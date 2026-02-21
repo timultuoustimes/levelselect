@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { loadData, saveData, createDefaultState } from '../utils/storage.js';
 import Library from './Library.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
+import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 
 export default function App() {
   const [data, setData] = useState(() => loadData() || createDefaultState());
@@ -33,27 +34,38 @@ export default function App() {
   // Get current game
   const currentGame = data.library.find(g => g.id === data.currentGameId);
 
+  const handleUpdateGame = (updatedGame) => {
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g =>
+        g.id === updatedGame.id ? updatedGame : g
+      ),
+    }));
+  };
+
   // Render the appropriate view
   if (view === 'game' && currentGame) {
-    // Route to game-specific tracker
     if (currentGame.trackerType === 'hades') {
       return (
         <HadesTracker
           game={currentGame}
           onBack={backToLibrary}
-          onUpdateGame={(updatedGame) => {
-            updateData(prev => ({
-              ...prev,
-              library: prev.library.map(g =>
-                g.id === updatedGame.id ? updatedGame : g
-              ),
-            }));
-          }}
+          onUpdateGame={handleUpdateGame}
         />
       );
     }
 
-    // Default: show placeholder for games without specific trackers
+    if (currentGame.trackerType === 'lone-ruin') {
+      return (
+        <LoneRuinTracker
+          game={currentGame}
+          onBack={backToLibrary}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+    }
+
+    // Default: placeholder for games without specific trackers
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-4">
         <div className="max-w-4xl mx-auto">
@@ -70,7 +82,7 @@ export default function App() {
                 Tracking not yet configured for this game.
               </p>
               <p className="text-gray-500 text-sm mt-2">
-                Detailed tracking is available for: Hades
+                Detailed tracking is available for: Hades, Lone Ruin
               </p>
             </div>
           </div>

@@ -20,6 +20,8 @@ const STATUS_LABELS = {
 // Games that have dedicated detailed trackers
 const TRACKER_TYPES = {
   'Hades': 'hades',
+  'LONE RUIN': 'lone-ruin',
+  'Lone Ruin': 'lone-ruin',
 };
 
 export default function Library({ data, updateData, onOpenGame }) {
