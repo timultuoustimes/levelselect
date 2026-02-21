@@ -1,5 +1,6 @@
 import { WEAPONS, ALL_ASPECTS } from '../data/hadesWeapons.js';
 import { KEEPSAKES, COMPANIONS } from '../data/hadesKeepsakes.js';
+import { ALL_MIRROR_UPGRADES } from '../data/hadesMirror.js';
 import { generateId } from './format.js';
 
 // Create a new Hades save file with all tracking initialized
@@ -36,12 +37,27 @@ export function createHadesSave(name) {
       unlocked: false,
     })),
 
+    // Mirror of Night: keyed by upgrade id, each has rank + useAlt flag
+    mirrorUpgrades: {},
+
     // Run history
     runs: [],
 
     // Active run (null when no run is active)
     activeRun: null,
   };
+}
+
+// Migrate an existing save to add any missing fields
+export function migrateSave(save) {
+  const migrated = { ...save };
+
+  // Add mirrorUpgrades if missing (existing saves)
+  if (!migrated.mirrorUpgrades) {
+    migrated.mirrorUpgrades = {};
+  }
+
+  return migrated;
 }
 
 // Create a new run object

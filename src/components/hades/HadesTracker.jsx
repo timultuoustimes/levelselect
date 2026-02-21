@@ -1,11 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { createHadesSave } from '../../utils/factories.js';
+import { createHadesSave, migrateSave } from '../../utils/factories.js';
 import { ArrowLeft, Plus, ChevronDown } from 'lucide-react';
 import OverviewTab from './OverviewTab.jsx';
 import BuildsTab from './BuildsTab.jsx';
 import AspectsTab from './AspectsTab.jsx';
 import KeepsakesTab from './KeepsakesTab.jsx';
 import AnalyticsTab from './AnalyticsTab.jsx';
+import MirrorTab from './MirrorTab.jsx';
 import RunView from './RunView.jsx';
 
 const TABS = [
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'builds', label: 'Builds' },
   { id: 'aspects', label: 'Aspects' },
   { id: 'keepsakes', label: 'Keepsakes' },
+  { id: 'mirror', label: 'Mirror' },
   { id: 'analytics', label: 'Analytics' },
 ];
 
@@ -23,7 +25,8 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
 
-  const saves = game.saves || [];
+  // Migrate saves on load to ensure they have all required fields
+  const saves = (game.saves || []).map(migrateSave);
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
   // Update current save
@@ -31,13 +34,13 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
     if (!currentSave) return;
     onUpdateGame({
       ...game,
-      saves: game.saves.map(s =>
+      saves: saves.map(s =>
         s.id === currentSave.id
           ? (typeof updater === 'function' ? updater(s) : { ...s, ...updater })
           : s
       ),
     });
-  }, [currentSave, game, onUpdateGame]);
+  }, [currentSave, game, onUpdateGame, saves]);
 
   // Create new save
   const handleCreateSave = () => {
@@ -213,6 +216,9 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
         )}
         {activeTab === 'keepsakes' && (
           <KeepsakesTab save={currentSave} updateSave={updateSave} />
+        )}
+        {activeTab === 'mirror' && (
+          <MirrorTab save={currentSave} updateSave={updateSave} />
         )}
         {activeTab === 'analytics' && (
           <AnalyticsTab save={currentSave} />
