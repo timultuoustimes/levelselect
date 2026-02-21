@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-950 text-white min-h-screen;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  /* Safe area insets for iPads with notch/home indicator */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Smooth scrolling for iOS */
+  .scroll-smooth-ios {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-black/50 backdrop-blur border border-purple-500/30 rounded-xl;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:border-purple-500/60 hover:bg-black/60;
+  }
+
+  .btn-primary {
+    @apply bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-medium
+           px-4 py-2.5 rounded-lg transition-colors duration-150
+           min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  .btn-secondary {
+    @apply bg-white/10 hover:bg-white/20 active:bg-white/30 text-white font-medium
+           px-4 py-2.5 rounded-lg transition-colors duration-150
+           min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  .btn-danger {
+    @apply bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-medium
+           px-4 py-2.5 rounded-lg transition-colors duration-150
+           min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  .btn-success {
+    @apply bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-medium
+           px-4 py-2.5 rounded-lg transition-colors duration-150
+           min-h-[44px] min-w-[44px] flex items-center justify-center;
+  }
+
+  .input-field {
+    @apply bg-black/50 border border-purple-500/30 rounded-lg px-3 py-2.5
+           text-white placeholder-gray-500 focus:outline-none focus:border-purple-500
+           min-h-[44px] w-full transition-colors duration-150;
+  }
+
+  .stat-box {
+    @apply rounded-xl p-4 text-center;
+  }
+
+  .tab-button {
+    @apply px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150
+           min-h-[44px] min-w-[44px];
+  }
+
+  .tab-button-active {
+    @apply tab-button bg-purple-600 text-white;
+  }
+
+  .tab-button-inactive {
+    @apply tab-button text-gray-400 hover:text-white hover:bg-white/10;
+  }
+}
