@@ -1234,6 +1234,145 @@ export default function Library({ data, updateData, onOpenGame }) {
                   </div>
                 </div>
               </div>
+
+              {/* ── Bulk action bar — sits at the bottom of the sticky header ── */}
+              {selectMode && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-purple-500/30">
+                  <span className="text-sm font-medium text-purple-300 mr-1">
+                    {selectedIds.size} selected
+                  </span>
+
+                  <button
+                    onClick={() => selectedIds.size === sortedGames.length ? deselectAll() : selectAll(sortedGames)}
+                    className="text-xs text-gray-400 hover:text-white underline"
+                  >
+                    {selectedIds.size === sortedGames.length ? 'Deselect all' : 'Select all'}
+                  </button>
+
+                  <div className="flex-1" />
+
+                  {/* IGDB Refresh */}
+                  <button
+                    onClick={handleBulkRefreshIGDB}
+                    disabled={selectedIds.size === 0 || bulkIgdbFetching}
+                    className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1.5 disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${bulkIgdbFetching ? 'animate-spin' : ''}`} />
+                    {bulkIgdbFetching ? 'Fetching…' : 'Get Art'}
+                  </button>
+
+                  {/* Status picker */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setBulkStatusOpen(o => !o); setBulkPlatformOpen(false); }}
+                      disabled={selectedIds.size === 0}
+                      className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1 disabled:opacity-40"
+                    >
+                      Status <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {bulkStatusOpen && (
+                      <div className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]">
+                        {Object.entries(STATUS_LABELS).map(([val, label]) => (
+                          <button
+                            key={val}
+                            onClick={() => handleBulkStatus(val)}
+                            className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-white/10 transition-colors"
+                          >
+                            <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[val]}`} />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Platform picker */}
+                  <div className="relative">
+                    <button
+                      onClick={() => { setBulkPlatformOpen(o => !o); setBulkStatusOpen(false); if (!bulkPlatformOpen) { setBulkPlatformDraft([]); setBulkCustomPlatform(''); } }}
+                      disabled={selectedIds.size === 0}
+                      className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1 disabled:opacity-40"
+                    >
+                      Platform <ChevronDown className="w-3 h-3" />
+                    </button>
+                    {bulkPlatformOpen && (
+                      <div className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-xl p-3 min-w-[220px] space-y-2">
+                        <div className="text-xs text-gray-400 mb-1">Set platforms for all selected games</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].map(p => (
+                            <button
+                              key={p}
+                              onClick={() => setBulkPlatformDraft(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
+                              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${bulkPlatformDraft.includes(p) ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
+                            >
+                              {p}
+                            </button>
+                          ))}
+                          {bulkPlatformDraft.filter(p => !['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].includes(p)).map(p => (
+                            <button
+                              key={p}
+                              onClick={() => setBulkPlatformDraft(prev => prev.filter(x => x !== p))}
+                              className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-600 text-white"
+                            >
+                              {p} ×
+                            </button>
+                          ))}
+                        </div>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="Other platform…"
+                            value={bulkCustomPlatform}
+                            onChange={e => setBulkCustomPlatform(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && bulkCustomPlatform.trim()) { setBulkPlatformDraft(p => [...p, bulkCustomPlatform.trim()]); setBulkCustomPlatform(''); }}}
+                            className="input-field text-xs flex-1 !py-1"
+                          />
+                          <button
+                            onClick={() => { if (bulkCustomPlatform.trim()) { setBulkPlatformDraft(p => [...p, bulkCustomPlatform.trim()]); setBulkCustomPlatform(''); }}}
+                            className="btn-secondary !px-2 !py-1 !min-h-0"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex gap-1.5 pt-1 border-t border-white/10">
+                          <button onClick={handleBulkPlatform} className="btn-primary flex-1 text-xs py-1.5 gap-1">
+                            <Check className="w-3.5 h-3.5" /> Apply
+                          </button>
+                          <button onClick={() => setBulkPlatformOpen(false)} className="btn-secondary flex-1 text-xs py-1.5">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Export */}
+                  <button
+                    onClick={handleBulkExport}
+                    disabled={selectedIds.size === 0}
+                    className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1.5 disabled:opacity-40"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Export
+                  </button>
+
+                  {/* Delete */}
+                  <button
+                    onClick={() => setBulkDeleteConfirm(true)}
+                    disabled={selectedIds.size === 0}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 flex items-center gap-1 px-2 py-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Delete
+                  </button>
+
+                  {/* Done */}
+                  <button
+                    onClick={toggleSelectMode}
+                    className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1241,146 +1380,6 @@ export default function Library({ data, updateData, onOpenGame }) {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-4">
-
-        {/* ── Bulk action bar ── */}
-        {selectMode && libraryView === 'games' && (
-          <div className="sticky top-0 z-40 card mb-3 p-3 flex flex-wrap items-center gap-2 border-purple-500/30 bg-purple-950/80 backdrop-blur-sm">
-            <span className="text-sm font-medium text-purple-300 mr-1">
-              {selectedIds.size} selected
-            </span>
-
-            {/* Select all / none */}
-            <button
-              onClick={() => selectedIds.size === sortedGames.length ? deselectAll() : selectAll(sortedGames)}
-              className="text-xs text-gray-400 hover:text-white underline"
-            >
-              {selectedIds.size === sortedGames.length ? 'Deselect all' : 'Select all'}
-            </button>
-
-            <div className="flex-1" />
-
-            {/* IGDB Refresh */}
-            <button
-              onClick={handleBulkRefreshIGDB}
-              disabled={selectedIds.size === 0 || bulkIgdbFetching}
-              className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1.5 disabled:opacity-40"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${bulkIgdbFetching ? 'animate-spin' : ''}`} />
-              {bulkIgdbFetching ? 'Fetching…' : 'Get Art'}
-            </button>
-
-            {/* Status picker */}
-            <div className="relative">
-              <button
-                onClick={() => { setBulkStatusOpen(o => !o); setBulkPlatformOpen(false); }}
-                disabled={selectedIds.size === 0}
-                className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1 disabled:opacity-40"
-              >
-                Status <ChevronDown className="w-3 h-3" />
-              </button>
-              {bulkStatusOpen && (
-                <div className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-xl overflow-hidden min-w-[150px]">
-                  {Object.entries(STATUS_LABELS).map(([val, label]) => (
-                    <button
-                      key={val}
-                      onClick={() => handleBulkStatus(val)}
-                      className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-white/10 transition-colors"
-                    >
-                      <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[val]}`} />
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Platform picker */}
-            <div className="relative">
-              <button
-                onClick={() => { setBulkPlatformOpen(o => !o); setBulkStatusOpen(false); if (!bulkPlatformOpen) { setBulkPlatformDraft([]); setBulkCustomPlatform(''); } }}
-                disabled={selectedIds.size === 0}
-                className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1 disabled:opacity-40"
-              >
-                Platform <ChevronDown className="w-3 h-3" />
-              </button>
-              {bulkPlatformOpen && (
-                <div className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-xl p-3 min-w-[220px] space-y-2">
-                  <div className="text-xs text-gray-400 mb-1">Set platforms for all selected games</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setBulkPlatformDraft(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${bulkPlatformDraft.includes(p) ? 'bg-purple-600 text-white' : 'bg-white/10 text-gray-400 hover:bg-white/20'}`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                    {bulkPlatformDraft.filter(p => !['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].includes(p)).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => setBulkPlatformDraft(prev => prev.filter(x => x !== p))}
-                        className="px-2.5 py-1 rounded-full text-xs font-medium bg-blue-600 text-white"
-                      >
-                        {p} ×
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      placeholder="Other platform…"
-                      value={bulkCustomPlatform}
-                      onChange={e => setBulkCustomPlatform(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && bulkCustomPlatform.trim()) { setBulkPlatformDraft(p => [...p, bulkCustomPlatform.trim()]); setBulkCustomPlatform(''); }}}
-                      className="input-field text-xs flex-1 !py-1"
-                    />
-                    <button
-                      onClick={() => { if (bulkCustomPlatform.trim()) { setBulkPlatformDraft(p => [...p, bulkCustomPlatform.trim()]); setBulkCustomPlatform(''); }}}
-                      className="btn-secondary !px-2 !py-1 !min-h-0"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex gap-1.5 pt-1 border-t border-white/10">
-                    <button onClick={handleBulkPlatform} className="btn-primary flex-1 text-xs py-1.5 gap-1">
-                      <Check className="w-3.5 h-3.5" /> Apply
-                    </button>
-                    <button onClick={() => setBulkPlatformOpen(false)} className="btn-secondary flex-1 text-xs py-1.5">
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Export */}
-            <button
-              onClick={handleBulkExport}
-              disabled={selectedIds.size === 0}
-              className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs gap-1.5 disabled:opacity-40"
-            >
-              <Download className="w-3.5 h-3.5" /> Export
-            </button>
-
-            {/* Delete */}
-            <button
-              onClick={() => setBulkDeleteConfirm(true)}
-              disabled={selectedIds.size === 0}
-              className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40 flex items-center gap-1 px-2 py-1.5"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Delete
-            </button>
-
-            {/* Cancel select mode */}
-            <button
-              onClick={toggleSelectMode}
-              className="btn-secondary !px-3 !py-1.5 !min-h-0 text-xs"
-            >
-              Done
-            </button>
-          </div>
-        )}
 
         {libraryView === 'stats' ? (
           <LibraryStats library={library} />
