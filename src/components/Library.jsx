@@ -300,7 +300,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
   return (
     <div
       onClick={selectMode ? onToggleSelect : undefined}
-      className={`card-hover text-left w-full group relative flex flex-col overflow-hidden ${selected ? 'ring-2 ring-purple-500' : ''} ${selectMode ? 'cursor-pointer' : ''}`}
+      className={`card-hover text-left w-full group relative flex flex-col ${selected ? 'ring-2 ring-purple-500' : ''} ${selectMode ? 'cursor-pointer' : ''}`}
     >
       {/* Select checkbox overlay (top-left in select mode) */}
       {selectMode && (
@@ -322,30 +322,30 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
         </button>
       )}
 
-      {/* Cover art */}
-      <div className="relative">
+      {/* Cover art — full 3:4 ratio, no cropping */}
+      <div className="rounded-t-xl overflow-hidden">
         {coverUrl ? (
           <img
             src={coverUrl}
             alt={game.name}
-            className="w-full h-36 object-cover"
+            className="w-full aspect-[3/4] object-cover"
             onError={e => { e.target.parentElement.classList.add('no-cover'); e.target.style.display = 'none'; }}
           />
         ) : (
-          <div className="w-full h-36 bg-gradient-to-br from-purple-900/40 to-slate-900/60 flex items-center justify-center border-b border-white/5">
+          <div className="w-full aspect-[3/4] bg-gradient-to-br from-purple-900/40 to-slate-900/60 flex items-center justify-center border-b border-white/5">
             <span className="text-4xl opacity-40">🎮</span>
-          </div>
-        )}
-        {/* Status badge (hidden in select mode to reduce clutter) */}
-        {!selectMode && (
-          <div className="absolute top-2 left-2">
-            <StatusBadge status={game.status} onChange={onUpdateStatus} />
           </div>
         )}
       </div>
 
       {/* Card body */}
       <button onClick={selectMode ? undefined : onOpen} className="flex-1 p-3 text-left" tabIndex={selectMode ? -1 : 0}>
+        {/* Status badge — in body so dropdown is never clipped */}
+        {!selectMode && (
+          <div className="mb-2">
+            <StatusBadge status={game.status} onChange={onUpdateStatus} />
+          </div>
+        )}
         <h3 className="font-semibold text-sm leading-tight group-hover:text-purple-300 transition-colors line-clamp-2 mb-1">
           {game.name}
         </h3>
