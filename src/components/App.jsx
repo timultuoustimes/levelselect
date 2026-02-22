@@ -13,6 +13,12 @@ import {
 import Library from './Library.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
 import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
+import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
+import ChecklistTracker from './checklist/ChecklistTracker.jsx';
+import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
+import MessengerTracker from './messenger/MessengerTracker.jsx';
+import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
+import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG } from '../data/checklistGameData.js';
 
 export default function App() {
   const [data, setData] = useState(null); // null = still loading
@@ -26,12 +32,10 @@ export default function App() {
   // On mount: load local immediately, then try cloud
   useEffect(() => {
     async function init() {
-      // Show local data instantly (no flash of empty state)
       const local = loadLocal() || createDefaultState();
       setData(local);
       setSyncStatus('loading');
 
-      // Then try cloud — if cloud is newer, use it
       const cloud = await loadFromCloud();
       if (cloud) {
         setData(cloud);
@@ -138,7 +142,6 @@ export default function App() {
         <div className="card p-4 w-80 shadow-2xl border border-purple-500/30 text-sm space-y-4">
           <div className="font-bold text-purple-300">Sync & Devices</div>
 
-          {/* Device ID */}
           <div>
             <div className="text-gray-400 text-xs mb-1">Your Device ID</div>
             <div className="bg-black/40 rounded px-2 py-1.5 font-mono text-xs text-gray-300 break-all select-all cursor-text">
@@ -149,7 +152,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Link input */}
           <div>
             <div className="text-gray-400 text-xs mb-1">Sync from Another Device</div>
             <input
@@ -171,7 +173,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* Export / Import */}
           <div>
             <div className="text-gray-400 text-xs mb-2">Manual Backup</div>
             <div className="flex gap-2">
@@ -194,7 +195,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Status pill */}
       <button
         onClick={() => setShowSyncPanel(p => !p)}
         className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-all ${
@@ -216,6 +216,7 @@ export default function App() {
   );
 
   if (view === 'game' && currentGame) {
+    // ── Hades ────────────────────────────────────────────────────────────────
     if (currentGame.trackerType === 'hades') {
       return (
         <>
@@ -225,6 +226,7 @@ export default function App() {
       );
     }
 
+    // ── Lone Ruin ─────────────────────────────────────────────────────────────
     if (currentGame.trackerType === 'lone-ruin') {
       return (
         <>
@@ -234,6 +236,110 @@ export default function App() {
       );
     }
 
+    // ── GONNER ────────────────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'gonner') {
+      return (
+        <>
+          <GenericRoguelikeTracker
+            game={currentGame}
+            config={GONNERS_CONFIG}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Cursed to Golf ────────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'cursed-to-golf') {
+      return (
+        <>
+          <GenericRoguelikeTracker
+            game={currentGame}
+            config={CURSED_TO_GOLF_CONFIG}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Blazing Chrome ────────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'blazing-chrome') {
+      return (
+        <>
+          <ChecklistTracker
+            game={currentGame}
+            config={BLAZING_CHROME_CONFIG}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Sayonara Wild Hearts ──────────────────────────────────────────────────
+    if (currentGame.trackerType === 'sayonara-wild-hearts') {
+      return (
+        <>
+          <ChecklistTracker
+            game={currentGame}
+            config={SAYONARA_CONFIG}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Cast n Chill ──────────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'cast-n-chill') {
+      return (
+        <>
+          <ChecklistTracker
+            game={currentGame}
+            config={CAST_N_CHILL_CONFIG}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Citizen Sleeper ───────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'citizen-sleeper') {
+      return (
+        <>
+          <CitizenSleeperTracker
+            game={currentGame}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── The Messenger ─────────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'messenger') {
+      return (
+        <>
+          <MessengerTracker
+            game={currentGame}
+            onBack={backToLibrary}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Fallback: no tracker configured ──────────────────────────────────────
     return (
       <>
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-4">
@@ -247,7 +353,8 @@ export default function App() {
               <div className="bg-purple-900/20 rounded-lg p-6 inline-block">
                 <p className="text-gray-300">Tracking not yet configured for this game.</p>
                 <p className="text-gray-500 text-sm mt-2">
-                  Detailed tracking available for: Hades, Lone Ruin
+                  Detailed tracking available for: Hades, Lone Ruin, GONNER, Cursed to Golf,
+                  Blazing Chrome, Sayonara Wild Hearts, Cast n Chill, Citizen Sleeper, The Messenger
                 </p>
               </div>
             </div>

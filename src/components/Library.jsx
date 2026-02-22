@@ -18,10 +18,27 @@ const STATUS_LABELS = {
 };
 
 // Games that have dedicated detailed trackers
+// Key = exact game name as it appears in Gamery CSV (case-sensitive)
 const TRACKER_TYPES = {
+  // Existing
   'Hades': 'hades',
   'Lone Ruin': 'lone-ruin',
   'LONE RUIN': 'lone-ruin',
+
+  // Generic roguelike tracker
+  'GONNER': 'gonner',
+  'GON\'NER': 'gonner',
+  'Gonner': 'gonner',
+  'Cursed to Golf': 'cursed-to-golf',
+
+  // Checklist tracker
+  'Blazing Chrome': 'blazing-chrome',
+  'Sayonara Wild Hearts': 'sayonara-wild-hearts',
+  'Cast n Chill': 'cast-n-chill',
+
+  // Dedicated trackers
+  'Citizen Sleeper': 'citizen-sleeper',
+  'The Messenger': 'messenger',
 };
 
 export default function Library({ data, updateData, onOpenGame }) {
