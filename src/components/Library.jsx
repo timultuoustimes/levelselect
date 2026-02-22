@@ -185,19 +185,35 @@ function getLibraryStats(library) {
 
 function StatusBadge({ status, onChange }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      // Close if click is outside both the button and the portal dropdown
+      if (btnRef.current && !btnRef.current.contains(e.target) && !e.target.closest('[data-status-dropdown]')) {
+        setOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  const handleOpen = (e) => {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(o => !o);
+  };
+
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
-        onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+        ref={btnRef}
+        onClick={handleOpen}
         className={`${STATUS_COLORS[status]} text-white text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1`}
       >
         {STATUS_LABELS[status]}
@@ -205,7 +221,9 @@ function StatusBadge({ status, onChange }) {
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-lg shadow-xl overflow-hidden min-w-[120px]"
+          data-status-dropdown
+          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
+          className="bg-slate-800 border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[130px]"
           onClick={e => e.stopPropagation()}
         >
           {Object.entries(STATUS_LABELS).map(([val, label]) => (
@@ -214,14 +232,14 @@ function StatusBadge({ status, onChange }) {
               onClick={() => { onChange(val); setOpen(false); }}
               className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/10 transition-colors ${status === val ? 'text-white' : 'text-gray-400'}`}
             >
-              <span className={`w-2 h-2 rounded-full ${STATUS_COLORS[val]}`} />
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_COLORS[val]}`} />
               {label}
               {status === val && <Check className="w-3 h-3 ml-auto text-purple-400" />}
             </button>
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -323,7 +341,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
       )}
 
       {/* Cover art — full 3:4 ratio, no cropping */}
-      <div className="rounded-t-xl overflow-hidden">
+      <div className="rounded-t-xl overflow-hidden relative">
         {coverUrl ? (
           <img
             src={coverUrl}
@@ -338,14 +356,15 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
         )}
       </div>
 
-      {/* Card body */}
-      <button onClick={selectMode ? undefined : onOpen} className="flex-1 p-3 text-left" tabIndex={selectMode ? -1 : 0}>
-        {/* Status badge — in body so dropdown is never clipped */}
-        {!selectMode && (
-          <div className="mb-2">
-            <StatusBadge status={game.status} onChange={onUpdateStatus} />
-          </div>
-        )}
+      {/* Status badge — outside the cover (no overflow-hidden) and outside the card body button (no nested button) */}
+      {!selectMode && (
+        <div className="px-3 pt-2" onClick={e => e.stopPropagation()}>
+          <StatusBadge status={game.status} onChange={onUpdateStatus} />
+        </div>
+      )}
+
+      {/* Card body — tappable area to open game */}
+      <button onClick={selectMode ? undefined : onOpen} className="flex-1 px-3 pb-3 pt-1 text-left" tabIndex={selectMode ? -1 : 0}>
         <h3 className="font-semibold text-sm leading-tight group-hover:text-purple-300 transition-colors line-clamp-2 mb-1">
           {game.name}
         </h3>
