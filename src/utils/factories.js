@@ -91,9 +91,42 @@ export function createGameEntry({ name, igdbId, platforms, status, complexity, s
     complexity: complexity || 'simple', // 'simple' | 'standard' | 'detailed'
     summary: summary || '',
     coverColor: null,
+    coverImageId: null,     // IGDB image_id for cover art
+    coverUrl: null,         // fallback manual URL
+    franchise: null,        // franchise/series name
+    firstReleaseDate: null, // release year from IGDB
+    yearPlayed: null,       // legacy: single year (kept for backward compat)
+    playPeriods: [],        // [{ id, startMonth, startYear, endMonth, endYear, ongoing, note }]
+    igdbSlug: null,         // IGDB URL slug for linking to game page
+    genres: [],             // e.g. ['Role-playing (RPG)', 'Hack and slash']
+    themes: [],             // e.g. ['Action', 'Fantasy'] — includes roguelike etc.
+    gameModes: [],          // e.g. ['Single player', 'Co-operative']
+    playerPerspectives: [], // e.g. ['Third person', 'Bird view / Isometric']
+    developers: [],         // company names
+    publishers: [],         // company names
     saves: [],
     currentSaveId: null,
     addedAt: new Date().toISOString(),
-    trackerType: null, // 'hades' | null (future: game-specific tracker types)
+    trackerType: null,
   };
+}
+
+// Migrate old yearPlayed integer → playPeriods array (called lazily in GamePage)
+export function migratePlayPeriods(game) {
+  if (Array.isArray(game.playPeriods) && game.playPeriods.length > 0) {
+    return game.playPeriods;
+  }
+  if (game.yearPlayed) {
+    return [{
+      id: generateId(),
+      startMonth: null,
+      startYear: game.yearPlayed,
+      endMonth: null,
+      endYear: null,
+      ongoing: false,
+      platform: game.platforms?.[0] || null, // default to first platform
+      note: '',
+    }];
+  }
+  return [];
 }

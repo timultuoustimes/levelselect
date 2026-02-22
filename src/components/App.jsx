@@ -11,12 +11,14 @@ import {
   importData,
 } from '../utils/storage.js';
 import Library from './Library.jsx';
+import GamePage from './GamePage.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
 import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
 import ChecklistTracker from './checklist/ChecklistTracker.jsx';
 import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
+import GeneralGameTracker from './general/GeneralGameTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
 import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG } from '../data/checklistGameData.js';
 
@@ -68,10 +70,13 @@ export default function App() {
 
   const openGame = useCallback((gameId) => {
     setData(prev => prev ? { ...prev, currentGameId: gameId } : prev);
-    setView('game');
+    setView('game-page');
   }, []);
 
+  const openTracker = useCallback(() => setView('game'), []);
+
   const backToLibrary = useCallback(() => setView('library'), []);
+  const backToGamePage = useCallback(() => setView('game-page'), []);
 
   const handleUpdateGame = useCallback((updatedGame) => {
     updateData(prev => ({
@@ -215,12 +220,27 @@ export default function App() {
     </div>
   );
 
+  // ── Game Landing Page ────────────────────────────────────────────────────────
+  if (view === 'game-page' && currentGame) {
+    return (
+      <>
+        <GamePage
+          game={currentGame}
+          onBack={backToLibrary}
+          onOpenTracker={openTracker}
+          onUpdateGame={handleUpdateGame}
+        />
+        <SyncBar />
+      </>
+    );
+  }
+
   if (view === 'game' && currentGame) {
     // ── Hades ────────────────────────────────────────────────────────────────
     if (currentGame.trackerType === 'hades') {
       return (
         <>
-          <HadesTracker game={currentGame} onBack={backToLibrary} onUpdateGame={handleUpdateGame} />
+          <HadesTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
           <SyncBar />
         </>
       );
@@ -230,7 +250,7 @@ export default function App() {
     if (currentGame.trackerType === 'lone-ruin') {
       return (
         <>
-          <LoneRuinTracker game={currentGame} onBack={backToLibrary} onUpdateGame={handleUpdateGame} />
+          <LoneRuinTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
           <SyncBar />
         </>
       );
@@ -243,7 +263,7 @@ export default function App() {
           <GenericRoguelikeTracker
             game={currentGame}
             config={GONNERS_CONFIG}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -258,7 +278,7 @@ export default function App() {
           <GenericRoguelikeTracker
             game={currentGame}
             config={CURSED_TO_GOLF_CONFIG}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -273,7 +293,7 @@ export default function App() {
           <ChecklistTracker
             game={currentGame}
             config={BLAZING_CHROME_CONFIG}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -288,7 +308,7 @@ export default function App() {
           <ChecklistTracker
             game={currentGame}
             config={SAYONARA_CONFIG}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -303,7 +323,7 @@ export default function App() {
           <ChecklistTracker
             game={currentGame}
             config={CAST_N_CHILL_CONFIG}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -317,7 +337,7 @@ export default function App() {
         <>
           <CitizenSleeperTracker
             game={currentGame}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -331,7 +351,7 @@ export default function App() {
         <>
           <MessengerTracker
             game={currentGame}
-            onBack={backToLibrary}
+            onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
           <SyncBar />
@@ -339,27 +359,14 @@ export default function App() {
       );
     }
 
-    // ── Fallback: no tracker configured ──────────────────────────────────────
+    // ── General tracker (fallback for all other games) ────────────────────────
     return (
       <>
-        <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 p-4">
-          <div className="max-w-4xl mx-auto">
-            <button onClick={backToLibrary} className="btn-secondary mb-4 gap-2">
-              ← Back to Library
-            </button>
-            <div className="card p-8 text-center">
-              <h2 className="text-2xl font-bold mb-2">{currentGame.name}</h2>
-              <p className="text-gray-400 mb-4">{currentGame.platforms?.join(', ')}</p>
-              <div className="bg-purple-900/20 rounded-lg p-6 inline-block">
-                <p className="text-gray-300">Tracking not yet configured for this game.</p>
-                <p className="text-gray-500 text-sm mt-2">
-                  Detailed tracking available for: Hades, Lone Ruin, GONNER, Cursed to Golf,
-                  Blazing Chrome, Sayonara Wild Hearts, Cast n Chill, Citizen Sleeper, The Messenger
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <GeneralGameTracker
+          game={currentGame}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
         <SyncBar />
       </>
     );
