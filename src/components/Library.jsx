@@ -1244,7 +1244,7 @@ export default function Library({ data, updateData, onOpenGame }) {
 
         {/* ── Bulk action bar ── */}
         {selectMode && libraryView === 'games' && (
-          <div className="card mb-3 p-3 flex flex-wrap items-center gap-2 border-purple-500/30 bg-purple-950/30">
+          <div className="sticky top-0 z-40 card mb-3 p-3 flex flex-wrap items-center gap-2 border-purple-500/30 bg-purple-950/80 backdrop-blur-sm">
             <span className="text-sm font-medium text-purple-300 mr-1">
               {selectedIds.size} selected
             </span>
