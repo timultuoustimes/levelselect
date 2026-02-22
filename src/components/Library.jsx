@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { parseGameryCSV } from '../utils/csvParser.js';
 import { createGameEntry } from '../utils/factories.js';
-import { Search, Upload, Plus, Gamepad2, Filter } from 'lucide-react';
+import { Search, Upload, Plus, Gamepad2, Trash2 } from 'lucide-react';
 
 const STATUS_COLORS = {
   playing: 'bg-green-500',
@@ -20,8 +20,8 @@ const STATUS_LABELS = {
 // Games that have dedicated detailed trackers
 const TRACKER_TYPES = {
   'Hades': 'hades',
-  'LONE RUIN': 'lone-ruin',
   'Lone Ruin': 'lone-ruin',
+  'LONE RUIN': 'lone-ruin',
 };
 
 export default function Library({ data, updateData, onOpenGame }) {
@@ -31,6 +31,7 @@ export default function Library({ data, updateData, onOpenGame }) {
   const [showAddGame, setShowAddGame] = useState(false);
   const [newGameName, setNewGameName] = useState('');
   const [newGamePlatform, setNewGamePlatform] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const fileInputRef = useRef(null);
 
   const { library } = data;
@@ -73,7 +74,6 @@ export default function Library({ data, updateData, onOpenGame }) {
         return;
       }
 
-      // Create game entries, detecting known tracker types
       const newGames = parsedGames.map(g => {
         const trackerType = TRACKER_TYPES[g.name] || null;
         return createGameEntry({
@@ -86,12 +86,10 @@ export default function Library({ data, updateData, onOpenGame }) {
         });
       });
 
-      // Assign tracker types
       newGames.forEach(g => {
         g.trackerType = TRACKER_TYPES[g.name] || null;
       });
 
-      // Merge with existing (avoid duplicates by name)
       const existingNames = new Set(library.map(g => g.name.toLowerCase()));
       const toAdd = newGames.filter(g => !existingNames.has(g.name.toLowerCase()));
 
@@ -104,7 +102,6 @@ export default function Library({ data, updateData, onOpenGame }) {
       alert(`Imported ${toAdd.length} new games (${parsedGames.length - toAdd.length} duplicates skipped).`);
     };
     reader.readAsText(file);
-    // Reset file input
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -128,6 +125,15 @@ export default function Library({ data, updateData, onOpenGame }) {
     setNewGameName('');
     setNewGamePlatform('');
     setShowAddGame(false);
+  };
+
+  // Delete game
+  const handleDeleteGame = (gameId) => {
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.filter(g => g.id !== gameId),
+    }));
+    setDeleteConfirmId(null);
   };
 
   return (
@@ -222,6 +228,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                     ),
                   }));
                 }}
+                onDelete={() => setDeleteConfirmId(game.id)}
               />
             ))}
           </div>
@@ -275,43 +282,81 @@ export default function Library({ data, updateData, onOpenGame }) {
           </div>
         </Modal>
       )}
+
+      {/* Delete Confirm Modal */}
+      {deleteConfirmId && (() => {
+        const game = library.find(g => g.id === deleteConfirmId);
+        return (
+          <Modal onClose={() => setDeleteConfirmId(null)} title="Remove Game">
+            <p className="text-gray-300 mb-2">
+              Remove <span className="font-semibold text-white">{game?.name}</span> from your library?
+            </p>
+            <p className="text-gray-500 text-sm mb-5">
+              This will delete all saves and tracking data for this game. This cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="btn-secondary flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteGame(deleteConfirmId)}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
 
-function GameCard({ game, onOpen, onUpdateStatus }) {
+function GameCard({ game, onOpen, onUpdateStatus, onDelete }) {
   const hasTracker = game.trackerType !== null;
 
   return (
-    <button
-      onClick={onOpen}
-      className="card-hover p-4 text-left w-full group"
-    >
-      <div className="flex items-start justify-between mb-2">
-        <h3 className="font-semibold text-sm leading-tight pr-2 group-hover:text-purple-300 transition-colors">
-          {game.name}
-        </h3>
-        <span className={`${STATUS_COLORS[game.status]} text-white text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0`}>
-          {STATUS_LABELS[game.status]}
-        </span>
-      </div>
-      {game.platforms.length > 0 && (
-        <p className="text-gray-500 text-xs mb-2 truncate">
-          {game.platforms.join(', ')}
-        </p>
-      )}
-      {hasTracker && (
-        <div className="flex items-center gap-1 text-purple-400 text-xs">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-          Detailed tracking available
+    <div className="card-hover p-4 text-left w-full group relative">
+      {/* Delete button — appears on hover */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className="absolute top-2 right-2 p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100"
+        title="Remove game"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Card content — clickable to open */}
+      <button onClick={onOpen} className="w-full text-left">
+        <div className="flex items-start justify-between mb-2 pr-6">
+          <h3 className="font-semibold text-sm leading-tight group-hover:text-purple-300 transition-colors">
+            {game.name}
+          </h3>
+          <span className={`${STATUS_COLORS[game.status]} text-white text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 ml-2`}>
+            {STATUS_LABELS[game.status]}
+          </span>
         </div>
-      )}
-      {game.saves?.length > 0 && (
-        <p className="text-gray-500 text-xs mt-1">
-          {game.saves.length} save{game.saves.length !== 1 ? 's' : ''}
-        </p>
-      )}
-    </button>
+        {game.platforms.length > 0 && (
+          <p className="text-gray-500 text-xs mb-2 truncate">
+            {game.platforms.join(', ')}
+          </p>
+        )}
+        {hasTracker && (
+          <div className="flex items-center gap-1 text-purple-400 text-xs">
+            <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+            Detailed tracking available
+          </div>
+        )}
+        {game.saves?.length > 0 && (
+          <p className="text-gray-500 text-xs mt-1">
+            {game.saves.length} save{game.saves.length !== 1 ? 's' : ''}
+          </p>
+        )}
+      </button>
+    </div>
   );
 }
 
