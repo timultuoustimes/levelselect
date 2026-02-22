@@ -183,36 +183,32 @@ function getLibraryStats(library) {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function StatusBadge({ status, onChange }) {
+function StatusBadge({ status, onChange, onOpenChange }) {
   const [open, setOpen] = useState(false);
-  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
-  const btnRef = useRef(null);
+  const wrapperRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
     const handler = (e) => {
-      // Close if click is outside both the button and the portal dropdown
-      if (btnRef.current && !btnRef.current.contains(e.target) && !e.target.closest('[data-status-dropdown]')) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
         setOpen(false);
+        onOpenChange?.(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, onOpenChange]);
 
   const handleOpen = (e) => {
     e.stopPropagation();
-    if (!open && btnRef.current) {
-      const rect = btnRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
-    }
-    setOpen(o => !o);
+    const next = !open;
+    setOpen(next);
+    onOpenChange?.(next);
   };
 
   return (
-    <>
+    <div ref={wrapperRef} className="relative" onClick={e => e.stopPropagation()}>
       <button
-        ref={btnRef}
         onClick={handleOpen}
         className={`${STATUS_COLORS[status]} text-white text-[10px] font-medium px-2 py-0.5 rounded-full whitespace-nowrap flex items-center gap-1`}
       >
@@ -221,15 +217,13 @@ function StatusBadge({ status, onChange }) {
       </button>
       {open && (
         <div
-          data-status-dropdown
-          style={{ position: 'fixed', top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
-          className="bg-slate-800 border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[130px]"
+          className="absolute left-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[130px] z-50"
           onClick={e => e.stopPropagation()}
         >
           {Object.entries(STATUS_LABELS).map(([val, label]) => (
             <button
               key={val}
-              onClick={() => { onChange(val); setOpen(false); }}
+              onClick={() => { onChange(val); setOpen(false); onOpenChange?.(false); }}
               className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/10 transition-colors ${status === val ? 'text-white' : 'text-gray-400'}`}
             >
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_COLORS[val]}`} />
@@ -239,7 +233,7 @@ function StatusBadge({ status, onChange }) {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -260,11 +254,13 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
   const rating = getGameRating(game);
   const playtime = getGamePlaytime(game);
   const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+  const [statusOpen, setStatusOpen] = useState(false);
 
   if (viewMode === 'list') {
     return (
       <div
         onClick={selectMode ? onToggleSelect : undefined}
+        style={{ zIndex: statusOpen ? 50 : 'auto' }}
         className={`card-hover px-3 py-2.5 text-left w-full group relative flex items-center gap-3 ${selected ? 'ring-2 ring-purple-500 bg-purple-900/20' : ''} ${selectMode ? 'cursor-pointer' : ''}`}
       >
         {/* Checkbox (select mode) or cover thumbnail */}
@@ -300,7 +296,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
 
         <div className="flex items-center gap-2 flex-shrink-0">
           {rating && <StarRow rating={rating} />}
-          {!selectMode && <StatusBadge status={game.status} onChange={onUpdateStatus} />}
+          {!selectMode && <StatusBadge status={game.status} onChange={onUpdateStatus} onOpenChange={setStatusOpen} />}
           {!selectMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -318,6 +314,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
   return (
     <div
       onClick={selectMode ? onToggleSelect : undefined}
+      style={{ zIndex: statusOpen ? 50 : 'auto' }}
       className={`card-hover text-left w-full group relative flex flex-col ${selected ? 'ring-2 ring-purple-500' : ''} ${selectMode ? 'cursor-pointer' : ''}`}
     >
       {/* Select checkbox overlay (top-left in select mode) */}
@@ -358,8 +355,8 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
 
       {/* Status badge — outside the cover (no overflow-hidden) and outside the card body button (no nested button) */}
       {!selectMode && (
-        <div className="px-3 pt-2" onClick={e => e.stopPropagation()}>
-          <StatusBadge status={game.status} onChange={onUpdateStatus} />
+        <div className="px-3 pt-2">
+          <StatusBadge status={game.status} onChange={onUpdateStatus} onOpenChange={setStatusOpen} />
         </div>
       )}
 
@@ -563,6 +560,8 @@ export default function Library({ data, updateData, onOpenGame }) {
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [selectMenuOpen, setSelectMenuOpen] = useState(false);
+  const selectMenuRef = useRef(null);
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkPlatformOpen, setBulkPlatformOpen] = useState(false);
   const [bulkPlatformDraft, setBulkPlatformDraft] = useState([]);
@@ -588,6 +587,18 @@ export default function Library({ data, updateData, onOpenGame }) {
   const searchDebounceRef = useRef(null);
 
   const { library } = data;
+
+  // ── Close select menu on outside click ────────────────────────────────
+  useEffect(() => {
+    if (!selectMenuOpen) return;
+    const handler = (e) => {
+      if (selectMenuRef.current && !selectMenuRef.current.contains(e.target)) {
+        setSelectMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [selectMenuOpen]);
 
   // ── IGDB search with debounce ──────────────────────────────────────────
 
@@ -1178,14 +1189,49 @@ export default function Library({ data, updateData, onOpenGame }) {
                     {viewMode === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
                   </button>
 
-                  <button
-                    onClick={toggleSelectMode}
-                    className={`btn-secondary !px-2.5 !py-2 !min-h-0 text-xs gap-1 ${selectMode ? 'ring-1 ring-purple-500 text-purple-300' : ''}`}
-                    title="Select multiple games"
-                  >
-                    <CheckSquare className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Select</span>
-                  </button>
+                  <div ref={selectMenuRef} className="relative">
+                    <div className={`flex rounded-lg overflow-hidden border ${selectMode ? 'border-purple-500/60' : 'border-white/10'}`}>
+                      {/* Main "Select" button */}
+                      <button
+                        onClick={toggleSelectMode}
+                        className={`btn-secondary !rounded-none !border-0 !px-2.5 !py-2 !min-h-0 text-xs gap-1 ${selectMode ? 'text-purple-300' : ''}`}
+                        title="Toggle select mode"
+                      >
+                        <CheckSquare className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Select</span>
+                      </button>
+                      {/* Chevron to open sub-menu */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectMenuOpen(o => !o); }}
+                        className={`btn-secondary !rounded-none !border-0 !border-l !border-white/10 !px-1.5 !py-2 !min-h-0 ${selectMode ? 'text-purple-300' : ''}`}
+                        title="Select options"
+                      >
+                        <ChevronDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {selectMenuOpen && (
+                      <div className="absolute right-0 top-full mt-1 bg-slate-800 border border-white/10 rounded-lg shadow-2xl overflow-hidden min-w-[140px] z-50">
+                        <button
+                          onClick={() => { if (!selectMode) toggleSelectMode(); setSelectMenuOpen(false); }}
+                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/10 transition-colors text-gray-300"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+                          Select
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!selectMode) { setSelectMode(true); }
+                            setSelectedIds(new Set(sortedGames.map(g => g.id)));
+                            setSelectMenuOpen(false);
+                          }}
+                          className="w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-white/10 transition-colors text-gray-300"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5 text-purple-400" />
+                          Select All ({sortedGames.length})
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </>
