@@ -40,7 +40,7 @@ export async function searchIGDB(query) {
         endpoint: 'games',
         query: `
           search "${query.replace(/"/g, '')}";
-          fields name, slug, cover.image_id, franchises.name, first_release_date,
+          fields name, slug, cover.image_id, franchises.name, collection.name, first_release_date,
                  platforms.name, game_type,
                  genres.name, themes.name, game_modes.name, player_perspectives.name,
                  involved_companies.developer, involved_companies.publisher,
@@ -65,7 +65,7 @@ export async function searchIGDB(query) {
         igdbId: String(g.id),
         igdbSlug: g.slug || null,
         name: g.name,
-        franchise: g.franchises?.[0]?.name || null,
+        franchise: g.franchises?.[0]?.name || g.collection?.name || null,
         coverImageId: g.cover?.image_id || null,
         coverUrl: g.cover?.image_id ? igdbCoverUrl(g.cover.image_id) : null,
         firstReleaseDate: g.first_release_date
@@ -106,7 +106,7 @@ export async function batchFetchIGDB(igdbIds) {
         body: JSON.stringify({
           endpoint: 'games',
           query: `
-            fields name, slug, cover.image_id, franchises.name, first_release_date,
+            fields name, slug, cover.image_id, franchises.name, collection.name, first_release_date,
                    platforms.name, genres.name, themes.name, game_modes.name,
                    player_perspectives.name,
                    involved_companies.developer, involved_companies.publisher,
@@ -127,7 +127,7 @@ export async function batchFetchIGDB(igdbIds) {
           igdbSlug: g.slug || null,
           coverImageId: g.cover?.image_id || null,
           coverUrl: g.cover?.image_id ? igdbCoverUrl(g.cover.image_id) : null,
-          franchise: g.franchises?.[0]?.name || null,
+          franchise: g.franchises?.[0]?.name || g.collection?.name || null,
           firstReleaseDate: g.first_release_date
             ? new Date(g.first_release_date * 1000).getFullYear()
             : null,
@@ -168,7 +168,7 @@ export async function fetchIGDBGame(igdbId) {
       body: JSON.stringify({
         endpoint: 'games',
         query: `
-          fields name, slug, cover.image_id, franchises.name, first_release_date,
+          fields name, slug, cover.image_id, franchises.name, collection.name, first_release_date,
                  platforms.name, genres.name, themes.name, game_modes.name,
                  player_perspectives.name,
                  involved_companies.developer, involved_companies.publisher,
@@ -190,7 +190,7 @@ export async function fetchIGDBGame(igdbId) {
       igdbId: String(g.id),
       igdbSlug: g.slug || null,
       name: g.name,
-      franchise: g.franchises?.[0]?.name || null,
+      franchise: g.franchises?.[0]?.name || g.collection?.name || null,
       coverImageId: g.cover?.image_id || null,
       coverUrl: g.cover?.image_id ? igdbCoverUrl(g.cover.image_id) : null,
       firstReleaseDate: g.first_release_date

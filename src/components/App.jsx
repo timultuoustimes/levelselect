@@ -25,6 +25,8 @@ import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG } from '../
 export default function App() {
   const [data, setData] = useState(null); // null = still loading
   const [view, setView] = useState('library');
+  const [libraryView, setLibraryView] = useState('home'); // 'home' | 'games' | 'stats'
+  const [navSource, setNavSource] = useState('library'); // 'home' | 'library'
   const [syncStatus, setSyncStatus] = useState('loading'); // 'loading' | 'synced' | 'saving' | 'offline'
   const [showSyncPanel, setShowSyncPanel] = useState(false);
   const [linkInput, setLinkInput] = useState('');
@@ -40,8 +42,14 @@ export default function App() {
 
       const cloud = await loadFromCloud();
       if (cloud) {
-        setData(cloud);
-        saveLocal(cloud);
+        // Only adopt cloud data if it's newer than local — prevents clobbering
+        // fresh local writes (e.g. timer data) before the debounce fires
+        const localTime = local?.lastSavedAt ? new Date(local.lastSavedAt).getTime() : 0;
+        const cloudTime = cloud?.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
+        if (cloudTime > localTime) {
+          setData(cloud);
+          saveLocal(cloud);
+        }
         setSyncStatus('synced');
       } else {
         setSyncStatus('synced');
@@ -68,7 +76,8 @@ export default function App() {
     });
   }, []);
 
-  const openGame = useCallback((gameId) => {
+  const openGame = useCallback((gameId, source = 'library') => {
+    setNavSource(source);
     setData(prev => prev ? { ...prev, currentGameId: gameId } : prev);
     setView('game-page');
   }, []);
@@ -77,6 +86,18 @@ export default function App() {
 
   const backToLibrary = useCallback(() => setView('library'), []);
   const backToGamePage = useCallback(() => setView('game-page'), []);
+
+  // Navigate to Library home tab from anywhere (e.g. from GamePage)
+  const goToHome = useCallback(() => {
+    setLibraryView('home');
+    setView('library');
+  }, []);
+
+  // Navigate to Library games list from anywhere (e.g. from GamePage)
+  const goToLibrary = useCallback(() => {
+    setLibraryView('games');
+    setView('library');
+  }, []);
 
   const handleUpdateGame = useCallback((updatedGame) => {
     updateData(prev => ({
@@ -226,9 +247,14 @@ export default function App() {
       <>
         <GamePage
           game={currentGame}
+          library={data.library}
+          navSource={navSource}
           onBack={backToLibrary}
+          onGoHome={goToHome}
+          onGoLibrary={goToLibrary}
           onOpenTracker={openTracker}
           onUpdateGame={handleUpdateGame}
+          onOpenGame={openGame}
         />
         <SyncBar />
       </>
@@ -374,7 +400,13 @@ export default function App() {
 
   return (
     <>
-      <Library data={data} updateData={updateData} onOpenGame={openGame} />
+      <Library
+        data={data}
+        updateData={updateData}
+        onOpenGame={openGame}
+        libraryView={libraryView}
+        setLibraryView={setLibraryView}
+      />
       <SyncBar />
     </>
   );

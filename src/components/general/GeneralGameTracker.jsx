@@ -245,6 +245,26 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
     setShowManualEntry(false);
   };
 
+  // ── Visibility change: save accumulated time when tab is hidden ──────────
+
+  useEffect(() => {
+    const handler = () => {
+      if (document.hidden && activeSession && !activeSession.pausedAt) {
+        const elapsed = Math.floor((Date.now() - new Date(activeSession.startTime).getTime()) / 1000);
+        updateSave(s => ({
+          ...s,
+          activeSession: {
+            ...s.activeSession,
+            accumulatedTime: (s.activeSession.accumulatedTime || 0) + elapsed,
+            startTime: new Date().toISOString(),
+          },
+        }));
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [activeSession]);
+
   // ── Milestones ──────────────────────────────────────────────────────────
 
   const addMilestone = () => {

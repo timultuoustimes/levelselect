@@ -108,6 +108,7 @@ export function createGameEntry({ name, igdbId, platforms, status, complexity, s
     currentSaveId: null,
     addedAt: new Date().toISOString(),
     trackerType: null,
+    userTags: [],
   };
 }
 

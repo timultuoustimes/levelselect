@@ -41,7 +41,7 @@ export function loadLocal() {
 
 export function saveLocal(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, version: STORAGE_VERSION }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, version: STORAGE_VERSION, lastSavedAt: new Date().toISOString() }));
   } catch (e) {
     console.error('Failed to save local data:', e);
   }

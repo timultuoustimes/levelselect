@@ -6,13 +6,14 @@ import {
   Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
   ExternalLink, X, Check, ShoppingBag, RefreshCw, Download,
-  CheckSquare, Square,
+  CheckSquare, Square, ArrowLeft,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const STATUS_COLORS = {
   playing:   'bg-green-500',
+  queued:    'bg-cyan-500',
   paused:    'bg-yellow-500',
   completed: 'bg-blue-500',
   backlog:   'bg-gray-500',
@@ -22,6 +23,7 @@ const STATUS_COLORS = {
 
 const STATUS_LABELS = {
   playing:   'Playing',
+  queued:    'Up Next',
   paused:    'Paused',
   completed: 'Completed',
   backlog:   'Backlog',
@@ -29,47 +31,120 @@ const STATUS_LABELS = {
   abandoned: 'Abandoned',
 };
 
-const STATUS_ORDER = { playing: 0, paused: 1, backlog: 2, completed: 3, shelved: 4, abandoned: 5 };
+const STATUS_ORDER = { playing: 0, queued: 1, paused: 2, backlog: 3, completed: 4, shelved: 5, abandoned: 6 };
 
-// Platforms the user plays on — shown as quick-select chips
+// Platforms available as quick-select chips throughout the app
 const PRESET_PLATFORMS = [
   'Switch',
   'Switch 2',
   'Mac',
   'iOS',
   'Recalbox',
+  'NES',
+  'SNES',
+  'N64',
+  'GameCube',
+  'Wii',
+  'Wii U',
+  'Game Boy',
+  'GBA',
+  'DS',
+  '3DS',
+  'Genesis',
+  'Xbox',
+  'Xbox 360',
+  'PS1',
+  'PS2',
+  'PS3',
+  'PS4',
+  'PS5',
+  'PC',
+  'Steam Deck',
 ];
 
-// Map IGDB platform names → our preset names (and handle Mac-over-Windows preference)
+// Map IGDB platform names → our short display names
+// Covers NA-preferred names; combines regional variants (Famicom=NES, Super Famicom=SNES, etc.)
 const PLATFORM_MAP = {
-  'PC (Microsoft Windows)': 'Mac', // prefer Mac — will be overridden to null if no Mac version
+  // Mac / PC
   'Mac': 'Mac',
   'macOS': 'Mac',
+  // Note: 'PC (Microsoft Windows)' handled separately (prefer Mac over Windows)
+
+  // Nintendo — modern
   'Nintendo Switch': 'Switch',
   'Nintendo Switch 2': 'Switch 2',
+
+  // Nintendo — classic (NA shorthand names)
+  'Nintendo Entertainment System': 'NES',
+  'Family Computer': 'NES',        // Famicom = NES in NA
+  'Super Nintendo Entertainment System': 'SNES',
+  'Super Famicom': 'SNES',
+  'Nintendo 64': 'N64',
+  'Nintendo GameCube': 'GameCube',
+  'Wii': 'Wii',
+  'Wii U': 'Wii U',
+
+  // Nintendo — handhelds
+  'Game Boy': 'Game Boy',
+  'Game Boy Color': 'GBC',
+  'Game Boy Advance': 'GBA',
+  'Nintendo DS': 'DS',
+  'Nintendo 3DS': '3DS',
+
+  // Sega
+  'Sega Mega Drive/Genesis': 'Genesis',
+  'Sega Genesis': 'Genesis',
+  'Sega Master System': 'Master System',
+  'Sega Saturn': 'Saturn',
+  'Dreamcast': 'Dreamcast',
+  'Sega Game Gear': 'Game Gear',
+
+  // Sony
+  'PlayStation': 'PS1',
+  'PlayStation 2': 'PS2',
+  'PlayStation 3': 'PS3',
+  'PlayStation 4': 'PS4',
+  'PlayStation 5': 'PS5',
+  'PlayStation Portable': 'PSP',
+  'PlayStation Vita': 'PS Vita',
+
+  // Microsoft
+  'Xbox': 'Xbox',
+  'Xbox 360': 'Xbox 360',
+  'Xbox One': 'Xbox One',
+  'Xbox Series X|S': 'Xbox Series X',
+
+  // Mobile
   'iOS': 'iOS',
   'iPhone': 'iOS',
   'iPad': 'iOS',
+  'Android': 'Android',
 };
 
 // Given IGDB platform list, return the user's preferred preset platforms.
-// Prefers Mac over Windows; if the game has a Mac version, uses that.
-// If it has Windows but no Mac, stays as null (user didn't ask for PC tracking).
+// Prefers Mac over Windows; maps IGDB names to short NA display names.
 function mapIGDBPlatforms(igdbPlatforms) {
   const names = (igdbPlatforms || []).map(p => (typeof p === 'string' ? p : p.name || ''));
   const hasMac = names.some(n => n === 'Mac' || n === 'macOS');
-  const hasWindows = names.some(n => n === 'PC (Microsoft Windows)');
-  const hasSwitch = names.some(n => n === 'Nintendo Switch');
-  const hasSwitch2 = names.some(n => n === 'Nintendo Switch 2');
-  const hasIOS = names.some(n => n === 'iOS' || n === 'iPhone' || n === 'iPad');
 
   const result = [];
-  // Mac preferred over Windows; only add Mac if the game actually supports it
-  if (hasMac) result.push('Mac');
-  // Windows-only: don't add anything (user doesn't track "PC" as a platform)
-  if (hasSwitch) result.push('Switch');
-  if (hasSwitch2) result.push('Switch 2');
-  if (hasIOS) result.push('iOS');
+
+  for (const name of names) {
+    const mapped = PLATFORM_MAP[name];
+    if (mapped && !result.includes(mapped)) {
+      // Skip 'Mac' entry for PC Windows — only add Mac if game actually has Mac support
+      result.push(mapped);
+    }
+  }
+
+  // If the game has Windows but no Mac, don't add 'Mac'
+  // (PC (Microsoft Windows) is not in PLATFORM_MAP intentionally)
+  // Filter: don't add Windows-only as Mac
+  if (!hasMac) {
+    const macIdx = result.indexOf('Mac');
+    if (macIdx !== -1) result.splice(macIdx, 1);
+  }
+
   return result;
 }
 
@@ -87,6 +162,14 @@ const TRACKER_TYPES = {
   'Cast n Chill': 'cast-n-chill',
   'Citizen Sleeper': 'citizen-sleeper',
   'The Messenger': 'messenger',
+};
+
+// Grid column classes keyed by user preference
+const GRID_CLASS = {
+  2: 'grid-cols-2',
+  3: 'grid-cols-2 sm:grid-cols-3',
+  4: 'grid-cols-3 sm:grid-cols-4',
+  5: 'grid-cols-3 sm:grid-cols-4 lg:grid-cols-5',
 };
 
 // Sort options
@@ -525,6 +608,276 @@ function LibraryStats({ library }) {
   );
 }
 
+// ─── Home View ───────────────────────────────────────────────────────────────
+
+const HOME_SECTIONS = [
+  { status: 'playing',   label: 'Now Playing',         icon: '▶',  collapsed: false },
+  { status: 'queued',    label: 'Up Next',              icon: '⏰', collapsed: false },
+  { status: 'paused',    label: 'Paused',               icon: '⏸', collapsed: false },
+  { status: 'completed', label: 'Recently Completed',   icon: '🏆', collapsed: false, limit: 5 },
+  { status: 'backlog',   label: 'Backlog',              icon: '📦', collapsed: false },
+  { status: 'shelved',   label: 'Shelved',              icon: '🗄', collapsed: true },
+  { status: 'abandoned', label: 'Abandoned',            icon: '🚫', collapsed: true },
+];
+
+function HomeCoverCard({ game, onOpen }) {
+  const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+  return (
+    <button
+      onClick={onOpen}
+      className="flex-shrink-0 w-20 sm:w-24 text-left group"
+    >
+      {coverUrl ? (
+        <img
+          src={coverUrl}
+          alt={game.name}
+          className="w-20 sm:w-24 aspect-[3/4] object-cover rounded-lg shadow-md mb-1.5"
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+      ) : (
+        <div className="w-20 sm:w-24 aspect-[3/4] rounded-lg bg-purple-900/40 border border-purple-500/20 flex items-center justify-center mb-1.5">
+          <span className="text-xl opacity-40">🎮</span>
+        </div>
+      )}
+      <p className="text-xs text-gray-300 group-hover:text-purple-300 line-clamp-2 leading-tight transition-colors">
+        {game.name}
+      </p>
+    </button>
+  );
+}
+
+function HomeView({ library, onOpenGame, onViewAll, collapsedSections, onToggleCollapsed, search = '' }) {
+  // Sort library by lastPlayed for the completed section
+  const getLastPlayed = (g) => g.saves?.[0]?.lastPlayedAt || g.addedAt || '';
+
+  // Apply search filter if provided
+  const matchSearch = (g) => !search || g.name.toLowerCase().includes(search.toLowerCase())
+    || (g.franchise || '').toLowerCase().includes(search.toLowerCase());
+
+  return (
+    <div className="space-y-5 pb-8">
+      {HOME_SECTIONS.map(section => {
+        let games = library.filter(g => g.status === section.status && matchSearch(g));
+        const totalCount = library.filter(g => g.status === section.status).length;
+        if (games.length === 0) return null;
+
+        // "Recently Completed" — sort by lastPlayedAt, cap at 5
+        if (section.status === 'completed') {
+          games = [...games].sort((a, b) =>
+            new Date(getLastPlayed(b)) - new Date(getLastPlayed(a))
+          ).slice(0, section.limit || 5);
+        }
+
+        const isCollapsed = collapsedSections[section.status] ?? section.collapsed;
+
+        return (
+          <div key={section.status}>
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => onToggleCollapsed(section.status)}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <span className="text-base">{section.icon}</span>
+                <span className="font-semibold text-sm">{section.label}</span>
+                <span className="text-xs text-gray-500">({totalCount})</span>
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isCollapsed ? '' : 'rotate-180'}`} />
+              </button>
+              <button
+                onClick={() => onViewAll(section.status)}
+                className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                See all →
+              </button>
+            </div>
+            {!isCollapsed && (
+              <div className="flex gap-3 overflow-x-auto pb-1 scroll-smooth-ios -mx-4 px-4">
+                {games.map(game => (
+                  <HomeCoverCard key={game.id} game={game} onOpen={() => onOpenGame(game.id, 'home')} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Platform Hub ─────────────────────────────────────────────────────────────
+
+function PlatformHub({ library, onSelect }) {
+  // Count games per platform, counting multi-platform games in each
+  const counts = {};
+  library.forEach(g => {
+    (g.platforms || []).forEach(p => {
+      counts[p] = (counts[p] || 0) + 1;
+    });
+    if (!g.platforms || g.platforms.length === 0) {
+      counts['Unknown'] = (counts['Unknown'] || 0) + 1;
+    }
+  });
+  const entries = Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0]));
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {entries.map(([platform, count]) => (
+        <button
+          key={platform}
+          onClick={() => onSelect(platform)}
+          className="card-hover p-4 text-left flex flex-col gap-1"
+        >
+          <div className="text-base font-semibold truncate">{platform}</div>
+          <div className="text-xs text-gray-500">{count} game{count !== 1 ? 's' : ''}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Franchise Hub ────────────────────────────────────────────────────────────
+
+function FranchiseHub({ library, onSelect }) {
+  const counts = {};
+  library.forEach(g => {
+    if (g.franchise) counts[g.franchise] = (counts[g.franchise] || 0) + 1;
+  });
+  // Only show franchises with 2+ games
+  const entries = Object.entries(counts).filter(([, c]) => c >= 2).sort((a, b) => a[0].localeCompare(b[0]));
+
+  if (entries.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-500 text-sm">
+        No franchises with 2+ games yet. Add franchise info to your games to see them grouped here.
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {entries.map(([franchise, count]) => (
+        <button
+          key={franchise}
+          onClick={() => onSelect(franchise)}
+          className="card-hover p-4 text-left flex flex-col gap-1"
+        >
+          <div className="text-base font-semibold truncate">{franchise}</div>
+          <div className="text-xs text-gray-500">{count} game{count !== 1 ? 's' : ''}</div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Tag Input with autocomplete dropdown ────────────────────────────────────
+
+function TagInput({ suggestions = [], onAdd, placeholder = 'Add a tag…', className = '' }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  const filtered = query.trim()
+    ? suggestions.filter(t => t.toLowerCase().includes(query.toLowerCase()))
+    : suggestions;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const commit = (val) => {
+    const cleaned = val.trim().replace(/,/g, '');
+    if (cleaned) onAdd(cleaned);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className={`relative flex-1 ${className}`}>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(query); }
+          if (e.key === 'Escape') setOpen(false);
+        }}
+        className={`input-field text-sm w-full`}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden w-full max-h-40 overflow-y-auto">
+          {filtered.slice(0, 8).map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => commit(tag)}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors text-gray-300 flex items-center gap-1.5"
+            >
+              <span className="text-purple-400">#</span>{tag}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Mobile Status Picker ─────────────────────────────────────────────────────
+
+function MobileStatusPicker({ statusFilter, onChange, counts }) {
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const label = statusFilter === 'all' ? 'All' : STATUS_LABELS[statusFilter];
+  const dotColor = statusFilter !== 'all' ? STATUS_COLORS[statusFilter] : null;
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="tab-button-active whitespace-nowrap text-xs flex items-center gap-1.5 pr-2"
+      >
+        {dotColor && <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />}
+        {label} ({counts[statusFilter] || 0})
+        <ChevronDown className="w-3 h-3 ml-0.5" />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+          {['all', 'playing', 'queued', 'paused', 'backlog', 'completed', 'shelved', 'abandoned'].map(status => (
+            <button
+              key={status}
+              onClick={() => { onChange(status); setOpen(false); }}
+              className={`w-full text-left px-3 py-2.5 text-xs flex items-center gap-2.5 hover:bg-white/10 transition-colors ${statusFilter === status ? 'text-white' : 'text-gray-400'}`}
+            >
+              {status !== 'all'
+                ? <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_COLORS[status]}`} />
+                : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-gray-500" />}
+              {status === 'all' ? 'All' : STATUS_LABELS[status]}
+              <span className="ml-auto text-gray-600">{counts[status] || 0}</span>
+              {statusFilter === status && <Check className="w-3 h-3 text-purple-400 ml-0.5" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 function Modal({ onClose, title, children }) {
@@ -545,17 +898,23 @@ function Modal({ onClose, title, children }) {
 
 // ─── Main Export ──────────────────────────────────────────────────────────────
 
-export default function Library({ data, updateData, onOpenGame }) {
+export default function Library({ data, updateData, onOpenGame, libraryView, setLibraryView }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('status');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
-  const [libraryView, setLibraryView] = useState('games'); // 'games' | 'stats'
+  // libraryView + setLibraryView come from App.jsx (lifted state)
+  const [collapsedSections, setCollapsedSections] = useState({ shelved: true, abandoned: true });
   const [showImport, setShowImport] = useState(false);
   const [igdbFetchStatus, setIgdbFetchStatus] = useState(null); // null | 'fetching' | 'done'
   const [showAddGame, setShowAddGame] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [showSortFilter, setShowSortFilter] = useState(false);
+  const [gridCols, setGridCols] = useState(() => parseInt(localStorage.getItem('ls-grid-cols') || '3'));
+
+  // Two-level navigation for platform and franchise views
+  const [platformFilter, setPlatformFilter] = useState(null);
+  const [franchiseFilter, setFranchiseFilter] = useState(null);
 
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
@@ -582,6 +941,13 @@ export default function Library({ data, updateData, onOpenGame }) {
   const [manualStatus, setManualStatus] = useState('backlog');
   const [manualFranchise, setManualFranchise] = useState('');
   const [manualYearPlayed, setManualYearPlayed] = useState('');
+
+  // Tag filter
+  const [tagFilter, setTagFilter] = useState([]);
+
+  // Add-game tags
+  const [newGameTags, setNewGameTags] = useState([]);
+  const [tagInput, setTagInput] = useState('');
 
   const fileInputRef = useRef(null);
   const searchDebounceRef = useRef(null);
@@ -617,13 +983,22 @@ export default function Library({ data, updateData, onOpenGame }) {
     }, 400);
   }, [searchQuery, showAddGame, addStep]);
 
+  // Reset sub-filters when sort mode changes
+  useEffect(() => {
+    setPlatformFilter(null);
+    setFranchiseFilter(null);
+  }, [sortBy]);
+
   // ── Filter + sort ──────────────────────────────────────────────────────
 
   const filteredGames = library.filter(g => {
     const matchSearch = g.name.toLowerCase().includes(search.toLowerCase())
       || (g.franchise || '').toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === 'all' || g.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchPlatform = sortBy !== 'platform' || platformFilter === null || (g.platforms || []).includes(platformFilter);
+    const matchFranchise = sortBy !== 'franchise' || franchiseFilter === null || g.franchise === franchiseFilter;
+    const matchTags = tagFilter.length === 0 || tagFilter.every(t => (g.userTags || []).includes(t));
+    return matchSearch && matchStatus && matchPlatform && matchFranchise && matchTags;
   });
 
   const sortedGames = [...filteredGames].sort((a, b) => {
@@ -669,6 +1044,9 @@ export default function Library({ data, updateData, onOpenGame }) {
     }
   });
 
+  // All unique tags across the library
+  const allLibraryTags = [...new Set(library.flatMap(g => g.userTags || []))].sort();
+
   // Status counts
   const counts = library.reduce((acc, g) => {
     acc[g.status] = (acc[g.status] || 0) + 1;
@@ -678,7 +1056,8 @@ export default function Library({ data, updateData, onOpenGame }) {
 
   // ── Group headers for franchise/platform sorts ──────────────────────────
 
-  const shouldShowGroupHeaders = sortBy === 'franchise' || sortBy === 'platform';
+  // Only show group headers when in the flat view (no sub-filter active)
+  const shouldShowGroupHeaders = (sortBy === 'franchise' && !franchiseFilter) || (sortBy === 'platform' && !platformFilter);
 
   function getGroupKey(game) {
     if (sortBy === 'franchise') return game.franchise || 'No Franchise';
@@ -797,11 +1176,9 @@ export default function Library({ data, updateData, onOpenGame }) {
     setManualName(result.name);
     setManualFranchise(result.franchise || '');
     setManualYearPlayed('');
-    // Pre-fill platform from result if it matches a preset
-    const matchedPreset = PRESET_PLATFORMS.find(p =>
-      (result.platforms || []).some(rp => rp.toLowerCase().includes(p.toLowerCase()))
-    );
-    setSelectedPlatforms(matchedPreset ? [matchedPreset] : []);
+    // Pre-fill platforms using the same IGDB → preset mapping used everywhere else
+    const mappedPlatforms = mapIGDBPlatforms(result.platforms || []);
+    setSelectedPlatforms(mappedPlatforms.length > 0 ? mappedPlatforms : []);
     setAddStep('confirm');
   };
 
@@ -831,6 +1208,7 @@ export default function Library({ data, updateData, onOpenGame }) {
     game.trackerType = trackerType;
     game.franchise = manualFranchise.trim() || null;
     game.yearPlayed = manualYearPlayed.trim() ? parseInt(manualYearPlayed.trim(), 10) : null;
+    game.userTags = [...newGameTags];
 
     if (selectedResult) {
       game.igdbId = selectedResult.igdbId;
@@ -864,6 +1242,8 @@ export default function Library({ data, updateData, onOpenGame }) {
     setSelectedPlatforms([]);
     setCustomPlatform('');
     setManualStatus('backlog');
+    setNewGameTags([]);
+    setTagInput('');
   };
 
   const togglePlatform = (p) => {
@@ -1064,13 +1444,42 @@ export default function Library({ data, updateData, onOpenGame }) {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             <button
-              onClick={() => setLibraryView('games')}
+              onClick={() => setLibraryView('home')}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
             >
               <Gamepad2 className="w-6 h-6 text-purple-400" />
               <h1 className="text-xl font-bold">LevelSelect</h1>
             </button>
             <div className="flex gap-2">
+              {/* View tabs */}
+              <div className="hidden sm:flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+                {[
+                  { id: 'home', label: 'Home' },
+                  { id: 'games', label: 'Library' },
+                  { id: 'stats', label: 'Stats' },
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setLibraryView(tab.id)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      libraryView === tab.id
+                        ? 'bg-purple-600 text-white'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+              {/* Mobile: single icon buttons */}
+              <div className="sm:hidden flex gap-1">
+                <button
+                  onClick={() => setLibraryView(v => v === 'stats' ? 'home' : 'stats')}
+                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'stats' ? 'text-purple-300 border-purple-500/50' : ''}`}
+                >
+                  <BarChart2 className="w-4 h-4" />
+                </button>
+              </div>
               <a
                 href="https://www.dekudeals.com/wishlist/cwnns56whw"
                 target="_blank"
@@ -1081,14 +1490,6 @@ export default function Library({ data, updateData, onOpenGame }) {
                 <ShoppingBag className="w-4 h-4" />
                 <span className="hidden sm:inline">Wishlist</span>
               </a>
-              <button
-                onClick={() => setLibraryView(v => v === 'games' ? 'stats' : 'games')}
-                className={`btn-secondary !px-3 text-sm gap-1.5 ${libraryView === 'stats' ? 'text-purple-300 border-purple-500/50' : ''}`}
-                title="Library Stats"
-              >
-                <BarChart2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Stats</span>
-              </button>
               <button
                 onClick={() => setShowImport(true)}
                 className="btn-secondary !px-3 text-sm gap-1.5"
@@ -1121,38 +1522,68 @@ export default function Library({ data, updateData, onOpenGame }) {
             </div>
           )}
 
+          {/* Search — visible on Home and Library tabs */}
+          {(libraryView === 'home' || libraryView === 'games') && (
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder={libraryView === 'home' ? 'Search games…' : 'Search games or franchises…'}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="input-field pl-10 pr-10"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          )}
+
           {libraryView === 'games' && (
             <>
-              {/* Search */}
-              <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Search games or franchises…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="input-field pl-10 pr-10"
-                />
-                {search && (
-                  <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
-                    <X className="w-4 h-4" />
+              {/* Sub-filter breadcrumb — shown when drilling into a platform or franchise */}
+              {(platformFilter || franchiseFilter) && (
+                <div className="flex items-center gap-2 mb-3">
+                  <button
+                    onClick={() => { setPlatformFilter(null); setFranchiseFilter(null); }}
+                    className="btn-secondary !px-2.5 !py-1.5 !min-h-0 text-xs gap-1.5"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    {sortBy === 'platform' ? 'All Platforms' : 'All Franchises'}
                   </button>
-                )}
-              </div>
+                  <span className="text-sm font-medium text-gray-200">
+                    {platformFilter || franchiseFilter}
+                  </span>
+                  <span className="text-xs text-gray-500">({filteredGames.length} game{filteredGames.length !== 1 ? 's' : ''})</span>
+                </div>
+              )}
 
               {/* Filter / sort / view row */}
               <div className="flex items-center gap-2 mb-3">
-                {/* Status tabs — scrollable */}
-                <div className="flex gap-1 overflow-x-auto scroll-smooth-ios flex-1">
-                  {['all', 'playing', 'paused', 'backlog', 'completed', 'shelved', 'abandoned'].map(status => (
-                    <button
-                      key={status}
-                      onClick={() => setStatusFilter(status)}
-                      className={`${statusFilter === status ? 'tab-button-active' : 'tab-button-inactive'} whitespace-nowrap text-xs`}
-                    >
-                      {status === 'all' ? 'All' : STATUS_LABELS[status]} ({counts[status] || 0})
-                    </button>
-                  ))}
+                {/* Status filter — dropdown on mobile, tabs on sm+ */}
+                <div className="flex-1 min-w-0">
+                  {/* Mobile: compact dropdown */}
+                  <div className="sm:hidden">
+                    <MobileStatusPicker
+                      statusFilter={statusFilter}
+                      onChange={setStatusFilter}
+                      counts={counts}
+                    />
+                  </div>
+                  {/* Desktop: scrollable tabs */}
+                  <div className="hidden sm:flex gap-1 overflow-x-auto scroll-smooth-ios">
+                    {['all', 'playing', 'queued', 'paused', 'backlog', 'completed', 'shelved', 'abandoned'].map(status => (
+                      <button
+                        key={status}
+                        onClick={() => setStatusFilter(status)}
+                        className={`${statusFilter === status ? 'tab-button-active' : 'tab-button-inactive'} whitespace-nowrap text-xs`}
+                      >
+                        {status === 'all' ? 'All' : STATUS_LABELS[status]} ({counts[status] || 0})
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Sort + view toggle */}
@@ -1163,7 +1594,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                       className="btn-secondary !px-2.5 !py-2 !min-h-0 text-xs gap-1"
                     >
                       <Filter className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Sort</span>
+                      <span className="hidden sm:inline">Filter</span>
                     </button>
                     {showSortFilter && (
                       <div className="absolute right-0 top-full mt-1 z-20 bg-slate-800 border border-white/10 rounded-lg shadow-xl min-w-[140px] overflow-hidden">
@@ -1188,6 +1619,29 @@ export default function Library({ data, updateData, onOpenGame }) {
                   >
                     {viewMode === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
                   </button>
+
+                  {/* Grid size control — only visible in grid mode */}
+                  {viewMode === 'grid' && (
+                    <div className="flex items-center rounded-lg overflow-hidden border border-white/10" title="Columns per row">
+                      <div className="bg-slate-800 px-1.5 py-2 border-r border-white/10 flex items-center">
+                        <LayoutGrid className="w-3 h-3 text-gray-500" />
+                      </div>
+                      {[2, 3, 4, 5].map(n => (
+                        <button
+                          key={n}
+                          onClick={() => { setGridCols(n); localStorage.setItem('ls-grid-cols', String(n)); }}
+                          className={`!px-2 !py-2 !min-h-0 text-[10px] font-medium transition-colors ${
+                            gridCols === n
+                              ? 'bg-purple-600 text-white'
+                              : 'bg-slate-800 text-gray-500 hover:text-gray-300 hover:bg-white/10'
+                          }`}
+                          title={`${n} columns`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   <div ref={selectMenuRef} className="relative">
                     <div className={`flex rounded-lg overflow-hidden border ${selectMode ? 'border-purple-500/60' : 'border-white/10'}`}>
@@ -1234,6 +1688,35 @@ export default function Library({ data, updateData, onOpenGame }) {
                   </div>
                 </div>
               </div>
+
+              {/* Tag filter chip row */}
+              {allLibraryTags.length > 0 && (
+                <div className="flex items-center gap-1.5 overflow-x-auto scroll-smooth-ios pb-0.5 mb-2">
+                  {allLibraryTags.map(tag => (
+                    <button
+                      key={tag}
+                      onClick={() => setTagFilter(prev =>
+                        prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+                      )}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition-colors ${
+                        tagFilter.includes(tag)
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white/10 text-gray-400 hover:bg-white/20'
+                      }`}
+                    >
+                      #{tag}
+                    </button>
+                  ))}
+                  {tagFilter.length > 0 && (
+                    <button
+                      onClick={() => setTagFilter([])}
+                      className="px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 bg-red-900/40 text-red-400 hover:bg-red-900/60 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* ── Bulk action bar — sits at the bottom of the sticky header ── */}
               {selectMode && (
@@ -1299,7 +1782,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                       <div className="absolute right-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-xl p-3 min-w-[220px] space-y-2">
                         <div className="text-xs text-gray-400 mb-1">Set platforms for all selected games</div>
                         <div className="flex flex-wrap gap-1.5">
-                          {['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].map(p => (
+                          {PRESET_PLATFORMS.map(p => (
                             <button
                               key={p}
                               onClick={() => setBulkPlatformDraft(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])}
@@ -1308,7 +1791,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                               {p}
                             </button>
                           ))}
-                          {bulkPlatformDraft.filter(p => !['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'].includes(p)).map(p => (
+                          {bulkPlatformDraft.filter(p => !PRESET_PLATFORMS.includes(p)).map(p => (
                             <button
                               key={p}
                               onClick={() => setBulkPlatformDraft(prev => prev.filter(x => x !== p))}
@@ -1381,8 +1864,26 @@ export default function Library({ data, updateData, onOpenGame }) {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-4">
 
-        {libraryView === 'stats' ? (
+        {libraryView === 'home' ? (
+          <HomeView
+            library={library}
+            onOpenGame={onOpenGame}
+            onViewAll={(status) => {
+              setLibraryView('games');
+              setStatusFilter(status);
+            }}
+            collapsedSections={collapsedSections}
+            onToggleCollapsed={(status) =>
+              setCollapsedSections(prev => ({ ...prev, [status]: !prev[status] }))
+            }
+            search={search}
+          />
+        ) : libraryView === 'stats' ? (
           <LibraryStats library={library} />
+        ) : sortBy === 'platform' && platformFilter === null ? (
+          <PlatformHub library={filteredGames} onSelect={setPlatformFilter} />
+        ) : sortBy === 'franchise' && franchiseFilter === null ? (
+          <FranchiseHub library={filteredGames} onSelect={setFranchiseFilter} />
         ) : library.length === 0 ? (
           <div className="card p-12 text-center">
             <Gamepad2 className="w-16 h-16 text-purple-400 mx-auto mb-4 opacity-50" />
@@ -1420,7 +1921,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                           key={game.id}
                           game={game}
                           viewMode="list"
-                          onOpen={() => onOpenGame(game.id)}
+                          onOpen={() => onOpenGame(game.id, 'library')}
                           onUpdateStatus={status => handleUpdateStatus(game.id, status)}
                           onDelete={() => setDeleteConfirmId(game.id)}
                           selectMode={selectMode}
@@ -1464,7 +1965,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                         <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                           {key}
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                        <div className={`grid ${GRID_CLASS[gridCols] || GRID_CLASS[3]} gap-3`}>
                           {games.map(game => (
                             <GameCard
                               key={game.id}
@@ -1485,7 +1986,7 @@ export default function Library({ data, updateData, onOpenGame }) {
                 );
               })()
             : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              <div className={`grid ${GRID_CLASS[gridCols] || GRID_CLASS[3]} gap-3`}>
                 {sortedGames.map(game => (
                   <GameCard
                     key={game.id}
@@ -1644,6 +2145,33 @@ export default function Library({ data, updateData, onOpenGame }) {
                   value={manualYearPlayed}
                   onChange={e => setManualYearPlayed(e.target.value)}
                   className="input-field text-sm"
+                />
+              </div>
+
+              {/* Tags */}
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">Tags (optional)</label>
+                {newGameTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {newGameTags.map(tag => (
+                      <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/60 text-purple-200 flex items-center gap-1">
+                        #{tag}
+                        <button
+                          onClick={() => setNewGameTags(prev => prev.filter(t => t !== tag))}
+                          className="hover:text-white ml-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <TagInput
+                  suggestions={allLibraryTags.filter(t => !newGameTags.includes(t))}
+                  onAdd={(val) => {
+                    if (!newGameTags.includes(val)) setNewGameTags(prev => [...prev, val]);
+                  }}
+                  placeholder="Add a tag…"
                 />
               </div>
 

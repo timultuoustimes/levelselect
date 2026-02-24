@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
-  ArrowLeft, Play, Star, Clock, Trophy, ChevronDown, ExternalLink,
+  ArrowLeft, Home, Play, Star, Clock, Trophy, ChevronDown, ExternalLink,
   Edit2, Check, X, Gamepad2, RefreshCw, Plus, Trash2,
 } from 'lucide-react';
 import { igdbCoverUrl, igdbGameUrl, fetchIGDBByName, fetchIGDBGame } from '../utils/igdb.js';
@@ -11,6 +11,7 @@ import { generateId } from '../utils/format.js';
 
 const STATUS_COLORS = {
   playing:   'bg-green-500',
+  queued:    'bg-cyan-500',
   paused:    'bg-yellow-500',
   completed: 'bg-blue-500',
   backlog:   'bg-gray-500',
@@ -20,6 +21,7 @@ const STATUS_COLORS = {
 
 const STATUS_LABELS = {
   playing:   'Playing',
+  queued:    'Up Next',
   paused:    'Paused',
   completed: 'Completed',
   backlog:   'Backlog',
@@ -75,10 +77,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // All platforms that can appear in a play period dropdown
 const KNOWN_PLATFORMS = [
   'Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox',
-  'GameCube', 'Sega Genesis', 'NES', 'N64', 'Xbox', 'Xbox 360',
-  'PlayStation', 'PlayStation 2', 'PlayStation 3', 'PlayStation 4', 'PlayStation 5',
-  'Game Boy Advance', 'Nintendo DS', 'Nintendo 3DS', 'Wii', 'Wii U',
-  'PC', 'Steam Deck',
+  'NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U',
+  'Game Boy', 'GBA', 'DS', '3DS',
+  'Genesis', 'Xbox', 'Xbox 360', 'Xbox One', 'Xbox Series X',
+  'PS1', 'PS2', 'PS3', 'PS4', 'PS5', 'PSP', 'PS Vita',
+  'PC', 'Steam Deck', 'Android',
 ];
 
 function formatPeriod(period) {
@@ -95,6 +98,66 @@ function formatPeriod(period) {
   if (!start) return end;
   if (start === end) return start;
   return `${start} – ${end}`;
+}
+
+// ─── Tag Input with autocomplete dropdown ────────────────────────────────────
+
+function TagInput({ suggestions = [], onAdd, placeholder = 'Add a tag…' }) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  const filtered = query.trim()
+    ? suggestions.filter(t => t.toLowerCase().includes(query.toLowerCase()))
+    : suggestions;
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const commit = (val) => {
+    const cleaned = val.trim().replace(/,/g, '');
+    if (cleaned) onAdd(cleaned);
+    setQuery('');
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative flex-1">
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commit(query); }
+          if (e.key === 'Escape') setOpen(false);
+        }}
+        className="input-field text-sm w-full"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute left-0 top-full mt-1 z-50 bg-slate-800 border border-white/10 rounded-xl shadow-2xl overflow-hidden w-full max-h-40 overflow-y-auto">
+          {filtered.slice(0, 8).map(tag => (
+            <button
+              key={tag}
+              type="button"
+              onMouseDown={e => e.preventDefault()}
+              onClick={() => commit(tag)}
+              className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors text-gray-300 flex items-center gap-1.5"
+            >
+              <span className="text-purple-400">#</span>{tag}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Status Picker ───────────────────────────────────────────────────────────
@@ -228,9 +291,101 @@ function SaveSelector({ game, onOpenTracker }) {
 
 // ─── Main GamePage Component ──────────────────────────────────────────────────
 
-const PRESET_PLATFORMS = ['Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox'];
+// Must stay in sync with PRESET_PLATFORMS in Library.jsx
+const PRESET_PLATFORMS = [
+  'Switch', 'Switch 2', 'Mac', 'iOS', 'Recalbox',
+  'NES', 'SNES', 'N64', 'GameCube', 'Wii', 'Wii U',
+  'Game Boy', 'GBA', 'DS', '3DS',
+  'Genesis', 'Xbox', 'Xbox 360',
+  'PS1', 'PS2', 'PS3', 'PS4', 'PS5',
+  'PC', 'Steam Deck',
+];
 
-export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) {
+// ─── Related Games section ───────────────────────────────────────────────────
+
+function RelatedGames({ game, library, onOpenGame }) {
+  const others = library.filter(g => g.id !== game.id);
+
+  let relatedGames = [];
+  let sectionLabel = null;
+
+  // Priority 1: same franchise (2+ games)
+  if (game.franchise) {
+    const sameFranchise = others.filter(g => g.franchise === game.franchise);
+    if (sameFranchise.length >= 1) {
+      relatedGames = sameFranchise;
+      sectionLabel = `More from ${game.franchise}`;
+    }
+  }
+
+  // Priority 2: same developer
+  if (!relatedGames.length && game.developers?.length > 0) {
+    const sameDev = others.filter(g =>
+      g.developers?.some(d => game.developers.includes(d))
+    );
+    if (sameDev.length >= 1) {
+      relatedGames = sameDev;
+      sectionLabel = `More from ${game.developers[0]}`;
+    }
+  }
+
+  // Priority 3: overlapping genres/themes
+  if (!relatedGames.length) {
+    const gameGenres = new Set([...(game.genres || []), ...(game.themes || [])]);
+    if (gameGenres.size > 0) {
+      const similar = others.filter(g => {
+        const gGenres = [...(g.genres || []), ...(g.themes || [])];
+        return gGenres.some(t => gameGenres.has(t));
+      });
+      if (similar.length >= 1) {
+        relatedGames = similar;
+        sectionLabel = 'Similar Games';
+      }
+    }
+  }
+
+  if (!relatedGames.length || !sectionLabel) return null;
+
+  const toShow = relatedGames.slice(0, 5);
+
+  return (
+    <div className="card p-4">
+      <h2 className="text-sm font-medium mb-3">{sectionLabel}</h2>
+      <div className="flex gap-3 overflow-x-auto pb-1 scroll-smooth-ios">
+        {toShow.map(g => {
+          const coverUrl = g.coverImageId
+            ? igdbCoverUrl(g.coverImageId, 'cover_big')
+            : g.coverUrl || null;
+          return (
+            <button
+              key={g.id}
+              onClick={() => onOpenGame(g.id, 'library')}
+              className="flex-shrink-0 w-24 text-left group"
+            >
+              {coverUrl ? (
+                <img
+                  src={coverUrl}
+                  alt={g.name}
+                  className="w-24 aspect-[3/4] object-cover rounded-lg shadow-md mb-1.5"
+                  onError={e => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-24 aspect-[3/4] rounded-lg bg-purple-900/40 border border-purple-500/20 flex items-center justify-center mb-1.5">
+                  <span className="text-2xl opacity-40">🎮</span>
+                </div>
+              )}
+              <p className="text-xs text-gray-300 group-hover:text-purple-300 line-clamp-2 leading-tight transition-colors">
+                {g.name}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function GamePage({ game, library, navSource = 'library', onBack, onGoHome, onGoLibrary, onOpenTracker, onUpdateGame, onOpenGame }) {
   const [editingReview, setEditingReview] = useState(false);
   const [reviewDraft, setReviewDraft] = useState('');
 
@@ -243,6 +398,38 @@ export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) 
   // IGDB refresh
   const [igdbFetching, setIgdbFetching] = useState(false);
   const [igdbFetchDone, setIgdbFetchDone] = useState(false);
+
+  // Franchise editing
+  const [editingFranchise, setEditingFranchise] = useState(false);
+  const [franchiseDraft, setFranchiseDraft] = useState('');
+
+  // Tags — derive all tags from library for autocomplete
+  const allLibraryTags = [...new Set((library || []).flatMap(g => g.userTags || []))].sort();
+  const allGameTags = game.userTags || [];
+
+  const addTag = (tag) => {
+    const val = tag.trim();
+    if (!val || allGameTags.includes(val)) return;
+    onUpdateGame({ ...game, userTags: [...allGameTags, val] });
+  };
+
+  const removeTag = (tag) => {
+    onUpdateGame({ ...game, userTags: allGameTags.filter(t => t !== tag) });
+  };
+
+  // Franchise editing
+  const allLibraryFranchises = [...new Set((library || [])
+    .map(g => g.franchise).filter(Boolean))].sort();
+
+  const startEditFranchise = () => {
+    setFranchiseDraft(game.franchise || '');
+    setEditingFranchise(true);
+  };
+
+  const saveFranchise = () => {
+    onUpdateGame({ ...game, franchise: franchiseDraft.trim() || null });
+    setEditingFranchise(false);
+  };
 
   // Platform editing
   const [editingPlatforms, setEditingPlatforms] = useState(false);
@@ -443,14 +630,31 @@ export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) 
         )}
 
         <div className="relative max-w-4xl mx-auto px-4 pt-4 pb-6">
-          {/* Back button */}
-          <button
-            onClick={onBack}
-            className="btn-secondary !px-3 !py-2 !min-h-0 mb-4 flex items-center gap-2 text-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Library
-          </button>
+          {/* Navigation */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={onBack}
+              className="btn-secondary !px-3 !py-2 !min-h-0 text-sm flex items-center gap-1.5"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onGoHome || onBack}
+                className="btn-secondary !px-3 !py-2 !min-h-0 text-sm flex items-center gap-1.5"
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Home</span>
+              </button>
+              <button
+                onClick={onGoLibrary || onBack}
+                className="btn-secondary !px-3 !py-2 !min-h-0 text-sm flex items-center gap-1.5"
+              >
+                Library
+              </button>
+            </div>
+          </div>
 
           {/* Cover + Info */}
           <div className="flex gap-5 items-start">
@@ -760,6 +964,28 @@ export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) 
           )}
         </div>
 
+        {/* Tags */}
+        <div className="card p-4 space-y-2.5">
+          <h2 className="text-sm font-medium">Tags</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {allGameTags.map(tag => (
+              <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/50 text-purple-200 flex items-center gap-1">
+                #{tag}
+                <button onClick={() => removeTag(tag)} className="hover:text-white">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-1.5">
+            <TagInput
+              suggestions={allLibraryTags.filter(t => !allGameTags.includes(t))}
+              onAdd={addTag}
+              placeholder="Add a tag…"
+            />
+          </div>
+        </div>
+
         {/* Game Info block */}
         <div className="card p-4 space-y-4">
           <h2 className="text-sm font-medium text-gray-400">Game Info</h2>
@@ -775,13 +1001,50 @@ export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) 
             )}
 
 
-            {/* Franchise */}
-            {game.franchise && (
-              <div>
-                <div className="text-xs text-gray-500 mb-0.5">Series</div>
-                <div className="text-gray-200">{game.franchise}</div>
+            {/* Franchise — editable */}
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <div className="text-xs text-gray-500">Series</div>
+                {!editingFranchise && (
+                  <button
+                    onClick={startEditFranchise}
+                    className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    {game.franchise ? 'Edit' : 'Add'}
+                  </button>
+                )}
               </div>
-            )}
+              {editingFranchise ? (
+                <div className="col-span-2 space-y-1.5 mt-0.5">
+                  <input
+                    type="text"
+                    placeholder="e.g. Zelda, Ori, Mario…"
+                    value={franchiseDraft}
+                    onChange={e => setFranchiseDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveFranchise(); if (e.key === 'Escape') setEditingFranchise(false); }}
+                    className="input-field text-sm !py-1 w-full"
+                    autoFocus
+                    list="franchise-suggestions"
+                  />
+                  <datalist id="franchise-suggestions">
+                    {allLibraryFranchises.map(f => <option key={f} value={f} />)}
+                  </datalist>
+                  <div className="flex gap-1.5">
+                    <button onClick={saveFranchise} className="btn-primary flex-1 text-xs py-1.5 gap-1">
+                      <Check className="w-3.5 h-3.5" /> Save
+                    </button>
+                    <button onClick={() => setEditingFranchise(false)} className="btn-secondary flex-1 text-xs py-1.5 gap-1">
+                      <X className="w-3.5 h-3.5" /> Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-gray-200">
+                  {game.franchise || <span className="text-gray-600 italic">—</span>}
+                </div>
+              )}
+            </div>
 
             {/* Platforms — editable */}
             <div className={game.platforms?.length > 0 ? '' : 'col-span-2'}>
@@ -950,6 +1213,11 @@ export default function GamePage({ game, onBack, onOpenTracker, onUpdateGame }) 
             )}
           </div>
         </div>
+
+        {/* Related games */}
+        {library && library.length > 1 && (
+          <RelatedGames game={game} library={library} onOpenGame={onOpenGame} />
+        )}
 
       </div>
     </div>
