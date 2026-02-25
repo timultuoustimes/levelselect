@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Play, Pause, StopCircle, ChevronDown, CheckCircle, Circle, Clock, Edit3, X, ChevronRight, Trash2 } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { ArrowLeft, Plus, ChevronDown, CheckCircle, Circle, Edit3, Trash2 } from 'lucide-react';
 import { createChecklistSave } from '../../utils/checklistFactory.js';
+import SessionPanel from '../shared/SessionPanel.jsx';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -13,56 +14,17 @@ const formatTime = (secs) => {
   return `${s}s`;
 };
 
-const formatTimeLong = (secs) => {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${m}:${String(s).padStart(2,'0')}`;
-};
 
 export default function ChecklistTracker({ game, config, onBack, onUpdateGame }) {
   const [activeTab, setActiveTab] = useState('checklist');
   const [showNewSave, setShowNewSave] = useState(false);
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
-  const [sessionElapsed, setSessionElapsed] = useState(0);
-  const [sessionRunning, setSessionRunning] = useState(false);
-  const [sessionNotes, setSessionNotes] = useState('');
-  const [editingNotes, setEditingNotes] = useState(false);
   const [editingChapters, setEditingChapters] = useState(false);
   const [chapterDrafts, setChapterDrafts] = useState([]);
-  const intervalRef = useRef(null);
-  const sessionStartRef = useRef(null); // wall-clock timestamp when session started
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
-
-  // Timer — timestamp-based so it survives background/tab-switch throttling
-  useEffect(() => {
-    if (sessionRunning) {
-      intervalRef.current = setInterval(() => {
-        if (sessionStartRef.current) {
-          setSessionElapsed(Math.round((Date.now() - sessionStartRef.current) / 1000));
-        }
-      }, 1000);
-    } else {
-      clearInterval(intervalRef.current);
-    }
-    return () => clearInterval(intervalRef.current);
-  }, [sessionRunning]);
-
-  // Recalculate elapsed when app returns from background
-  useEffect(() => {
-    if (!sessionRunning) return;
-    const handler = () => {
-      if (!document.hidden && sessionStartRef.current) {
-        setSessionElapsed(Math.round((Date.now() - sessionStartRef.current) / 1000));
-      }
-    };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
-  }, [sessionRunning]);
 
   const updateCurrentSave = useCallback((updater) => {
     const updated = typeof updater === 'function' ? updater(currentSave) : updater;
@@ -76,36 +38,6 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     onUpdateGame({ ...game, saves: [...saves, save], currentSaveId: save.id });
     setNewSaveName('');
     setShowNewSave(false);
-  };
-
-  const startSession = () => {
-    sessionStartRef.current = Date.now();
-    setSessionElapsed(0);
-    setSessionRunning(true);
-    setSessionNotes('');
-  };
-
-  const stopSession = () => {
-    setSessionRunning(false);
-    const endTime = Date.now();
-    const startTime = sessionStartRef.current;
-    const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : sessionElapsed;
-    if (elapsed > 0) {
-      const session = {
-        id: generateId(),
-        startTime: new Date(startTime || endTime - elapsed * 1000).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        duration: elapsed,
-        notes: sessionNotes,
-      };
-      updateCurrentSave(s => ({
-        ...s,
-        sessions: [...(s.sessions || []), session],
-        totalPlaytime: (s.totalPlaytime || 0) + elapsed,
-      }));
-    }
-    sessionStartRef.current = null;
-    setSessionElapsed(0);
   };
 
   const toggleChapter = (chapterId) => {
@@ -196,7 +128,6 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   const totalChapters = activeChapters.length;
   const completedChapters = activeChapters.filter(c => currentSave?.chapterCompleted?.[c.id]).length;
   const pct = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
-  const totalPlaytime = currentSave?.totalPlaytime || 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black text-white">
@@ -239,6 +170,18 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
         </div>
       </div>
 
+      {/* Session panel — consistent with all other trackers */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={currentSave?.totalPlaytime || 0}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateCurrentSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
+        }))}
+      />
+
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {/* New save inline form */}
         {showNewSave && (
@@ -261,63 +204,18 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
           </div>
         )}
 
-        {/* Progress + Timer card */}
-        <div className="bg-black/40 rounded-xl border border-white/10 p-4 space-y-3">
-          {/* Progress bar */}
-          <div>
-            <div className="flex justify-between text-sm mb-1.5">
-              <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
-              <span className="font-bold text-white">{pct}%</span>
-            </div>
-            <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+        {/* Progress card */}
+        <div className="bg-black/40 rounded-xl border border-white/10 p-4">
+          <div className="flex justify-between text-sm mb-1.5">
+            <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
+            <span className="font-bold text-white">{pct}%</span>
           </div>
-
-          {/* Playtime */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">Total playtime:</span>
-              <span className="font-mono font-bold text-white">
-                {formatTime(totalPlaytime + (sessionRunning ? sessionElapsed : 0))}
-              </span>
-            </div>
-
-            {sessionRunning ? (
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-green-400 text-sm animate-pulse">
-                  ● {formatTimeLong(sessionElapsed)}
-                </span>
-                <button
-                  onClick={stopSession}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-800 hover:bg-red-700 rounded-lg text-sm font-medium"
-                >
-                  <StopCircle className="w-4 h-4" /> Stop
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={startSession}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-sm font-medium"
-              >
-                <Play className="w-4 h-4" /> Start Session
-              </button>
-            )}
-          </div>
-
-          {sessionRunning && (
-            <input
-              type="text"
-              placeholder="Session notes (optional)..."
-              value={sessionNotes}
-              onChange={e => setSessionNotes(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none"
+          <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
+              style={{ width: `${pct}%` }}
             />
-          )}
+          </div>
         </div>
 
         {/* Chapter checklist */}
