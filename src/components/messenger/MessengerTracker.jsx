@@ -3,6 +3,7 @@ import {
   ArrowLeft, Plus, ChevronDown, CheckCircle, Circle, Music, Star,
   Zap, ShoppingBag, Map, BookOpen, ChevronRight
 } from 'lucide-react';
+import SessionPanel from '../shared/SessionPanel.jsx';
 import {
   LEVELS, MUSIC_NOTES, PHOBEKINS, SHOP_UPGRADES,
   TOTAL_POWER_SEALS_MAIN, TOTAL_POWER_SEALS_DLC
@@ -244,12 +245,19 @@ export default function MessengerTracker({ game, onBack, onUpdateGame }) {
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
+  // Migrate: add sessions/totalPlaytime if missing
+  const migratedSave = currentSave ? {
+    ...currentSave,
+    sessions: currentSave.sessions || [],
+    totalPlaytime: currentSave.totalPlaytime ?? 0,
+    notes: currentSave.notes ?? '',
+  } : currentSave;
 
   const updateCurrentSave = useCallback((updater) => {
-    const updated = typeof updater === 'function' ? updater(currentSave) : updater;
+    const updated = typeof updater === 'function' ? updater(migratedSave) : updater;
     const newSaves = saves.map(s => s.id === updated.id ? updated : s);
     onUpdateGame({ ...game, saves: newSaves });
-  }, [currentSave, saves, game, onUpdateGame]);
+  }, [migratedSave, saves, game, onUpdateGame]);
 
   const createSave = () => {
     if (!newSaveName.trim()) return;
@@ -295,6 +303,19 @@ export default function MessengerTracker({ game, onBack, onUpdateGame }) {
           </button>
         </div>
       </div>
+
+      {/* Session Panel */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={migratedSave?.totalPlaytime || 0}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateCurrentSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
+          lastPlayedAt: session.endTime,
+        }))}
+      />
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {showNewSave && (

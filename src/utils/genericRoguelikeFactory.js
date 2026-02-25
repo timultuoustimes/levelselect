@@ -8,7 +8,16 @@ export function createGenericRoguelikeSave(name) {
     lastPlayedAt: new Date().toISOString(),
     runs: [],
     activeRun: null,
+    sessions: [],
+    notes: '',
   };
+}
+
+export function migrateGenericRoguelikeSave(save) {
+  const migrated = { ...save };
+  if (!migrated.sessions) migrated.sessions = [];
+  if (migrated.notes === undefined) migrated.notes = '';
+  return migrated;
 }
 
 export function createGenericRun(loadout = {}) {

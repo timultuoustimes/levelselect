@@ -132,7 +132,16 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
     }
   }, []);
 
-  if (!save) return null;
+  if (!save) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-3 animate-pulse">🎮</div>
+          <div className="text-gray-400 text-sm">Setting up tracker…</div>
+        </div>
+      </div>
+    );
+  }
 
   const updateSave = (updater) => {
     const updated = typeof updater === 'function' ? updater(save) : updater;

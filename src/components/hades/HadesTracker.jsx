@@ -8,6 +8,7 @@ import KeepsakesTab from './KeepsakesTab.jsx';
 import AnalyticsTab from './AnalyticsTab.jsx';
 import MirrorTab from './MirrorTab.jsx';
 import RunView from './RunView.jsx';
+import SessionPanel from '../shared/SessionPanel.jsx';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -202,6 +203,18 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
           </div>
         </div>
       </div>
+
+      {/* Session Panel */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          lastPlayedAt: session.endTime,
+        }))}
+      />
 
       {/* Tab Content */}
       <div className="max-w-7xl mx-auto px-4 py-4">

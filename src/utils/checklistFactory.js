@@ -16,5 +16,7 @@ export function createChecklistSave(name, config) {
     // Total elapsed across all sessions
     totalPlaytime: 0,
     notes: '',
+    // User-edited chapter list (null = use config.chapters; array = override)
+    customChapters: null,
   };
 }
