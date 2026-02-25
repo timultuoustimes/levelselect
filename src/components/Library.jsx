@@ -6,7 +6,7 @@ import {
   Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
   ExternalLink, X, Check, ShoppingBag, RefreshCw, Download,
-  CheckSquare, Square, ArrowLeft,
+  CheckSquare, Square, ArrowLeft, Home,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -1471,11 +1471,26 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                   </button>
                 ))}
               </div>
-              {/* Mobile: single icon buttons */}
+              {/* Mobile: icon buttons for all three views */}
               <div className="sm:hidden flex gap-1">
                 <button
-                  onClick={() => setLibraryView(v => v === 'stats' ? 'home' : 'stats')}
+                  onClick={() => setLibraryView('home')}
+                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'home' ? 'text-purple-300 border-purple-500/50' : ''}`}
+                  title="Home"
+                >
+                  <Home className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setLibraryView('games')}
+                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'games' ? 'text-purple-300 border-purple-500/50' : ''}`}
+                  title="Library"
+                >
+                  <Gamepad2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setLibraryView('stats')}
                   className={`btn-secondary !px-2.5 text-sm ${libraryView === 'stats' ? 'text-purple-300 border-purple-500/50' : ''}`}
+                  title="Stats"
                 >
                   <BarChart2 className="w-4 h-4" />
                 </button>
@@ -1562,28 +1577,13 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
               {/* Filter / sort / view row */}
               <div className="flex items-center gap-2 mb-3">
-                {/* Status filter — dropdown on mobile, tabs on sm+ */}
+                {/* Status filter — compact dropdown on all screen sizes */}
                 <div className="flex-1 min-w-0">
-                  {/* Mobile: compact dropdown */}
-                  <div className="sm:hidden">
-                    <MobileStatusPicker
-                      statusFilter={statusFilter}
-                      onChange={setStatusFilter}
-                      counts={counts}
-                    />
-                  </div>
-                  {/* Desktop: scrollable tabs */}
-                  <div className="hidden sm:flex gap-1 overflow-x-auto scroll-smooth-ios">
-                    {['all', 'playing', 'queued', 'paused', 'backlog', 'completed', 'shelved', 'abandoned'].map(status => (
-                      <button
-                        key={status}
-                        onClick={() => setStatusFilter(status)}
-                        className={`${statusFilter === status ? 'tab-button-active' : 'tab-button-inactive'} whitespace-nowrap text-xs`}
-                      >
-                        {status === 'all' ? 'All' : STATUS_LABELS[status]} ({counts[status] || 0})
-                      </button>
-                    ))}
-                  </div>
+                  <MobileStatusPicker
+                    statusFilter={statusFilter}
+                    onChange={setStatusFilter}
+                    counts={counts}
+                  />
                 </div>
 
                 {/* Sort + view toggle */}

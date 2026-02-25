@@ -1,10 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { ArrowLeft, Plus, ChevronDown, Zap } from 'lucide-react';
-import { createLoneRuinSave, createLoneRuinRun } from '../../utils/loneRuinFactory.js';
+import { createLoneRuinSave, createLoneRuinRun, migrateLoneRuinSave } from '../../utils/loneRuinFactory.js';
 import { STARTING_SPELLS, DIFFICULTIES, MODES } from '../../data/loneRuinData.js';
 import LoneRuinRunView from './LoneRuinRunView.jsx';
 import LoneRuinOverview from './LoneRuinOverview.jsx';
 import LoneRuinAnalytics from './LoneRuinAnalytics.jsx';
+import SessionPanel from '../shared/SessionPanel.jsx';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -26,7 +27,7 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
   });
   const [showRunSetup, setShowRunSetup] = useState(false);
 
-  const saves = game.saves || [];
+  const saves = (game.saves || []).map(migrateLoneRuinSave);
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
   const updateSave = useCallback((updater) => {
@@ -184,6 +185,18 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
           </button>
         </div>
       </div>
+
+      {/* Session Panel */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          lastPlayedAt: session.endTime,
+        }))}
+      />
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
 

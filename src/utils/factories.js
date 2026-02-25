@@ -57,6 +57,10 @@ export function migrateSave(save) {
     migrated.mirrorUpgrades = {};
   }
 
+  // Add session tracking fields if missing
+  if (!migrated.sessions) migrated.sessions = [];
+  if (migrated.notes === undefined) migrated.notes = '';
+
   return migrated;
 }
 
@@ -109,6 +113,7 @@ export function createGameEntry({ name, igdbId, platforms, status, complexity, s
     addedAt: new Date().toISOString(),
     trackerType: null,
     userTags: [],
+    notes: '',   // game-level freeform notes ("where I left off", current goals, etc.)
   };
 }
 

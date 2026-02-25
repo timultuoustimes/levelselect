@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ArrowLeft, Plus, Play, Pause, Trophy, Skull, X, ChevronDown, Timer, TrendingUp, FileText } from 'lucide-react';
-import { createGenericRoguelikeSave, createGenericRun } from '../../utils/genericRoguelikeFactory.js';
+import { createGenericRoguelikeSave, createGenericRun, migrateGenericRoguelikeSave } from '../../utils/genericRoguelikeFactory.js';
+import SessionPanel from '../shared/SessionPanel.jsx';
 
 const formatTime = (secs) => {
   const h = Math.floor(secs / 3600);
@@ -253,7 +254,7 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
 
-  const saves = game.saves || [];
+  const saves = (game.saves || []).map(migrateGenericRoguelikeSave);
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
   const updateCurrentSave = useCallback((updater) => {
@@ -352,6 +353,18 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
           )}
         </div>
       </div>
+
+      {/* Session Panel */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateCurrentSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          lastPlayedAt: session.endTime,
+        }))}
+      />
 
       <div className="max-w-4xl mx-auto px-4 py-4">
         {/* New save form */}

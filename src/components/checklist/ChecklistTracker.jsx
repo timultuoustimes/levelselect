@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Play, Pause, StopCircle, ChevronDown, CheckCircle, Circle, Clock, Edit3, X, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Play, Pause, StopCircle, ChevronDown, CheckCircle, Circle, Clock, Edit3, X, ChevronRight, Trash2 } from 'lucide-react';
 import { createChecklistSave } from '../../utils/checklistFactory.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -30,19 +30,38 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   const [sessionRunning, setSessionRunning] = useState(false);
   const [sessionNotes, setSessionNotes] = useState('');
   const [editingNotes, setEditingNotes] = useState(false);
+  const [editingChapters, setEditingChapters] = useState(false);
+  const [chapterDrafts, setChapterDrafts] = useState([]);
   const intervalRef = useRef(null);
+  const sessionStartRef = useRef(null); // wall-clock timestamp when session started
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
-  // Timer
+  // Timer — timestamp-based so it survives background/tab-switch throttling
   useEffect(() => {
     if (sessionRunning) {
-      intervalRef.current = setInterval(() => setSessionElapsed(e => e + 1), 1000);
+      intervalRef.current = setInterval(() => {
+        if (sessionStartRef.current) {
+          setSessionElapsed(Math.round((Date.now() - sessionStartRef.current) / 1000));
+        }
+      }, 1000);
     } else {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
+  }, [sessionRunning]);
+
+  // Recalculate elapsed when app returns from background
+  useEffect(() => {
+    if (!sessionRunning) return;
+    const handler = () => {
+      if (!document.hidden && sessionStartRef.current) {
+        setSessionElapsed(Math.round((Date.now() - sessionStartRef.current) / 1000));
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
   }, [sessionRunning]);
 
   const updateCurrentSave = useCallback((updater) => {
@@ -60,6 +79,7 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   };
 
   const startSession = () => {
+    sessionStartRef.current = Date.now();
     setSessionElapsed(0);
     setSessionRunning(true);
     setSessionNotes('');
@@ -67,20 +87,24 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
 
   const stopSession = () => {
     setSessionRunning(false);
-    if (sessionElapsed > 0) {
+    const endTime = Date.now();
+    const startTime = sessionStartRef.current;
+    const elapsed = startTime ? Math.round((endTime - startTime) / 1000) : sessionElapsed;
+    if (elapsed > 0) {
       const session = {
         id: generateId(),
-        startTime: new Date(Date.now() - sessionElapsed * 1000).toISOString(),
-        endTime: new Date().toISOString(),
-        duration: sessionElapsed,
+        startTime: new Date(startTime || endTime - elapsed * 1000).toISOString(),
+        endTime: new Date(endTime).toISOString(),
+        duration: elapsed,
         notes: sessionNotes,
       };
       updateCurrentSave(s => ({
         ...s,
         sessions: [...(s.sessions || []), session],
-        totalPlaytime: (s.totalPlaytime || 0) + sessionElapsed,
+        totalPlaytime: (s.totalPlaytime || 0) + elapsed,
       }));
     }
+    sessionStartRef.current = null;
     setSessionElapsed(0);
   };
 
@@ -92,6 +116,53 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
         [chapterId]: !s.chapterCompleted?.[chapterId],
       },
     }));
+  };
+
+  // Chapter editing
+  const activeChapters = currentSave?.customChapters ?? config.chapters;
+
+  const enterEditMode = () => {
+    setChapterDrafts(activeChapters.map(c => ({ ...c })));
+    setEditingChapters(true);
+  };
+
+  const saveChapters = () => {
+    updateCurrentSave(s => ({ ...s, customChapters: chapterDrafts }));
+    setEditingChapters(false);
+  };
+
+  const resetToDefault = () => {
+    updateCurrentSave(s => ({ ...s, customChapters: null }));
+    setEditingChapters(false);
+  };
+
+  const addChapter = () => {
+    setChapterDrafts(d => [...d, { id: generateId(), name: `Stage ${d.length + 1}`, items: [] }]);
+  };
+
+  const renameChapter = (id, name) => {
+    setChapterDrafts(d => d.map(c => c.id === id ? { ...c, name } : c));
+  };
+
+  const deleteChapter = (id) => {
+    setChapterDrafts(d => d.filter(c => c.id !== id));
+  };
+
+  const moveChapter = (id, dir) => {
+    setChapterDrafts(d => {
+      const idx = d.findIndex(c => c.id === id);
+      if (dir === 'up' && idx > 0) {
+        const next = [...d];
+        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+        return next;
+      }
+      if (dir === 'down' && idx < d.length - 1) {
+        const next = [...d];
+        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+        return next;
+      }
+      return d;
+    });
   };
 
   if (!currentSave && saves.length === 0) {
@@ -122,8 +193,8 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     );
   }
 
-  const totalChapters = config.chapters.length;
-  const completedChapters = config.chapters.filter(c => currentSave?.chapterCompleted?.[c.id]).length;
+  const totalChapters = activeChapters.length;
+  const completedChapters = activeChapters.filter(c => currentSave?.chapterCompleted?.[c.id]).length;
   const pct = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
   const totalPlaytime = currentSave?.totalPlaytime || 0;
 
@@ -251,11 +322,73 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
 
         {/* Chapter checklist */}
         <div className="bg-black/40 rounded-xl border border-white/10 overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/10">
+          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <h3 className="font-semibold text-sm text-gray-300 uppercase tracking-wider">Stages / Chapters</h3>
+            {!editingChapters && (
+              <button
+                onClick={enterEditMode}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <Edit3 className="w-3 h-3" /> Edit
+              </button>
+            )}
           </div>
+
+          {/* Chapter editor */}
+          {editingChapters && (
+            <div className="p-4 border-b border-white/10 space-y-3">
+              <div className="space-y-2">
+                {chapterDrafts.map((chapter, idx) => (
+                  <div key={chapter.id} className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => moveChapter(chapter.id, 'up')}
+                        disabled={idx === 0}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none px-0.5"
+                      >▲</button>
+                      <button
+                        onClick={() => moveChapter(chapter.id, 'down')}
+                        disabled={idx === chapterDrafts.length - 1}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none px-0.5"
+                      >▼</button>
+                    </div>
+                    <input
+                      type="text"
+                      value={chapter.name}
+                      onChange={e => renameChapter(chapter.id, e.target.value)}
+                      className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50"
+                    />
+                    <button
+                      onClick={() => deleteChapter(chapter.id)}
+                      className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={addChapter}
+                className="flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Stage
+              </button>
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveChapters} className="flex-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">
+                  Save Changes
+                </button>
+                <button onClick={resetToDefault} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                  Reset to Default
+                </button>
+                <button onClick={() => setEditingChapters(false)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="divide-y divide-white/5">
-            {config.chapters.map((chapter, idx) => {
+            {activeChapters.map((chapter) => {
               const done = currentSave?.chapterCompleted?.[chapter.id];
               return (
                 <button
