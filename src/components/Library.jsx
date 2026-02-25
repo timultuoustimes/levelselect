@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { parseGameryCSV } from '../utils/csvParser.js';
 import { createGameEntry } from '../utils/factories.js';
-import { searchIGDB, igdbCoverUrl, batchFetchIGDB, fetchIGDBByName } from '../utils/igdb.js';
+import { searchIGDB, igdbCoverUrl, batchFetchIGDB, fetchIGDBByName, fetchIGDBGame } from '../utils/igdb.js';
 import {
   Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
@@ -976,9 +976,17 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
     setIgdbLoading(true);
     setIgdbError(false);
     searchDebounceRef.current = setTimeout(async () => {
-      const results = await searchIGDB(searchQuery);
+      const q = searchQuery.trim();
+      let results;
+      if (/^\d+$/.test(q)) {
+        // Numeric query → treat as IGDB ID and fetch directly
+        const game = await fetchIGDBGame(q);
+        results = game ? [game] : [];
+      } else {
+        results = await searchIGDB(searchQuery);
+      }
       setIgdbLoading(false);
-      if (results.length === 0 && searchQuery.trim().length > 1) setIgdbError(true);
+      if (results.length === 0 && q.length > 1) setIgdbError(true);
       setIgdbResults(results);
     }, 400);
   }, [searchQuery, showAddGame, addStep]);
@@ -2015,7 +2023,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 <input
                   type="text"
-                  placeholder="Search for a game…"
+                  placeholder="Search by name or paste IGDB ID…"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="input-field pl-10"
