@@ -119,6 +119,19 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
 
   // Use first save, or create one if none exists
   const save = game.saves?.[0] || null;
+  // Derived before early return so hooks below can reference it safely (rules of hooks)
+  const activeSession = save?.activeSession ?? null;
+
+  // Defined before early return so the visibilitychange effect can call it
+  const updateSave = (updater) => {
+    if (!save) return;
+    const updated = typeof updater === 'function' ? updater(save) : updater;
+    onUpdateGame({
+      ...game,
+      saves: [updated],
+      currentSaveId: updated.id,
+    });
+  };
 
   // Ensure save exists on mount
   useEffect(() => {
@@ -132,6 +145,26 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
     }
   }, []);
 
+  // ── Visibility change: save accumulated time when tab is hidden ──────────
+  // Must be BEFORE the early return to satisfy React's rules of hooks.
+  useEffect(() => {
+    const handler = () => {
+      if (document.hidden && activeSession && !activeSession.pausedAt) {
+        const elapsed = Math.floor((Date.now() - new Date(activeSession.startTime).getTime()) / 1000);
+        updateSave(s => ({
+          ...s,
+          activeSession: {
+            ...s.activeSession,
+            accumulatedTime: (s.activeSession.accumulatedTime || 0) + elapsed,
+            startTime: new Date().toISOString(),
+          },
+        }));
+      }
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, [activeSession]);
+
   if (!save) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
@@ -143,18 +176,7 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
     );
   }
 
-  const updateSave = (updater) => {
-    const updated = typeof updater === 'function' ? updater(save) : updater;
-    onUpdateGame({
-      ...game,
-      saves: [updated],
-      currentSaveId: updated.id,
-    });
-  };
-
   // ── Session management ──────────────────────────────────────────────────
-
-  const activeSession = save.activeSession;
 
   const startSession = () => {
     if (activeSession) return;
@@ -253,26 +275,6 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
     setManualDate(new Date().toISOString().slice(0, 10));
     setShowManualEntry(false);
   };
-
-  // ── Visibility change: save accumulated time when tab is hidden ──────────
-
-  useEffect(() => {
-    const handler = () => {
-      if (document.hidden && activeSession && !activeSession.pausedAt) {
-        const elapsed = Math.floor((Date.now() - new Date(activeSession.startTime).getTime()) / 1000);
-        updateSave(s => ({
-          ...s,
-          activeSession: {
-            ...s.activeSession,
-            accumulatedTime: (s.activeSession.accumulatedTime || 0) + elapsed,
-            startTime: new Date().toISOString(),
-          },
-        }));
-      }
-    };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
-  }, [activeSession]);
 
   // ── Milestones ──────────────────────────────────────────────────────────
 
