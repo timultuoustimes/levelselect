@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ArrowLeft, Plus, ChevronDown, CheckCircle, Circle, Edit3, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronDown, CheckCircle, Circle, Edit3, Trash2, Trophy } from 'lucide-react';
 import { createChecklistSave } from '../../utils/checklistFactory.js';
 import SessionPanel from '../shared/SessionPanel.jsx';
 
@@ -66,6 +66,30 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     onUpdateGame({ ...game, saves: remaining, currentSaveId: nextId });
     setShowSaveDropdown(false);
   };
+
+  const markCleared = () => {
+    const now = new Date();
+    const updates = {
+      ...game,
+      clears: [...(game.clears || []), { id: generateId(), clearedAt: now.toISOString() }],
+    };
+    // Auto-add a play period ending this month if none exist yet
+    if (!(game.playPeriods || []).length) {
+      updates.playPeriods = [{
+        id: generateId(),
+        startYear: now.getFullYear(),
+        startMonth: null,
+        endYear: now.getFullYear(),
+        endMonth: now.getMonth() + 1,
+        ongoing: false,
+        platform: game.platforms?.[0] || null,
+        note: '',
+      }];
+    }
+    onUpdateGame(updates);
+  };
+
+  const clearCount = (game.clears || []).length;
 
   // Chapter editing
   const activeChapters = currentSave?.customChapters ?? config.chapters;
@@ -232,16 +256,40 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
         )}
 
         {/* Progress card */}
-        <div className="bg-black/40 rounded-xl border border-white/10 p-4">
-          <div className="flex justify-between text-sm mb-1.5">
-            <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
-            <span className="font-bold text-white">{pct}%</span>
+        <div className="bg-black/40 rounded-xl border border-white/10 p-4 space-y-3">
+          <div>
+            <div className="flex justify-between text-sm mb-1.5">
+              <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
+              <span className="font-bold text-white">{pct}%</span>
+            </div>
+            <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
           </div>
-          <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
-              style={{ width: `${pct}%` }}
-            />
+          <div className="flex items-center justify-between">
+            {clearCount > 0 ? (
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-yellow-400" />
+                <span className="text-sm text-yellow-300 font-medium">
+                  Cleared{clearCount > 1 ? ` ×${clearCount}` : ''}
+                </span>
+                <button
+                  onClick={markCleared}
+                  className="text-xs text-gray-600 hover:text-yellow-400 transition-colors ml-1"
+                  title="Clear again (NG+)"
+                >+ again</button>
+              </div>
+            ) : (
+              <button
+                onClick={markCleared}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border border-yellow-700/40 bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40 transition-colors"
+              >
+                <Trophy className="w-4 h-4" /> Mark Cleared
+              </button>
+            )}
           </div>
         </div>
 

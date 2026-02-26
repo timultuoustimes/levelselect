@@ -60,7 +60,7 @@ function getGameRating(game) {
 
 function getCompletionCount(game) {
   // Count completed saves / runs across all tracker types
-  let count = 0;
+  let count = (game.clears || []).length;
   (game.saves || []).forEach(save => {
     if (save.completedAt) count++;
     if (Array.isArray(save.runs)) {
@@ -734,13 +734,25 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
             <div className="text-2xl font-bold text-blue-300">{(game.saves || []).length}</div>
             <div className="text-xs text-gray-500 mt-1">Save{(game.saves || []).length !== 1 ? 's' : ''}</div>
           </div>
-          <div className="card p-4 text-center">
+          <div className="card p-4 text-center relative group">
             <div className="text-2xl font-bold text-green-300">{completionCount || '—'}</div>
-            <div className="text-xs text-gray-500 mt-1">
-              {game.trackerType === 'hades' || game.trackerType === 'gonner' || game.trackerType === 'lone-ruin'
-                ? 'Clears'
-                : 'Clears'}
-            </div>
+            <div className="text-xs text-gray-500 mt-1">Clears</div>
+            <button
+              onClick={() => onUpdateGame({ ...game, clears: [...(game.clears || []), { id: generateId(), clearedAt: new Date().toISOString() }] })}
+              className="absolute top-1.5 right-1.5 p-1 rounded text-gray-700 hover:text-green-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+              title="Mark cleared"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            {(game.clears || []).length > 0 && (
+              <button
+                onClick={() => onUpdateGame({ ...game, clears: (game.clears || []).slice(0, -1) })}
+                className="absolute top-1.5 left-1.5 p-1 rounded text-gray-700 hover:text-red-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+                title="Remove last clear"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 

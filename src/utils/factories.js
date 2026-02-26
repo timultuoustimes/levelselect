@@ -110,6 +110,7 @@ export function createGameEntry({ name, igdbId, platforms, status, complexity, s
     publishers: [],         // company names
     saves: [],
     currentSaveId: null,
+    clears: [],             // [{ id, clearedAt }] — each entry = one clear/completion
     addedAt: new Date().toISOString(),
     trackerType: null,
     userTags: [],
