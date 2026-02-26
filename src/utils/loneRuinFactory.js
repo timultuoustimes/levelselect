@@ -8,7 +8,16 @@ export function createLoneRuinSave(name) {
     lastPlayedAt: new Date().toISOString(),
     runs: [],
     activeRun: null,
+    sessions: [],
+    notes: '',
   };
+}
+
+export function migrateLoneRuinSave(save) {
+  const migrated = { ...save };
+  if (!migrated.sessions) migrated.sessions = [];
+  if (migrated.notes === undefined) migrated.notes = '';
+  return migrated;
 }
 
 export function createLoneRuinRun({ startingSpell, mode, difficulty }) {

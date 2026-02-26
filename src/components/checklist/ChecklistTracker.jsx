@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Plus, Play, Pause, StopCircle, ChevronDown, CheckCircle, Circle, Clock, Edit3, X, ChevronRight } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { ArrowLeft, Plus, ChevronDown, CheckCircle, Circle, Edit3, Trash2 } from 'lucide-react';
 import { createChecklistSave } from '../../utils/checklistFactory.js';
+import SessionPanel from '../shared/SessionPanel.jsx';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -13,37 +14,17 @@ const formatTime = (secs) => {
   return `${s}s`;
 };
 
-const formatTimeLong = (secs) => {
-  const h = Math.floor(secs / 3600);
-  const m = Math.floor((secs % 3600) / 60);
-  const s = secs % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  return `${m}:${String(s).padStart(2,'0')}`;
-};
 
 export default function ChecklistTracker({ game, config, onBack, onUpdateGame }) {
   const [activeTab, setActiveTab] = useState('checklist');
   const [showNewSave, setShowNewSave] = useState(false);
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
-  const [sessionElapsed, setSessionElapsed] = useState(0);
-  const [sessionRunning, setSessionRunning] = useState(false);
-  const [sessionNotes, setSessionNotes] = useState('');
-  const [editingNotes, setEditingNotes] = useState(false);
-  const intervalRef = useRef(null);
+  const [editingChapters, setEditingChapters] = useState(false);
+  const [chapterDrafts, setChapterDrafts] = useState([]);
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
-
-  // Timer
-  useEffect(() => {
-    if (sessionRunning) {
-      intervalRef.current = setInterval(() => setSessionElapsed(e => e + 1), 1000);
-    } else {
-      clearInterval(intervalRef.current);
-    }
-    return () => clearInterval(intervalRef.current);
-  }, [sessionRunning]);
 
   const updateCurrentSave = useCallback((updater) => {
     const updated = typeof updater === 'function' ? updater(currentSave) : updater;
@@ -59,31 +40,6 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     setShowNewSave(false);
   };
 
-  const startSession = () => {
-    setSessionElapsed(0);
-    setSessionRunning(true);
-    setSessionNotes('');
-  };
-
-  const stopSession = () => {
-    setSessionRunning(false);
-    if (sessionElapsed > 0) {
-      const session = {
-        id: generateId(),
-        startTime: new Date(Date.now() - sessionElapsed * 1000).toISOString(),
-        endTime: new Date().toISOString(),
-        duration: sessionElapsed,
-        notes: sessionNotes,
-      };
-      updateCurrentSave(s => ({
-        ...s,
-        sessions: [...(s.sessions || []), session],
-        totalPlaytime: (s.totalPlaytime || 0) + sessionElapsed,
-      }));
-    }
-    setSessionElapsed(0);
-  };
-
   const toggleChapter = (chapterId) => {
     updateCurrentSave(s => ({
       ...s,
@@ -94,13 +50,52 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     }));
   };
 
-  const setChapterRank = (chapterId, rank) => {
-  updateCurrentSave(s => ({
-    ...s,
-    chapterCompleted: { ...s.chapterCompleted, [chapterId]: rank !== null },
-    chapterRank: { ...(s.chapterRank || {}), [chapterId]: rank },
-  }));
-};
+  // Chapter editing
+  const activeChapters = currentSave?.customChapters ?? config.chapters;
+
+  const enterEditMode = () => {
+    setChapterDrafts(activeChapters.map(c => ({ ...c })));
+    setEditingChapters(true);
+  };
+
+  const saveChapters = () => {
+    updateCurrentSave(s => ({ ...s, customChapters: chapterDrafts }));
+    setEditingChapters(false);
+  };
+
+  const resetToDefault = () => {
+    updateCurrentSave(s => ({ ...s, customChapters: null }));
+    setEditingChapters(false);
+  };
+
+  const addChapter = () => {
+    setChapterDrafts(d => [...d, { id: generateId(), name: `Stage ${d.length + 1}`, items: [] }]);
+  };
+
+  const renameChapter = (id, name) => {
+    setChapterDrafts(d => d.map(c => c.id === id ? { ...c, name } : c));
+  };
+
+  const deleteChapter = (id) => {
+    setChapterDrafts(d => d.filter(c => c.id !== id));
+  };
+
+  const moveChapter = (id, dir) => {
+    setChapterDrafts(d => {
+      const idx = d.findIndex(c => c.id === id);
+      if (dir === 'up' && idx > 0) {
+        const next = [...d];
+        [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+        return next;
+      }
+      if (dir === 'down' && idx < d.length - 1) {
+        const next = [...d];
+        [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+        return next;
+      }
+      return d;
+    });
+  };
 
   if (!currentSave && saves.length === 0) {
     return (
@@ -130,10 +125,9 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     );
   }
 
-  const totalChapters = config.chapters.length;
-  const completedChapters = config.chapters.filter(c => currentSave?.chapterCompleted?.[c.id]).length;
+  const totalChapters = activeChapters.length;
+  const completedChapters = activeChapters.filter(c => currentSave?.chapterCompleted?.[c.id]).length;
   const pct = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
-  const totalPlaytime = currentSave?.totalPlaytime || 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black text-white">
@@ -176,6 +170,18 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
         </div>
       </div>
 
+      {/* Session panel — consistent with all other trackers */}
+      <SessionPanel
+        game={game}
+        totalPlaytime={currentSave?.totalPlaytime || 0}
+        onUpdateGame={onUpdateGame}
+        onAddSession={(session) => updateCurrentSave(s => ({
+          ...s,
+          sessions: [...(s.sessions || []), session],
+          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
+        }))}
+      />
+
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">
         {/* New save inline form */}
         {showNewSave && (
@@ -198,72 +204,89 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
           </div>
         )}
 
-        {/* Progress + Timer card */}
-        <div className="bg-black/40 rounded-xl border border-white/10 p-4 space-y-3">
-          {/* Progress bar */}
-          <div>
-            <div className="flex justify-between text-sm mb-1.5">
-              <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
-              <span className="font-bold text-white">{pct}%</span>
-            </div>
-            <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
+        {/* Progress card */}
+        <div className="bg-black/40 rounded-xl border border-white/10 p-4">
+          <div className="flex justify-between text-sm mb-1.5">
+            <span className="text-gray-300">{completedChapters} / {totalChapters} stages completed</span>
+            <span className="font-bold text-white">{pct}%</span>
           </div>
-
-          {/* Playtime */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-gray-400" />
-              <span className="text-sm text-gray-300">Total playtime:</span>
-              <span className="font-mono font-bold text-white">
-                {formatTime(totalPlaytime + (sessionRunning ? sessionElapsed : 0))}
-              </span>
-            </div>
-
-            {sessionRunning ? (
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-green-400 text-sm animate-pulse">
-                  ● {formatTimeLong(sessionElapsed)}
-                </span>
-                <button
-                  onClick={stopSession}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-800 hover:bg-red-700 rounded-lg text-sm font-medium"
-                >
-                  <StopCircle className="w-4 h-4" /> Stop
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={startSession}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-700 hover:bg-green-600 rounded-lg text-sm font-medium"
-              >
-                <Play className="w-4 h-4" /> Start Session
-              </button>
-            )}
-          </div>
-
-          {sessionRunning && (
-            <input
-              type="text"
-              placeholder="Session notes (optional)..."
-              value={sessionNotes}
-              onChange={e => setSessionNotes(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none"
+          <div className="h-2.5 bg-black/40 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full transition-all duration-500"
+              style={{ width: `${pct}%` }}
             />
-          )}
+          </div>
         </div>
 
         {/* Chapter checklist */}
         <div className="bg-black/40 rounded-xl border border-white/10 overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/10">
+          <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <h3 className="font-semibold text-sm text-gray-300 uppercase tracking-wider">Stages / Chapters</h3>
+            {!editingChapters && (
+              <button
+                onClick={enterEditMode}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+              >
+                <Edit3 className="w-3 h-3" /> Edit
+              </button>
+            )}
           </div>
+
+          {/* Chapter editor */}
+          {editingChapters && (
+            <div className="p-4 border-b border-white/10 space-y-3">
+              <div className="space-y-2">
+                {chapterDrafts.map((chapter, idx) => (
+                  <div key={chapter.id} className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => moveChapter(chapter.id, 'up')}
+                        disabled={idx === 0}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none px-0.5"
+                      >▲</button>
+                      <button
+                        onClick={() => moveChapter(chapter.id, 'down')}
+                        disabled={idx === chapterDrafts.length - 1}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20 text-xs leading-none px-0.5"
+                      >▼</button>
+                    </div>
+                    <input
+                      type="text"
+                      value={chapter.name}
+                      onChange={e => renameChapter(chapter.id, e.target.value)}
+                      className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-purple-500/50"
+                    />
+                    <button
+                      onClick={() => deleteChapter(chapter.id)}
+                      className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={addChapter}
+                className="flex items-center gap-1.5 text-sm text-purple-400 hover:text-purple-300 transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Stage
+              </button>
+              <div className="flex gap-2 pt-1">
+                <button onClick={saveChapters} className="flex-1 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-xs font-medium transition-colors">
+                  Save Changes
+                </button>
+                <button onClick={resetToDefault} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                  Reset to Default
+                </button>
+                <button onClick={() => setEditingChapters(false)} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="divide-y divide-white/5">
-            {config.chapters.map((chapter, idx) => {
+            {activeChapters.map((chapter) => {
               const done = currentSave?.chapterCompleted?.[chapter.id];
               return (
                 <button
@@ -286,56 +309,22 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
 
         {/* Session log */}
         {(currentSave?.sessions?.length > 0) && (
-          <div className="divide-y divide-white/5">
-            {activeChapters.map((chapter) => {
-              const done = currentSave?.chapterCompleted?.[chapter.id];
-              const currentRank = currentSave?.chapterRank?.[chapter.id];
-
-              if (config.hasRanks) {
-                return (
-                  <div key={chapter.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors">
-                    <span className={`text-sm flex-1 ${done ? 'text-gray-400' : 'text-gray-200'}`}>
-                      {chapter.name}
-                    </span>
-                    <div className="flex gap-1 shrink-0">
-                      {[
-                        { rank: 'bronze', label: 'B', on: 'bg-amber-700 text-amber-100', off: 'bg-white/5 text-gray-600 hover:text-amber-500' },
-                        { rank: 'silver', label: 'S', on: 'bg-slate-500 text-slate-100', off: 'bg-white/5 text-gray-600 hover:text-slate-300' },
-                        { rank: 'gold',   label: 'G', on: 'bg-yellow-500 text-black',    off: 'bg-white/5 text-gray-600 hover:text-yellow-400' },
-                      ].map(({ rank, label, on, off }) => {
-                        const active = currentRank === rank;
-                        return (
-                          <button
-                            key={rank}
-                            onClick={() => setChapterRank(chapter.id, active ? null : rank)}
-                            className={`w-7 h-7 rounded font-bold text-xs transition-colors ${active ? on : off}`}
-                            title={rank.charAt(0).toUpperCase() + rank.slice(1)}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
+          <div className="bg-black/40 rounded-xl border border-white/10 p-4">
+            <h3 className="font-semibold text-sm text-gray-300 uppercase tracking-wider mb-3">Session Log</h3>
+            <div className="space-y-2">
+              {[...(currentSave.sessions || [])].reverse().map(session => (
+                <div key={session.id} className="flex items-start justify-between gap-2 text-sm">
+                  <div>
+                    <span className="text-gray-300">{new Date(session.startTime).toLocaleDateString()}</span>
+                    {session.notes && <span className="text-gray-500 ml-2">— {session.notes}</span>}
                   </div>
-                );
-              }
-
-              return (
-                <button
-                  key={chapter.id}
-                  onClick={() => toggleChapter(chapter.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-white/5 transition-colors ${done ? 'opacity-70' : ''}`}
-                >
-                  {done
-                    ? <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
-                    : <Circle className="w-5 h-5 text-gray-600 shrink-0" />
-                  }
-                  <span className={`text-sm ${done ? 'line-through text-gray-500' : 'text-gray-200'}`}>
-                    {chapter.name}
-                  </span>
-                </button>
-              );
-            })}
+                  <span className="font-mono text-gray-400 shrink-0">{formatTime(session.duration)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
