@@ -23,6 +23,7 @@ export const SAYONARA_CONFIG = {
   color: 'from-purple-900 via-violet-900 to-black',
   accent: 'violet',
   description: 'Pop album video game',
+  hasRanks: true,
   chapters: [
     { id: 'swh-1',  name: '1. Wild Hearts Never Die', items: [] },
     { id: 'swh-2',  name: '2. Magic Girl',            items: [] },

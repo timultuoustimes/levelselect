@@ -50,6 +50,23 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     }));
   };
 
+  const setChapterRank = (chapterId, rank) => {
+    updateCurrentSave(s => ({
+      ...s,
+      chapterCompleted: { ...s.chapterCompleted, [chapterId]: rank !== null },
+      chapterRank: { ...(s.chapterRank || {}), [chapterId]: rank },
+    }));
+  };
+
+  const deleteSave = (saveId) => {
+    const remaining = saves.filter(s => s.id !== saveId);
+    const nextId = remaining.length > 0
+      ? (saveId === game.currentSaveId ? remaining[0].id : game.currentSaveId)
+      : null;
+    onUpdateGame({ ...game, saves: remaining, currentSaveId: nextId });
+    setShowSaveDropdown(false);
+  };
+
   // Chapter editing
   const activeChapters = currentSave?.customChapters ?? config.chapters;
 
@@ -149,15 +166,25 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
                 {currentSave?.name} <ChevronDown className="w-3.5 h-3.5" />
               </button>
               {showSaveDropdown && (
-                <div className="absolute left-0 mt-1 w-48 bg-gray-900 border border-white/20 rounded-xl shadow-xl z-20">
+                <div className="absolute left-0 mt-1 w-56 bg-gray-900 border border-white/20 rounded-xl shadow-xl z-20">
                   {saves.map(s => (
-                    <button
-                      key={s.id}
-                      onClick={() => { onUpdateGame({ ...game, currentSaveId: s.id }); setShowSaveDropdown(false); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-white/10 first:rounded-t-xl last:rounded-b-xl ${s.id === game.currentSaveId ? 'text-white font-medium' : 'text-gray-300'}`}
-                    >
-                      {s.name}
-                    </button>
+                    <div key={s.id} className="flex items-center first:rounded-t-xl last:rounded-b-xl hover:bg-white/10">
+                      <button
+                        onClick={() => { onUpdateGame({ ...game, currentSaveId: s.id }); setShowSaveDropdown(false); }}
+                        className={`flex-1 text-left px-3 py-2 text-sm ${s.id === game.currentSaveId ? 'text-white font-medium' : 'text-gray-300'}`}
+                      >
+                        {s.name}
+                      </button>
+                      {saves.length > 1 && (
+                        <button
+                          onClick={() => deleteSave(s.id)}
+                          className="px-2 py-2 text-gray-600 hover:text-red-400 transition-colors"
+                          title="Delete save"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -288,6 +315,40 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
           <div className="divide-y divide-white/5">
             {activeChapters.map((chapter) => {
               const done = currentSave?.chapterCompleted?.[chapter.id];
+              const currentRank = currentSave?.chapterRank?.[chapter.id];
+
+              if (config.hasRanks) {
+                return (
+                  <div
+                    key={chapter.id}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                  >
+                    <span className={`text-sm flex-1 ${done ? 'text-gray-400' : 'text-gray-200'}`}>
+                      {chapter.name}
+                    </span>
+                    <div className="flex gap-1 shrink-0">
+                      {[
+                        { rank: 'bronze', label: 'B', on: 'bg-amber-700 text-amber-100', off: 'bg-white/5 text-gray-600 hover:text-amber-500' },
+                        { rank: 'silver', label: 'S', on: 'bg-slate-500 text-slate-100', off: 'bg-white/5 text-gray-600 hover:text-slate-300' },
+                        { rank: 'gold',   label: 'G', on: 'bg-yellow-500 text-black',    off: 'bg-white/5 text-gray-600 hover:text-yellow-400' },
+                      ].map(({ rank, label, on, off }) => {
+                        const active = currentRank === rank;
+                        return (
+                          <button
+                            key={rank}
+                            onClick={() => setChapterRank(chapter.id, active ? null : rank)}
+                            className={`w-7 h-7 rounded font-bold text-xs transition-colors ${active ? on : off}`}
+                            title={rank.charAt(0).toUpperCase() + rank.slice(1)}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={chapter.id}
