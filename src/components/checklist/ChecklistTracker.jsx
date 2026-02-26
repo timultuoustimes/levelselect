@@ -94,6 +94,14 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
     }));
   };
 
+  const setChapterRank = (chapterId, rank) => {
+  updateCurrentSave(s => ({
+    ...s,
+    chapterCompleted: { ...s.chapterCompleted, [chapterId]: rank !== null },
+    chapterRank: { ...(s.chapterRank || {}), [chapterId]: rank },
+  }));
+};
+
   if (!currentSave && saves.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black text-white flex flex-col items-center justify-center gap-4 p-4">
@@ -278,22 +286,56 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
 
         {/* Session log */}
         {(currentSave?.sessions?.length > 0) && (
-          <div className="bg-black/40 rounded-xl border border-white/10 p-4">
-            <h3 className="font-semibold text-sm text-gray-300 uppercase tracking-wider mb-3">Session Log</h3>
-            <div className="space-y-2">
-              {[...(currentSave.sessions || [])].reverse().map(session => (
-                <div key={session.id} className="flex items-start justify-between gap-2 text-sm">
-                  <div>
-                    <span className="text-gray-300">{new Date(session.startTime).toLocaleDateString()}</span>
-                    {session.notes && <span className="text-gray-500 ml-2">— {session.notes}</span>}
+          <div className="divide-y divide-white/5">
+            {activeChapters.map((chapter) => {
+              const done = currentSave?.chapterCompleted?.[chapter.id];
+              const currentRank = currentSave?.chapterRank?.[chapter.id];
+
+              if (config.hasRanks) {
+                return (
+                  <div key={chapter.id} className="flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors">
+                    <span className={`text-sm flex-1 ${done ? 'text-gray-400' : 'text-gray-200'}`}>
+                      {chapter.name}
+                    </span>
+                    <div className="flex gap-1 shrink-0">
+                      {[
+                        { rank: 'bronze', label: 'B', on: 'bg-amber-700 text-amber-100', off: 'bg-white/5 text-gray-600 hover:text-amber-500' },
+                        { rank: 'silver', label: 'S', on: 'bg-slate-500 text-slate-100', off: 'bg-white/5 text-gray-600 hover:text-slate-300' },
+                        { rank: 'gold',   label: 'G', on: 'bg-yellow-500 text-black',    off: 'bg-white/5 text-gray-600 hover:text-yellow-400' },
+                      ].map(({ rank, label, on, off }) => {
+                        const active = currentRank === rank;
+                        return (
+                          <button
+                            key={rank}
+                            onClick={() => setChapterRank(chapter.id, active ? null : rank)}
+                            className={`w-7 h-7 rounded font-bold text-xs transition-colors ${active ? on : off}`}
+                            title={rank.charAt(0).toUpperCase() + rank.slice(1)}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <span className="font-mono text-gray-400 shrink-0">{formatTime(session.duration)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+                );
+              }
+
+              return (
+                <button
+                  key={chapter.id}
+                  onClick={() => toggleChapter(chapter.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-white/5 transition-colors ${done ? 'opacity-70' : ''}`}
+                >
+                  {done
+                    ? <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+                    : <Circle className="w-5 h-5 text-gray-600 shrink-0" />
+                  }
+                  <span className={`text-sm ${done ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                    {chapter.name}
+                  </span>
+                </button>
+              );
+            })}
     </div>
   );
 }
