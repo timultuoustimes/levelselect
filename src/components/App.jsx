@@ -20,7 +20,7 @@ import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
 import GeneralGameTracker from './general/GeneralGameTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
-import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG, HITMAN_CONFIG } from '../data/checklistGameData.js';
+import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG, HITMAN_CONFIG, UNDER_THE_ISLAND_CONFIG } from '../data/checklistGameData.js';
 
 export default function App() {
   const [data, setData] = useState(null); // null = still loading
@@ -364,6 +364,21 @@ export default function App() {
           <ChecklistTracker
             game={currentGame}
             config={HITMAN_CONFIG}
+            onBack={backToGamePage}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Under the Island ─────────────────────────────────────────────────────
+    if (currentGame.trackerType === 'under-the-island') {
+      return (
+        <>
+          <ChecklistTracker
+            game={currentGame}
+            config={UNDER_THE_ISLAND_CONFIG}
             onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />
