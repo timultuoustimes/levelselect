@@ -149,7 +149,7 @@ function mapIGDBPlatforms(igdbPlatforms) {
 }
 
 // Games that have dedicated detailed trackers
-const TRACKER_TYPES = {
+export const TRACKER_TYPES = {
   'Hades': 'hades',
   'Lone Ruin': 'lone-ruin',
   'LONE RUIN': 'lone-ruin',
@@ -162,6 +162,8 @@ const TRACKER_TYPES = {
   'Cast n Chill': 'cast-n-chill',
   'Citizen Sleeper': 'citizen-sleeper',
   'The Messenger': 'messenger',
+  'Under the Island': 'under-the-island',
+  'Under The Island': 'under-the-island',
 };
 
 // Grid column classes keyed by user preference
