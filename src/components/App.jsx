@@ -56,8 +56,17 @@ export default function App() {
         const localTime = local?.lastSavedAt ? new Date(local.lastSavedAt).getTime() : 0;
         const cloudTime = cloud?.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
         if (cloudTime > localTime) {
-          setData(cloud);
-          saveLocal(cloud);
+          // Apply the same trackerType backfill to cloud data before adopting it
+          const migratedCloud = {
+            ...cloud,
+            games: (cloud.games || []).map(g =>
+              g.trackerType == null && TRACKER_TYPES[g.name]
+                ? { ...g, trackerType: TRACKER_TYPES[g.name] }
+                : g
+            ),
+          };
+          setData(migratedCloud);
+          saveLocal(migratedCloud);
         }
         setSyncStatus('synced');
       } else {
@@ -271,8 +280,12 @@ export default function App() {
   }
 
   if (view === 'game' && currentGame) {
+    // IGDB ID → trackerType fallback (catches games added before name mapping existed)
+    const IGDB_TRACKER_IDS = { 151501: 'under-the-island' };
+    const trackerType = currentGame.trackerType || IGDB_TRACKER_IDS[currentGame.igdbId] || null;
+
     // ── Hades ────────────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'hades') {
+    if (trackerType === 'hades') {
       return (
         <>
           <HadesTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
@@ -282,7 +295,7 @@ export default function App() {
     }
 
     // ── Lone Ruin ─────────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'lone-ruin') {
+    if (trackerType === 'lone-ruin') {
       return (
         <>
           <LoneRuinTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
@@ -292,7 +305,7 @@ export default function App() {
     }
 
     // ── GONNER ────────────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'gonner') {
+    if (trackerType === 'gonner') {
       return (
         <>
           <GenericRoguelikeTracker
@@ -307,7 +320,7 @@ export default function App() {
     }
 
     // ── Cursed to Golf ────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'cursed-to-golf') {
+    if (trackerType === 'cursed-to-golf') {
       return (
         <>
           <GenericRoguelikeTracker
@@ -322,7 +335,7 @@ export default function App() {
     }
 
     // ── Blazing Chrome ────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'blazing-chrome') {
+    if (trackerType === 'blazing-chrome') {
       return (
         <>
           <ChecklistTracker
@@ -337,7 +350,7 @@ export default function App() {
     }
 
     // ── Sayonara Wild Hearts ──────────────────────────────────────────────────
-    if (currentGame.trackerType === 'sayonara-wild-hearts') {
+    if (trackerType === 'sayonara-wild-hearts') {
       return (
         <>
           <ChecklistTracker
@@ -352,7 +365,7 @@ export default function App() {
     }
 
     // ── Cast n Chill ──────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'cast-n-chill') {
+    if (trackerType === 'cast-n-chill') {
       return (
         <>
           <ChecklistTracker
@@ -367,7 +380,7 @@ export default function App() {
     }
 
     // ── Hitman: World of Assassination ───────────────────────────────────────
-    if (currentGame.trackerType === 'hitman') {
+    if (trackerType === 'hitman') {
       return (
         <>
           <ChecklistTracker
@@ -382,7 +395,7 @@ export default function App() {
     }
 
     // ── Under the Island ─────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'under-the-island') {
+    if (trackerType === 'under-the-island') {
       return (
         <>
           <ChecklistTracker
@@ -397,7 +410,7 @@ export default function App() {
     }
 
     // ── Citizen Sleeper ───────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'citizen-sleeper') {
+    if (trackerType === 'citizen-sleeper') {
       return (
         <>
           <CitizenSleeperTracker
@@ -411,7 +424,7 @@ export default function App() {
     }
 
     // ── The Messenger ─────────────────────────────────────────────────────────
-    if (currentGame.trackerType === 'messenger') {
+    if (trackerType === 'messenger') {
       return (
         <>
           <MessengerTracker
