@@ -10,7 +10,7 @@ import {
   exportData,
   importData,
 } from '../utils/storage.js';
-import Library from './Library.jsx';
+import Library, { TRACKER_TYPES } from './Library.jsx';
 import GamePage from './GamePage.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
 import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
@@ -36,7 +36,16 @@ export default function App() {
   // On mount: load local immediately, then try cloud
   useEffect(() => {
     async function init() {
-      const local = loadLocal() || createDefaultState();
+      const raw = loadLocal() || createDefaultState();
+      // Backfill trackerType for any game whose name is now recognised but was added before the mapping existed
+      const local = {
+        ...raw,
+        games: (raw.games || []).map(g =>
+          g.trackerType == null && TRACKER_TYPES[g.name]
+            ? { ...g, trackerType: TRACKER_TYPES[g.name] }
+            : g
+        ),
+      };
       setData(local);
       setSyncStatus('loading');
 
