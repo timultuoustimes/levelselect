@@ -82,31 +82,108 @@ export const HITMAN_CONFIG = {
   accent: 'red',
   description: 'Stealth assassination sandbox',
   chapters: [
-    // ── Hitman 1 ──────────────────────────────────────────────────────────────
-    { id: 'h1-1',  name: 'H1 — ICA Facility (Prologue)', items: [] },
-    { id: 'h1-2',  name: 'H1 — Paris',                   items: [] },
-    { id: 'h1-3',  name: 'H1 — Sapienza',                items: [] },
-    { id: 'h1-4',  name: 'H1 — Marrakesh',               items: [] },
-    { id: 'h1-5',  name: 'H1 — Bangkok',                 items: [] },
-    { id: 'h1-6',  name: 'H1 — Colorado',                items: [] },
-    { id: 'h1-7',  name: 'H1 — Hokkaido',                items: [] },
-    // ── Hitman 2 ──────────────────────────────────────────────────────────────
-    { id: 'h2-1',  name: "H2 — Hawke's Bay",             items: [] },
-    { id: 'h2-2',  name: 'H2 — Miami',                   items: [] },
-    { id: 'h2-3',  name: 'H2 — Santa Fortuna',           items: [] },
-    { id: 'h2-4',  name: 'H2 — Mumbai',                  items: [] },
-    { id: 'h2-5',  name: 'H2 — Whittleton Creek',        items: [] },
-    { id: 'h2-6',  name: 'H2 — Isle of Sgàil',           items: [] },
-    { id: 'h2-7',  name: 'H2 — New York',                items: [] },
-    { id: 'h2-8',  name: 'H2 — Haven Island',            items: [] },
-    // ── Hitman 3 ──────────────────────────────────────────────────────────────
-    { id: 'h3-1',  name: 'H3 — Dubai',                   items: [] },
-    { id: 'h3-2',  name: 'H3 — Dartmoor',                items: [] },
-    { id: 'h3-3',  name: 'H3 — Berlin',                  items: [] },
-    { id: 'h3-4',  name: 'H3 — Chongqing',               items: [] },
-    { id: 'h3-5',  name: 'H3 — Mendoza',                 items: [] },
-    { id: 'h3-6',  name: 'H3 — Carpathian Mountains',    items: [] },
-    { id: 'h3-7',  name: 'H3 — Ambrose Island',          items: [] },
+
+    // ── HITMAN 1 — Main Campaign ───────────────────────────────────────────────
+    { id: 'h1-1',  name: 'H1 — ICA Facility: The Final Test (Prologue)',       items: [] },
+    { id: 'h1-2',  name: 'H1 — Paris: The Showstopper',                        items: [] },
+    { id: 'h1-3',  name: 'H1 — Sapienza: World of Tomorrow',                   items: [] },
+    { id: 'h1-4',  name: 'H1 — Marrakesh: A Gilded Cage',                      items: [] },
+    { id: 'h1-5',  name: 'H1 — Bangkok: Club 27',                              items: [] },
+    { id: 'h1-6',  name: 'H1 — Colorado: Freedom Fighters',                    items: [] },
+    { id: 'h1-7',  name: 'H1 — Hokkaido: Situs Inversus',                      items: [] },
+
+    // ── HITMAN 1 — Bonus Missions ──────────────────────────────────────────────
+    { id: 'h1-b1', name: 'H1 Bonus — Sapienza: The Icon',                      items: [] },
+    { id: 'h1-b2', name: 'H1 Bonus — Sapienza: Landslide',                     items: [] },
+    { id: 'h1-b3', name: 'H1 Bonus — Marrakesh: A House Built on Sand',        items: [] },
+    { id: 'h1-b4', name: 'H1 Bonus — Paris: Holiday Hoarders',                 items: [] },
+
+    // ── HITMAN 2 — Main Campaign ───────────────────────────────────────────────
+    { id: 'h2-1',  name: "H2 — Hawke's Bay: Nightcall",                        items: [] },
+    { id: 'h2-2',  name: 'H2 — Miami: The Finish Line',                        items: [] },
+    { id: 'h2-3',  name: 'H2 — Santa Fortuna: Three-Headed Serpent',           items: [] },
+    { id: 'h2-4',  name: 'H2 — Mumbai: Chasing a Ghost',                       items: [] },
+    { id: 'h2-5',  name: 'H2 — Whittleton Creek: Another Life',                items: [] },
+    { id: 'h2-6',  name: "H2 — Isle of Sgàil: The Ark Society",                items: [] },
+
+    // ── HITMAN 2 — Expansion Locations (included in Signature Edition) ─────────
+    { id: 'h2-7',  name: 'H2 Expansion — New York: Golden Handshake',          items: [] },
+    { id: 'h2-8',  name: 'H2 Expansion — Haven Island: The Last Resort',       items: [] },
+
+    // ── HITMAN 2 — Special Assignments (included in Signature Edition) ─────────
+    { id: 'h2-sa1', name: 'H2 Special — Santa Fortuna: Embrace of the Serpent', items: [] },
+    { id: 'h2-sa2', name: 'H2 Special — Mumbai: Illusions of Grandeur',         items: [] },
+    { id: 'h2-sa3', name: 'H2 Special — Miami: A Silver Tongue',                items: [] },
+    { id: 'h2-sa4', name: 'H2 Special — Whittleton Creek: A Bitter Pill',       items: [] },
+
+    // ── HITMAN 3 — Main Campaign ───────────────────────────────────────────────
+    { id: 'h3-1',  name: 'H3 — Dubai: On Top of the World',                    items: [] },
+    { id: 'h3-2',  name: 'H3 — Dartmoor: Death in the Family',                 items: [] },
+    { id: 'h3-3',  name: 'H3 — Berlin: Apex Predator',                         items: [] },
+    { id: 'h3-4',  name: 'H3 — Chongqing: End of an Era',                      items: [] },
+    { id: 'h3-5',  name: 'H3 — Mendoza: The Farewell',                         items: [] },
+    { id: 'h3-6',  name: 'H3 — Carpathian Mountains: Untouchable',             items: [] },
+    { id: 'h3-7',  name: 'H3 — Ambrose Island: Shadows in the Water',          items: [] },
+
+    // ── Achievements ──────────────────────────────────────────────────────────
+
+    // Prologue
+    { id: 'ha-1',  name: '🏆 The Result of Previous Training — Complete Freeform Training',       items: [] },
+    { id: 'ha-2',  name: '🏆 Cleared for Field Duty — Complete The Final Test',                   items: [] },
+    { id: 'ha-3',  name: '🏆 Silent Assassin — Complete The Final Test with Silent Assassin rating', items: [] },
+    { id: 'ha-4',  name: '🏆 Seizing the Opportunity — Complete a Mission Story in The Final Test', items: [] },
+    { id: 'ha-5',  name: '🏆 Training Escalated — Complete Level 5 of an Escalation in ICA Facility', items: [] },
+
+    // Hitman 1 — Story Completions
+    { id: 'ha-6',  name: '🏆 When No One Else Dares — Complete The Showstopper',                  items: [] },
+    { id: 'ha-7',  name: '🏆 Die By the Sword — Complete World of Tomorrow',                      items: [] },
+    { id: 'ha-8',  name: '🏆 Too Big to Fail — Complete A Gilded Cage',                           items: [] },
+    { id: 'ha-9',  name: '🏆 Shining Bright — Complete Club 27',                                  items: [] },
+    { id: 'ha-10', name: '🏆 Guerrilla Warfare — Complete Freedom Fighters',                      items: [] },
+    { id: 'ha-11', name: '🏆 A Long Time Coming — Complete Situs Inversus',                       items: [] },
+
+    // Hitman 1 — Mastery Level 20
+    { id: 'ha-12', name: '🏆 City of Light — Reach Paris Mastery Level 20',                       items: [] },
+    { id: 'ha-13', name: '🏆 Amalfi Pearl — Reach Sapienza Mastery Level 20',                     items: [] },
+    { id: 'ha-14', name: '🏆 Ancient Marrakesh — Reach Marrakesh Mastery Level 20',               items: [] },
+    { id: 'ha-15', name: '🏆 One Night in Bangkok — Reach Bangkok Mastery Level 20',              items: [] },
+    { id: 'ha-16', name: '🏆 Mission Complete — Reach Colorado Mastery Level 20',                 items: [] },
+    { id: 'ha-17', name: '🏆 Sayōnara — Reach Hokkaido Mastery Level 20',                         items: [] },
+
+    // Hitman 1 — Bonus Mission Challenges
+    { id: 'ha-18', name: '🏆 Perfectionist — Complete Suit Only & Silent Assassin on The Icon, Landslide, or A House Built on Sand', items: [] },
+
+    // Hitman 2 — Sniper Assassin
+    { id: 'ha-19', name: '🏆 Silent Sniper — Complete The Last Yardbird as Silent Assassin',      items: [] },
+    { id: 'ha-20', name: '🏆 Hawkeye — Complete The Pen and the Sword as Silent Assassin',        items: [] },
+    { id: 'ha-21', name: '🏆 Pure Poetry — Complete all The Pen and the Sword challenges',        items: [] },
+    { id: 'ha-22', name: '🏆 Seven Figures — Score above 1,000,000 on The Pen and the Sword',     items: [] },
+    { id: 'ha-23', name: '🏆 Never Knew What Hit Them — Complete Crime and Punishment as Silent Assassin', items: [] },
+    { id: 'ha-24', name: '🏆 Capital Punishment — Complete all Crime and Punishment challenges',  items: [] },
+    { id: 'ha-25', name: '🏆 In a League of Their Own — Score above 1,000,000 on Crime and Punishment', items: [] },
+
+    // Hitman 3 — Story & Location Mastery
+    { id: 'ha-26', name: '🏆 Death From Above — Complete On Top of the World (Dubai)',            items: [] },
+    { id: 'ha-27', name: '🏆 Reach Dubai Mastery Level 20',                                       items: [] },
+    { id: 'ha-28', name: '🏆 Complete Death in the Family (Dartmoor)',                            items: [] },
+    { id: 'ha-29', name: '🏆 Reach Dartmoor Mastery Level 20',                                    items: [] },
+    { id: 'ha-30', name: '🏆 Complete Apex Predator (Berlin)',                                    items: [] },
+    { id: 'ha-31', name: '🏆 Reach Berlin Mastery Level 20',                                      items: [] },
+    { id: 'ha-32', name: '🏆 Complete End of an Era (Chongqing)',                                 items: [] },
+    { id: 'ha-33', name: '🏆 Reach Chongqing Mastery Level 20',                                   items: [] },
+    { id: 'ha-34', name: '🏆 Complete The Farewell (Mendoza)',                                    items: [] },
+    { id: 'ha-35', name: '🏆 Reach Mendoza Mastery Level 20',                                     items: [] },
+    { id: 'ha-36', name: '🏆 Complete Untouchable (Carpathian Mountains)',                        items: [] },
+
+    // Hitman 3 — Shortcut / Challenge achievements
+    { id: 'ha-37', name: '🏆 Shortcut Killer — Find and unlock 15 shortcuts',                    items: [] },
+    { id: 'ha-38', name: '🏆 Well-Rounded — Complete a Playstyle from each category',            items: [] },
+
+    // Contracts Mode
+    { id: 'ha-39', name: '🏆 The Creative Assassin — Complete the Contract Creation Tutorial',   items: [] },
+    { id: 'ha-40', name: '🏆 A New Profile — Complete a Featured Contract',                      items: [] },
+    { id: 'ha-41', name: '🏆 Top of the Class — Beat the highest leaderboard score on a Contract', items: [] },
+
   ],
 };
 
