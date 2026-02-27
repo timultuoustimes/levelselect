@@ -223,9 +223,18 @@ function StarRating({ value, onChange, size = 'md', readOnly = false }) {
 
 // ─── Saves / Runs selector ───────────────────────────────────────────────────
 
-function SaveSelector({ game, onOpenTracker }) {
+function SaveSelector({ game, onOpenTracker, onUpdateGame }) {
   const hasTracker = game.trackerType !== null;
   const saves = game.saves || [];
+
+  const deleteSave = (saveId, e) => {
+    e.stopPropagation();
+    const remaining = saves.filter(s => s.id !== saveId);
+    const nextId = remaining.length > 0
+      ? (saveId === game.currentSaveId ? remaining[0].id : game.currentSaveId)
+      : null;
+    onUpdateGame({ ...game, saves: remaining, currentSaveId: nextId });
+  };
 
   if (saves.length === 0) {
     return (
@@ -252,10 +261,10 @@ function SaveSelector({ game, onOpenTracker }) {
         );
 
         return (
-          <button
+          <div
             key={save.id || i}
+            className="card-hover w-full p-3 text-left flex items-center gap-3 cursor-pointer"
             onClick={onOpenTracker}
-            className="card-hover w-full p-3 text-left flex items-center gap-3"
           >
             <div className="w-10 h-10 rounded-lg bg-purple-900/40 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
               <Gamepad2 className="w-5 h-5 text-purple-400" />
@@ -275,7 +284,14 @@ function SaveSelector({ game, onOpenTracker }) {
             {hasTracker && (
               <div className="text-xs text-purple-400 flex-shrink-0">Open →</div>
             )}
-          </button>
+            <button
+              onClick={(e) => deleteSave(save.id, e)}
+              className="p-1.5 text-gray-700 hover:text-red-400 transition-colors flex-shrink-0"
+              title="Delete save"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         );
       })}
       <button
@@ -761,7 +777,7 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
           <h2 className="text-sm font-medium text-gray-400 mb-3">
             {game.trackerType ? 'Tracker' : 'Play Tracking'}
           </h2>
-          <SaveSelector game={game} onOpenTracker={onOpenTracker} />
+          <SaveSelector game={game} onOpenTracker={onOpenTracker} onUpdateGame={onUpdateGame} />
         </div>
 
         {/* Play History */}

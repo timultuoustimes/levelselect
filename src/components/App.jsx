@@ -281,7 +281,7 @@ export default function App() {
 
   if (view === 'game' && currentGame) {
     // IGDB ID → trackerType fallback (catches games added before name mapping existed)
-    const IGDB_TRACKER_IDS = { 151501: 'under-the-island' };
+    const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman' };
     const trackerType = currentGame.trackerType || IGDB_TRACKER_IDS[currentGame.igdbId] || null;
 
     // ── Hades ────────────────────────────────────────────────────────────────

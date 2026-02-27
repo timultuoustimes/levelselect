@@ -162,6 +162,7 @@ export const TRACKER_TYPES = {
   'Cast n Chill': 'cast-n-chill',
   'Citizen Sleeper': 'citizen-sleeper',
   'The Messenger': 'messenger',
+  'Hitman: World of Assassination': 'hitman',
   'Under the Island': 'under-the-island',
   'Under The Island': 'under-the-island',
 };
