@@ -22,6 +22,7 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [editingChapters, setEditingChapters] = useState(false);
   const [chapterDrafts, setChapterDrafts] = useState([]);
+  const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState(null);
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
@@ -90,6 +91,16 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   };
 
   const clearCount = (game.clears || []).length;
+
+  const deleteSession = (sessionId) => {
+    const session = (currentSave?.sessions || []).find(s => s.id === sessionId);
+    updateCurrentSave(s => ({
+      ...s,
+      sessions: s.sessions.filter(s2 => s2.id !== sessionId),
+      totalPlaytime: Math.max(0, (s.totalPlaytime || 0) - (session?.duration || 0)),
+    }));
+    setConfirmDeleteSessionId(null);
+  };
 
   // Chapter editing
   const activeChapters = currentSave?.customChapters ?? config.chapters;
@@ -422,12 +433,29 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
             <h3 className="font-semibold text-sm text-gray-300 uppercase tracking-wider mb-3">Session Log</h3>
             <div className="space-y-2">
               {[...(currentSave.sessions || [])].reverse().map(session => (
-                <div key={session.id} className="flex items-start justify-between gap-2 text-sm">
-                  <div>
+                <div key={session.id} className="flex items-center justify-between gap-2 text-sm group">
+                  <div className="min-w-0">
                     <span className="text-gray-300">{new Date(session.startTime).toLocaleDateString()}</span>
                     {session.notes && <span className="text-gray-500 ml-2">— {session.notes}</span>}
                   </div>
-                  <span className="font-mono text-gray-400 shrink-0">{formatTime(session.duration)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono text-gray-400">{formatTime(session.duration)}</span>
+                    {confirmDeleteSessionId === session.id ? (
+                      <span className="flex items-center gap-1">
+                        <span className="text-xs text-gray-500">Delete?</span>
+                        <button onClick={() => deleteSession(session.id)} className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors">Yes</button>
+                        <button onClick={() => setConfirmDeleteSessionId(null)} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">Cancel</button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteSessionId(session.id)}
+                        className="text-gray-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Delete session"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
