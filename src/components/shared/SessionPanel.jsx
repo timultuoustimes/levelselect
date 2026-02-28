@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, Clock, ChevronDown, Check } from 'lucide-react';
+import { Play, Square, Clock, ChevronDown, Check, Plus } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -111,8 +111,24 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
   const [sessionDisplay, setSessionDisplay] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState(game.notes || '');
+  const [logOpen, setLogOpen] = useState(false);
+  const [logHours, setLogHours] = useState('');
+  const [logMinutes, setLogMinutes] = useState('');
+  const [logNote, setLogNote] = useState('');
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));
   const sessionStartRef = useRef(null);
   const intervalRef = useRef(null);
+  const logRef = useRef(null);
+
+  // Close log form when clicking outside
+  useEffect(() => {
+    if (!logOpen) return;
+    const handler = (e) => {
+      if (logRef.current && !logRef.current.contains(e.target)) setLogOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [logOpen]);
 
   // Timestamp-based timer — accurate even when app is backgrounded
   useEffect(() => {
@@ -163,6 +179,28 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
     }
   };
 
+  const submitLog = () => {
+    const h = parseInt(logHours) || 0;
+    const m = parseInt(logMinutes) || 0;
+    const duration = h * 3600 + m * 60;
+    if (duration <= 0) return;
+    const startMs = new Date(logDate + 'T12:00:00').getTime();
+    if (onAddSession) {
+      onAddSession({
+        id: generateId(),
+        startTime: new Date(startMs).toISOString(),
+        endTime: new Date(startMs + duration * 1000).toISOString(),
+        duration,
+        notes: logNote.trim(),
+      });
+    }
+    setLogHours('');
+    setLogMinutes('');
+    setLogNote('');
+    setLogDate(new Date().toISOString().slice(0, 10));
+    setLogOpen(false);
+  };
+
   const handleStatusChange = (newStatus) => {
     onUpdateGame({ ...game, status: newStatus });
   };
@@ -197,6 +235,70 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
               <Play className="w-3 h-3" /> Start Session
             </button>
           )}
+
+          {/* Log manual session */}
+          <div ref={logRef} className="relative">
+            <button
+              onClick={() => setLogOpen(o => !o)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-colors ${
+                logOpen ? 'bg-purple-600/60 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-400'
+              }`}
+              title="Log time manually"
+            >
+              <Plus className="w-3 h-3" /> Log Time
+            </button>
+            {logOpen && (
+              <div className="absolute left-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-2xl p-3 w-64">
+                <p className="text-xs text-gray-400 mb-2 font-medium">Log a session manually</p>
+                <div className="flex gap-2 mb-2">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 block mb-0.5">Hours</label>
+                    <input
+                      type="number" min="0" max="99" placeholder="0"
+                      value={logHours}
+                      onChange={e => setLogHours(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 block mb-0.5">Minutes</label>
+                    <input
+                      type="number" min="0" max="59" placeholder="0"
+                      value={logMinutes}
+                      onChange={e => setLogMinutes(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                </div>
+                <div className="mb-2">
+                  <label className="text-xs text-gray-500 block mb-0.5">Date</label>
+                  <input
+                    type="date"
+                    value={logDate}
+                    onChange={e => setLogDate(e.target.value)}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label className="text-xs text-gray-500 block mb-0.5">Note (optional)</label>
+                  <input
+                    type="text" placeholder="e.g. finished Paris mission"
+                    value={logNote}
+                    onChange={e => setLogNote(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && submitLog()}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-purple-500/50"
+                  />
+                </div>
+                <button
+                  onClick={submitLog}
+                  disabled={!((parseInt(logHours) || 0) + (parseInt(logMinutes) || 0))}
+                  className="w-full px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs transition-colors"
+                >
+                  Add to Session Log
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Separator */}
