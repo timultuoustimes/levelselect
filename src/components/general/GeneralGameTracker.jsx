@@ -106,6 +106,7 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
   const [editingReview, setEditingReview] = useState(false);
   const [reviewDraft, setReviewDraft] = useState('');
   const [expandedSession, setExpandedSession] = useState(null);
+  const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState(null);
 
   // Manual time entry
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -222,6 +223,16 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
       totalPlaytime: (s.totalPlaytime || 0) + duration,
     }));
     setSessionNote('');
+  };
+
+  const deleteSession = (sessionId) => {
+    const session = (save?.sessions || []).find(s => s.id === sessionId);
+    updateSave(s => ({
+      ...s,
+      sessions: (s.sessions || []).filter(s2 => s2.id !== sessionId),
+      totalPlaytime: Math.max(0, (s.totalPlaytime || 0) - (session?.duration || 0)),
+    }));
+    setConfirmDeleteSessionId(null);
   };
 
   // ── Manual session entry ─────────────────────────────────────────────────
@@ -715,30 +726,47 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
                 </div>
               )}
               {sessions.map(s => (
-                <div key={s.id} className="card p-3">
-                  <button
-                    className="w-full text-left"
-                    onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium flex items-center gap-1.5">
-                          {formatDate(s.startTime)}
-                          {s.manual && (
-                            <span className="text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">manual</span>
-                          )}
+                <div key={s.id} className="card p-3 group">
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      className="flex-1 text-left min-w-0"
+                      onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium flex items-center gap-1.5">
+                            {formatDate(s.startTime)}
+                            {s.manual && (
+                              <span className="text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">manual</span>
+                            )}
+                          </div>
+                          {s.notes && <div className="text-xs text-gray-500 truncate max-w-xs">{s.notes}</div>}
                         </div>
-                        {s.notes && <div className="text-xs text-gray-500 truncate max-w-xs">{s.notes}</div>}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-sm text-purple-300 font-mono">{formatDuration(s.duration)}</span>
+                          {expandedSession === s.id
+                            ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
+                            : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
+                          }
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-purple-300 font-mono">{formatDuration(s.duration)}</span>
-                        {expandedSession === s.id
-                          ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" />
-                          : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                        }
-                      </div>
-                    </div>
-                  </button>
+                    </button>
+                    {confirmDeleteSessionId === s.id ? (
+                      <span className="flex items-center gap-1 shrink-0">
+                        <span className="text-xs text-gray-500">Delete?</span>
+                        <button onClick={() => deleteSession(s.id)} className="text-xs text-red-400 hover:text-red-300 font-medium transition-colors">Yes</button>
+                        <button onClick={() => setConfirmDeleteSessionId(null)} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">Cancel</button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteSessionId(s.id)}
+                        className="text-gray-700 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                        title="Delete session"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   {expandedSession === s.id && (
                     <div className="mt-2 pt-2 border-t border-white/10 text-xs text-gray-400 space-y-1">
                       <div>Started: {new Date(s.startTime).toLocaleTimeString()}</div>
