@@ -467,7 +467,7 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
           <div className="text-center py-20 text-gray-500">
             <div className="text-5xl mb-4">🤖</div>
             <div className="text-lg mb-2 text-gray-300">No playthroughs yet</div>
-            <p className="text-sm mb-4">Track all 11 questlines, 35+ clocks, and 8 endings</p>
+            <p className="text-sm mb-4">Track all 12 questlines, 50+ clocks, and 10 endings</p>
             <button onClick={() => setShowNewSave(true)} className="px-4 py-2 bg-indigo-600 rounded-lg text-sm">Start Tracking</button>
           </div>
         ) : (
@@ -485,7 +485,7 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
             {activeTab === 'overview' && <OverviewTab save={currentSave} onUpdateSave={updateCurrentSave} />}
             {activeTab === 'questlines' && (
               <div className="space-y-3">
-                <p className="text-xs text-gray-500">11 NPCs · Click any questline to expand clocks, drives, and notes</p>
+                <p className="text-xs text-gray-500">12 NPCs · Click any questline to expand clocks, drives, and notes</p>
                 {QUESTLINES.map(q => (
                   <QuestlineCard key={q.id} questline={q} save={currentSave} onUpdateSave={updateCurrentSave} />
                 ))}
