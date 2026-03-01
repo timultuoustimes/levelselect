@@ -17,6 +17,7 @@ import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
 import ChecklistTracker from './checklist/ChecklistTracker.jsx';
 import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
+import DeadCellsTracker from './deadcells/DeadCellsTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
 import GeneralGameTracker from './general/GeneralGameTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
@@ -281,7 +282,7 @@ export default function App() {
 
   if (view === 'game' && currentGame) {
     // IGDB ID → trackerType fallback (catches games added before name mapping existed)
-    const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman' };
+    const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman', 26192: 'dead-cells' };
     const trackerType = currentGame.trackerType || IGDB_TRACKER_IDS[currentGame.igdbId] || null;
 
     // ── Hades ────────────────────────────────────────────────────────────────
@@ -401,6 +402,20 @@ export default function App() {
           <ChecklistTracker
             game={currentGame}
             config={UNDER_THE_ISLAND_CONFIG}
+            onBack={backToGamePage}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Dead Cells ────────────────────────────────────────────────────────────
+    if (trackerType === 'dead-cells') {
+      return (
+        <>
+          <DeadCellsTracker
+            game={currentGame}
             onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
           />

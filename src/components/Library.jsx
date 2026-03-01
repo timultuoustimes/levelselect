@@ -165,6 +165,7 @@ export const TRACKER_TYPES = {
   'Hitman: World of Assassination': 'hitman',
   'Under the Island': 'under-the-island',
   'Under The Island': 'under-the-island',
+  'Dead Cells': 'dead-cells',
 };
 
 // Grid column classes keyed by user preference
