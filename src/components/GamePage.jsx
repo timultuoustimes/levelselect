@@ -401,9 +401,10 @@ function RelatedGames({ game, library, onOpenGame }) {
   );
 }
 
-export default function GamePage({ game, library, navSource = 'library', onBack, onGoHome, onGoLibrary, onOpenTracker, onUpdateGame, onOpenGame }) {
+export default function GamePage({ game, library, navSource = 'library', onBack, onGoHome, onGoLibrary, onOpenTracker, onUpdateGame, onDeleteGame, onOpenGame }) {
   const [editingReview, setEditingReview] = useState(false);
   const [reviewDraft, setReviewDraft] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Play history
   const [playPeriods, setPlayPeriods] = useState(() => migratePlayPeriods(game));
@@ -669,6 +670,29 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
               >
                 Library
               </button>
+              {onDeleteGame && (
+                showDeleteConfirm ? (
+                  <div className="flex items-center gap-1.5 ml-1">
+                    <span className="text-xs text-gray-400">Delete?</span>
+                    <button
+                      onClick={() => onDeleteGame(game.id)}
+                      className="text-xs text-red-400 hover:text-red-300 font-medium px-2 py-1 rounded bg-red-900/30 border border-red-700/40"
+                    >Yes</button>
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="text-xs text-gray-500 hover:text-gray-300 px-2 py-1"
+                    >Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="btn-secondary !px-2.5 !py-2 !min-h-0 text-sm text-gray-500 hover:text-red-400"
+                    title="Delete game"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )
+              )}
             </div>
           </div>
 

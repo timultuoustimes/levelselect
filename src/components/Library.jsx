@@ -6,7 +6,7 @@ import {
   Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
   ExternalLink, X, Check, ShoppingBag, RefreshCw, Download,
-  CheckSquare, Square, ArrowLeft, Home,
+  CheckSquare, Square, ArrowLeft, Home, Settings,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -909,6 +909,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   // libraryView + setLibraryView come from App.jsx (lifted state)
   const [collapsedSections, setCollapsedSections] = useState({ shelved: true, abandoned: true });
   const [showImport, setShowImport] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [igdbFetchStatus, setIgdbFetchStatus] = useState(null); // null | 'fetching' | 'done'
   const [showAddGame, setShowAddGame] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -1187,9 +1188,14 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
     setManualName(result.name);
     setManualFranchise(result.franchise || '');
     setManualYearPlayed('');
-    // Pre-fill platforms using the same IGDB → preset mapping used everywhere else
+    // Pre-fill platforms: intersect IGDB-available platforms with user's defaults.
+    // If user has no defaults configured, nothing is pre-selected (user picks manually).
     const mappedPlatforms = mapIGDBPlatforms(result.platforms || []);
-    setSelectedPlatforms(mappedPlatforms.length > 0 ? mappedPlatforms : []);
+    const defaults = data.settings?.defaultPlatforms || [];
+    const preselected = defaults.length > 0
+      ? mappedPlatforms.filter(p => defaults.includes(p))
+      : [];
+    setSelectedPlatforms(preselected);
     setAddStep('confirm');
   };
 
@@ -1517,11 +1523,11 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 <span className="hidden sm:inline">Wishlist</span>
               </a>
               <button
-                onClick={() => setShowImport(true)}
+                onClick={() => setShowSettings(true)}
                 className="btn-secondary !px-3 text-sm gap-1.5"
+                title="Settings"
               >
-                <Upload className="w-4 h-4" />
-                <span className="hidden sm:inline">Import</span>
+                <Settings className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setShowAddGame(true)}
@@ -1899,10 +1905,10 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
           <div className="card p-12 text-center">
             <Gamepad2 className="w-16 h-16 text-purple-400 mx-auto mb-4 opacity-50" />
             <h2 className="text-xl font-bold mb-2">No games yet</h2>
-            <p className="text-gray-400 mb-6">Import your Gamery library or add games manually.</p>
+            <p className="text-gray-400 mb-6">Import a library from CSV or add games manually.</p>
             <div className="flex gap-3 justify-center flex-wrap">
               <button onClick={() => setShowImport(true)} className="btn-primary gap-2">
-                <Upload className="w-4 h-4" /> Import from Gamery
+                <Upload className="w-4 h-4" /> Import from CSV
               </button>
               <button onClick={() => setShowAddGame(true)} className="btn-secondary gap-2">
                 <Plus className="w-4 h-4" /> Add Game
@@ -2200,9 +2206,9 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
       {/* ── Import Modal ─────────────────────────────────────────────────────── */}
       {showImport && (
-        <Modal onClose={() => setShowImport(false)} title="Import from Gamery">
+        <Modal onClose={() => setShowImport(false)} title="Import from CSV">
           <p className="text-gray-400 mb-4 text-sm">
-            Export your library from Gamery as CSV, then select the file below.
+            Select a CSV file to import games into your library.
           </p>
           <input
             ref={fileInputRef}
@@ -2214,6 +2220,60 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
               file:text-sm file:font-medium file:bg-purple-600 file:text-white
               file:cursor-pointer hover:file:bg-purple-700 file:min-h-[44px]"
           />
+        </Modal>
+      )}
+
+      {/* ── Settings Modal ───────────────────────────────────────────────────── */}
+      {showSettings && (
+        <Modal onClose={() => setShowSettings(false)} title="Settings">
+          {/* Default platforms */}
+          <div className="mb-6">
+            <h4 className="text-sm font-medium text-gray-300 mb-2">Default Platforms</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              When adding a game, only these platforms will be pre-selected (if the game is available on them).
+              Leave empty to always pick manually.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {PRESET_PLATFORMS.map(p => {
+                const active = (data.settings?.defaultPlatforms || []).includes(p);
+                return (
+                  <button
+                    key={p}
+                    onClick={() => {
+                      const prev = data.settings?.defaultPlatforms || [];
+                      const next = active ? prev.filter(x => x !== p) : [...prev, p];
+                      updateData(d => ({ ...d, settings: { ...(d.settings || {}), defaultPlatforms: next } }));
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                      active
+                        ? 'bg-purple-600 border-purple-500 text-white'
+                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* CSV import */}
+          <div className="pt-4 border-t border-white/10">
+            <h4 className="text-sm font-medium text-gray-300 mb-2">Import from CSV</h4>
+            <p className="text-xs text-gray-500 mb-3">
+              Import a game library exported as CSV.
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={(e) => { handleImportCSV(e); setShowSettings(false); }}
+              className="block w-full text-sm text-gray-400
+                file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
+                file:text-sm file:font-medium file:bg-purple-600 file:text-white
+                file:cursor-pointer hover:file:bg-purple-700 file:min-h-[44px]"
+            />
+          </div>
         </Modal>
       )}
 

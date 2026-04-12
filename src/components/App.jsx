@@ -124,6 +124,15 @@ export default function App() {
     }));
   }, [updateData]);
 
+  const handleDeleteGame = useCallback((gameId) => {
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.filter(g => g.id !== gameId),
+      currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
+    }));
+    setView('library');
+  }, [updateData]);
+
   // Link to another device's data
   const handleLink = async () => {
     const targetId = linkInput.trim();
@@ -272,6 +281,7 @@ export default function App() {
           onGoLibrary={goToLibrary}
           onOpenTracker={openTracker}
           onUpdateGame={handleUpdateGame}
+          onDeleteGame={handleDeleteGame}
           onOpenGame={openGame}
         />
         <SyncBar />
