@@ -19,8 +19,10 @@ import ChecklistTracker from './checklist/ChecklistTracker.jsx';
 import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
 import GeneralGameTracker from './general/GeneralGameTracker.jsx';
+import StructuredTracker from './structured/StructuredTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
 import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG, HITMAN_CONFIG, UNDER_THE_ISLAND_CONFIG } from '../data/checklistGameData.js';
+import { HOLLOW_KNIGHT_CONFIG } from '../data/hollowKnightData.js';
 
 export default function App() {
   const [data, setData] = useState(null); // null = still loading
@@ -414,6 +416,35 @@ export default function App() {
       return (
         <>
           <CitizenSleeperTracker
+            game={currentGame}
+            onBack={backToGamePage}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── Hollow Knight (StructuredTracker / generic, config-driven) ───────────
+    if (trackerType === 'hollow-knight') {
+      return (
+        <>
+          <StructuredTracker
+            game={currentGame}
+            config={HOLLOW_KNIGHT_CONFIG}
+            onBack={backToGamePage}
+            onUpdateGame={handleUpdateGame}
+          />
+          <SyncBar />
+        </>
+      );
+    }
+
+    // ── AI-generated structured tracker (game carries its own schema) ────────
+    if (currentGame.structuredData) {
+      return (
+        <>
+          <StructuredTracker
             game={currentGame}
             onBack={backToGamePage}
             onUpdateGame={handleUpdateGame}
