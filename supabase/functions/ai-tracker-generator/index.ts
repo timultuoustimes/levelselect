@@ -230,7 +230,7 @@ serve(async (req: Request) => {
       tools.push({
         type: 'web_search_20250305',
         name: 'web_search',
-        max_uses: 5,
+        max_uses: 1,
       });
     }
 
@@ -244,7 +244,7 @@ serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 16384,
+        max_tokens: 12000,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools,
         tool_choice: { type: 'any' },

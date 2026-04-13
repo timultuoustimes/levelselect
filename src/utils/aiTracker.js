@@ -15,16 +15,46 @@ const FUNCTION_URL = 'https://sextftevxqrtodlmnyve.supabase.co/functions/v1/ai-t
  * @throws {Error} on network/API failure
  */
 export async function generateTrackerData({ gameName, igdbData, mode = 'auto', payload }) {
-  const res = await fetch(FUNCTION_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ gameName, igdbData, mode, payload }),
-  });
+  // Supabase free-tier Edge Functions have a 150s wall-clock limit.
+  // Use AbortController to surface a clear error instead of a generic network failure.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 140_000); // 140s — just under the 150s limit
 
-  const data = await res.json();
+  let res;
+  try {
+    res = await fetch(FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameName, igdbData, mode, payload }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err.name === 'AbortError') {
+      throw new Error(
+        'Generation timed out — the AI took too long. Try "Paste text" mode instead of Auto, or try a simpler game.'
+      );
+    }
+    throw new Error('Network error — check your connection and try again.');
+  }
+  clearTimeout(timeout);
+
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error(`Server returned an invalid response (${res.status}). Try again.`);
+  }
 
   if (!res.ok) {
-    throw new Error(data.error || `Generator failed (${res.status})`);
+    // Surface the specific error from Supabase or the Edge Function
+    const detail = data.detail || data.message || '';
+    if (res.status === 546 || res.status === 504) {
+      throw new Error(
+        'Generation timed out on the server. Try "Paste text" mode for faster results.'
+      );
+    }
+    throw new Error(data.error || `Generator failed (${res.status})${detail ? ': ' + detail : ''}`);
   }
 
   if (!data.structuredData) {
