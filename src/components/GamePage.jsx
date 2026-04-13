@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ArrowLeft, Home, Play, Star, Clock, Trophy, ChevronDown, ExternalLink,
-  Edit2, Check, X, Gamepad2, RefreshCw, Plus, Trash2,
+  Edit2, Check, X, Gamepad2, RefreshCw, Plus, Trash2, Sparkles,
 } from 'lucide-react';
 import { igdbCoverUrl, igdbGameUrl, fetchIGDBByName, fetchIGDBGame } from '../utils/igdb.js';
 import { migratePlayPeriods } from '../utils/factories.js';
 import { generateId } from '../utils/format.js';
+import GenerateTrackerModal from './structured/GenerateTrackerModal.jsx';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -405,6 +406,7 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
   const [editingReview, setEditingReview] = useState(false);
   const [reviewDraft, setReviewDraft] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showGenerateTracker, setShowGenerateTracker] = useState(false);
 
   // Play history
   const [playPeriods, setPlayPeriods] = useState(() => migratePlayPeriods(game));
@@ -799,9 +801,18 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
         {/* Open tracker / save selector */}
         <div className="card p-4">
           <h2 className="text-sm font-medium text-gray-400 mb-3">
-            {game.trackerType ? 'Tracker' : 'Play Tracking'}
+            {game.trackerType || game.structuredData ? 'Tracker' : 'Play Tracking'}
           </h2>
           <SaveSelector game={game} onOpenTracker={onOpenTracker} onUpdateGame={onUpdateGame} />
+          {!game.trackerType && !game.structuredData && (
+            <button
+              onClick={() => setShowGenerateTracker(true)}
+              className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-purple-500/40 bg-purple-900/20 text-purple-300 hover:bg-purple-900/40 transition-colors"
+            >
+              <Sparkles className="w-4 h-4" />
+              Generate Tracker Data with AI
+            </button>
+          )}
         </div>
 
         {/* Play History */}
@@ -1272,6 +1283,18 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
         )}
 
       </div>
+
+      {/* Generate Tracker Modal */}
+      {showGenerateTracker && (
+        <GenerateTrackerModal
+          game={game}
+          onSave={(structuredData) => {
+            onUpdateGame({ ...game, structuredData });
+            setShowGenerateTracker(false);
+          }}
+          onClose={() => setShowGenerateTracker(false)}
+        />
+      )}
     </div>
   );
 }
