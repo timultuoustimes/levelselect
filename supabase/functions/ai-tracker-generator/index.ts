@@ -243,7 +243,7 @@ serve(async (req: Request) => {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 16384,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools,
@@ -288,7 +288,7 @@ serve(async (req: Request) => {
     const structuredData = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      generatedBy: `claude-sonnet-4-6`,
+      generatedBy: 'claude-sonnet-4-6',
       sources: [
         { type: mode || 'auto', ...(payload && mode === 'url' ? { url: payload } : {}) },
       ],
