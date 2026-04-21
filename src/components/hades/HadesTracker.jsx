@@ -131,7 +131,7 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900/30 to-slate-900 safe-area-bottom">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-purple-500/20">
+      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-purple-500/20 safe-area-top">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-3">

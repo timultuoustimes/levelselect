@@ -352,7 +352,7 @@ export default function GeneralGameTracker({ game, onBack, onUpdateGame }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 safe-area-bottom">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-white/10">
+      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-white/10 safe-area-top">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center gap-3 mb-3">
             <button onClick={onBack} className="btn-secondary !px-3 !py-2 !min-h-0">

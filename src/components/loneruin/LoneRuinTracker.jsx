@@ -118,7 +118,7 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-900/30 to-slate-900 text-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-purple-500/20 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-purple-500/20 safe-area-top px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center gap-3 flex-wrap">
           <button onClick={onBack} className="btn-secondary flex items-center gap-1.5 text-sm">
             <ArrowLeft size={14} /> Library

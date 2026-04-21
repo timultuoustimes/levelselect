@@ -184,7 +184,7 @@ export default function ChecklistTracker({ game, config, onBack, onUpdateGame })
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black text-white">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-black/60 backdrop-blur border-b border-white/10 px-4 py-3">
+      <div className="sticky top-0 z-10 bg-black/60 backdrop-blur border-b border-white/10 safe-area-top px-4 py-3">
         <div className="max-w-2xl mx-auto flex items-center gap-3 flex-wrap">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white">
             <ArrowLeft className="w-5 h-5" />

@@ -89,6 +89,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null); // { structuredData, usage }
+  const [showCloseWarning, setShowCloseWarning] = useState(false);
   const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
@@ -183,7 +184,10 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 px-4 pb-4 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+        onClick={result ? handleSave : onClose}
+      />
       <div className="relative bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-xl z-10">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -191,10 +195,30 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
             <Sparkles className="w-5 h-5 text-purple-400" />
             <h2 className="font-bold text-white">Generate Tracker Data</h2>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors p-1">
+          <button
+            onClick={result ? () => setShowCloseWarning(true) : onClose}
+            className="text-gray-500 hover:text-white transition-colors p-1"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Close warning banner */}
+        {showCloseWarning && (
+          <div className="px-5 py-3 bg-yellow-900/20 border-b border-yellow-500/20 flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-yellow-200 flex-1">Save the generated tracker data before closing?</span>
+            <button onClick={handleSave} className="btn-primary text-xs px-3 py-1.5 shrink-0">
+              Save & Close
+            </button>
+            <button onClick={onClose} className="btn-secondary text-xs px-3 py-1.5 shrink-0">
+              Discard
+            </button>
+            <button onClick={() => setShowCloseWarning(false)} className="text-gray-400 text-xs hover:text-white shrink-0">
+              Keep Editing
+            </button>
+          </div>
+        )}
+
 
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {!result ? (

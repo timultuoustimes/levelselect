@@ -136,7 +136,7 @@ export default function RunView({ save, onEndRun, onCancelRun }) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-red-900/30 via-purple-900/40 to-black safe-area-bottom">
       {/* Timer Header */}
-      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-red-500/20">
+      <div className="sticky top-0 z-10 bg-black/80 backdrop-blur border-b border-red-500/20 safe-area-top">
         <div className="max-w-7xl mx-auto px-4 py-3">
           {/* Timer */}
           <div className="text-center mb-3">
