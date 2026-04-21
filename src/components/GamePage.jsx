@@ -648,7 +648,7 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
           </div>
         )}
 
-        <div className="relative max-w-4xl mx-auto px-4 pt-4 pb-6">
+        <div className="relative max-w-4xl mx-auto px-4 pb-6" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
           {/* Navigation */}
           <div className="flex items-center justify-between mb-4">
             <button

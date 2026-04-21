@@ -6,7 +6,7 @@ import {
 import { generateTrackerData } from '../../utils/aiTracker.js';
 
 const MODES = [
-  { id: 'auto',  label: 'Auto (web search)',   icon: Search,   desc: 'Claude searches for guides and wikis' },
+  { id: 'auto',  label: 'Auto (web search)',   icon: Search,   desc: 'Codex searches for guides and wikis' },
   { id: 'url',   label: 'From URL',            icon: Link,     desc: 'Provide a link to a guide' },
   { id: 'paste', label: 'Paste text',          icon: FileText, desc: 'Paste guide or walkthrough text' },
   { id: 'file',  label: 'Upload file',         icon: Upload,   desc: 'Upload a PDF, TXT, or MD file' },
@@ -326,7 +326,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
 
               {loading && (
                 <p className="text-xs text-gray-500 text-center">
-                  Claude is searching the web and building your tracker data. Hang tight.
+                  Codex is searching the web and building your tracker data. Hang tight.
                 </p>
               )}
             </>

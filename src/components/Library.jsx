@@ -1461,7 +1461,63 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       {/* Header */}
       <div className="sticky top-0 z-10 bg-slate-900/90 backdrop-blur border-b border-white/10 safe-area-top">
         <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
+          {/* ── Mobile header: two rows ── */}
+          <div className="sm:hidden">
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => setLibraryView('home')}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                <Gamepad2 className="w-6 h-6 text-purple-400" />
+                <h1 className="text-xl font-bold">LevelSelect</h1>
+              </button>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href="https://www.dekudeals.com/wishlist/cwnns56whw"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px]"
+                  title="Deku Deals Wishlist"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                </a>
+                <button
+                  onClick={() => setShowSettings(true)}
+                  className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px]"
+                  title="Settings"
+                >
+                  <Settings className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowAddGame(true)}
+                  className="btn-primary !px-2.5 !min-h-[36px] !min-w-[36px]"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+              {[
+                { id: 'home',  label: 'Home',    Icon: Home },
+                { id: 'games', label: 'Library', Icon: Gamepad2 },
+                { id: 'stats', label: 'Stats',   Icon: BarChart2 },
+              ].map(({ id, label, Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setLibraryView(id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    libraryView === id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Desktop header: single row ── */}
+          <div className="hidden sm:flex items-center justify-between mb-3">
             <button
               onClick={() => setLibraryView('home')}
               className="flex items-center gap-2 hover:opacity-80 transition-opacity"
@@ -1470,8 +1526,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
               <h1 className="text-xl font-bold">LevelSelect</h1>
             </button>
             <div className="flex gap-2">
-              {/* View tabs */}
-              <div className="hidden sm:flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+              <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
                 {[
                   { id: 'home', label: 'Home' },
                   { id: 'games', label: 'Library' },
@@ -1481,38 +1536,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                     key={tab.id}
                     onClick={() => setLibraryView(tab.id)}
                     className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      libraryView === tab.id
-                        ? 'bg-purple-600 text-white'
-                        : 'text-gray-400 hover:text-gray-200'
+                      libraryView === tab.id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
                     }`}
                   >
                     {tab.label}
                   </button>
                 ))}
-              </div>
-              {/* Mobile: icon buttons for all three views */}
-              <div className="sm:hidden flex gap-1">
-                <button
-                  onClick={() => setLibraryView('home')}
-                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'home' ? 'text-purple-300 border-purple-500/50' : ''}`}
-                  title="Home"
-                >
-                  <Home className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setLibraryView('games')}
-                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'games' ? 'text-purple-300 border-purple-500/50' : ''}`}
-                  title="Library"
-                >
-                  <Gamepad2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setLibraryView('stats')}
-                  className={`btn-secondary !px-2.5 text-sm ${libraryView === 'stats' ? 'text-purple-300 border-purple-500/50' : ''}`}
-                  title="Stats"
-                >
-                  <BarChart2 className="w-4 h-4" />
-                </button>
               </div>
               <a
                 href="https://www.dekudeals.com/wishlist/cwnns56whw"
@@ -1522,7 +1551,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 title="Deku Deals Wishlist"
               >
                 <ShoppingBag className="w-4 h-4" />
-                <span className="hidden sm:inline">Wishlist</span>
+                <span>Wishlist</span>
               </a>
               <button
                 onClick={() => setShowSettings(true)}
@@ -1536,7 +1565,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 className="btn-primary !px-3 text-sm gap-1.5"
               >
                 <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Game</span>
+                <span>Add Game</span>
               </button>
             </div>
           </div>
