@@ -219,6 +219,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
           </div>
         )}
 
+
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {!result ? (
             <>
