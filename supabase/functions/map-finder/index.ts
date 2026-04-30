@@ -16,16 +16,23 @@ Return ONLY a JSON array of map objects. Each object must have:
 - name: string — descriptive name (e.g. "Green Hill Zone Act 1", "World Map", "Norfair")
 - type: "world" | "area" — "world" for full-game overview maps, "area" for level/zone/area maps
 - url: string — direct URL to the image file (must end in .jpg, .jpeg, .png, .gif, .webp, or similar)
-- source: string — website name (e.g. "Sonic Retro Wiki", "GameFAQs")
+- source: string — website name (e.g. "Sonic Fandom Wiki", "The Cutting Room Floor")
 
 Rules:
-1. Only include DIRECT image file URLs (not page URLs). The URL must point to an actual image.
-2. Prefer high-resolution map images over low-res thumbnails.
-3. Include both world maps and individual area/level maps when available.
-4. If given a specific page URL, extract ALL map images from that page.
-5. If doing a general search, return the 6–10 best maps for the game.
-6. Skip screenshots, character art, or box art — only actual maps/level layouts.
-7. Return valid JSON only, no markdown, no explanation.`;
+1. Only include DIRECT image file URLs (not page URLs). The URL must point to an actual image file.
+2. CRITICAL — hotlink policy: Only use URLs from sources that allow cross-origin image embedding. Preferred:
+   - Fandom/Wikia CDN: URLs containing "static.wikia.nocookie.net" or "vignette.wikia.nocookie.net"
+   - Wikimedia Commons / MediaWiki: URLs containing "upload.wikimedia.org"
+   - The Cutting Room Floor: tcrf.net wiki image paths
+   - GitHub raw: "raw.githubusercontent.com"
+   - Any MediaWiki-based game wiki's /images/ path (e.g. sonic.fandom.com/wiki/Special:FilePath/...)
+   AVOID sites that block hotlinking: vgmaps.com, vgmaps.de, GameFAQs image hosting, neoseeker.com. Images from these appear broken when embedded.
+3. Prefer high-resolution map images over low-res thumbnails.
+4. Include both world maps and individual area/level maps when available.
+5. If given a specific page URL, extract ALL map images from that page.
+6. If doing a general search, return the 6–10 best maps for the game. Search specifically on Fandom wikis and Wikimedia for the game name + "map".
+7. Skip screenshots, character art, or box art — only actual maps/level layouts.
+8. Return valid JSON only, no markdown, no explanation.`;
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -67,11 +74,13 @@ serve(async (req: Request) => {
       userMessage = [
         `Game: "${gameName}"${meta.length > 0 ? ` (${meta.join('; ')})` : ''}`,
         ``,
-        `Search the web for map images for this game. Look for:`,
-        `- World overview maps`,
-        `- Individual level, zone, or area maps`,
-        `- Game wikis (Sonic Retro, Wikia/Fandom, GameFAQs, neoseeker, etc.)`,
+        `Search the web for map images for this game. Focus on:`,
+        `- Fandom/Wikia game wikis (search: site:*.fandom.com "${gameName}" map)`,
+        `- Wikimedia Commons or MediaWiki-based wikis`,
+        `- The Cutting Room Floor (tcrf.net)`,
+        `- GitHub repositories with game assets`,
         ``,
+        `Return only image URLs from hotlink-friendly sources (Fandom CDN, Wikimedia, tcrf.net).`,
         `Return a JSON array of map objects as described.`,
       ].join('\n');
     }

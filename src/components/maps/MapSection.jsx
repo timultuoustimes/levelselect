@@ -10,17 +10,26 @@ const MAP_FINDER_URL = 'https://sextftevxqrtodlmnyve.supabase.co/functions/v1/ma
 
 function MapThumb({ map, onOpen, onDelete }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
 
   return (
     <div className="relative group rounded-xl overflow-hidden border border-white/10 bg-black/30 aspect-video cursor-pointer"
       onClick={onOpen}
     >
-      <img
-        src={map.imageUrl}
-        alt={map.name}
-        className="w-full h-full object-cover"
-        loading="lazy"
-      />
+      {imgFailed ? (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-1 bg-slate-800/50">
+          <Map className="w-6 h-6 text-gray-600" />
+          <span className="text-[10px] text-gray-600">Image unavailable</span>
+        </div>
+      ) : (
+        <img
+          src={map.imageUrl}
+          alt={map.name}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setImgFailed(true)}
+        />
+      )}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
       <div className="absolute bottom-0 inset-x-0 px-2 py-2">
         <div className="text-xs font-medium text-white truncate">{map.name}</div>
@@ -54,6 +63,41 @@ function MapThumb({ map, onOpen, onDelete }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Suggestion row with image fallback ──────────────────────────────────────
+
+function SuggestionRow({ suggestion: s, onAdd }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  return (
+    <div className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/10">
+      {imgFailed ? (
+        <div className="w-16 h-10 rounded bg-white/5 border border-white/10 flex items-center justify-center shrink-0">
+          <Map className="w-4 h-4 text-gray-600" />
+        </div>
+      ) : (
+        <img
+          src={s.url}
+          alt={s.name}
+          className="w-16 h-10 object-cover rounded shrink-0"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm text-white truncate">{s.name}</div>
+        <div className="text-xs text-gray-500 truncate">
+          {s.source} · {s.type}
+          {imgFailed && <span className="text-yellow-600 ml-1">(preview unavailable)</span>}
+        </div>
+      </div>
+      <button
+        onClick={() => onAdd(s)}
+        className="btn-primary !px-2 !py-1 !min-h-0 text-xs shrink-0"
+      >
+        Add
+      </button>
     </div>
   );
 }
@@ -121,19 +165,7 @@ function GenieMapFinder({ game, onAddUrl, onDismiss }) {
           </button>
         </div>
         {suggestions.map((s, i) => (
-          <div key={i} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/10">
-            <img src={s.url} alt={s.name} className="w-16 h-10 object-cover rounded" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-white truncate">{s.name}</div>
-              <div className="text-xs text-gray-500">{s.source} · {s.type}</div>
-            </div>
-            <button
-              onClick={() => onAddUrl(s)}
-              className="btn-primary !px-2 !py-1 !min-h-0 text-xs shrink-0"
-            >
-              Add
-            </button>
-          </div>
+          <SuggestionRow key={i} suggestion={s} onAdd={onAddUrl} />
         ))}
       </div>
     );
