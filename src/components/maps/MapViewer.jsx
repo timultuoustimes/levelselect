@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, MapPin,
 } from 'lucide-react';
 import MarkerEditModal, { CATEGORIES } from './MarkerEditModal.jsx';
-import { addMarker, updateMarker, removeMarker, newId } from '../../utils/mapStorage.js';
+import { addMarker, updateMarker, removeMarker, newId, upgradeImageUrl } from '../../utils/mapStorage.js';
 
 const CATEGORY_COLORS = {
   collectible: '#3b82f6',
@@ -331,7 +331,7 @@ export default function MapViewer({
   const mapCanvas = (
     <div
       ref={containerRef}
-      className={`relative overflow-hidden bg-black/40 select-none ${addMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} ${isModal ? 'flex-1' : 'h-[60vh] min-h-[300px]'}`}
+      className={`relative overflow-hidden bg-black/40 select-none ${addMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'} ${isModal ? 'flex-1' : 'h-full'}`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -356,10 +356,11 @@ export default function MapViewer({
         <div className="relative inline-block">
           <img
             ref={imgRef}
-            src={map.imageUrl}
+            src={upgradeImageUrl(map.imageUrl)}
             alt={map.name}
             className="block max-w-full max-h-full object-contain pointer-events-none"
             draggable={false}
+            style={{ imageRendering: 'high-quality' }}
           />
 
           {/* Markers */}

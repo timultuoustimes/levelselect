@@ -78,3 +78,19 @@ export function removeMarker(game, mapId, markerId) {
 export function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+// ─── Image URL upgrader ───────────────────────────────────────────────────────
+
+export function upgradeImageUrl(url) {
+  if (!url) return url;
+  // Fandom/Wikia CDN: strip thumbnail scale limit to load full-res
+  if (url.includes('static.wikia.nocookie.net') || url.includes('vignette.wikia.nocookie.net')) {
+    return url.replace(/\/scale-to-width-down\/\d+/, '/scale-to-width-down/4096');
+  }
+  // Wikimedia: strip /thumb/ path to get original file
+  if (url.includes('upload.wikimedia.org') && url.includes('/thumb/')) {
+    const m = url.match(/upload\.wikimedia\.org\/(wikipedia\/[^/]+)\/thumb\/([^?]+?)\/[^/?]+(\?.*)?$/);
+    if (m) return `https://upload.wikimedia.org/${m[1]}/${m[2]}`;
+  }
+  return url;
+}

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Map, Plus, Sparkles, Loader, Trash2, X } from 'lucide-react';
 import AddMapModal from './AddMapModal.jsx';
 import MapViewer from './MapViewer.jsx';
-import { addMapToGame, removeMapFromGame, deleteMapImage, newId } from '../../utils/mapStorage.js';
+import { addMapToGame, removeMapFromGame, deleteMapImage, newId, upgradeImageUrl } from '../../utils/mapStorage.js';
 
 const MAP_FINDER_URL = 'https://sextftevxqrtodlmnyve.supabase.co/functions/v1/map-finder';
 
@@ -79,7 +79,7 @@ function SuggestionRow({ suggestion: s, onAdd }) {
         </div>
       ) : (
         <img
-          src={s.url}
+          src={upgradeImageUrl(s.url)}
           alt={s.name}
           className="w-16 h-10 object-cover rounded shrink-0"
           onError={() => setImgFailed(true)}
