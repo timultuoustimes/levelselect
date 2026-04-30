@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  X, ZoomIn, ZoomOut, RefreshCw, Plus, Filter,
+  X, ZoomIn, ZoomOut, RefreshCw, Plus, Filter, Maximize2, Loader,
   ChevronLeft, ChevronRight, ChevronDown, MapPin,
 } from 'lucide-react';
 import MarkerEditModal, { CATEGORIES } from './MarkerEditModal.jsx';
@@ -95,6 +95,7 @@ export default function MapViewer({
   onUpdateGame,
   mode = 'modal', // 'modal' | 'panel'
   onClose,
+  onExpand,      // () => void — panel mode only, opens fullscreen overlay
 }) {
   const map = maps.find(m => m.id === activeMapId);
   const markers = map?.markers || [];
@@ -106,27 +107,64 @@ export default function MapViewer({
   const [editingMarker, setEditingMarker] = useState(null); // { marker } | { x, y } (new)
   const [showFilterMenu, setShowFilterMenu] = useState(false);
 
+  // Crisp zoom: track natural image size and compute fit dimensions
+  const [fitDims, setFitDims] = useState(null); // { w, h } at scale=1
+
   const containerRef = useRef(null);
   const imgRef       = useRef(null);
   const isDragging   = useRef(false);
   const lastPointer  = useRef({ x: 0, y: 0 });
   const lastDist     = useRef(null);
 
-  // Reset transform when map changes
+  // Reset transform + fitDims when map changes
   useEffect(() => {
     setScale(1);
     setTranslate({ x: 0, y: 0 });
     setAddMode(false);
+    setFitDims(null);
   }, [activeMapId]);
+
+  // Compute fit dims from natural image size vs container size
+  const computeFitDims = useCallback(() => {
+    const img = imgRef.current;
+    const el  = containerRef.current;
+    if (!img || !el || !img.naturalWidth) return;
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    const { width: cw, height: ch } = el.getBoundingClientRect();
+    if (!cw || !ch) return;
+    const fitScale = Math.min(cw / nw, ch / nh);
+    setFitDims({ w: nw * fitScale, h: nh * fitScale });
+    // Reset pan/zoom when fit dims change (e.g. window resize)
+    setScale(1);
+    setTranslate({ x: 0, y: 0 });
+  }, []);
+
+  const handleImgLoad = useCallback(() => {
+    computeFitDims();
+  }, [computeFitDims]);
+
+  // Recompute fit dims on container resize (panel width changes, window resize)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (imgRef.current?.naturalWidth) computeFitDims();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [computeFitDims]);
 
   const clampTranslate = useCallback((tx, ty, s) => {
     const el = containerRef.current;
-    if (!el) return { x: tx, y: ty };
-    const { width, height } = el.getBoundingClientRect();
-    const maxX = Math.max(0, (width * s - width) / 2);
-    const maxY = Math.max(0, (height * s - height) / 2);
+    if (!el || !fitDims) return { x: tx, y: ty };
+    const { width: cw, height: ch } = el.getBoundingClientRect();
+    const imgW = fitDims.w * s;
+    const imgH = fitDims.h * s;
+    const maxX = Math.max(0, (imgW - cw) / 2);
+    const maxY = Math.max(0, (imgH - ch) / 2);
     return { x: Math.max(-maxX, Math.min(maxX, tx)), y: Math.max(-maxY, Math.min(maxY, ty)) };
-  }, []);
+  }, [fitDims]);
 
   // ── Zoom ────────────────────────────────────────────────────────────────────
   const zoom = (delta) => {
@@ -319,6 +357,17 @@ export default function MapViewer({
           <RefreshCw className="w-4 h-4" />
         </button>
 
+        {/* Fullscreen (panel mode only) */}
+        {!isModal && onExpand && (
+          <button
+            onClick={onExpand}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"
+            title="Fullscreen"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        )}
+
         {isModal && (
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white ml-1" title="Close">
             <X className="w-4 h-4" />
@@ -341,26 +390,24 @@ export default function MapViewer({
       onTouchEnd={onTouchEnd}
       onClick={handleMapClick}
     >
-      <div
-        style={{
-          transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
-          transformOrigin: 'center center',
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-        }}
-      >
-        <div className="relative inline-block">
+      {fitDims ? (
+        <div
+          style={{
+            position: 'absolute',
+            width:  fitDims.w * scale,
+            height: fitDims.h * scale,
+            left: '50%',
+            top:  '50%',
+            transform: `translate(calc(-50% + ${translate.x}px), calc(-50% + ${translate.y}px))`,
+          }}
+        >
           <img
             ref={imgRef}
             src={upgradeImageUrl(map.imageUrl)}
             alt={map.name}
-            className="block max-w-full max-h-full object-contain pointer-events-none"
+            className="block w-full h-full object-contain pointer-events-none"
             draggable={false}
-            style={{ imageRendering: 'high-quality' }}
+            onLoad={handleImgLoad}
           />
 
           {/* Markers */}
@@ -386,7 +433,22 @@ export default function MapViewer({
             </button>
           ))}
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Hidden img triggers onLoad to compute fitDims */}
+          <img
+            ref={imgRef}
+            src={upgradeImageUrl(map.imageUrl)}
+            alt={map.name}
+            className="sr-only"
+            draggable={false}
+            onLoad={handleImgLoad}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Loader className="w-6 h-6 animate-spin text-gray-600" />
+          </div>
+        </>
+      )}
 
       {addMode && (
         <div className="absolute inset-x-0 bottom-4 flex justify-center pointer-events-none">

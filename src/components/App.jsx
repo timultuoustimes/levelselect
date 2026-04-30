@@ -30,7 +30,53 @@ import { HOLLOW_KNIGHT_CONFIG } from '../data/hollowKnightData.js';
 
 function TrackerWithMaps({ game, deviceId, onUpdateGame, children }) {
   const [activeMapId, setActiveMapId] = useState(null);
-  const hasMaps = (game.maps || []).length > 0;
+  const [panelWidth, setPanelWidth]   = useState(() => {
+    return parseInt(localStorage.getItem('mapPanelWidth') || '384', 10);
+  });
+  const isResizing = useRef(false);
+  const startX     = useRef(0);
+  const startWidth = useRef(0);
+  const hasMaps    = (game.maps || []).length > 0;
+
+  const beginResize = useCallback((clientX) => {
+    isResizing.current = true;
+    startX.current     = clientX;
+    startWidth.current = panelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelWidth]);
+
+  const onDragStart      = useCallback((e) => beginResize(e.clientX), [beginResize]);
+  const onTouchDragStart = useCallback((e) => beginResize(e.touches[0].clientX), [beginResize]);
+
+  useEffect(() => {
+    const onMove = (clientX) => {
+      if (!isResizing.current) return;
+      const delta = startX.current - clientX; // dragging left = wider
+      const next  = Math.max(280, Math.min(800, startWidth.current + delta));
+      setPanelWidth(next);
+    };
+    const onEnd = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setPanelWidth(w => { localStorage.setItem('mapPanelWidth', String(w)); return w; });
+    };
+    const onMouseMove = (e) => onMove(e.clientX);
+    const onTouchMove = (e) => { e.preventDefault(); onMove(e.touches[0].clientX); };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, []);
 
   if (!hasMaps) return children;
 
@@ -39,7 +85,19 @@ function TrackerWithMaps({ game, deviceId, onUpdateGame, children }) {
       <div className="lg:flex-1 lg:overflow-y-auto min-w-0">
         {children}
       </div>
-      <div className="hidden lg:flex lg:flex-col lg:h-screen w-80 xl:w-96 shrink-0 border-l border-white/10 bg-slate-950">
+      {/* Drag handle */}
+      <div
+        className="hidden lg:flex items-center justify-center w-1.5 shrink-0 cursor-col-resize hover:bg-purple-500/30 bg-white/5 transition-colors group"
+        onMouseDown={onDragStart}
+        onTouchStart={onTouchDragStart}
+      >
+        <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-purple-400/60 transition-colors" />
+      </div>
+      {/* Map panel */}
+      <div
+        className="hidden lg:flex lg:flex-col lg:h-screen shrink-0 border-l border-white/10 bg-slate-950"
+        style={{ width: panelWidth }}
+      >
         <MapPanel
           game={game}
           deviceId={deviceId}
