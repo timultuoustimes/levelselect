@@ -116,6 +116,12 @@ export default function MapViewer({
   const lastPointer  = useRef({ x: 0, y: 0 });
   const lastDist     = useRef(null);
 
+  // Refs that keep touch handlers in sync with current state without re-registering
+  const scaleRef   = useRef(scale);
+  const addModeRef = useRef(addMode);
+  useEffect(() => { scaleRef.current = scale; },   [scale]);
+  useEffect(() => { addModeRef.current = addMode; }, [addMode]);
+
   // Reset transform + fitDims when map changes
   useEffect(() => {
     setScale(1);
@@ -135,7 +141,6 @@ export default function MapViewer({
     if (!cw || !ch) return;
     const fitScale = Math.min(cw / nw, ch / nh);
     setFitDims({ w: nw * fitScale, h: nh * fitScale });
-    // Reset pan/zoom when fit dims change (e.g. window resize)
     setScale(1);
     setTranslate({ x: 0, y: 0 });
   }, []);
@@ -170,6 +175,7 @@ export default function MapViewer({
   const zoom = (delta) => {
     setScale(prev => {
       const next = Math.min(5, Math.max(0.5, prev + delta));
+      scaleRef.current = next;
       setTranslate(t => clampTranslate(t.x, t.y, next));
       return next;
     });
@@ -199,48 +205,65 @@ export default function MapViewer({
     const dx = e.clientX - lastPointer.current.x;
     const dy = e.clientY - lastPointer.current.y;
     lastPointer.current = { x: e.clientX, y: e.clientY };
-    setTranslate(t => clampTranslate(t.x + dx, t.y + dy, scale));
+    setTranslate(t => clampTranslate(t.x + dx, t.y + dy, scaleRef.current));
   };
   const onMouseUp = () => { isDragging.current = false; };
 
-  // ── Touch handlers ───────────────────────────────────────────────────────────
-  const onTouchStart = (e) => {
-    if (e.touches.length === 1 && !addMode) {
-      isDragging.current = true;
-      lastPointer.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
-    if (e.touches.length === 2) {
+  // ── Touch handlers — registered via addEventListener to allow preventDefault ──
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length === 1 && !addModeRef.current) {
+        isDragging.current = true;
+        lastPointer.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+      if (e.touches.length === 2) {
+        isDragging.current = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastDist.current = Math.hypot(dx, dy);
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && isDragging.current) {
+        const dx = e.touches[0].clientX - lastPointer.current.x;
+        const dy = e.touches[0].clientY - lastPointer.current.y;
+        lastPointer.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        setTranslate(t => clampTranslate(t.x + dx, t.y + dy, scaleRef.current));
+      }
+      if (e.touches.length === 2 && lastDist.current !== null) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const delta = (dist - lastDist.current) * 0.01;
+        lastDist.current = dist;
+        setScale(prev => {
+          const next = Math.min(5, Math.max(0.5, prev + delta));
+          scaleRef.current = next;
+          setTranslate(t => clampTranslate(t.x, t.y, next));
+          return next;
+        });
+      }
+    };
+
+    const handleTouchEnd = () => {
       isDragging.current = false;
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      lastDist.current = Math.hypot(dx, dy);
-    }
-  };
-  const onTouchMove = (e) => {
-    e.preventDefault();
-    if (e.touches.length === 1 && isDragging.current) {
-      const dx = e.touches[0].clientX - lastPointer.current.x;
-      const dy = e.touches[0].clientY - lastPointer.current.y;
-      lastPointer.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      setTranslate(t => clampTranslate(t.x + dx, t.y + dy, scale));
-    }
-    if (e.touches.length === 2 && lastDist.current !== null) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const dist = Math.hypot(dx, dy);
-      const delta = (dist - lastDist.current) * 0.01;
-      lastDist.current = dist;
-      setScale(prev => {
-        const next = Math.min(5, Math.max(0.5, prev + delta));
-        setTranslate(t => clampTranslate(t.x, t.y, next));
-        return next;
-      });
-    }
-  };
-  const onTouchEnd = () => {
-    isDragging.current = false;
-    lastDist.current = null;
-  };
+      lastDist.current = null;
+    };
+
+    el.addEventListener('touchstart', handleTouchStart, { passive: false });
+    el.addEventListener('touchmove',  handleTouchMove,  { passive: false });
+    el.addEventListener('touchend',   handleTouchEnd);
+    return () => {
+      el.removeEventListener('touchstart', handleTouchStart);
+      el.removeEventListener('touchmove',  handleTouchMove);
+      el.removeEventListener('touchend',   handleTouchEnd);
+    };
+  }, [clampTranslate]);
 
   // ── Click on map to place marker ────────────────────────────────────────────
   const handleMapClick = (e) => {
@@ -289,7 +312,9 @@ export default function MapViewer({
   const isModal = mode === 'modal';
 
   const toolbar = (
-    <div className="flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur border-b border-white/10 flex-wrap">
+    // z-10 ensures this stacking context sits above the map canvas (which also creates
+    // a stacking context via opacity). Without it, the filter dropdown gets painted over.
+    <div className="relative z-10 flex items-center gap-2 px-3 py-2 bg-black/60 backdrop-blur border-b border-white/10 flex-wrap shrink-0">
       {/* Map switcher */}
       <MapSwitcher maps={maps} activeMapId={activeMapId} onSwitch={onMapSwitch} />
 
@@ -350,7 +375,7 @@ export default function MapViewer({
           <ZoomOut className="w-4 h-4" />
         </button>
         <button
-          onClick={() => { setScale(1); setTranslate({ x: 0, y: 0 }); }}
+          onClick={() => { setScale(1); scaleRef.current = 1; setTranslate({ x: 0, y: 0 }); }}
           className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"
           title="Reset zoom"
         >
@@ -385,9 +410,6 @@ export default function MapViewer({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-      onTouchEnd={onTouchEnd}
       onClick={handleMapClick}
     >
       {fitDims ? (
@@ -463,7 +485,11 @@ export default function MapViewer({
   if (isModal) {
     return (
       <>
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/90">
+        {/* safe-area-inset-top keeps toolbar below iOS status bar/notch in the modal overlay */}
+        <div
+          className="fixed inset-0 z-50 flex flex-col bg-black/90"
+          style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+        >
           {toolbar}
           {mapCanvas}
         </div>
