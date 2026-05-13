@@ -1,12 +1,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   ArrowLeft, Plus, ChevronDown, ChevronRight, CheckCircle, Circle,
-  Trash2, Trophy, AlertTriangle, Eye, EyeOff, Minus,
+  Trash2, Trophy, AlertTriangle, Eye, EyeOff, Minus, Sparkles,
 } from 'lucide-react';
 import {
   createStructuredSave, getItemState, setItemState,
 } from '../../utils/structuredFactory.js';
 import SessionPanel from '../shared/SessionPanel.jsx';
+import GenerateTrackerModal from './GenerateTrackerModal.jsx';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -348,6 +349,28 @@ export default function StructuredTracker({ game, config, onBack, onUpdateGame }
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState(() => new Set());
   const [confirmDeleteSessionId, setConfirmDeleteSessionId] = useState(null);
+  const [showRegenerateWarning, setShowRegenerateWarning] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+
+  // Check if any save has tracking progress (non-empty itemState)
+  const hasTrackedProgress = useMemo(() =>
+    (game.saves || []).some(s => Object.keys(s.itemState || {}).length > 0),
+  [game.saves]);
+
+  const handleRegenerateClick = () => {
+    if (hasTrackedProgress) {
+      setShowRegenerateWarning(true);
+    } else {
+      setShowGenerateModal(true);
+    }
+  };
+
+  const handleRegenerateSave = (structuredData) => {
+    // Replace schema, keep saves but wipe itemState (old IDs won't match new schema)
+    const resetSaves = (game.saves || []).map(s => ({ ...s, itemState: {} }));
+    onUpdateGame({ ...game, structuredData, saves: resetSaves });
+    setShowGenerateModal(false);
+  };
 
   const saves = game.saves || [];
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
@@ -521,6 +544,7 @@ export default function StructuredTracker({ game, config, onBack, onUpdateGame }
   };
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black text-white">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-black/60 backdrop-blur border-b border-white/10 safe-area-top px-4 py-3">
@@ -565,9 +589,21 @@ export default function StructuredTracker({ game, config, onBack, onUpdateGame }
             </div>
           )}
 
-          <button onClick={() => setShowNewSave(v => !v)} className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm">
-            <Plus className="w-3.5 h-3.5" /> New Save
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            {game.structuredData && (
+              <button
+                onClick={handleRegenerateClick}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-purple-900/40 hover:text-purple-300 text-gray-400 text-sm transition-colors"
+                title="Regenerate tracker data with Genie"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Regenerate</span>
+              </button>
+            )}
+            <button onClick={() => setShowNewSave(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm">
+              <Plus className="w-3.5 h-3.5" /> New Save
+            </button>
+          </div>
         </div>
       </div>
 
@@ -731,5 +767,47 @@ export default function StructuredTracker({ game, config, onBack, onUpdateGame }
         )}
       </div>
     </div>
+
+    {/* Regenerate warning dialog */}
+    {showRegenerateWarning && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowRegenerateWarning(false)} />
+        <div className="relative bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-400 shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-white mb-1">Replace tracker data?</h3>
+              <p className="text-sm text-gray-400">
+                This will replace all categories and items with newly generated data.
+                Your checked progress will be reset, but session history and playtime will be kept.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowRegenerateWarning(false); setShowGenerateModal(true); }}
+              className="btn-primary flex-1 text-sm"
+            >
+              Continue
+            </button>
+            <button
+              onClick={() => setShowRegenerateWarning(false)}
+              className="btn-secondary flex-1 text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {showGenerateModal && (
+      <GenerateTrackerModal
+        game={game}
+        onSave={handleRegenerateSave}
+        onClose={() => setShowGenerateModal(false)}
+      />
+    )}
+    </>
   );
 }
