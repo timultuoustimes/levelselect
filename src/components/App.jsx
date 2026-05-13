@@ -64,7 +64,11 @@ function TrackerWithMaps({ game, deviceId, onUpdateGame, children }) {
       setPanelWidth(w => { localStorage.setItem('mapPanelWidth', String(w)); return w; });
     };
     const onMouseMove = (e) => onMove(e.clientX);
-    const onTouchMove = (e) => { e.preventDefault(); onMove(e.touches[0].clientX); };
+    const onTouchMove = (e) => {
+      if (!isResizing.current) return; // don't block page scrolling when not resizing
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    };
 
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onEnd);
