@@ -9,18 +9,53 @@
     -webkit-touch-callout: none;
   }
 
-  /* Safe area insets for iPads with notch/home indicator */
-  .safe-area-top {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-
-  .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-
   /* Smooth scrolling for iOS */
   .scroll-smooth-ios {
     -webkit-overflow-scrolling: touch;
+  }
+}
+
+/*
+ * Safe-area classes live OUTSIDE @layer so they outrank all @tailwind utilities
+ * (unlayered CSS beats every named layer per the CSS Cascade spec).
+ * This prevents Tailwind padding utilities like py-3 from overriding safe-area
+ * inset padding on sticky tracker headers.
+ *
+ * Ordering matters within this block: the default rule comes first so the
+ * @supports iOS-Safari-browser override (which comes second) wins by source
+ * order when both rules match.
+ */
+
+/* PWA + non-iOS: env() covers the status bar notch */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Non-sticky hero areas (e.g. GamePage top section) */
+.safe-area-top-page {
+  padding-top: max(1rem, env(safe-area-inset-top, 0px));
+}
+
+/*
+ * iOS Safari browser (not PWA) override: viewport extends under the URL bar
+ * which is ~50px taller than the status bar alone. Add 3.5rem so the back
+ * button clears the full browser chrome.
+ * -webkit-touch-callout targets iOS Safari. (display-mode: standalone) excludes
+ * the installed PWA which has no URL bar.
+ * This block is AFTER the defaults above so it wins by source order on iOS Safari.
+ */
+@supports (-webkit-touch-callout: none) {
+  @media not all and (display-mode: standalone) {
+    .safe-area-top {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
+    }
+    .safe-area-top-page {
+      padding-top: calc(env(safe-area-inset-top, 0px) + 3.5rem);
+    }
   }
 }
 

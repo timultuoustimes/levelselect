@@ -12,6 +12,7 @@ import {
 } from '../utils/storage.js';
 import Library, { TRACKER_TYPES } from './Library.jsx';
 import GamePage from './GamePage.jsx';
+import MapPanel from './maps/MapPanel.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
 import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
@@ -24,6 +25,94 @@ import StructuredTracker from './structured/StructuredTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
 import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG, HITMAN_CONFIG, UNDER_THE_ISLAND_CONFIG } from '../data/checklistGameData.js';
 import { HOLLOW_KNIGHT_CONFIG } from '../data/hollowKnightData.js';
+
+// ─── Tracker layout with optional map panel (desktop) ────────────────────────
+
+function TrackerWithMaps({ game, deviceId, onUpdateGame, children }) {
+  const [activeMapId, setActiveMapId] = useState(null);
+  const [panelWidth, setPanelWidth]   = useState(() => {
+    return parseInt(localStorage.getItem('mapPanelWidth') || '384', 10);
+  });
+  const isResizing = useRef(false);
+  const startX     = useRef(0);
+  const startWidth = useRef(0);
+  const hasMaps    = (game.maps || []).length > 0;
+
+  const beginResize = useCallback((clientX) => {
+    isResizing.current = true;
+    startX.current     = clientX;
+    startWidth.current = panelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }, [panelWidth]);
+
+  const onDragStart      = useCallback((e) => beginResize(e.clientX), [beginResize]);
+  const onTouchDragStart = useCallback((e) => beginResize(e.touches[0].clientX), [beginResize]);
+
+  useEffect(() => {
+    const onMove = (clientX) => {
+      if (!isResizing.current) return;
+      const delta = startX.current - clientX; // dragging left = wider
+      const next  = Math.max(280, Math.min(800, startWidth.current + delta));
+      setPanelWidth(next);
+    };
+    const onEnd = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      setPanelWidth(w => { localStorage.setItem('mapPanelWidth', String(w)); return w; });
+    };
+    const onMouseMove = (e) => onMove(e.clientX);
+    const onTouchMove = (e) => {
+      if (!isResizing.current) return; // don't block page scrolling when not resizing
+      e.preventDefault();
+      onMove(e.touches[0].clientX);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onEnd);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onEnd);
+    };
+  }, []);
+
+  if (!hasMaps) return children;
+
+  return (
+    <div className="lg:flex lg:h-screen lg:overflow-hidden">
+      <div className="lg:flex-1 lg:overflow-y-auto min-w-0">
+        {children}
+      </div>
+      {/* Drag handle */}
+      <div
+        className="hidden lg:flex items-center justify-center w-1.5 shrink-0 cursor-col-resize hover:bg-purple-500/30 bg-white/5 transition-colors group"
+        onMouseDown={onDragStart}
+        onTouchStart={onTouchDragStart}
+      >
+        <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-purple-400/60 transition-colors" />
+      </div>
+      {/* Map panel */}
+      <div
+        className="hidden lg:flex lg:flex-col lg:h-screen shrink-0 border-l border-white/10 bg-slate-950"
+        style={{ width: panelWidth }}
+      >
+        <MapPanel
+          game={game}
+          deviceId={deviceId}
+          activeMapId={activeMapId}
+          onActiveMapChange={setActiveMapId}
+          onUpdateGame={onUpdateGame}
+        />
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [data, setData] = useState(null); // null = still loading
@@ -193,7 +282,7 @@ export default function App() {
   const currentGame = data.library.find(g => g.id === data.currentGameId);
 
   const SyncBar = () => (
-    <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+    <div className="fixed right-4 z-50 flex flex-col items-end gap-2" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
       {showSyncPanel && (
         <div className="card p-4 w-80 shadow-2xl border border-purple-500/30 text-sm space-y-4">
           <div className="font-bold text-purple-300">Sync & Devices</div>
@@ -278,6 +367,7 @@ export default function App() {
         <GamePage
           game={currentGame}
           library={data.library}
+          deviceId={getDeviceIdPublic()}
           navSource={navSource}
           onBack={backToLibrary}
           onGoHome={goToHome}
@@ -297,210 +387,130 @@ export default function App() {
     const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman', 26192: 'dead-cells' };
     const trackerType = currentGame.trackerType || IGDB_TRACKER_IDS[currentGame.igdbId] || null;
 
+    let trackerEl;
+
     // ── Hades ────────────────────────────────────────────────────────────────
     if (trackerType === 'hades') {
-      return (
-        <>
-          <HadesTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
-          <SyncBar />
-        </>
-      );
-    }
+      trackerEl = <HadesTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
 
     // ── Lone Ruin ─────────────────────────────────────────────────────────────
-    if (trackerType === 'lone-ruin') {
-      return (
-        <>
-          <LoneRuinTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />
-          <SyncBar />
-        </>
-      );
-    }
+    } else if (trackerType === 'lone-ruin') {
+      trackerEl = <LoneRuinTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
 
     // ── GONNER ────────────────────────────────────────────────────────────────
-    if (trackerType === 'gonner') {
-      return (
-        <>
-          <GenericRoguelikeTracker
-            game={currentGame}
-            config={GONNERS_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Cursed to Golf ────────────────────────────────────────────────────────
-    if (trackerType === 'cursed-to-golf') {
-      return (
-        <>
-          <GenericRoguelikeTracker
-            game={currentGame}
-            config={CURSED_TO_GOLF_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Blazing Chrome ────────────────────────────────────────────────────────
-    if (trackerType === 'blazing-chrome') {
-      return (
-        <>
-          <ChecklistTracker
-            game={currentGame}
-            config={BLAZING_CHROME_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Sayonara Wild Hearts ──────────────────────────────────────────────────
-    if (trackerType === 'sayonara-wild-hearts') {
-      return (
-        <>
-          <ChecklistTracker
-            game={currentGame}
-            config={SAYONARA_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Cast n Chill ──────────────────────────────────────────────────────────
-    if (trackerType === 'cast-n-chill') {
-      return (
-        <>
-          <ChecklistTracker
-            game={currentGame}
-            config={CAST_N_CHILL_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Hitman: World of Assassination ───────────────────────────────────────
-    if (trackerType === 'hitman') {
-      return (
-        <>
-          <ChecklistTracker
-            game={currentGame}
-            config={HITMAN_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Under the Island ─────────────────────────────────────────────────────
-    if (trackerType === 'under-the-island') {
-      return (
-        <>
-          <ChecklistTracker
-            game={currentGame}
-            config={UNDER_THE_ISLAND_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Dead Cells ────────────────────────────────────────────────────────────
-    if (trackerType === 'dead-cells') {
-      return (
-        <>
-          <DeadCellsTracker
-            game={currentGame}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Citizen Sleeper ───────────────────────────────────────────────────────
-    if (trackerType === 'citizen-sleeper') {
-      return (
-        <>
-          <CitizenSleeperTracker
-            game={currentGame}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── Hollow Knight (StructuredTracker / generic, config-driven) ───────────
-    if (trackerType === 'hollow-knight') {
-      return (
-        <>
-          <StructuredTracker
-            game={currentGame}
-            config={HOLLOW_KNIGHT_CONFIG}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── AI-generated structured tracker (game carries its own schema) ────────
-    if (currentGame.structuredData) {
-      return (
-        <>
-          <StructuredTracker
-            game={currentGame}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── The Messenger ─────────────────────────────────────────────────────────
-    if (trackerType === 'messenger') {
-      return (
-        <>
-          <MessengerTracker
-            game={currentGame}
-            onBack={backToGamePage}
-            onUpdateGame={handleUpdateGame}
-          />
-          <SyncBar />
-        </>
-      );
-    }
-
-    // ── General tracker (fallback for all other games) ────────────────────────
-    return (
-      <>
-        <GeneralGameTracker
+    } else if (trackerType === 'gonner') {
+      trackerEl = (
+        <GenericRoguelikeTracker
           game={currentGame}
+          config={GONNERS_CONFIG}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
+      );
+
+    // ── Cursed to Golf ────────────────────────────────────────────────────────
+    } else if (trackerType === 'cursed-to-golf') {
+      trackerEl = (
+        <GenericRoguelikeTracker
+          game={currentGame}
+          config={CURSED_TO_GOLF_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Blazing Chrome ────────────────────────────────────────────────────────
+    } else if (trackerType === 'blazing-chrome') {
+      trackerEl = (
+        <ChecklistTracker
+          game={currentGame}
+          config={BLAZING_CHROME_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Sayonara Wild Hearts ──────────────────────────────────────────────────
+    } else if (trackerType === 'sayonara-wild-hearts') {
+      trackerEl = (
+        <ChecklistTracker
+          game={currentGame}
+          config={SAYONARA_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Cast n Chill ──────────────────────────────────────────────────────────
+    } else if (trackerType === 'cast-n-chill') {
+      trackerEl = (
+        <ChecklistTracker
+          game={currentGame}
+          config={CAST_N_CHILL_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Hitman: World of Assassination ───────────────────────────────────────
+    } else if (trackerType === 'hitman') {
+      trackerEl = (
+        <ChecklistTracker
+          game={currentGame}
+          config={HITMAN_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Under the Island ─────────────────────────────────────────────────────
+    } else if (trackerType === 'under-the-island') {
+      trackerEl = (
+        <ChecklistTracker
+          game={currentGame}
+          config={UNDER_THE_ISLAND_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── Dead Cells ────────────────────────────────────────────────────────────
+    } else if (trackerType === 'dead-cells') {
+      trackerEl = <DeadCellsTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+
+    // ── Citizen Sleeper ───────────────────────────────────────────────────────
+    } else if (trackerType === 'citizen-sleeper') {
+      trackerEl = <CitizenSleeperTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+
+    // ── Hollow Knight (StructuredTracker / generic, config-driven) ───────────
+    } else if (trackerType === 'hollow-knight') {
+      trackerEl = (
+        <StructuredTracker
+          game={currentGame}
+          config={HOLLOW_KNIGHT_CONFIG}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
+
+    // ── AI-generated structured tracker (game carries its own schema) ────────
+    } else if (currentGame.structuredData) {
+      trackerEl = <StructuredTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+
+    // ── The Messenger ─────────────────────────────────────────────────────────
+    } else if (trackerType === 'messenger') {
+      trackerEl = <MessengerTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+
+    // ── General tracker (fallback for all other games) ────────────────────────
+    } else {
+      trackerEl = <GeneralGameTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+    }
+
+    return (
+      <>
+        <TrackerWithMaps key={currentGame.id} game={currentGame} deviceId={getDeviceIdPublic()} onUpdateGame={handleUpdateGame}>
+          {trackerEl}
+        </TrackerWithMaps>
         <SyncBar />
       </>
     );

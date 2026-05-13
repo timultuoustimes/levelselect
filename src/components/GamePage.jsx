@@ -7,6 +7,9 @@ import { igdbCoverUrl, igdbGameUrl, fetchIGDBByName, fetchIGDBGame } from '../ut
 import { migratePlayPeriods } from '../utils/factories.js';
 import { generateId } from '../utils/format.js';
 import GenerateTrackerModal from './structured/GenerateTrackerModal.jsx';
+import MapSection from './maps/MapSection.jsx';
+import MapPanel from './maps/MapPanel.jsx';
+import { addMapToGame } from '../utils/mapStorage.js';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -402,8 +405,9 @@ function RelatedGames({ game, library, onOpenGame }) {
   );
 }
 
-export default function GamePage({ game, library, navSource = 'library', onBack, onGoHome, onGoLibrary, onOpenTracker, onUpdateGame, onDeleteGame, onOpenGame }) {
+export default function GamePage({ game, library, deviceId, navSource = 'library', onBack, onGoHome, onGoLibrary, onOpenTracker, onUpdateGame, onDeleteGame, onOpenGame }) {
   const [editingReview, setEditingReview] = useState(false);
+  const [activeMapId, setActiveMapId] = useState(null);
   const [reviewDraft, setReviewDraft] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showGenerateTracker, setShowGenerateTracker] = useState(false);
@@ -648,7 +652,7 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
           </div>
         )}
 
-        <div className="relative max-w-4xl mx-auto px-4 pb-6" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+        <div className="relative max-w-4xl mx-auto px-4 pb-6 safe-area-top-page">
           {/* Navigation */}
           <div className="flex items-center justify-between mb-4">
             <button
@@ -763,8 +767,11 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
         </div>
       </div>
 
-      {/* Content below hero */}
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
+      {/* Content below hero — two-column on desktop */}
+      <div className="max-w-5xl mx-auto px-4 py-4 lg:flex lg:gap-6 lg:items-start">
+
+      {/* Left column: game info, stats, review, etc. */}
+      <div className="flex-1 min-w-0 space-y-4">
 
         {/* Play stats */}
         <div className="grid grid-cols-3 gap-3">
@@ -1282,7 +1289,32 @@ export default function GamePage({ game, library, navSource = 'library', onBack,
           <RelatedGames game={game} library={library} onOpenGame={onOpenGame} />
         )}
 
+        {/* Maps section — mobile only (desktop shows in the right panel) */}
+        <div className="lg:hidden">
+          <MapSection
+            game={game}
+            deviceId={deviceId}
+            onUpdateGame={onUpdateGame}
+            onActiveMapChange={null}
+          />
+        </div>
+
+      </div>{/* end left column */}
+
+      {/* Right column: sticky map panel — desktop only */}
+      <div className="hidden lg:block w-80 xl:w-96 shrink-0">
+        <div className="sticky top-4 h-[calc(100vh-5rem)] min-h-[400px]">
+          <MapPanel
+            game={game}
+            deviceId={deviceId}
+            activeMapId={activeMapId}
+            onActiveMapChange={setActiveMapId}
+            onUpdateGame={onUpdateGame}
+          />
+        </div>
       </div>
+
+      </div>{/* end two-column wrapper */}
 
       {/* Generate Tracker Modal */}
       {showGenerateTracker && (

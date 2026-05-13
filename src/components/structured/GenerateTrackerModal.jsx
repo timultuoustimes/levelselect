@@ -314,7 +314,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
                 {loading ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    Generating... (this may take 15–30 seconds)
+                    Generating... (this may take 1–2 minutes)
                   </>
                 ) : (
                   <>

@@ -156,6 +156,57 @@ const TRACKER_TOOL = {
   },
 };
 
+// ─── Stage 1: find best guide URL for auto mode ──────────────────────────────
+
+async function findGuideUrl(
+  apiKey: string,
+  gameName: string,
+  igdbData: Record<string, unknown> | null,
+): Promise<string | null> {
+  const meta: string[] = [];
+  if (igdbData?.genres)     meta.push(`Genres: ${(igdbData.genres as string[]).join(', ')}`);
+  if (igdbData?.developers) meta.push(`Developer: ${(igdbData.developers as string[]).join(', ')}`);
+
+  const prompt = [
+    `Search the web for the single best comprehensive guide or wiki page for the game "${gameName}".`,
+    meta.length > 0 ? `(${meta.join('; ')})` : '',
+    'Return ONLY the URL of the best guide page — no other text, no explanation, just the URL.',
+    'Prefer wikis (fandom, wiki.gg, neoseeker, gamefaqs) that cover collectibles and 100% completion.',
+  ].filter(Boolean).join(' ');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 300,
+      tools: [{
+        type: 'web_search_20250305',
+        name: 'web_search',
+        max_uses: 2,
+      }],
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  const textBlock = (data.content || []).find(
+    (b: { type: string }) => b.type === 'text'
+  ) as { text: string } | undefined;
+
+  if (!textBlock?.text) return null;
+
+  // Extract the first URL-looking string from the response
+  const urlMatch = textBlock.text.match(/https?:\/\/[^\s"'<>]+/);
+  return urlMatch ? urlMatch[0] : null;
+}
+
 // ─── Build Claude API messages ───────────────────────────────────────────────
 
 function buildUserMessage(
@@ -187,10 +238,6 @@ function buildUserMessage(
     parts.push(`\nThe user wants you to use this URL as a reference source. Search the web for this page and extract relevant game data from it: ${payload}`);
   }
 
-  if (mode === 'auto') {
-    parts.push('\nSearch the web for game guides, wikis, and walkthroughs to find the most accurate and thorough information about this game\'s content, collectibles, bosses, upgrades, and progression systems.');
-  }
-
   parts.push('\nBe thorough — include all major bosses, collectibles, upgrades, story progression, and endings. Group items into logical categories using the right category type for each. Call the generate_tracker_data tool with the complete result.');
 
   return parts.join('\n');
@@ -212,7 +259,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { gameName, igdbData, mode, payload } = await req.json();
+    let { gameName, igdbData, mode, payload } = await req.json();
 
     if (!gameName) {
       return new Response(
@@ -221,12 +268,25 @@ serve(async (req: Request) => {
       );
     }
 
-    const userMessage = buildUserMessage(gameName, igdbData || null, mode || 'auto', payload || null);
+    // Auto mode: two-stage — find a guide URL first (fast), then generate from it.
+    // This splits the work into two calls each well under Supabase's 150s limit.
+    if (mode === 'auto' || !mode) {
+      const guideUrl = await findGuideUrl(apiKey, gameName, igdbData || null);
+      if (guideUrl) {
+        mode = 'url';
+        payload = guideUrl;
+      } else {
+        // Couldn't find a URL — fall back to knowledge-only generation (no web search)
+        mode = 'paste';
+        payload = null;
+      }
+    }
 
-    // Build tools array: always include our structured output tool,
-    // plus web_search for auto/url modes.
+    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null);
+
+    // URL mode gets web_search so Claude can fetch the page content
     const tools: unknown[] = [TRACKER_TOOL];
-    if (mode === 'auto' || mode === 'url' || !mode) {
+    if (mode === 'url') {
       tools.push({
         type: 'web_search_20250305',
         name: 'web_search',
@@ -264,15 +324,12 @@ serve(async (req: Request) => {
     const claudeData = await claudeRes.json();
 
     // Extract the tool call result from the response.
-    // Claude may include multiple content blocks (text, web search results,
-    // tool_use). We want the generate_tracker_data tool_use block.
     const toolUseBlock = (claudeData.content || []).find(
       (block: { type: string; name?: string }) =>
         block.type === 'tool_use' && block.name === 'generate_tracker_data'
     );
 
     if (!toolUseBlock) {
-      // Claude didn't call the tool — return whatever it said for debugging
       const textBlocks = (claudeData.content || [])
         .filter((b: { type: string }) => b.type === 'text')
         .map((b: { text: string }) => b.text)
@@ -283,14 +340,13 @@ serve(async (req: Request) => {
       );
     }
 
-    // Build the complete structuredData object
     const generated = toolUseBlock.input;
     const structuredData = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
       generatedBy: 'claude-sonnet-4-6',
       sources: [
-        { type: mode || 'auto', ...(payload && mode === 'url' ? { url: payload } : {}) },
+        { type: mode, ...(payload && mode === 'url' ? { url: payload } : {}) },
       ],
       categories: generated.categories || [],
       ...(generated.runTemplate ? { runTemplate: generated.runTemplate } : {}),
@@ -300,7 +356,6 @@ serve(async (req: Request) => {
       tags: generated.tags || [],
     };
 
-    // Return the structured data + usage info
     return new Response(
       JSON.stringify({
         structuredData,

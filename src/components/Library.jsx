@@ -666,6 +666,13 @@ function HomeView({ library, onOpenGame, onViewAll, collapsedSections, onToggleC
         const totalCount = library.filter(g => g.status === section.status).length;
         if (games.length === 0) return null;
 
+        // Sort active sections by most recent activity (most recently played first)
+        if (['playing', 'queued', 'paused'].includes(section.status)) {
+          games = [...games].sort((a, b) =>
+            new Date(getLastPlayed(b)) - new Date(getLastPlayed(a))
+          );
+        }
+
         // "Recently Completed" — sort by lastPlayedAt, cap at 5
         if (section.status === 'completed') {
           games = [...games].sort((a, b) =>
