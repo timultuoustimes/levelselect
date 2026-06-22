@@ -66,7 +66,7 @@ export default function LoneRuinRunView({ run, onEnd, onCancel, onUpdateRun }) {
   const startingSpellData = STARTING_SPELLS.find(s => s.name === runData.startingSpell);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-indigo-950 via-purple-950 to-black text-white p-4">
+    <div className="min-h-screen bg-gradient-to-b from-indigo-950 via-purple-950 to-black text-white p-4 safe-area-top">
       <div className="max-w-3xl mx-auto space-y-4">
 
         {/* Timer bar */}

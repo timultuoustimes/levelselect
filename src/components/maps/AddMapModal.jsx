@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Upload, Link, Loader, AlertCircle } from 'lucide-react';
 import { uploadMapImage, newId } from '../../utils/mapStorage.js';
 
@@ -22,6 +22,11 @@ export default function AddMapModal({ game, deviceId, onAdd, onClose }) {
   const [file, setFile]         = useState(null);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
+  const blobUrlRef = useRef(null);
+
+  useEffect(() => {
+    return () => { if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current); };
+  }, []);
 
   // Collect tracker category names for the optional link step
   const trackerCategories = game.structuredTracker?.categories || [];
@@ -29,8 +34,11 @@ export default function AddMapModal({ game, deviceId, onAdd, onClose }) {
   const handleFileChange = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    const url = URL.createObjectURL(f);
+    blobUrlRef.current = url;
     setFile(f);
-    setImgPreview(URL.createObjectURL(f));
+    setImgPreview(url);
     if (!name) setName(f.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '));
     setError(null);
   };
