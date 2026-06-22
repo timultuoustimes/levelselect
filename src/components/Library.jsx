@@ -167,6 +167,7 @@ export const TRACKER_TYPES = {
   'Under The Island': 'under-the-island',
   'Dead Cells': 'dead-cells',
   'Hollow Knight': 'hollow-knight',
+  'Mina the Hollower': 'mina-the-hollower',
 };
 
 // Grid column classes keyed by user preference

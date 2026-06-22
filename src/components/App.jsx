@@ -21,6 +21,7 @@ import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
 import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
+import MinaTracker from './mina/MinaTracker.jsx';
 import GeneralGameTracker from './general/GeneralGameTracker.jsx';
 import StructuredTracker from './structured/StructuredTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
@@ -639,6 +640,10 @@ export default function App() {
     // ── The Messenger ─────────────────────────────────────────────────────────
     } else if (trackerType === 'messenger') {
       trackerEl = <MessengerTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+
+    // ── Mina the Hollower ─────────────────────────────────────────────────────
+    } else if (trackerType === 'mina-the-hollower') {
+      trackerEl = <MinaTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
 
     // ── General tracker (fallback for all other games) ────────────────────────
     } else {
