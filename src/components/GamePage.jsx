@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Home, Play, Star, Clock, Trophy, ChevronDown, ExternalLink,
   Edit2, Check, X, Gamepad2, RefreshCw, Plus, Trash2, Sparkles,
@@ -44,16 +44,10 @@ function formatDuration(seconds) {
 }
 
 function getGamePlaytime(game) {
-  // Sum all saves
   let total = 0;
   (game.saves || []).forEach(save => {
-    if (typeof save.totalPlaytime === 'number') {
-      total += save.totalPlaytime;
-    } else if (Array.isArray(save.sessions)) {
-      total += save.sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-    } else if (Array.isArray(save.runs)) {
-      total += save.runs.reduce((acc, r) => acc + (r.duration || 0), 0);
-    }
+    total += (save.sessions || []).reduce((acc, s) => acc + (s.duration || 0), 0);
+    total += (save.runs || []).reduce((acc, r) => acc + (r.duration || 0), 0);
   });
   return total;
 }
@@ -68,7 +62,7 @@ function getCompletionCount(game) {
   (game.saves || []).forEach(save => {
     if (save.completedAt) count++;
     if (Array.isArray(save.runs)) {
-      count += save.runs.filter(r => r.escaped || r.completed || r.won).length;
+      count += save.runs.filter(r => r.escaped || r.completed || r.won || r.outcome === 'victory').length;
     }
   });
   return count;
@@ -247,7 +241,7 @@ function SaveSelector({ game, onOpenTracker, onUpdateGame }) {
         className="btn-primary w-full gap-2 text-base py-3"
       >
         <Play className="w-5 h-5" />
-        {hasTracker ? 'Open Tracker' : 'Start Tracking'}
+        {hasTracker ? 'Open Tracker' : 'Create Tracker'}
       </button>
     );
   }
@@ -255,9 +249,9 @@ function SaveSelector({ game, onOpenTracker, onUpdateGame }) {
   return (
     <div className="space-y-2">
       {saves.map((save, i) => {
-        const playtime = typeof save.totalPlaytime === 'number'
-          ? save.totalPlaytime
-          : (save.sessions || []).reduce((a, s) => a + (s.duration || 0), 0);
+        const playtime =
+          (save.sessions || []).reduce((a, s) => a + (s.duration || 0), 0) +
+          (save.runs || []).reduce((a, r) => a + (r.duration || 0), 0);
         const progress = save.progressPercent ?? (
           save.milestones?.length > 0
             ? Math.round((save.milestones.filter(m => m.completed).length / save.milestones.length) * 100)
@@ -303,7 +297,7 @@ function SaveSelector({ game, onOpenTracker, onUpdateGame }) {
         className="btn-primary w-full gap-2 mt-2"
       >
         <Play className="w-4 h-4" />
-        {hasTracker ? 'Open Full Tracker' : 'Track This Game'}
+        {hasTracker ? 'Open Tracker' : 'Create Tracker'}
       </button>
     </div>
   );
@@ -411,12 +405,24 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
   const [reviewDraft, setReviewDraft] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showGenerateTracker, setShowGenerateTracker] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesDraft, setNotesDraft] = useState('');
 
   // Play history
   const [playPeriods, setPlayPeriods] = useState(() => migratePlayPeriods(game));
   const [editingPeriodId, setEditingPeriodId] = useState(null);
-  // periodDraft: { startMonth, startYear, endMonth, endYear, ongoing, note }
   const [periodDraft, setPeriodDraft] = useState(null);
+
+  // Always-fresh ref so async ops (IGDB fetch) don't close over stale game
+  const gameRef = useRef(game);
+  useEffect(() => { gameRef.current = game; }, [game]);
+
+  // Reset play-period state when navigating between games (Related Games links)
+  useEffect(() => {
+    setPlayPeriods(migratePlayPeriods(game));
+    setEditingPeriodId(null);
+    setPeriodDraft(null);
+  }, [game.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // IGDB refresh
   const [igdbFetching, setIgdbFetching] = useState(false);
@@ -579,20 +585,21 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
         : await fetchIGDBByName(game.name);
 
       if (result) {
+        const latest = gameRef.current;
         onUpdateGame({
-          ...game,
-          igdbId: result.igdbId || game.igdbId,
-          igdbSlug: result.igdbSlug || game.igdbSlug,
-          coverImageId: result.coverImageId || game.coverImageId,
-          coverUrl: result.coverUrl || game.coverUrl,
-          franchise: game.franchise || result.franchise,
-          firstReleaseDate: game.firstReleaseDate || result.firstReleaseDate,
-          genres: result.genres?.length ? result.genres : game.genres,
-          themes: result.themes?.length ? result.themes : game.themes,
-          gameModes: result.gameModes?.length ? result.gameModes : game.gameModes,
-          playerPerspectives: result.playerPerspectives?.length ? result.playerPerspectives : game.playerPerspectives,
-          developers: result.developers?.length ? result.developers : game.developers,
-          publishers: result.publishers?.length ? result.publishers : game.publishers,
+          ...latest,
+          igdbId: result.igdbId || latest.igdbId,
+          igdbSlug: result.igdbSlug || latest.igdbSlug,
+          coverImageId: result.coverImageId || latest.coverImageId,
+          coverUrl: result.coverUrl || latest.coverUrl,
+          franchise: latest.franchise || result.franchise,
+          firstReleaseDate: latest.firstReleaseDate || result.firstReleaseDate,
+          genres: result.genres?.length ? result.genres : latest.genres,
+          themes: result.themes?.length ? result.themes : latest.themes,
+          gameModes: result.gameModes?.length ? result.gameModes : latest.gameModes,
+          playerPerspectives: result.playerPerspectives?.length ? result.playerPerspectives : latest.playerPerspectives,
+          developers: result.developers?.length ? result.developers : latest.developers,
+          publishers: result.publishers?.length ? result.publishers : latest.publishers,
         });
         setIgdbFetchDone(true);
         setTimeout(() => setIgdbFetchDone(false), 3000);
@@ -665,14 +672,14 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
             <div className="flex items-center gap-2">
               <button
                 onClick={onGoHome || onBack}
-                className="btn-secondary !px-3 !py-2 !min-h-0 text-sm flex items-center gap-1.5"
+                className="hidden sm:flex btn-secondary !px-3 !py-2 !min-h-0 text-sm items-center gap-1.5"
               >
                 <Home className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Home</span>
+                Home
               </button>
               <button
                 onClick={onGoLibrary || onBack}
-                className="btn-secondary !px-3 !py-2 !min-h-0 text-sm flex items-center gap-1.5"
+                className="hidden sm:flex btn-secondary !px-3 !py-2 !min-h-0 text-sm items-center gap-1.5"
               >
                 Library
               </button>
@@ -1031,6 +1038,48 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
             <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{review}</p>
           ) : (
             <p className="text-sm text-gray-600 italic">No review yet.</p>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div className="card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">Notes</h2>
+            {!editingNotes && (
+              <button
+                onClick={() => { setNotesDraft(game.notes || ''); setEditingNotes(true); }}
+                className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+              >
+                <Edit2 className="w-3 h-3" />
+                {game.notes ? 'Edit' : 'Add'}
+              </button>
+            )}
+          </div>
+          {editingNotes ? (
+            <div className="space-y-2">
+              <textarea
+                value={notesDraft}
+                onChange={e => setNotesDraft(e.target.value)}
+                placeholder="Anything worth remembering — builds to try, where you left off, tips…"
+                className="input-field resize-none h-28 text-sm w-full"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { onUpdateGame({ ...game, notes: notesDraft.trim() || null }); setEditingNotes(false); }}
+                  className="btn-primary flex-1 text-sm gap-1"
+                >
+                  <Check className="w-4 h-4" /> Save
+                </button>
+                <button onClick={() => setEditingNotes(false)} className="btn-secondary flex-1 text-sm gap-1">
+                  <X className="w-4 h-4" /> Cancel
+                </button>
+              </div>
+            </div>
+          ) : game.notes ? (
+            <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">{game.notes}</p>
+          ) : (
+            <p className="text-sm text-gray-600 italic">No notes yet.</p>
           )}
         </div>
 
