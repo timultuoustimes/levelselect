@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ArrowLeft, Plus, ChevronDown, Zap } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronDown, Zap, AlertTriangle } from 'lucide-react';
 import { createLoneRuinSave, createLoneRuinRun, migrateLoneRuinSave } from '../../utils/loneRuinFactory.js';
 import { STARTING_SPELLS, DIFFICULTIES, MODES } from '../../data/loneRuinData.js';
 import LoneRuinRunView from './LoneRuinRunView.jsx';
@@ -61,8 +61,19 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
 
   const startRun = () => {
     if (!runSetup.startingSpell) return;
+    const run = createLoneRuinRun(runSetup);
+    updateSave(s => ({ ...s, activeRun: run }));
     setShowRunSetup(false);
     setActiveRunMode(true);
+  };
+
+  const handleUpdateRun = (run) => {
+    updateSave(s => ({ ...s, activeRun: run }));
+  };
+
+  const discardActiveRun = () => {
+    updateSave(s => ({ ...s, activeRun: null }));
+    setActiveRunMode(false);
   };
 
   const endRun = (completedRun) => {
@@ -70,6 +81,7 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
       updateSave(s => ({
         ...s,
         runs: [...s.runs, completedRun],
+        activeRun: null,
         lastPlayedAt: new Date().toISOString(),
       }));
     }
@@ -104,13 +116,13 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
   }
 
   // Active run
-  if (activeRunMode && currentSave) {
-    const run = createLoneRuinRun(runSetup);
+  if (activeRunMode && currentSave?.activeRun) {
     return (
       <LoneRuinRunView
-        run={run}
+        run={currentSave.activeRun}
         onEnd={endRun}
-        onCancel={() => setActiveRunMode(false)}
+        onCancel={discardActiveRun}
+        onUpdateRun={handleUpdateRun}
       />
     );
   }
@@ -189,7 +201,10 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        totalPlaytime={
+          (currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0) +
+          (currentSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0)
+        }
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateSave(s => ({
           ...s,
@@ -205,6 +220,21 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
       />
 
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-4">
+
+        {/* Resume banner */}
+        {currentSave?.activeRun && !activeRunMode && (
+          <div className="card p-4 border-yellow-500/40 bg-yellow-900/10 flex items-center gap-3">
+            <AlertTriangle size={18} className="text-yellow-400 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold text-yellow-200 text-sm">Run in progress</div>
+              <div className="text-xs text-yellow-400/70">
+                {currentSave.activeRun.startingSpell} · {currentSave.activeRun.mode} · {currentSave.activeRun.difficulty}
+              </div>
+            </div>
+            <button onClick={() => setActiveRunMode(true)} className="btn-primary text-sm py-1.5 px-3">Resume</button>
+            <button onClick={discardActiveRun} className="btn-secondary text-sm py-1.5 px-3 text-red-400 hover:text-red-300">Discard</button>
+          </div>
+        )}
 
         {/* Run setup panel */}
         {showRunSetup && (

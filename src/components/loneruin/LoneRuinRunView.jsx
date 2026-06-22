@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Pause, Trophy, Skull, X } from 'lucide-react';
+import { Play, Pause, Trophy, Skull, X, AlertTriangle } from 'lucide-react';
 import { STARTING_SPELLS, RUN_SPELLS } from '../../data/loneRuinData.js';
 
 const ALL_SPELLS = [...STARTING_SPELLS, ...RUN_SPELLS];
@@ -12,9 +12,12 @@ function formatTime(seconds) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-export default function LoneRuinRunView({ run, onEnd, onCancel }) {
-  const [elapsed, setElapsed] = useState(run.accumulatedTime || 0);
+export default function LoneRuinRunView({ run, onEnd, onCancel, onUpdateRun }) {
+  const [elapsed, setElapsed] = useState(() =>
+    run.startTime ? Math.floor((Date.now() - new Date(run.startTime).getTime()) / 1000) : 0
+  );
   const [paused, setPaused] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [spellInput, setSpellInput] = useState('');
   const [showSpellSuggestions, setShowSpellSuggestions] = useState(false);
   const [runData, setRunData] = useState(run);
@@ -27,8 +30,11 @@ export default function LoneRuinRunView({ run, onEnd, onCancel }) {
     return () => clearInterval(intervalRef.current);
   }, [paused]);
 
-  const update = (field, value) =>
-    setRunData(prev => ({ ...prev, [field]: value }));
+  const update = (field, value) => {
+    const newData = { ...runData, [field]: value };
+    setRunData(newData);
+    onUpdateRun?.(newData);
+  };
 
   const addSpell = (spellName) => {
     const name = spellName.trim();
@@ -88,12 +94,31 @@ export default function LoneRuinRunView({ run, onEnd, onCancel }) {
             >
               <Skull size={16} /> Defeated
             </button>
-            <button
-              onClick={onCancel}
-              className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg flex items-center gap-2"
-            >
-              <X size={16} /> Cancel
-            </button>
+            {showCancelConfirm ? (
+              <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                <AlertTriangle size={14} className="text-yellow-400" />
+                <span className="text-sm text-gray-300">Discard run?</span>
+                <button
+                  onClick={onCancel}
+                  className="text-red-400 hover:text-red-300 text-sm font-medium px-2"
+                >
+                  Discard
+                </button>
+                <button
+                  onClick={() => setShowCancelConfirm(false)}
+                  className="text-gray-400 hover:text-gray-200 text-sm px-2"
+                >
+                  Keep Going
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowCancelConfirm(true)}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg flex items-center gap-2"
+              >
+                <X size={16} /> Cancel
+              </button>
+            )}
           </div>
         </div>
 
