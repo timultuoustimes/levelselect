@@ -101,12 +101,13 @@ function StatusPicker({ status, onChange }) {
  * SessionPanel — always-visible compact bar above the tab nav in specialized trackers.
  *
  * Props:
- *   game          — full game object (for status and notes)
- *   totalPlaytime — number (seconds), derived by parent from save data
- *   onUpdateGame  — (updatedGame) => void
- *   onAddSession  — ({ id, startTime, endTime, duration }) => void — persists session to save
+ *   game            — full game object (for status and notes)
+ *   totalPlaytime   — number (seconds), derived by parent from save data
+ *   onUpdateGame    — (updatedGame) => void
+ *   onSessionStart  — ({ id, startTime }) => void — called immediately on Start so parent can persist activeSession
+ *   onAddSession    — ({ id, startTime, endTime, duration }) => void — called on Stop to complete the session
  */
-export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, onAddSession }) {
+export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, onSessionStart, onAddSession }) {
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionDisplay, setSessionDisplay] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -117,6 +118,7 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
   const [logNote, setLogNote] = useState('');
   const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));
   const sessionStartRef = useRef(null);
+  const sessionIdRef = useRef(null);
   const intervalRef = useRef(null);
   const logRef = useRef(null);
 
@@ -157,9 +159,13 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
   }, [sessionActive]);
 
   const startSession = () => {
+    const id = generateId();
+    const startTime = new Date().toISOString();
+    sessionIdRef.current = id;
     sessionStartRef.current = Date.now();
     setSessionDisplay(0);
     setSessionActive(true);
+    if (onSessionStart) onSessionStart({ id, startTime });
   };
 
   const stopSession = () => {
@@ -169,9 +175,11 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
     setSessionActive(false);
     setSessionDisplay(0);
     sessionStartRef.current = null;
+    const id = sessionIdRef.current || generateId();
+    sessionIdRef.current = null;
     if (elapsed > 0 && onAddSession) {
       onAddSession({
-        id: generateId(),
+        id,
         startTime: new Date(startMs).toISOString(),
         endTime: new Date(endMs).toISOString(),
         duration: elapsed,

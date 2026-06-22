@@ -3,13 +3,16 @@ import {
   loadLocal,
   saveLocal,
   loadFromCloud,
+  saveToCloud,
   debouncedCloudSave,
+  flushCloudSave,
   createDefaultState,
   getDeviceIdPublic,
   adoptDeviceData,
   exportData,
   importData,
 } from '../utils/storage.js';
+import { deleteMapImage } from '../utils/mapStorage.js';
 import Library, { TRACKER_TYPES } from './Library.jsx';
 import GamePage from './GamePage.jsx';
 import MapPanel from './maps/MapPanel.jsx';
@@ -169,15 +172,27 @@ export default function App() {
     init();
   }, []);
 
-  // Auto-save: local immediately, cloud debounced
+  // Auto-save: local immediately, cloud debounced — status reflects actual result
   useEffect(() => {
     if (data === null || isFirstLoad.current) return;
     saveLocal(data);
     setSyncStatus('saving');
-    debouncedCloudSave(data, 2000);
-    const timer = setTimeout(() => setSyncStatus('synced'), 2500);
-    return () => clearTimeout(timer);
+    debouncedCloudSave(data, 2000, (result) => {
+      setSyncStatus(result.ok ? 'synced' : 'error');
+    });
   }, [data]);
+
+  // Flush pending cloud write when the page is hidden or closed
+  useEffect(() => {
+    const handleHide = () => { flushCloudSave(); };
+    window.addEventListener('pagehide', handleHide);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushCloudSave();
+    });
+    return () => {
+      window.removeEventListener('pagehide', handleHide);
+    };
+  }, []);
 
   const updateData = useCallback((updater) => {
     setData(prev => {
@@ -217,13 +232,27 @@ export default function App() {
   }, [updateData]);
 
   const handleDeleteGame = useCallback((gameId) => {
-    updateData(prev => ({
-      ...prev,
-      library: prev.library.filter(g => g.id !== gameId),
-      currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
-    }));
+    updateData(prev => {
+      const game = prev.library.find(g => g.id === gameId);
+      if (game?.maps) {
+        game.maps
+          .filter(m => m.storagePath)
+          .forEach(m => deleteMapImage(m.storagePath).catch(e => console.error('Map cleanup failed:', e)));
+      }
+      return {
+        ...prev,
+        library: prev.library.filter(g => g.id !== gameId),
+        currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
+      };
+    });
     setView('library');
   }, [updateData]);
+
+  const handleRetryCloudSave = useCallback(() => {
+    if (!data) return;
+    setSyncStatus('saving');
+    saveToCloud(data).then(result => setSyncStatus(result.ok ? 'synced' : 'error'));
+  }, [data]);
 
   // Link to another device's data
   const handleLink = async () => {
@@ -340,23 +369,33 @@ export default function App() {
         </div>
       )}
 
-      <button
-        onClick={() => setShowSyncPanel(p => !p)}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-all ${
-          syncStatus === 'synced'  ? 'bg-green-900/80 text-green-300 border border-green-700/50'
-          : syncStatus === 'saving'  ? 'bg-yellow-900/80 text-yellow-300 border border-yellow-700/50'
-          : syncStatus === 'loading' ? 'bg-blue-900/80 text-blue-300 border border-blue-700/50'
-          : 'bg-red-900/80 text-red-300 border border-red-700/50'
-        }`}
-      >
-        <span className={syncStatus === 'saving' || syncStatus === 'loading' ? 'animate-pulse' : ''}>
-          {syncStatus === 'synced' ? '☁️' : syncStatus === 'saving' ? '⏳' : syncStatus === 'loading' ? '🔄' : '⚠️'}
-        </span>
-        {syncStatus === 'synced' ? 'Synced'
-          : syncStatus === 'saving' ? 'Saving…'
-          : syncStatus === 'loading' ? 'Syncing…'
-          : 'Offline'}
-      </button>
+      <div className="flex items-center gap-1.5">
+        {syncStatus === 'error' && (
+          <button
+            onClick={handleRetryCloudSave}
+            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-red-800/80 text-red-200 border border-red-600/50 hover:bg-red-700/80 transition-colors shadow-lg"
+          >
+            Retry
+          </button>
+        )}
+        <button
+          onClick={() => setShowSyncPanel(p => !p)}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-all ${
+            syncStatus === 'synced'  ? 'bg-green-900/80 text-green-300 border border-green-700/50'
+            : syncStatus === 'saving'  ? 'bg-yellow-900/80 text-yellow-300 border border-yellow-700/50'
+            : syncStatus === 'loading' ? 'bg-blue-900/80 text-blue-300 border border-blue-700/50'
+            : 'bg-red-900/80 text-red-300 border border-red-700/50'
+          }`}
+        >
+          <span className={syncStatus === 'saving' || syncStatus === 'loading' ? 'animate-pulse' : ''}>
+            {syncStatus === 'synced' ? '☁️' : syncStatus === 'saving' ? '⏳' : syncStatus === 'loading' ? '🔄' : '⚠️'}
+          </span>
+          {syncStatus === 'synced' ? 'Synced'
+            : syncStatus === 'saving' ? 'Saving…'
+            : syncStatus === 'loading' ? 'Syncing…'
+            : 'Cloud backup failed'}
+        </button>
+      </div>
     </div>
   );
 

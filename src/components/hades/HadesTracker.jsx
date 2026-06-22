@@ -209,9 +209,15 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
         game={game}
         totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
         onUpdateGame={onUpdateGame}
+        onSessionStart={({ id, startTime }) => updateSave(s => ({
+          ...s,
+          activeSession: { id, startTime, endTime: null, duration: 0 },
+          lastPlayedAt: startTime,
+        }))}
         onAddSession={(session) => updateSave(s => ({
           ...s,
           sessions: [...(s.sessions || []), session],
+          activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
       />

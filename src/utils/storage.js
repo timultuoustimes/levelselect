@@ -79,9 +79,14 @@ export async function saveToCloud(appData) {
         { device_id: deviceId, data: appData, updated_at: new Date().toISOString() },
         { onConflict: 'device_id' }
       );
-    if (error) console.error('Supabase save error:', error);
+    if (error) {
+      console.error('Supabase save error:', error);
+      return { ok: false, error: error.message };
+    }
+    return { ok: true };
   } catch (e) {
     console.error('Cloud save failed:', e);
+    return { ok: false, error: e.message || 'Network error' };
   }
 }
 
@@ -121,9 +126,25 @@ export async function adoptDeviceData(targetDeviceId) {
 
 // ---------- Debounced cloud save ----------
 let saveTimer = null;
-export function debouncedCloudSave(data, delayMs = 2000) {
+let pendingData = null;
+
+export function debouncedCloudSave(data, delayMs = 2000, onResult) {
+  pendingData = data;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveToCloud(data), delayMs);
+  saveTimer = setTimeout(async () => {
+    const snapshot = pendingData;
+    pendingData = null;
+    const result = await saveToCloud(snapshot);
+    if (onResult) onResult(result);
+  }, delayMs);
+}
+
+export async function flushCloudSave() {
+  if (!pendingData) return;
+  clearTimeout(saveTimer);
+  const snapshot = pendingData;
+  pendingData = null;
+  return saveToCloud(snapshot);
 }
 
 // ---------- Helpers ----------
