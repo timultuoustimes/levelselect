@@ -51,36 +51,30 @@ export function createHadesSave(name) {
 // Migrate an existing save to add any missing fields
 export function migrateSave(save) {
   const migrated = { ...save };
-
-  // Add mirrorUpgrades if missing (existing saves)
-  if (!migrated.mirrorUpgrades) {
-    migrated.mirrorUpgrades = {};
-  }
-
-  // Add session tracking fields if missing
+  if (!migrated.mirrorUpgrades) migrated.mirrorUpgrades = {};
   if (!migrated.sessions) migrated.sessions = [];
   if (migrated.notes === undefined) migrated.notes = '';
-
+  if (migrated.activeSession === undefined) migrated.activeSession = null;
   return migrated;
 }
 
 // Create a new run object
-export function createRun(weapon, aspect, keepsake, heatLevel) {
+export function createRun(weapon = '', aspect = '') {
   return {
     id: generateId(),
     startTime: new Date().toISOString(),
     endTime: null,
-    weapon: weapon || '',
-    aspect: aspect || '',
-    keepsake: keepsake || '',
-    heatLevel: heatLevel || 0,
-    boons: [],          // [{ god, name, slot }]
-    hammerUpgrades: [],  // [string]
+    weapon,
+    aspect,
+    keepsake: '',
+    heatLevel: 0,
+    gods: [],            // quick-log: gods seen this run [string]
+    hammerUpgrades: [],
+    boons: [],           // optional detailed boon log [{ god, name, slot }]
     notes: '',
-    outcome: null,       // 'victory' | 'defeated'
-    duration: 0,         // seconds
-    pausedAt: null,      // timestamp when paused
-    accumulatedTime: 0,  // seconds accumulated before current timer segment
+    outcome: null,       // 'victory' | 'defeated' | 'abandoned'
+    deathLocation: null, // 'tartarus'|'asphodel'|'elysium'|'styx'|'final-boss'
+    duration: 0,
   };
 }
 
