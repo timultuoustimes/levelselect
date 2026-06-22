@@ -3,7 +3,7 @@ import { parseGameryCSV } from '../utils/csvParser.js';
 import { createGameEntry } from '../utils/factories.js';
 import { searchIGDB, igdbCoverUrl, batchFetchIGDB, fetchIGDBByName, fetchIGDBGame } from '../utils/igdb.js';
 import {
-  Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
+  Search, Upload, Plus, Gamepad2, Trash2, ChevronDown, ChevronRight,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
   ExternalLink, X, Check, ShoppingBag, RefreshCw, Download,
   CheckSquare, Square, ArrowLeft, Home, Settings, Pin, Play,
@@ -389,7 +389,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
           {!selectMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1"
+              className="text-gray-600 hover:text-red-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -419,7 +419,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
       {!selectMode && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="absolute top-2 right-2 p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 z-10"
+          className="absolute top-2 right-2 p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors sm:opacity-0 sm:group-hover:opacity-100 z-10"
           title="Remove game"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -645,7 +645,7 @@ function HomeCoverCard({ game, onOpen, pinned, onTogglePin, onStartSession, sess
       {onStartSession && !sessionActive && (
         <button
           onClick={e => { e.stopPropagation(); onStartSession(); }}
-          className="absolute top-1 right-1 p-1 rounded-md bg-black/50 opacity-0 group-hover:opacity-100 z-10 transition-opacity"
+          className="absolute top-1 right-1 p-1 rounded-md bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 z-10 transition-opacity"
           title="Start quick session"
         >
           <Play className="w-3 h-3 text-white/60" />
@@ -746,6 +746,7 @@ function ContinuePlayingCard({ game, onOpen, homeSession, homeSessionElapsed, on
 function HomeView({
   library, onOpenGame, onViewAll, collapsedSections, onToggleCollapsed,
   search = '', homeSession, homeSessionElapsed, onStartSession, onStopSession, onTogglePin,
+  onAddGame,
 }) {
   const getLastPlayed = (g) => g.saves?.[0]?.lastPlayedAt || g.addedAt || '';
   const matchSearch = (g) => !search || g.name.toLowerCase().includes(search.toLowerCase())
@@ -758,6 +759,21 @@ function HomeView({
 
   // Pinned games (any status)
   const pinnedGames = library.filter(g => g.pinned && matchSearch(g));
+
+  // Empty library onboarding
+  if (library.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+        <div className="text-6xl mb-5">🎮</div>
+        <h2 className="text-2xl font-bold mb-2">Welcome to LevelSelect</h2>
+        <p className="text-gray-400 mb-8 max-w-sm">Track every game you play — time spent, runs, progress, and your own notes.</p>
+        <button onClick={onAddGame} className="btn-primary gap-2 text-base px-6 py-3 mb-3">
+          <Plus className="w-5 h-5" /> Add Your First Game
+        </button>
+        <p className="text-xs text-gray-600">Or import a library from a CSV or JSON backup.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-8">
@@ -1110,6 +1126,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const [manualStatus, setManualStatus] = useState('backlog');
   const [manualFranchise, setManualFranchise] = useState('');
   const [manualYearPlayed, setManualYearPlayed] = useState('');
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
 
   // Tag filter
   const [tagFilter, setTagFilter] = useState([]);
@@ -1489,6 +1506,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
     setManualStatus('backlog');
     setNewGameTags([]);
     setTagInput('');
+    setShowMoreDetails(false);
   };
 
   const togglePlatform = (p) => {
@@ -2196,6 +2214,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
             onStartSession={handleStartHomeSession}
             onStopSession={handleStopHomeSession}
             onTogglePin={handleTogglePin}
+            onAddGame={() => setShowAddGame(true)}
           />
         ) : libraryView === 'stats' ? (
           <LibraryStats library={library} />
@@ -2394,18 +2413,6 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 />
               </div>
 
-              {/* Franchise */}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Franchise / Series (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Zelda, Mario, Metroid…"
-                  value={manualFranchise}
-                  onChange={e => setManualFranchise(e.target.value)}
-                  className="input-field"
-                />
-              </div>
-
               {/* Platform */}
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Platform</label>
@@ -2453,45 +2460,62 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 </div>
               </div>
 
-              {/* Year Played */}
+              {/* More details (collapsible) */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Year Played / Beaten (optional)</label>
-                <input
-                  type="number"
-                  placeholder={`e.g. ${new Date().getFullYear()}`}
-                  min="1970"
-                  max={new Date().getFullYear() + 1}
-                  value={manualYearPlayed}
-                  onChange={e => setManualYearPlayed(e.target.value)}
-                  className="input-field text-sm"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Tags (optional)</label>
-                {newGameTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {newGameTags.map(tag => (
-                      <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/60 text-purple-200 flex items-center gap-1">
-                        #{tag}
-                        <button
-                          onClick={() => setNewGameTags(prev => prev.filter(t => t !== tag))}
-                          className="hover:text-white ml-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                <button
+                  type="button"
+                  onClick={() => setShowMoreDetails(p => !p)}
+                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  {showMoreDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  {showMoreDetails ? 'Fewer details' : 'More details (franchise, year, tags)'}
+                </button>
+                {showMoreDetails && (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Franchise / Series</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Zelda, Mario, Metroid…"
+                        value={manualFranchise}
+                        onChange={e => setManualFranchise(e.target.value)}
+                        className="input-field"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Year Played / Beaten</label>
+                      <input
+                        type="number"
+                        placeholder={`e.g. ${new Date().getFullYear()}`}
+                        min="1970"
+                        max={new Date().getFullYear() + 1}
+                        value={manualYearPlayed}
+                        onChange={e => setManualYearPlayed(e.target.value)}
+                        className="input-field text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Tags</label>
+                      {newGameTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {newGameTags.map(tag => (
+                            <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/60 text-purple-200 flex items-center gap-1">
+                              #{tag}
+                              <button onClick={() => setNewGameTags(prev => prev.filter(t => t !== tag))} className="hover:text-white ml-0.5">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <TagInput
+                        suggestions={allLibraryTags.filter(t => !newGameTags.includes(t))}
+                        onAdd={(val) => { if (!newGameTags.includes(val)) setNewGameTags(prev => [...prev, val]); }}
+                        placeholder="Add a tag…"
+                      />
+                    </div>
                   </div>
                 )}
-                <TagInput
-                  suggestions={allLibraryTags.filter(t => !newGameTags.includes(t))}
-                  onAdd={(val) => {
-                    if (!newGameTags.includes(val)) setNewGameTags(prev => [...prev, val]);
-                  }}
-                  placeholder="Add a tag…"
-                />
               </div>
 
               <button
