@@ -1066,15 +1066,31 @@ function MobileStatusPicker({ statusFilter, onChange, counts }) {
 
 function Modal({ onClose, title, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto
+                   rounded-t-3xl sm:rounded-2xl
+                   bg-slate-800/90 backdrop-blur-2xl
+                   border border-white/[0.12] shadow-2xl"
+        onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {/* Drag handle — mobile only */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
+        <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-white/[0.08]">
           <h2 className="text-lg font-bold">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white p-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children}
+        <div className="px-6 py-5">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -1096,6 +1112,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [showSortFilter, setShowSortFilter] = useState(false);
   const [gridCols, setGridCols] = useState(() => parseInt(localStorage.getItem('ls-grid-cols') || '3'));
+  const [bottomNav, setBottomNav] = useState(() => localStorage.getItem('ls-bottom-nav') === '1');
+  const toggleBottomNav = () => setBottomNav(n => {
+    const next = !n;
+    localStorage.setItem('ls-bottom-nav', next ? '1' : '0');
+    return next;
+  });
 
   // Two-level navigation for platform and franchise views
   const [platformFilter, setPlatformFilter] = useState(null);
@@ -1762,32 +1784,36 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 >
                   <Settings className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => setShowAddGame(true)}
-                  className="btn-primary !px-2.5 !min-h-[36px] !min-w-[36px]"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+                {!bottomNav && (
+                  <button
+                    onClick={() => setShowAddGame(true)}
+                    className="btn-primary !px-2.5 !min-h-[36px] !min-w-[36px]"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
-              {[
-                { id: 'home',  label: 'Home',    Icon: Home },
-                { id: 'games', label: 'Library', Icon: Gamepad2 },
-                { id: 'stats', label: 'Stats',   Icon: BarChart2 },
-              ].map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setLibraryView(id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    libraryView === id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
+            {!bottomNav && (
+              <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+                {[
+                  { id: 'home',  label: 'Home',    Icon: Home },
+                  { id: 'games', label: 'Library', Icon: Gamepad2 },
+                  { id: 'stats', label: 'Stats',   Icon: BarChart2 },
+                ].map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setLibraryView(id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      libraryView === id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Desktop header: single row ── */}
@@ -2194,7 +2220,10 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div
+        className="max-w-7xl mx-auto px-4 py-4"
+        style={bottomNav ? { paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom))' } : undefined}
+      >
 
         {libraryView === 'home' ? (
           <HomeView
@@ -2552,6 +2581,23 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       {/* ── Settings Modal ───────────────────────────────────────────────────── */}
       {showSettings && (
         <Modal onClose={() => setShowSettings(false)} title="Settings">
+          {/* Display preferences */}
+          <div className="mb-5 pb-5 border-b border-white/[0.08]">
+            <h4 className="text-sm font-medium text-gray-300 mb-3">Display</h4>
+            <button
+              onClick={toggleBottomNav}
+              className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/10"
+            >
+              <div className="text-left">
+                <div className="text-sm text-gray-200">Bottom navigation bar</div>
+                <div className="text-xs text-gray-500 mt-0.5">Move tabs and Add to bottom for one-handed use</div>
+              </div>
+              <div className={`w-11 h-6 rounded-full flex-shrink-0 transition-colors flex items-center px-0.5 ${bottomNav ? 'bg-purple-600' : 'bg-white/20'}`}>
+                <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${bottomNav ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+          </div>
+
           {/* Default platforms */}
           <div className="mb-6">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Default Platforms</h4>
@@ -2695,6 +2741,56 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
             </div>
           )}
         </Modal>
+      )}
+
+      {/* ── Bottom navigation bar ─────────────────────────────────────────────── */}
+      {bottomNav && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[45] sm:hidden bg-slate-900/90 backdrop-blur-lg border-t border-white/10"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="flex items-center px-2 pt-2 pb-1">
+            {[
+              { id: 'home',  label: 'Home',    Icon: Home },
+              { id: 'games', label: 'Library', Icon: Gamepad2 },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setLibraryView(id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-lg transition-colors ${
+                  libraryView === id ? 'text-purple-400' : 'text-gray-500'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="flex flex-col items-center gap-0.5 py-0.5 px-4"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-600/30">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-[10px] font-medium text-gray-500 mt-0.5">Add</span>
+            </button>
+            {[
+              { id: 'stats', label: 'Stats', Icon: BarChart2 },
+              { id: 'settings', label: 'Settings', Icon: Settings },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => id === 'settings' ? setShowSettings(true) : setLibraryView(id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-lg transition-colors ${
+                  libraryView === id ? 'text-purple-400' : 'text-gray-500'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

@@ -372,8 +372,13 @@ export default function App() {
 
   const currentGame = data.library.find(g => g.id === data.currentGameId);
 
-  const SyncBar = () => (
-    <div className="fixed right-4 z-50 flex flex-col items-end gap-2" style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+  const SyncBar = () => {
+    const bottomNav = localStorage.getItem('ls-bottom-nav') === '1';
+    return (
+    <div
+      className="fixed right-4 z-50 flex flex-col items-end gap-2"
+      style={{ bottom: bottomNav ? 'calc(5rem + env(safe-area-inset-bottom))' : 'max(1rem, env(safe-area-inset-bottom))' }}
+    >
       {showSyncPanel && (
         <div className="card p-4 w-80 shadow-2xl border border-purple-500/30 text-sm space-y-4">
           <div className="font-bold text-purple-300">Sync & Devices</div>
@@ -493,7 +498,8 @@ export default function App() {
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   // ── Game Landing Page ────────────────────────────────────────────────────────
   if (view === 'game-page' && currentGame) {

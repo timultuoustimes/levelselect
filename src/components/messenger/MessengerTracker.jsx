@@ -6,7 +6,7 @@ import {
 import SessionPanel from '../shared/SessionPanel.jsx';
 import {
   LEVELS, MUSIC_NOTES, PHOBEKINS, SHOP_UPGRADES,
-  TOTAL_POWER_SEALS_MAIN, TOTAL_POWER_SEALS_DLC
+  TOTAL_POWER_SEALS_MAIN, TOTAL_DLC_COLLECTIBLES
 } from '../../data/messengerData.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
