@@ -109,6 +109,7 @@ export default function MapViewer({
 
   // Crisp zoom: track natural image size and compute fit dimensions
   const [fitDims, setFitDims] = useState(null); // { w, h } at scale=1
+  const [imgError, setImgError] = useState(false);
 
   const containerRef = useRef(null);
   const imgRef       = useRef(null);
@@ -128,6 +129,7 @@ export default function MapViewer({
     setTranslate({ x: 0, y: 0 });
     setAddMode(false);
     setFitDims(null);
+    setImgError(false);
   }, [activeMapId]);
 
   // Compute fit dims from natural image size vs container size
@@ -283,9 +285,11 @@ export default function MapViewer({
     const img = imgRef.current;
     if (!img) return;
     const rect = img.getBoundingClientRect();
+    // Reject clicks outside the image bounds (letterboxed area of the canvas)
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top)  / rect.height) * 100;
-    setEditingMarker({ x, y }); // new marker
+    setEditingMarker({ x, y });
     setAddMode(false);
   };
 
@@ -442,6 +446,7 @@ export default function MapViewer({
             className="block w-full h-full object-contain pointer-events-none"
             draggable={false}
             onLoad={handleImgLoad}
+            onError={() => setImgError(true)}
           />
 
           {/* Markers */}
@@ -467,6 +472,19 @@ export default function MapViewer({
             </button>
           ))}
         </div>
+      ) : imgError ? (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500">
+          <span className="text-3xl">🗺️</span>
+          <p className="text-sm">Image couldn't load</p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setImgError(false)}
+              className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors text-gray-300"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       ) : (
         <>
           {/* Hidden img triggers onLoad to compute fitDims */}
@@ -477,6 +495,7 @@ export default function MapViewer({
             className="sr-only"
             draggable={false}
             onLoad={handleImgLoad}
+            onError={() => setImgError(true)}
           />
           <div className="absolute inset-0 flex items-center justify-center">
             <Loader className="w-6 h-6 animate-spin text-gray-600" />

@@ -454,10 +454,16 @@ export default function DeadCellsTracker({ game, onBack, onUpdateGame }) {
         game={game}
         totalPlaytime={migratedSave?.totalPlaytime || 0}
         onUpdateGame={onUpdateGame}
+        onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
+          ...s,
+          activeSession: { id, startTime, endTime: null, duration: 0 },
+          lastPlayedAt: startTime,
+        }))}
         onAddSession={(session) => updateCurrentSave(s => ({
           ...s,
           sessions: [...(s.sessions || []), session],
           totalPlaytime: (s.totalPlaytime || 0) + session.duration,
+          activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
       />

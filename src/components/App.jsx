@@ -3,28 +3,79 @@ import {
   loadLocal,
   saveLocal,
   loadFromCloud,
+  saveToCloud,
   debouncedCloudSave,
+  flushCloudSave,
   createDefaultState,
   getDeviceIdPublic,
   adoptDeviceData,
   exportData,
   importData,
 } from '../utils/storage.js';
+import { deleteMapImage } from '../utils/mapStorage.js';
 import Library, { TRACKER_TYPES } from './Library.jsx';
 import GamePage from './GamePage.jsx';
 import MapPanel from './maps/MapPanel.jsx';
 import HadesTracker from './hades/HadesTracker.jsx';
 import LoneRuinTracker from './loneruin/LoneRuinTracker.jsx';
 import GenericRoguelikeTracker from './gonner/GenericRoguelikeTracker.jsx';
-import ChecklistTracker from './checklist/ChecklistTracker.jsx';
 import CitizenSleeperTracker from './citizensleeper/CitizenSleeperTracker.jsx';
-import DeadCellsTracker from './deadcells/DeadCellsTracker.jsx';
 import MessengerTracker from './messenger/MessengerTracker.jsx';
 import GeneralGameTracker from './general/GeneralGameTracker.jsx';
 import StructuredTracker from './structured/StructuredTracker.jsx';
 import { GONNERS_CONFIG, CURSED_TO_GOLF_CONFIG } from '../data/genericRoguelikeData.js';
 import { BLAZING_CHROME_CONFIG, SAYONARA_CONFIG, CAST_N_CHILL_CONFIG, HITMAN_CONFIG, UNDER_THE_ISLAND_CONFIG } from '../data/checklistGameData.js';
 import { HOLLOW_KNIGHT_CONFIG } from '../data/hollowKnightData.js';
+import { checklistToStructuredSchema, migrateChecklistSave, migrateDeadCellsSave } from '../utils/structuredFactory.js';
+import { buildDeadCellsStructuredSchema } from '../data/deadCellsData.js';
+
+// IGDB ID → trackerType fallback for games added before name mapping existed
+const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman', 26192: 'dead-cells' };
+
+// Precomputed structured configs — these are built once at module load and
+// passed as the `config` prop to StructuredTracker, replacing the old
+// per-game tracker components.
+const BLAZING_CHROME_STRUCTURED   = { ...BLAZING_CHROME_CONFIG,    structuredData: checklistToStructuredSchema(BLAZING_CHROME_CONFIG)    };
+const SAYONARA_STRUCTURED         = { ...SAYONARA_CONFIG,           structuredData: checklistToStructuredSchema(SAYONARA_CONFIG)           };
+const CAST_N_CHILL_STRUCTURED     = { ...CAST_N_CHILL_CONFIG,       structuredData: checklistToStructuredSchema(CAST_N_CHILL_CONFIG)       };
+const HITMAN_STRUCTURED           = { ...HITMAN_CONFIG,             structuredData: checklistToStructuredSchema(HITMAN_CONFIG)             };
+const UNDER_THE_ISLAND_STRUCTURED = { ...UNDER_THE_ISLAND_CONFIG,   structuredData: checklistToStructuredSchema(UNDER_THE_ISLAND_CONFIG)   };
+const DEAD_CELLS_STRUCTURED       = { icon: '💀', name: 'Dead Cells', structuredData: buildDeadCellsStructuredSchema()                    };
+
+const CHECKLIST_TRACKER_IDS = new Set([
+  'blazing-chrome', 'sayonara-wild-hearts', 'cast-n-chill', 'hitman', 'under-the-island',
+]);
+
+// Resolve trackerType from name or IGDB ID if not already set
+function resolveTrackerType(g) {
+  if (g.trackerType) return g;
+  const fromName = TRACKER_TYPES[g.name];
+  if (fromName) return { ...g, trackerType: fromName };
+  const fromIgdb = IGDB_TRACKER_IDS[g.igdbId];
+  if (fromIgdb) return { ...g, trackerType: fromIgdb };
+  return g;
+}
+
+// Migrate old per-game save formats to the unified StructuredTracker itemState.
+// Idempotent — migration functions check for old-format fields before acting.
+function migrateGameSaves(g) {
+  if (CHECKLIST_TRACKER_IDS.has(g.trackerType)) {
+    const saves = (g.saves || []).map(migrateChecklistSave);
+    return { ...g, saves };
+  }
+  if (g.trackerType === 'dead-cells') {
+    const saves = (g.saves || []).map(migrateDeadCellsSave);
+    return { ...g, saves };
+  }
+  return g;
+}
+
+function applyMigrations(appData) {
+  return {
+    ...appData,
+    library: (appData.library || []).map(g => migrateGameSaves(resolveTrackerType(g))),
+  };
+}
 
 // ─── Tracker layout with optional map panel (desktop) ────────────────────────
 
@@ -129,15 +180,7 @@ export default function App() {
   useEffect(() => {
     async function init() {
       const raw = loadLocal() || createDefaultState();
-      // Backfill trackerType for any game whose name is now recognised but was added before the mapping existed
-      const local = {
-        ...raw,
-        games: (raw.games || []).map(g =>
-          g.trackerType == null && TRACKER_TYPES[g.name]
-            ? { ...g, trackerType: TRACKER_TYPES[g.name] }
-            : g
-        ),
-      };
+      const local = applyMigrations(raw);
       setData(local);
       setSyncStatus('loading');
 
@@ -148,15 +191,7 @@ export default function App() {
         const localTime = local?.lastSavedAt ? new Date(local.lastSavedAt).getTime() : 0;
         const cloudTime = cloud?.lastSavedAt ? new Date(cloud.lastSavedAt).getTime() : 0;
         if (cloudTime > localTime) {
-          // Apply the same trackerType backfill to cloud data before adopting it
-          const migratedCloud = {
-            ...cloud,
-            games: (cloud.games || []).map(g =>
-              g.trackerType == null && TRACKER_TYPES[g.name]
-                ? { ...g, trackerType: TRACKER_TYPES[g.name] }
-                : g
-            ),
-          };
+          const migratedCloud = applyMigrations(cloud);
           setData(migratedCloud);
           saveLocal(migratedCloud);
         }
@@ -169,15 +204,27 @@ export default function App() {
     init();
   }, []);
 
-  // Auto-save: local immediately, cloud debounced
+  // Auto-save: local immediately, cloud debounced — status reflects actual result
   useEffect(() => {
     if (data === null || isFirstLoad.current) return;
     saveLocal(data);
     setSyncStatus('saving');
-    debouncedCloudSave(data, 2000);
-    const timer = setTimeout(() => setSyncStatus('synced'), 2500);
-    return () => clearTimeout(timer);
+    debouncedCloudSave(data, 2000, (result) => {
+      setSyncStatus(result.ok ? 'synced' : 'error');
+    });
   }, [data]);
+
+  // Flush pending cloud write when the page is hidden or closed
+  useEffect(() => {
+    const handleHide = () => { flushCloudSave(); };
+    window.addEventListener('pagehide', handleHide);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) flushCloudSave();
+    });
+    return () => {
+      window.removeEventListener('pagehide', handleHide);
+    };
+  }, []);
 
   const updateData = useCallback((updater) => {
     setData(prev => {
@@ -217,13 +264,27 @@ export default function App() {
   }, [updateData]);
 
   const handleDeleteGame = useCallback((gameId) => {
-    updateData(prev => ({
-      ...prev,
-      library: prev.library.filter(g => g.id !== gameId),
-      currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
-    }));
+    updateData(prev => {
+      const game = prev.library.find(g => g.id === gameId);
+      if (game?.maps) {
+        game.maps
+          .filter(m => m.storagePath)
+          .forEach(m => deleteMapImage(m.storagePath).catch(e => console.error('Map cleanup failed:', e)));
+      }
+      return {
+        ...prev,
+        library: prev.library.filter(g => g.id !== gameId),
+        currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
+      };
+    });
     setView('library');
   }, [updateData]);
+
+  const handleRetryCloudSave = useCallback(() => {
+    if (!data) return;
+    setSyncStatus('saving');
+    saveToCloud(data).then(result => setSyncStatus(result.ok ? 'synced' : 'error'));
+  }, [data]);
 
   // Link to another device's data
   const handleLink = async () => {
@@ -340,23 +401,33 @@ export default function App() {
         </div>
       )}
 
-      <button
-        onClick={() => setShowSyncPanel(p => !p)}
-        className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-all ${
-          syncStatus === 'synced'  ? 'bg-green-900/80 text-green-300 border border-green-700/50'
-          : syncStatus === 'saving'  ? 'bg-yellow-900/80 text-yellow-300 border border-yellow-700/50'
-          : syncStatus === 'loading' ? 'bg-blue-900/80 text-blue-300 border border-blue-700/50'
-          : 'bg-red-900/80 text-red-300 border border-red-700/50'
-        }`}
-      >
-        <span className={syncStatus === 'saving' || syncStatus === 'loading' ? 'animate-pulse' : ''}>
-          {syncStatus === 'synced' ? '☁️' : syncStatus === 'saving' ? '⏳' : syncStatus === 'loading' ? '🔄' : '⚠️'}
-        </span>
-        {syncStatus === 'synced' ? 'Synced'
-          : syncStatus === 'saving' ? 'Saving…'
-          : syncStatus === 'loading' ? 'Syncing…'
-          : 'Offline'}
-      </button>
+      <div className="flex items-center gap-1.5">
+        {syncStatus === 'error' && (
+          <button
+            onClick={handleRetryCloudSave}
+            className="px-2.5 py-1.5 rounded-full text-xs font-medium bg-red-800/80 text-red-200 border border-red-600/50 hover:bg-red-700/80 transition-colors shadow-lg"
+          >
+            Retry
+          </button>
+        )}
+        <button
+          onClick={() => setShowSyncPanel(p => !p)}
+          className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 shadow-lg transition-all ${
+            syncStatus === 'synced'  ? 'bg-green-900/80 text-green-300 border border-green-700/50'
+            : syncStatus === 'saving'  ? 'bg-yellow-900/80 text-yellow-300 border border-yellow-700/50'
+            : syncStatus === 'loading' ? 'bg-blue-900/80 text-blue-300 border border-blue-700/50'
+            : 'bg-red-900/80 text-red-300 border border-red-700/50'
+          }`}
+        >
+          <span className={syncStatus === 'saving' || syncStatus === 'loading' ? 'animate-pulse' : ''}>
+            {syncStatus === 'synced' ? '☁️' : syncStatus === 'saving' ? '⏳' : syncStatus === 'loading' ? '🔄' : '⚠️'}
+          </span>
+          {syncStatus === 'synced' ? 'Synced'
+            : syncStatus === 'saving' ? 'Saving…'
+            : syncStatus === 'loading' ? 'Syncing…'
+            : 'Cloud backup failed'}
+        </button>
+      </div>
     </div>
   );
 
@@ -383,8 +454,6 @@ export default function App() {
   }
 
   if (view === 'game' && currentGame) {
-    // IGDB ID → trackerType fallback (catches games added before name mapping existed)
-    const IGDB_TRACKER_IDS = { 151501: 'under-the-island', 338082: 'hitman', 26192: 'dead-cells' };
     const trackerType = currentGame.trackerType || IGDB_TRACKER_IDS[currentGame.igdbId] || null;
 
     let trackerEl;
@@ -422,9 +491,9 @@ export default function App() {
     // ── Blazing Chrome ────────────────────────────────────────────────────────
     } else if (trackerType === 'blazing-chrome') {
       trackerEl = (
-        <ChecklistTracker
+        <StructuredTracker
           game={currentGame}
-          config={BLAZING_CHROME_CONFIG}
+          config={BLAZING_CHROME_STRUCTURED}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
@@ -433,9 +502,9 @@ export default function App() {
     // ── Sayonara Wild Hearts ──────────────────────────────────────────────────
     } else if (trackerType === 'sayonara-wild-hearts') {
       trackerEl = (
-        <ChecklistTracker
+        <StructuredTracker
           game={currentGame}
-          config={SAYONARA_CONFIG}
+          config={SAYONARA_STRUCTURED}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
@@ -444,9 +513,9 @@ export default function App() {
     // ── Cast n Chill ──────────────────────────────────────────────────────────
     } else if (trackerType === 'cast-n-chill') {
       trackerEl = (
-        <ChecklistTracker
+        <StructuredTracker
           game={currentGame}
-          config={CAST_N_CHILL_CONFIG}
+          config={CAST_N_CHILL_STRUCTURED}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
@@ -455,9 +524,9 @@ export default function App() {
     // ── Hitman: World of Assassination ───────────────────────────────────────
     } else if (trackerType === 'hitman') {
       trackerEl = (
-        <ChecklistTracker
+        <StructuredTracker
           game={currentGame}
-          config={HITMAN_CONFIG}
+          config={HITMAN_STRUCTURED}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
@@ -466,9 +535,9 @@ export default function App() {
     // ── Under the Island ─────────────────────────────────────────────────────
     } else if (trackerType === 'under-the-island') {
       trackerEl = (
-        <ChecklistTracker
+        <StructuredTracker
           game={currentGame}
-          config={UNDER_THE_ISLAND_CONFIG}
+          config={UNDER_THE_ISLAND_STRUCTURED}
           onBack={backToGamePage}
           onUpdateGame={handleUpdateGame}
         />
@@ -476,7 +545,14 @@ export default function App() {
 
     // ── Dead Cells ────────────────────────────────────────────────────────────
     } else if (trackerType === 'dead-cells') {
-      trackerEl = <DeadCellsTracker game={currentGame} onBack={backToGamePage} onUpdateGame={handleUpdateGame} />;
+      trackerEl = (
+        <StructuredTracker
+          game={currentGame}
+          config={DEAD_CELLS_STRUCTURED}
+          onBack={backToGamePage}
+          onUpdateGame={handleUpdateGame}
+        />
+      );
 
     // ── Citizen Sleeper ───────────────────────────────────────────────────────
     } else if (trackerType === 'citizen-sleeper') {

@@ -1,15 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
-  X, Search, Link, FileText, Upload, Loader, ChevronDown, ChevronRight,
-  CheckCircle, Circle, AlertTriangle, Eye, Trash2, Sparkles,
+  X, Search, FileText, Loader, ChevronDown, ChevronRight,
+  AlertTriangle, Eye, Trash2, Sparkles,
 } from 'lucide-react';
 import { generateTrackerData } from '../../utils/aiTracker.js';
 
 const MODES = [
-  { id: 'auto',  label: 'Auto (web search)',   icon: Search,   desc: 'Genie searches for guides and wikis' },
-  { id: 'url',   label: 'From URL',            icon: Link,     desc: 'Provide a link to a guide' },
-  { id: 'paste', label: 'Paste text',          icon: FileText, desc: 'Paste guide or walkthrough text' },
-  { id: 'file',  label: 'Upload file',         icon: Upload,   desc: 'Upload a PDF, TXT, or MD file' },
+  { id: 'auto',  label: 'Auto (web search)', icon: Search,   desc: 'Genie searches for guides and wikis' },
+  { id: 'paste', label: 'Paste text',        icon: FileText, desc: 'Paste guide or walkthrough text' },
 ];
 
 // ─── Review panel for generated data ─────────────────────────────────────────
@@ -82,34 +80,11 @@ function ReviewCategory({ category, onRemoveCategory, onRemoveItem }) {
 
 export default function GenerateTrackerModal({ game, onSave, onClose }) {
   const [mode, setMode] = useState('auto');
-  const [urlInput, setUrlInput] = useState('');
   const [pasteInput, setPasteInput] = useState('');
-  const [fileName, setFileName] = useState('');
-  const [fileContent, setFileContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null); // { structuredData, usage }
   const [showCloseWarning, setShowCloseWarning] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    const reader = new FileReader();
-    if (file.type === 'application/pdf') {
-      reader.onload = () => {
-        const base64 = btoa(
-          new Uint8Array(reader.result).reduce((data, byte) => data + String.fromCharCode(byte), '')
-        );
-        setFileContent(base64);
-      };
-      reader.readAsArrayBuffer(file);
-    } else {
-      reader.onload = () => setFileContent(reader.result);
-      reader.readAsText(file);
-    }
-  };
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -117,11 +92,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
     setResult(null);
 
     try {
-      const payload =
-        mode === 'url'   ? urlInput.trim() :
-        mode === 'paste' ? pasteInput.trim() :
-        mode === 'file'  ? fileContent :
-        null;
+      const payload = mode === 'paste' ? pasteInput.trim() : null;
 
       const igdbData = {
         genres: game.genres || [],
@@ -255,19 +226,6 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
               </div>
 
               {/* Mode-specific input */}
-              {mode === 'url' && (
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Guide URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://hollowknight.wiki/..."
-                    value={urlInput}
-                    onChange={e => setUrlInput(e.target.value)}
-                    className="input-field text-sm w-full"
-                  />
-                </div>
-              )}
-
               {mode === 'paste' && (
                 <div>
                   <label className="text-xs text-gray-400 mb-1 block">Guide text</label>
@@ -281,23 +239,6 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
                 </div>
               )}
 
-              {mode === 'file' && (
-                <div>
-                  <label className="text-xs text-gray-400 mb-1 block">Upload file (PDF, TXT, MD)</label>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.txt,.md,.markdown"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-gray-400
-                      file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0
-                      file:text-sm file:font-medium file:bg-purple-600 file:text-white
-                      file:cursor-pointer hover:file:bg-purple-700 file:min-h-[44px]"
-                  />
-                  {fileName && <div className="text-xs text-gray-500 mt-1">{fileName}</div>}
-                </div>
-              )}
-
               {/* Error */}
               {error && (
                 <div className="text-red-400 text-sm bg-red-900/20 border border-red-700/30 rounded-lg p-3">
@@ -308,7 +249,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
               {/* Generate button */}
               <button
                 onClick={handleGenerate}
-                disabled={loading || (mode === 'url' && !urlInput.trim()) || (mode === 'file' && !fileContent)}
+                disabled={loading}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? (
