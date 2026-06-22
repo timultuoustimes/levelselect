@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, Plus, Play, Pause, Trophy, Skull, X, ChevronDown, Timer, TrendingUp, FileText } from 'lucide-react';
+import { ArrowLeft, Plus, Play, Pause, Trophy, Skull, X, ChevronDown, Timer, TrendingUp, FileText, AlertTriangle } from 'lucide-react';
 import { createGenericRoguelikeSave, createGenericRun, migrateGenericRoguelikeSave } from '../../utils/genericRoguelikeFactory.js';
 import SessionPanel from '../shared/SessionPanel.jsx';
 
@@ -20,8 +20,12 @@ const OUTCOME_STYLES = {
 
 // ── Run View ─────────────────────────────────────────────────────────────────
 function RunView({ config, run, onUpdateRun, onEndRun, onCancel }) {
-  const [elapsed, setElapsed] = useState(run.accumulatedTime || 0);
+  // Resume from crash: compute elapsed from startTime
+  const [elapsed, setElapsed] = useState(() =>
+    run.startTime ? Math.floor((Date.now() - new Date(run.startTime).getTime()) / 1000) : 0
+  );
   const [paused, setPaused] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -35,8 +39,6 @@ function RunView({ config, run, onUpdateRun, onEndRun, onCancel }) {
     clearInterval(intervalRef.current);
     onEndRun({ ...run, outcome, duration: elapsed, endTime: new Date().toISOString() });
   };
-
-  const accentColor = config.accent || 'purple';
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${config.color} text-white p-4`}>
@@ -57,12 +59,36 @@ function RunView({ config, run, onUpdateRun, onEndRun, onCancel }) {
             {paused ? 'Resume' : 'Pause'}
           </button>
           <button
-            onClick={onCancel}
+            onClick={() => setShowCancelConfirm(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/20 bg-white/10 hover:bg-white/20 text-gray-300"
           >
-            <X className="w-4 h-4" /> Cancel
+            <X className="w-4 h-4" /> Cancel Run
           </button>
         </div>
+
+        {/* Cancel confirmation */}
+        {showCancelConfirm && (
+          <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-4 flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-red-300">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span className="text-sm font-medium">Discard this run?</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={onCancel}
+                className="flex-1 py-2 bg-red-700 hover:bg-red-600 text-white rounded-lg text-sm font-medium"
+              >
+                Discard
+              </button>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-gray-300 rounded-lg text-sm"
+              >
+                Keep Going
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Loadout fields */}
         <div className="bg-black/40 rounded-xl border border-white/10 p-4 space-y-3">
@@ -169,13 +195,9 @@ function OverviewTab({ save, config }) {
                 <div key={run.id} className={`flex items-center justify-between p-3 rounded-lg border ${style.bg} ${style.border}`}>
                   <div className="min-w-0 flex-1">
                     <div className={`text-sm font-medium ${style.text}`}>{style.label}</div>
-                    {/* Loadout summary */}
                     {run.loadout && Object.keys(run.loadout).length > 0 && (
                       <div className="text-xs text-gray-400 mt-0.5 truncate">
-                        {Object.entries(run.loadout)
-                          .filter(([, v]) => v)
-                          .map(([k, v]) => `${v}`)
-                          .join(' · ')}
+                        {Object.entries(run.loadout).filter(([, v]) => v).map(([, v]) => v).join(' · ')}
                       </div>
                     )}
                     {run.notes && <div className="text-xs text-gray-500 mt-0.5 truncate">{run.notes}</div>}
@@ -198,7 +220,6 @@ function AnalyticsTab({ save, config }) {
     <div className="text-gray-500 text-center py-16">No runs yet to analyze.</div>
   );
 
-  // Group by each loadout field
   const fieldStats = {};
   config.loadoutFields.forEach(field => {
     const groups = {};
@@ -249,7 +270,7 @@ function AnalyticsTab({ save, config }) {
 // ── Main Tracker ──────────────────────────────────────────────────────────────
 export default function GenericRoguelikeTracker({ game, config, onBack, onUpdateGame }) {
   const [activeTab, setActiveTab] = useState('overview');
-  const [activeRun, setActiveRun] = useState(null);
+  const [activeRunMode, setActiveRunMode] = useState(false);
   const [showNewSave, setShowNewSave] = useState(false);
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
@@ -258,6 +279,7 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
   const updateCurrentSave = useCallback((updater) => {
+    if (!currentSave) return;
     const updated = typeof updater === 'function' ? updater(currentSave) : updater;
     const newSaves = saves.map(s => s.id === updated.id ? updated : s);
     onUpdateGame({ ...game, saves: newSaves });
@@ -266,36 +288,64 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
   const createSave = () => {
     if (!newSaveName.trim()) return;
     const save = createGenericRoguelikeSave(newSaveName.trim());
-    const newSaves = [...saves, save];
-    onUpdateGame({ ...game, saves: newSaves, currentSaveId: save.id });
+    onUpdateGame({ ...game, saves: [...saves, save], currentSaveId: save.id });
     setNewSaveName('');
     setShowNewSave(false);
   };
 
   const startRun = () => {
     const run = createGenericRun({});
-    setActiveRun(run);
+    // Persist immediately so a crash doesn't lose the run
+    updateCurrentSave(s => ({ ...s, activeRun: run }));
+    setActiveRunMode(true);
+  };
+
+  const resumeRun = () => {
+    setActiveRunMode(true);
+  };
+
+  const handleUpdateRun = (run) => {
+    updateCurrentSave(s => ({ ...s, activeRun: run }));
   };
 
   const endRun = (completedRun) => {
-    updateCurrentSave(s => ({ ...s, runs: [...(s.runs || []), completedRun] }));
-    setActiveRun(null);
+    updateCurrentSave(s => ({
+      ...s,
+      runs: [...(s.runs || []), completedRun],
+      activeRun: null,
+      lastPlayedAt: new Date().toISOString(),
+    }));
+    setActiveRunMode(false);
   };
 
-  if (activeRun) {
+  const cancelRun = () => {
+    updateCurrentSave(s => ({ ...s, activeRun: null }));
+    setActiveRunMode(false);
+  };
+
+  const discardActiveRun = () => {
+    updateCurrentSave(s => ({ ...s, activeRun: null }));
+  };
+
+  // Playtime from runs + sessions
+  const runTime     = (currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0);
+  const sessionTime = (currentSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0);
+  const totalPlaytime = runTime + sessionTime;
+
+  if (activeRunMode && currentSave?.activeRun) {
     return (
       <RunView
         config={config}
-        run={activeRun}
-        onUpdateRun={setActiveRun}
+        run={currentSave.activeRun}
+        onUpdateRun={handleUpdateRun}
         onEndRun={endRun}
-        onCancel={() => setActiveRun(null)}
+        onCancel={cancelRun}
       />
     );
   }
 
   const TABS = [
-    { id: 'overview', label: 'Overview', icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: 'overview',  label: 'Overview',  icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'analytics', label: 'Analytics', icon: <TrendingUp className="w-3.5 h-3.5" /> },
   ];
 
@@ -310,7 +360,6 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
           <span className="text-xl">{config.icon}</span>
           <span className="font-bold text-lg">{config.name}</span>
 
-          {/* Save selector */}
           {saves.length > 0 && (
             <div className="relative ml-auto">
               <button
@@ -354,10 +403,27 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
         </div>
       </div>
 
+      {/* Resume banner */}
+      {currentSave?.activeRun && !activeRunMode && (
+        <div className="max-w-4xl mx-auto px-4 pt-3">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-900/20 border border-amber-500/30 rounded-xl text-sm">
+            <span className="text-amber-300">⚡ You have a run in progress</span>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={resumeRun} className="text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors">
+                Resume
+              </button>
+              <button onClick={discardActiveRun} className="text-xs px-3 py-1.5 border border-white/10 text-gray-400 hover:text-white rounded-lg transition-colors">
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        totalPlaytime={totalPlaytime}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -398,7 +464,6 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
           </div>
         ) : (
           <>
-            {/* Tabs */}
             <div className="flex gap-1 mb-4 border-b border-white/10 pb-1">
               {TABS.map(tab => (
                 <button
@@ -413,7 +478,7 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
               ))}
             </div>
 
-            {activeTab === 'overview' && <OverviewTab save={currentSave} config={config} />}
+            {activeTab === 'overview'  && <OverviewTab  save={currentSave} config={config} />}
             {activeTab === 'analytics' && <AnalyticsTab save={currentSave} config={config} />}
           </>
         )}
