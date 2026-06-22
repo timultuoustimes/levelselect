@@ -1119,6 +1119,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
   const fileInputRef = useRef(null);
   const searchDebounceRef = useRef(null);
+  const [showTrash, setShowTrash] = useState(false);
 
   // ── Home session (quick-play timer from home screen) ────────────────────
   const homeSession = data.homeSession || null;
@@ -1180,7 +1181,9 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
     }));
   }, [updateData]);
 
-  const { library } = data;
+  const { library: allLibrary } = data;
+  const library = allLibrary.filter(g => !g.deletedAt);
+  const trash = allLibrary.filter(g => !!g.deletedAt);
 
   // ── Close select menu on outside click ────────────────────────────────
   useEffect(() => {
@@ -1496,8 +1499,22 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   // ── Delete game ─────────────────────────────────────────────────────────
 
   const handleDeleteGame = (gameId) => {
-    updateData(prev => ({ ...prev, library: prev.library.filter(g => g.id !== gameId) }));
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => g.id === gameId ? { ...g, deletedAt: new Date().toISOString() } : g),
+    }));
     setDeleteConfirmId(null);
+  };
+
+  const handleRestoreGame = (gameId) => {
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => g.id === gameId ? { ...g, deletedAt: null } : g),
+    }));
+  };
+
+  const handlePurgeGame = (gameId) => {
+    updateData(prev => ({ ...prev, library: prev.library.filter(g => g.id !== gameId) }));
   };
 
   // ── Update game status ──────────────────────────────────────────────────
@@ -1534,7 +1551,11 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const deselectAll = () => setSelectedIds(new Set());
 
   const handleBulkDelete = () => {
-    updateData(prev => ({ ...prev, library: prev.library.filter(g => !selectedIds.has(g.id)) }));
+    const now = new Date().toISOString();
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => selectedIds.has(g.id) ? { ...g, deletedAt: now } : g),
+    }));
     setSelectedIds(new Set());
     setBulkDeleteConfirm(false);
     setSelectMode(false);
@@ -1703,6 +1724,18 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 >
                   <ShoppingBag className="w-4 h-4" />
                 </a>
+                {trash.length > 0 && (
+                  <button
+                    onClick={() => setShowTrash(true)}
+                    className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px] relative"
+                    title="Trash"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
+                      {trash.length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => setShowSettings(true)}
                   className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px]"
@@ -1775,6 +1808,16 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 <ShoppingBag className="w-4 h-4" />
                 <span>Wishlist</span>
               </a>
+              {trash.length > 0 && (
+                <button
+                  onClick={() => setShowTrash(true)}
+                  className="btn-secondary !px-3 text-sm gap-1.5 relative"
+                  title="Trash"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{trash.length}</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowSettings(true)}
                 className="btn-secondary !px-3 text-sm gap-1.5"
@@ -2539,12 +2582,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       {deleteConfirmId && (() => {
         const game = library.find(g => g.id === deleteConfirmId);
         return (
-          <Modal onClose={() => setDeleteConfirmId(null)} title="Remove Game">
+          <Modal onClose={() => setDeleteConfirmId(null)} title="Move to Trash">
             <p className="text-gray-300 mb-2">
-              Remove <span className="font-semibold text-white">{game?.name}</span> from your library?
+              Move <span className="font-semibold text-white">{game?.name}</span> to trash?
             </p>
             <p className="text-gray-500 text-sm mb-5">
-              This will delete all saves and tracking data. This cannot be undone.
+              You can restore it from the trash within 30 days.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className="btn-secondary flex-1">Cancel</button>
@@ -2552,7 +2595,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 onClick={() => handleDeleteGame(deleteConfirmId)}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
               >
-                Remove
+                Move to Trash
               </button>
             </div>
           </Modal>
@@ -2561,20 +2604,71 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
       {/* Bulk delete confirmation */}
       {bulkDeleteConfirm && (
-        <Modal onClose={() => setBulkDeleteConfirm(false)} title="Delete Games">
+        <Modal onClose={() => setBulkDeleteConfirm(false)} title="Move to Trash">
           <p className="text-gray-300 mb-1">
-            Permanently delete <span className="text-white font-semibold">{selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}</span>?
+            Move <span className="text-white font-semibold">{selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}</span> to trash?
           </p>
-          <p className="text-gray-500 text-sm mb-6">All tracking data and saves will be lost. This cannot be undone.</p>
+          <p className="text-gray-500 text-sm mb-6">You can restore them within 30 days.</p>
           <div className="flex gap-3">
             <button onClick={() => setBulkDeleteConfirm(false)} className="btn-secondary flex-1">Cancel</button>
             <button
               onClick={handleBulkDelete}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
             >
-              Delete {selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}
+              Move {selectedIds.size} to Trash
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* ── Trash modal ──────────────────────────────────────────────────────── */}
+      {showTrash && (
+        <Modal onClose={() => setShowTrash(false)} title={`Trash (${trash.length})`}>
+          <p className="text-gray-500 text-xs mb-4">
+            Games are permanently deleted after 30 days. Restore them anytime before then.
+          </p>
+          {trash.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">Trash is empty.</p>
+          ) : (
+            <div className="space-y-2">
+              {trash.map(game => {
+                const daysLeft = game.deletedAt
+                  ? Math.max(0, 30 - Math.floor((Date.now() - new Date(game.deletedAt).getTime()) / (1000 * 60 * 60 * 24)))
+                  : 30;
+                const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+                return (
+                  <div key={game.id} className="flex items-center gap-3 p-2.5 bg-black/20 rounded-lg border border-white/5">
+                    <div className="w-8 h-10 flex-shrink-0 rounded overflow-hidden bg-purple-900/20">
+                      {coverUrl ? (
+                        <img src={coverUrl} alt={game.name} className="w-full h-full object-cover" onError={e => { e.target.style.display='none'; }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs">🎮</div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-200 truncate">{game.name}</div>
+                      <div className="text-xs text-gray-600">{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleRestoreGame(game.id)}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-green-700/40 bg-green-900/20 text-green-400 hover:bg-green-900/40 transition-colors"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => handlePurgeGame(game.id)}
+                        className="text-xs px-2 py-1.5 rounded-lg border border-red-700/30 text-red-500 hover:bg-red-900/20 transition-colors"
+                        title="Delete permanently"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </Modal>
       )}
     </div>

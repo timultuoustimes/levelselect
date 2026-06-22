@@ -174,13 +174,23 @@ export default function App() {
   const [showSyncPanel, setShowSyncPanel] = useState(false);
   const [linkInput, setLinkInput] = useState('');
   const [linkStatus, setLinkStatus] = useState(null); // null | 'loading' | 'success' | 'error'
+  const [importPreview, setImportPreview] = useState(null); // null | { data, gameCount, trackerCount, newCount }
   const isFirstLoad = useRef(true);
 
   // On mount: load local immediately, then try cloud
   useEffect(() => {
     async function init() {
       const raw = loadLocal() || createDefaultState();
-      const local = applyMigrations(raw);
+      const migrated = applyMigrations(raw);
+      // Auto-purge trash items older than 30 days
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      const local = {
+        ...migrated,
+        library: migrated.library.filter(g =>
+          !g.deletedAt || (now - new Date(g.deletedAt).getTime() < THIRTY_DAYS_MS)
+        ),
+      };
       setData(local);
       setSyncStatus('loading');
 
@@ -264,19 +274,13 @@ export default function App() {
   }, [updateData]);
 
   const handleDeleteGame = useCallback((gameId) => {
-    updateData(prev => {
-      const game = prev.library.find(g => g.id === gameId);
-      if (game?.maps) {
-        game.maps
-          .filter(m => m.storagePath)
-          .forEach(m => deleteMapImage(m.storagePath).catch(e => console.error('Map cleanup failed:', e)));
-      }
-      return {
-        ...prev,
-        library: prev.library.filter(g => g.id !== gameId),
-        currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
-      };
-    });
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g =>
+        g.id !== gameId ? g : { ...g, deletedAt: new Date().toISOString() }
+      ),
+      currentGameId: prev.currentGameId === gameId ? null : prev.currentGameId,
+    }));
     setView('library');
   }, [updateData]);
 
@@ -309,9 +313,10 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'game-tracker-backup.json';
+    a.download = `levelselect-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    updateData(d => ({ ...d, lastBackupAt: new Date().toISOString() }));
   };
 
   const handleImport = (e) => {
@@ -320,12 +325,36 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const imported = importData(ev.target.result);
-      if (imported) {
-        setData(imported);
-        saveLocal(imported);
+      if (!imported || !Array.isArray(imported.library)) {
+        alert('Invalid file. Expected a LevelSelect JSON backup.');
+        return;
       }
+      const active = imported.library.filter(g => !g.deletedAt);
+      const gameCount = active.length;
+      const trackerCount = active.filter(g => g.trackerType).length;
+      const existingNames = new Set((data?.library || []).filter(g => !g.deletedAt).map(g => g.name.toLowerCase()));
+      const newCount = active.filter(g => !existingNames.has(g.name.toLowerCase())).length;
+      setImportPreview({ data: imported, gameCount, trackerCount, newCount });
     };
     reader.readAsText(file);
+    if (e.target) e.target.value = '';
+  };
+
+  const handleImportMerge = () => {
+    if (!importPreview) return;
+    const existingNames = new Set((data?.library || []).map(g => g.name.toLowerCase()));
+    const newGames = importPreview.data.library.filter(g => !g.deletedAt && !existingNames.has(g.name.toLowerCase()));
+    updateData(d => ({ ...d, library: [...d.library, ...newGames] }));
+    setImportPreview(null);
+    setShowSyncPanel(false);
+  };
+
+  const handleImportReplace = () => {
+    if (!importPreview) return;
+    setData(importPreview.data);
+    saveLocal(importPreview.data);
+    setImportPreview(null);
+    setShowSyncPanel(false);
   };
 
   // Loading screen
@@ -390,6 +419,11 @@ export default function App() {
                 <input type="file" accept=".json" onChange={handleImport} className="hidden" />
               </label>
             </div>
+            {data?.lastBackupAt && (
+              <div className="text-xs text-gray-600 mt-1.5">
+                Last backup: {new Date(data.lastBackupAt).toLocaleDateString()}
+              </div>
+            )}
           </div>
 
           <button
@@ -398,6 +432,35 @@ export default function App() {
           >
             Close
           </button>
+        </div>
+      )}
+
+      {/* Import preview/confirmation modal */}
+      {importPreview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setImportPreview(null)}>
+          <div className="card p-6 w-full max-w-md mx-4" onClick={e => e.stopPropagation()}>
+            <h2 className="text-lg font-bold mb-1">Import Backup</h2>
+            <p className="text-sm text-gray-400 mb-4">
+              File contains <span className="text-white font-medium">{importPreview.gameCount} games</span>
+              {importPreview.trackerCount > 0 && <> ({importPreview.trackerCount} with detailed trackers)</>}.
+            </p>
+            <div className="space-y-1 mb-5 text-sm">
+              <div className="text-green-400">+ {importPreview.newCount} new game{importPreview.newCount !== 1 ? 's' : ''} not in your library</div>
+              <div className="text-gray-500">= {importPreview.gameCount - importPreview.newCount} already exist (skipped on merge)</div>
+            </div>
+            <div className="space-y-2">
+              <button onClick={handleImportMerge} className="btn-primary w-full">
+                Merge — add {importPreview.newCount} new game{importPreview.newCount !== 1 ? 's' : ''}
+              </button>
+              <button
+                onClick={handleImportReplace}
+                className="w-full py-2.5 px-4 rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-700/40 text-sm font-medium transition-colors"
+              >
+                Replace all — overwrite your entire library
+              </button>
+              <button onClick={() => setImportPreview(null)} className="btn-secondary w-full text-sm">Cancel</button>
+            </div>
+          </div>
         </div>
       )}
 
