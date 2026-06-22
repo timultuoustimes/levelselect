@@ -61,3 +61,70 @@ export function setItemState(save, itemId, partial) {
     },
   };
 }
+
+// Convert a checklist game config (chapters array) into a StructuredTracker schema.
+export function checklistToStructuredSchema(config) {
+  return {
+    categories: [
+      {
+        id: 'stages',
+        name: 'Stages',
+        type: 'checklist',
+        items: (config.chapters || []).map(ch => ({ id: ch.id, name: ch.name })),
+      },
+    ],
+  };
+}
+
+// Migrate a ChecklistTracker save to the StructuredTracker itemState format.
+// Idempotent: returns unchanged if already migrated (no chapterCompleted field).
+export function migrateChecklistSave(save) {
+  if (!save || !('chapterCompleted' in save)) return save;
+
+  const itemState = {};
+  for (const [id, done] of Object.entries(save.chapterCompleted || {})) {
+    if (done) itemState[id] = { done: true };
+  }
+  // chapterRank being set (any non-null value) also means chapter is done
+  for (const [id, rank] of Object.entries(save.chapterRank || {})) {
+    if (rank != null) itemState[id] = { ...(itemState[id] || {}), done: true };
+  }
+
+  const { chapterCompleted, chapterRank, itemCompleted, customChapters, ...rest } = save;
+  return {
+    ...rest,
+    itemState,
+    runs: rest.runs || [],
+    customSchema: null,
+    activeSession: rest.activeSession || null,
+  };
+}
+
+// Migrate a DeadCellsTracker save to the StructuredTracker itemState format.
+// Idempotent: returns unchanged if already migrated (no bscEarned field).
+export function migrateDeadCellsSave(save) {
+  if (!save || !('bscEarned' in save)) return save;
+
+  const itemState = {};
+  for (const [id, done] of Object.entries(save.bscEarned || {})) {
+    if (done) itemState[id] = { done: true };
+  }
+  for (const [id, done] of Object.entries(save.runesFound || {})) {
+    if (done) itemState[id] = { done: true };
+  }
+  for (const [id, done] of Object.entries(save.bossesDefeated || {})) {
+    if (done) itemState[id] = { done: true };
+  }
+  for (const [id, done] of Object.entries(save.biomesVisited || {})) {
+    if (done) itemState[id] = { done: true };
+  }
+
+  const { bscEarned, runesFound, bossesDefeated, biomesVisited, ...rest } = save;
+  return {
+    ...rest,
+    itemState,
+    runs: rest.runs || [],
+    customSchema: null,
+    activeSession: rest.activeSession || null,
+  };
+}

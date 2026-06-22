@@ -186,3 +186,56 @@ export const DLC_LIST = [
 ];
 
 export const SECTIONS = ['Start', 'Early', 'Boss 1', 'Mid', 'Boss 2', 'Late', 'Boss 3', 'End', 'Final', 'Special'];
+
+export function buildDeadCellsStructuredSchema() {
+  return {
+    categories: [
+      {
+        id: 'dc-bsc',
+        name: 'Boss Stem Cells',
+        type: 'checklist',
+        items: BOSS_CELLS.map(c => ({
+          id: c.id,
+          name: `BSC ${c.number}`,
+          description: c.unlockCondition,
+          ...(c.note ? { tags: [c.note] } : {}),
+        })),
+      },
+      {
+        id: 'dc-runes',
+        name: 'Runes',
+        type: 'checklist',
+        items: RUNES.map(r => ({
+          id: r.id,
+          name: r.name,
+          location: r.location,
+          description: r.unlocks,
+          metadata: { Guardian: r.guardian },
+        })),
+      },
+      {
+        id: 'dc-bosses',
+        name: 'Bosses',
+        type: 'checklist',
+        items: BOSSES.map(b => ({
+          id: b.id,
+          name: b.name,
+          location: b.location,
+          ...(b.note ? { description: b.note } : {}),
+          tags: [b.dlc || 'Base Game'],
+        })),
+      },
+      {
+        id: 'dc-biomes',
+        name: 'Biomes',
+        type: 'checklist',
+        items: BIOMES.map(b => ({
+          id: b.id,
+          name: b.name,
+          ...(b.note ? { description: b.note } : {}),
+          tags: [b.section, ...(b.dlc ? [b.dlc] : [])],
+        })),
+      },
+    ],
+  };
+}
