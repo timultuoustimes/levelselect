@@ -1,36 +1,27 @@
 import React, { useState, useCallback } from 'react';
 import { createHadesSave, migrateSave } from '../../utils/factories.js';
 import { ArrowLeft, Plus, ChevronDown } from 'lucide-react';
-import OverviewTab from './OverviewTab.jsx';
-import BuildsTab from './BuildsTab.jsx';
-import AspectsTab from './AspectsTab.jsx';
-import KeepsakesTab from './KeepsakesTab.jsx';
-import AnalyticsTab from './AnalyticsTab.jsx';
-import MirrorTab from './MirrorTab.jsx';
+import RunsTab from './RunsTab.jsx';
+import ProgressTab from './ProgressTab.jsx';
 import RunView from './RunView.jsx';
 import SessionPanel from '../shared/SessionPanel.jsx';
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'builds', label: 'Builds' },
-  { id: 'aspects', label: 'Aspects' },
-  { id: 'keepsakes', label: 'Keepsakes' },
-  { id: 'mirror', label: 'Mirror' },
-  { id: 'analytics', label: 'Analytics' },
+  { id: 'runs',     label: 'Runs' },
+  { id: 'progress', label: 'Progress' },
 ];
 
 export default function HadesTracker({ game, onBack, onUpdateGame }) {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('runs');
   const [activeRunMode, setActiveRunMode] = useState(false);
+  const [resumingRun, setResumingRun] = useState(null); // run object to resume, or null
   const [showNewSave, setShowNewSave] = useState(false);
   const [newSaveName, setNewSaveName] = useState('');
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
 
-  // Migrate saves on load to ensure they have all required fields
   const saves = (game.saves || []).map(migrateSave);
   const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
 
-  // Update current save
   const updateSave = useCallback((updater) => {
     if (!currentSave) return;
     onUpdateGame({
@@ -43,31 +34,38 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
     });
   }, [currentSave, game, onUpdateGame, saves]);
 
-  // Create new save
   const handleCreateSave = () => {
     const name = newSaveName.trim() || `Save ${saves.length + 1}`;
     const save = createHadesSave(name);
-    onUpdateGame({
-      ...game,
-      saves: [...saves, save],
-      currentSaveId: save.id,
-    });
+    onUpdateGame({ ...game, saves: [...saves, save], currentSaveId: save.id });
     setNewSaveName('');
     setShowNewSave(false);
   };
 
-  // Switch save
   const switchSave = (saveId) => {
     onUpdateGame({ ...game, currentSaveId: saveId });
     setShowSaveDropdown(false);
   };
 
-  // Start new run
+  // Persist activeRun immediately so crashes don't lose the run
+  const handleStartRun = (run) => {
+    updateSave(s => ({ ...s, activeRun: run }));
+  };
+
   const startRun = () => {
+    setResumingRun(null);
     setActiveRunMode(true);
   };
 
-  // End run (save and return)
+  const resumeRun = () => {
+    setResumingRun(currentSave.activeRun);
+    setActiveRunMode(true);
+  };
+
+  const discardActiveRun = () => {
+    updateSave(s => ({ ...s, activeRun: null }));
+  };
+
   const endRun = (completedRun) => {
     if (completedRun) {
       updateSave(s => ({
@@ -78,15 +76,21 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
       }));
     }
     setActiveRunMode(false);
+    setResumingRun(null);
   };
 
-  // Cancel run
   const cancelRun = () => {
     updateSave(s => ({ ...s, activeRun: null }));
     setActiveRunMode(false);
+    setResumingRun(null);
   };
 
-  // No saves yet - show welcome
+  // Playtime: runs + general sessions
+  const runTime = (currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0);
+  const sessionTime = (currentSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0);
+  const totalPlaytime = runTime + sessionTime;
+
+  // Welcome screen (no saves yet)
   if (saves.length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900/40 to-slate-900 flex items-center justify-center p-4">
@@ -123,11 +127,13 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
         save={currentSave}
         onEndRun={endRun}
         onCancelRun={cancelRun}
+        onStartRun={handleStartRun}
+        initialRun={resumingRun}
       />
     );
   }
 
-  // Main tracker view
+  // Main tracker
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-purple-900/30 to-slate-900 safe-area-bottom">
       {/* Header */}
@@ -139,10 +145,7 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-lg font-bold flex items-center gap-2">
-                  🔥 Hades
-                </h1>
-                {/* Save selector */}
+                <h1 className="text-lg font-bold">🔥 Hades</h1>
                 <div className="relative">
                   <button
                     onClick={() => setShowSaveDropdown(!showSaveDropdown)}
@@ -154,19 +157,13 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
                   {showSaveDropdown && (
                     <div className="absolute top-full left-0 mt-1 card p-1 min-w-[200px] z-20">
                       {saves.map(s => (
-                        <button
-                          key={s.id}
-                          onClick={() => switchSave(s.id)}
+                        <button key={s.id} onClick={() => switchSave(s.id)}
                           className={`w-full text-left px-3 py-2 rounded text-sm min-h-[44px] ${
-                            s.id === currentSave?.id
-                              ? 'bg-purple-600 text-white'
-                              : 'hover:bg-white/10 text-gray-300'
+                            s.id === currentSave?.id ? 'bg-purple-600 text-white' : 'hover:bg-white/10 text-gray-300'
                           }`}
                         >
                           {s.name}
-                          <span className="text-xs text-gray-500 ml-2">
-                            ({s.runs?.length || 0} runs)
-                          </span>
+                          <span className="text-xs text-gray-500 ml-2">({s.runs?.length || 0} runs)</span>
                         </button>
                       ))}
                       <hr className="border-purple-500/20 my-1" />
@@ -187,15 +184,11 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
             </button>
           </div>
 
-          {/* Tab navigation */}
+          {/* Tabs */}
           <div className="flex gap-1 overflow-x-auto scroll-smooth-ios -mx-4 px-4">
             {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`${
-                  activeTab === tab.id ? 'tab-button-active' : 'tab-button-inactive'
-                } whitespace-nowrap text-sm`}
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`${activeTab === tab.id ? 'tab-button-active' : 'tab-button-inactive'} whitespace-nowrap text-sm`}
               >
                 {tab.label}
               </button>
@@ -204,10 +197,27 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
         </div>
       </div>
 
+      {/* Resume banner */}
+      {currentSave?.activeRun && (
+        <div className="max-w-7xl mx-auto px-4 pt-3">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-900/20 border border-amber-500/30 rounded-xl text-sm">
+            <span className="text-amber-300">⚡ You have a run in progress</span>
+            <div className="flex gap-2 shrink-0">
+              <button onClick={resumeRun} className="text-xs px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg transition-colors">
+                Resume
+              </button>
+              <button onClick={discardActiveRun} className="text-xs px-3 py-1.5 border border-white/10 text-gray-400 hover:text-white rounded-lg transition-colors">
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        totalPlaytime={totalPlaytime}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateSave(s => ({
           ...s,
@@ -222,32 +232,22 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
         }))}
       />
 
-      {/* Tab Content */}
+      {/* Tab content */}
       <div className="max-w-7xl mx-auto px-4 py-4">
-        {activeTab === 'overview' && (
-          <OverviewTab save={currentSave} />
+        {activeTab === 'runs' && (
+          <RunsTab save={currentSave} />
         )}
-        {activeTab === 'builds' && (
-          <BuildsTab save={currentSave} />
-        )}
-        {activeTab === 'aspects' && (
-          <AspectsTab save={currentSave} updateSave={updateSave} />
-        )}
-        {activeTab === 'keepsakes' && (
-          <KeepsakesTab save={currentSave} updateSave={updateSave} />
-        )}
-        {activeTab === 'mirror' && (
-          <MirrorTab save={currentSave} updateSave={updateSave} />
-        )}
-        {activeTab === 'analytics' && (
-          <AnalyticsTab save={currentSave} />
+        {activeTab === 'progress' && (
+          <ProgressTab save={currentSave} updateSave={updateSave} />
         )}
       </div>
 
-      {/* New Save Modal */}
+      {/* New Save modal */}
       {showNewSave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setShowNewSave(false)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setShowNewSave(false)}
+        >
           <div className="card p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
             <h2 className="text-lg font-bold mb-4">New Save File</h2>
             <input
@@ -259,9 +259,7 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
               className="input-field mb-3"
               autoFocus
             />
-            <button onClick={handleCreateSave} className="btn-primary w-full">
-              Create Save
-            </button>
+            <button onClick={handleCreateSave} className="btn-primary w-full">Create Save</button>
           </div>
         </div>
       )}

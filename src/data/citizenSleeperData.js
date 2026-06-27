@@ -344,7 +344,9 @@ export const ALL_ENDINGS = [
 ];
 
 export const CLASSES = [
-  { id: 'machinist', name: 'Machinist', description: 'Skilled with machines and repair. Engine skill boosted.' },
-  { id: 'operator', name: 'Operator', description: 'Information broker and hacker. Interface skill boosted.' },
-  { id: 'scholar', name: 'Scholar', description: 'Researcher and analyst. Endure skill boosted.' },
+  { id: 'machinist', name: 'Machinist', description: 'Works on machines and automated systems. Engineer skill boosted; struggles with direct conflict (Engage reduced).' },
+  { id: 'operator',  name: 'Operator',  description: 'Works with drones and remote systems. Interface skill boosted; physically fragile (Endure reduced).' },
+  { id: 'extractor', name: 'Extractor', description: 'Works at the "coal face" of resource extraction, often in hard vacuum. Endure skill boosted; struggles with intuition (Intuit reduced).' },
+  // NOTE: There is no "Scholar" class in Citizen Sleeper. The three classes are
+  // Machinist, Operator, and Extractor (confirmed via citizensleeper.fandom.com/wiki/Sleeper).
 ];

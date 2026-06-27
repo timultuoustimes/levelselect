@@ -6,7 +6,7 @@ import {
 import SessionPanel from '../shared/SessionPanel.jsx';
 import {
   LEVELS, MUSIC_NOTES, PHOBEKINS, SHOP_UPGRADES,
-  TOTAL_POWER_SEALS_MAIN, TOTAL_POWER_SEALS_DLC
+  TOTAL_POWER_SEALS_MAIN, TOTAL_DLC_COLLECTIBLES
 } from '../../data/messengerData.js';
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -185,7 +185,7 @@ function CollectiblesTab({ save, onUpdateSave }) {
 }
 
 // ── Overview Tab ──────────────────────────────────────────────────────────────
-function OverviewTab({ save }) {
+function OverviewTab({ save, onUpdateSave }) {
   const clearedLevels = Object.values(save.levelData || {}).filter(d => d.cleared).length;
   const totalLevels = LEVELS.length;
   const totalSeals = LEVELS.filter(l => !l.dlc).reduce((sum, l) => sum + (l.powerSeals || 0), 0);
@@ -225,6 +225,17 @@ function OverviewTab({ save }) {
           <li>→ All <span className="text-blue-400">45 Power Seals</span> unlock the Windmill Shuriken</li>
           <li>→ <span className="text-green-400">Key of Strength</span>: deliver Power Thistle between 8-bit eras</li>
         </ul>
+      </div>
+
+      <div className="bg-black/40 rounded-xl border border-white/10 p-4">
+        <label className="text-xs text-gray-400 block mb-2">Notes</label>
+        <textarea
+          rows={3}
+          placeholder="Route notes, items to revisit, spoiler reminders..."
+          value={save.notes || ''}
+          onChange={e => onUpdateSave(s => ({ ...s, notes: e.target.value }))}
+          className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 resize-none focus:outline-none"
+        />
       </div>
     </div>
   );
@@ -307,7 +318,7 @@ export default function MessengerTracker({ game, onBack, onUpdateGame }) {
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={migratedSave?.totalPlaytime || 0}
+        totalPlaytime={(migratedSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0)}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -317,7 +328,6 @@ export default function MessengerTracker({ game, onBack, onUpdateGame }) {
         onAddSession={(session) => updateCurrentSave(s => ({
           ...s,
           sessions: [...(s.sessions || []), session],
-          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
           activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
@@ -353,7 +363,7 @@ export default function MessengerTracker({ game, onBack, onUpdateGame }) {
               ))}
             </div>
 
-            {activeTab === 'overview' && <OverviewTab save={currentSave} />}
+            {activeTab === 'overview' && <OverviewTab save={currentSave} onUpdateSave={updateCurrentSave} />}
             {activeTab === 'levels' && <LevelsTab save={currentSave} onUpdateSave={updateCurrentSave} />}
             {activeTab === 'collectibles' && <CollectiblesTab save={currentSave} onUpdateSave={updateCurrentSave} />}
           </>

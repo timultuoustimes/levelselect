@@ -3,10 +3,10 @@ import { parseGameryCSV } from '../utils/csvParser.js';
 import { createGameEntry } from '../utils/factories.js';
 import { searchIGDB, igdbCoverUrl, batchFetchIGDB, fetchIGDBByName, fetchIGDBGame } from '../utils/igdb.js';
 import {
-  Search, Upload, Plus, Gamepad2, Trash2, ChevronDown,
+  Search, Upload, Plus, Gamepad2, Trash2, ChevronDown, ChevronRight,
   LayoutGrid, List, BarChart2, Star, Clock, Filter,
   ExternalLink, X, Check, ShoppingBag, RefreshCw, Download,
-  CheckSquare, Square, ArrowLeft, Home, Settings,
+  CheckSquare, Square, ArrowLeft, Home, Settings, Pin, Play,
 } from 'lucide-react';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -167,6 +167,7 @@ export const TRACKER_TYPES = {
   'Under The Island': 'under-the-island',
   'Dead Cells': 'dead-cells',
   'Hollow Knight': 'hollow-knight',
+  'Mina the Hollower': 'mina-the-hollower',
 };
 
 // Grid column classes keyed by user preference
@@ -388,7 +389,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
           {!selectMode && (
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="text-gray-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1"
+              className="text-gray-600 hover:text-red-400 transition-colors sm:opacity-0 sm:group-hover:opacity-100 p-1"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -418,7 +419,7 @@ function GameCard({ game, onOpen, onUpdateStatus, onDelete, viewMode, selectMode
       {!selectMode && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="absolute top-2 right-2 p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 z-10"
+          className="absolute top-2 right-2 p-1.5 rounded-md text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition-colors sm:opacity-0 sm:group-hover:opacity-100 z-10"
           title="Remove game"
         >
           <Trash2 className="w-3.5 h-3.5" />
@@ -625,59 +626,222 @@ const HOME_SECTIONS = [
   { status: 'abandoned', label: 'Abandoned',            icon: '🚫', collapsed: true },
 ];
 
-function HomeCoverCard({ game, onOpen }) {
+function HomeCoverCard({ game, onOpen, pinned, onTogglePin, onStartSession, sessionActive }) {
   const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
   return (
-    <button
-      onClick={onOpen}
-      className="flex-shrink-0 w-20 sm:w-24 text-left group"
-    >
-      {coverUrl ? (
-        <img
-          src={coverUrl}
-          alt={game.name}
-          className="w-20 sm:w-24 aspect-[3/4] object-cover rounded-lg shadow-md mb-1.5"
-          onError={e => { e.target.style.display = 'none'; }}
-        />
-      ) : (
-        <div className="w-20 sm:w-24 aspect-[3/4] rounded-lg bg-purple-900/40 border border-purple-500/20 flex items-center justify-center mb-1.5">
-          <span className="text-xl opacity-40">🎮</span>
-        </div>
+    <div className="flex-shrink-0 w-20 sm:w-24 text-left group relative">
+      {/* Pin button */}
+      <button
+        onClick={e => { e.stopPropagation(); onTogglePin?.(); }}
+        className={`absolute top-1 left-1 p-1 rounded-md bg-black/50 z-10 transition-opacity ${
+          pinned ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+        title={pinned ? 'Unpin' : 'Pin to home'}
+      >
+        <Pin className={`w-3 h-3 ${pinned ? 'text-purple-400 fill-purple-400' : 'text-white/60'}`} />
+      </button>
+
+      {/* Quick-play button */}
+      {onStartSession && !sessionActive && (
+        <button
+          onClick={e => { e.stopPropagation(); onStartSession(); }}
+          className="absolute top-1 right-1 p-1 rounded-md bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 z-10 transition-opacity"
+          title="Start quick session"
+        >
+          <Play className="w-3 h-3 text-white/60" />
+        </button>
       )}
-      <p className="text-xs text-gray-300 group-hover:text-purple-300 line-clamp-2 leading-tight transition-colors">
-        {game.name}
-      </p>
-    </button>
+      {sessionActive && (
+        <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-green-400 animate-pulse z-10" title="Session active" />
+      )}
+
+      <button onClick={onOpen} className="block w-full text-left">
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={game.name}
+            className="w-20 sm:w-24 aspect-[3/4] object-cover rounded-lg shadow-md mb-1.5"
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="w-20 sm:w-24 aspect-[3/4] rounded-lg bg-purple-900/40 border border-purple-500/20 flex items-center justify-center mb-1.5">
+            <span className="text-xl opacity-40">🎮</span>
+          </div>
+        )}
+        <p className="text-xs text-gray-300 group-hover:text-purple-300 line-clamp-2 leading-tight transition-colors">
+          {game.name}
+        </p>
+      </button>
+    </div>
   );
 }
 
-function HomeView({ library, onOpenGame, onViewAll, collapsedSections, onToggleCollapsed, search = '' }) {
-  // Sort library by lastPlayed for the completed section
-  const getLastPlayed = (g) => g.saves?.[0]?.lastPlayedAt || g.addedAt || '';
+function ContinuePlayingCard({ game, onOpen, homeSession, homeSessionElapsed, onStartSession, onStopSession }) {
+  const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+  const isActiveSession = homeSession?.gameId === game.id;
+  const playtime = getGamePlaytime(game);
 
-  // Apply search filter if provided
+  return (
+    <div className="flex gap-4 p-3 bg-gradient-to-r from-purple-900/30 to-black/30 rounded-xl border border-purple-500/20 items-center">
+      {/* Cover */}
+      <button onClick={onOpen} className="flex-shrink-0">
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={game.name}
+            className="w-16 aspect-[3/4] object-cover rounded-lg shadow-lg"
+            onError={e => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="w-16 aspect-[3/4] rounded-lg bg-purple-900/50 border border-purple-500/20 flex items-center justify-center">
+            <span className="text-xl opacity-40">🎮</span>
+          </div>
+        )}
+      </button>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <button onClick={onOpen} className="text-left w-full">
+          <div className="font-semibold text-sm text-white hover:text-purple-300 transition-colors truncate">{game.name}</div>
+          {game.platforms?.length > 0 && (
+            <div className="text-xs text-gray-500 mt-0.5 truncate">{game.platforms.join(', ')}</div>
+          )}
+        </button>
+        {playtime > 0 && (
+          <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+            <Clock className="w-3 h-3" /> {formatDuration(playtime)} played
+          </div>
+        )}
+        {isActiveSession && (
+          <div className="text-xs text-green-400 font-mono mt-1">
+            ● {formatDuration(homeSessionElapsed)}
+          </div>
+        )}
+      </div>
+
+      {/* Action */}
+      <div className="flex-shrink-0">
+        {isActiveSession ? (
+          <button
+            onClick={onStopSession}
+            className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg border border-red-500/40 bg-red-900/20 text-red-300 hover:bg-red-900/40 transition-colors text-xs"
+          >
+            <Square className="w-4 h-4 fill-red-400 text-red-400" />
+            Stop
+          </button>
+        ) : (
+          <button
+            onClick={onStartSession}
+            className="flex flex-col items-center gap-1 px-3 py-2 rounded-lg border border-green-500/40 bg-green-900/20 text-green-300 hover:bg-green-900/40 transition-colors text-xs"
+          >
+            <Play className="w-4 h-4" />
+            Play
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HomeView({
+  library, onOpenGame, onViewAll, collapsedSections, onToggleCollapsed,
+  search = '', homeSession, homeSessionElapsed, onStartSession, onStopSession, onTogglePin,
+  onAddGame,
+}) {
+  const getLastPlayed = (g) => g.saves?.[0]?.lastPlayedAt || g.addedAt || '';
   const matchSearch = (g) => !search || g.name.toLowerCase().includes(search.toLowerCase())
     || (g.franchise || '').toLowerCase().includes(search.toLowerCase());
 
+  // Most recently active 'playing' game for Continue Playing card
+  const continueGame = [...library]
+    .filter(g => g.status === 'playing' && matchSearch(g))
+    .sort((a, b) => new Date(getLastPlayed(b)) - new Date(getLastPlayed(a)))[0] || null;
+
+  // Pinned games (any status)
+  const pinnedGames = library.filter(g => g.pinned && matchSearch(g));
+
+  // Empty library onboarding
+  if (library.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+        <div className="text-6xl mb-5">🎮</div>
+        <h2 className="text-2xl font-bold mb-2">Welcome to LevelSelect</h2>
+        <p className="text-gray-400 mb-8 max-w-sm">Track every game you play — time spent, runs, progress, and your own notes.</p>
+        <button onClick={onAddGame} className="btn-primary gap-2 text-base px-6 py-3 mb-3">
+          <Plus className="w-5 h-5" /> Add Your First Game
+        </button>
+        <p className="text-xs text-gray-600">Or import a library from a CSV or JSON backup.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5 pb-8">
+      {/* ── Active home session bar ─────────────────────────────────────────── */}
+      {homeSession && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-green-900/20 border border-green-500/30 rounded-xl">
+          <span className="text-green-400 font-mono text-sm font-bold">{formatDuration(homeSessionElapsed)}</span>
+          <span className="text-sm text-gray-300 flex-1 truncate">
+            {library.find(g => g.id === homeSession.gameId)?.name}
+          </span>
+          <button
+            onClick={onStopSession}
+            className="text-xs px-3 py-1.5 bg-green-900/40 hover:bg-green-900/60 text-green-300 rounded-lg border border-green-700/40 transition-colors flex items-center gap-1.5"
+          >
+            <Square className="w-3 h-3 fill-green-400 text-green-400" /> Stop
+          </button>
+        </div>
+      )}
+
+      {/* ── Continue Playing ────────────────────────────────────────────────── */}
+      {continueGame && (
+        <div>
+          <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Continue Playing</div>
+          <ContinuePlayingCard
+            game={continueGame}
+            onOpen={() => onOpenGame(continueGame.id, 'home')}
+            homeSession={homeSession}
+            homeSessionElapsed={homeSessionElapsed}
+            onStartSession={() => onStartSession(continueGame.id)}
+            onStopSession={onStopSession}
+          />
+        </div>
+      )}
+
+      {/* ── Pinned ──────────────────────────────────────────────────────────── */}
+      {pinnedGames.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <Pin className="w-3.5 h-3.5 text-purple-400 fill-purple-400" />
+            <span className="font-semibold text-sm">Pinned</span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-1 scroll-smooth-ios -mx-4 px-4">
+            {pinnedGames.map(game => (
+              <HomeCoverCard
+                key={game.id}
+                game={game}
+                onOpen={() => onOpenGame(game.id, 'home')}
+                pinned
+                onTogglePin={() => onTogglePin(game.id)}
+                onStartSession={() => onStartSession(game.id)}
+                sessionActive={homeSession?.gameId === game.id}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Status sections ─────────────────────────────────────────────────── */}
       {HOME_SECTIONS.map(section => {
         let games = library.filter(g => g.status === section.status && matchSearch(g));
         const totalCount = library.filter(g => g.status === section.status).length;
         if (games.length === 0) return null;
 
-        // Sort active sections by most recent activity (most recently played first)
         if (['playing', 'queued', 'paused'].includes(section.status)) {
-          games = [...games].sort((a, b) =>
-            new Date(getLastPlayed(b)) - new Date(getLastPlayed(a))
-          );
+          games = [...games].sort((a, b) => new Date(getLastPlayed(b)) - new Date(getLastPlayed(a)));
         }
-
-        // "Recently Completed" — sort by lastPlayedAt, cap at 5
         if (section.status === 'completed') {
-          games = [...games].sort((a, b) =>
-            new Date(getLastPlayed(b)) - new Date(getLastPlayed(a))
-          ).slice(0, section.limit || 5);
+          games = [...games].sort((a, b) => new Date(getLastPlayed(b)) - new Date(getLastPlayed(a))).slice(0, section.limit || 5);
         }
 
         const isCollapsed = collapsedSections[section.status] ?? section.collapsed;
@@ -704,7 +868,15 @@ function HomeView({ library, onOpenGame, onViewAll, collapsedSections, onToggleC
             {!isCollapsed && (
               <div className="flex gap-3 overflow-x-auto pb-1 scroll-smooth-ios -mx-4 px-4">
                 {games.map(game => (
-                  <HomeCoverCard key={game.id} game={game} onOpen={() => onOpenGame(game.id, 'home')} />
+                  <HomeCoverCard
+                    key={game.id}
+                    game={game}
+                    onOpen={() => onOpenGame(game.id, 'home')}
+                    pinned={!!game.pinned}
+                    onTogglePin={() => onTogglePin(game.id)}
+                    onStartSession={() => onStartSession(game.id)}
+                    sessionActive={homeSession?.gameId === game.id}
+                  />
                 ))}
               </div>
             )}
@@ -894,15 +1066,31 @@ function MobileStatusPicker({ statusFilter, onChange, counts }) {
 
 function Modal({ onClose, title, children }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="card p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-md"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-md max-h-[90vh] overflow-y-auto
+                   rounded-t-3xl sm:rounded-2xl
+                   bg-slate-800/90 backdrop-blur-2xl
+                   border border-white/[0.12] shadow-2xl"
+        onClick={e => e.stopPropagation()}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {/* Drag handle — mobile only */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/20" />
+        </div>
+        <div className="flex items-center justify-between px-6 pt-4 pb-3 border-b border-white/[0.08]">
           <h2 className="text-lg font-bold">{title}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white p-1 min-h-[44px] min-w-[44px] flex items-center justify-center">
             <X className="w-5 h-5" />
           </button>
         </div>
-        {children}
+        <div className="px-6 py-5">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -924,6 +1112,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [showSortFilter, setShowSortFilter] = useState(false);
   const [gridCols, setGridCols] = useState(() => parseInt(localStorage.getItem('ls-grid-cols') || '3'));
+  const [bottomNav, setBottomNav] = useState(() => localStorage.getItem('ls-bottom-nav') === '1');
+  const toggleBottomNav = () => setBottomNav(n => {
+    const next = !n;
+    localStorage.setItem('ls-bottom-nav', next ? '1' : '0');
+    return next;
+  });
 
   // Two-level navigation for platform and franchise views
   const [platformFilter, setPlatformFilter] = useState(null);
@@ -954,6 +1148,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const [manualStatus, setManualStatus] = useState('backlog');
   const [manualFranchise, setManualFranchise] = useState('');
   const [manualYearPlayed, setManualYearPlayed] = useState('');
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
 
   // Tag filter
   const [tagFilter, setTagFilter] = useState([]);
@@ -964,8 +1159,71 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
   const fileInputRef = useRef(null);
   const searchDebounceRef = useRef(null);
+  const [showTrash, setShowTrash] = useState(false);
 
-  const { library } = data;
+  // ── Home session (quick-play timer from home screen) ────────────────────
+  const homeSession = data.homeSession || null;
+  const [homeSessionElapsed, setHomeSessionElapsed] = useState(0);
+  const homeTimerRef = useRef(null);
+
+  useEffect(() => {
+    clearInterval(homeTimerRef.current);
+    if (!homeSession) { setHomeSessionElapsed(0); return; }
+    const initial = Math.floor((Date.now() - new Date(homeSession.startTime).getTime()) / 1000);
+    setHomeSessionElapsed(initial);
+    homeTimerRef.current = setInterval(() => setHomeSessionElapsed(e => e + 1), 1000);
+    return () => clearInterval(homeTimerRef.current);
+  }, [homeSession?.gameId, homeSession?.startTime]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleStartHomeSession = useCallback((gameId) => {
+    updateData(d => ({ ...d, homeSession: { gameId, startTime: new Date().toISOString() } }));
+  }, [updateData]);
+
+  const handleStopHomeSession = useCallback(() => {
+    if (!homeSession) return;
+    const duration = homeSessionElapsed;
+    const sessionObj = {
+      id: String(Date.now()),
+      startTime: homeSession.startTime,
+      endTime: new Date().toISOString(),
+      duration,
+    };
+    updateData(d => {
+      const game = d.library.find(g => g.id === homeSession.gameId);
+      if (!game) return { ...d, homeSession: null };
+      const saves = game.saves || [];
+      const currentSave = saves.find(s => s.id === game.currentSaveId) || saves[0];
+      if (!currentSave) return { ...d, homeSession: null };
+      return {
+        ...d,
+        homeSession: null,
+        library: d.library.map(g => {
+          if (g.id !== homeSession.gameId) return g;
+          return {
+            ...g,
+            saves: g.saves.map(s =>
+              s.id !== currentSave.id ? s : {
+                ...s,
+                sessions: [...(s.sessions || []), sessionObj],
+                lastPlayedAt: sessionObj.endTime,
+              }
+            ),
+          };
+        }),
+      };
+    });
+  }, [homeSession, homeSessionElapsed, updateData]);
+
+  const handleTogglePin = useCallback((gameId) => {
+    updateData(d => ({
+      ...d,
+      library: d.library.map(g => g.id === gameId ? { ...g, pinned: !g.pinned } : g),
+    }));
+  }, [updateData]);
+
+  const { library: allLibrary } = data;
+  const library = allLibrary.filter(g => !g.deletedAt);
+  const trash = allLibrary.filter(g => !!g.deletedAt);
 
   // ── Close select menu on outside click ────────────────────────────────
   useEffect(() => {
@@ -1270,6 +1528,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
     setManualStatus('backlog');
     setNewGameTags([]);
     setTagInput('');
+    setShowMoreDetails(false);
   };
 
   const togglePlatform = (p) => {
@@ -1281,8 +1540,22 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   // ── Delete game ─────────────────────────────────────────────────────────
 
   const handleDeleteGame = (gameId) => {
-    updateData(prev => ({ ...prev, library: prev.library.filter(g => g.id !== gameId) }));
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => g.id === gameId ? { ...g, deletedAt: new Date().toISOString() } : g),
+    }));
     setDeleteConfirmId(null);
+  };
+
+  const handleRestoreGame = (gameId) => {
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => g.id === gameId ? { ...g, deletedAt: null } : g),
+    }));
+  };
+
+  const handlePurgeGame = (gameId) => {
+    updateData(prev => ({ ...prev, library: prev.library.filter(g => g.id !== gameId) }));
   };
 
   // ── Update game status ──────────────────────────────────────────────────
@@ -1319,7 +1592,11 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
   const deselectAll = () => setSelectedIds(new Set());
 
   const handleBulkDelete = () => {
-    updateData(prev => ({ ...prev, library: prev.library.filter(g => !selectedIds.has(g.id)) }));
+    const now = new Date().toISOString();
+    updateData(prev => ({
+      ...prev,
+      library: prev.library.map(g => selectedIds.has(g.id) ? { ...g, deletedAt: now } : g),
+    }));
     setSelectedIds(new Set());
     setBulkDeleteConfirm(false);
     setSelectMode(false);
@@ -1488,6 +1765,18 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 >
                   <ShoppingBag className="w-4 h-4" />
                 </a>
+                {trash.length > 0 && (
+                  <button
+                    onClick={() => setShowTrash(true)}
+                    className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px] relative"
+                    title="Trash"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] flex items-center justify-center font-bold">
+                      {trash.length}
+                    </span>
+                  </button>
+                )}
                 <button
                   onClick={() => setShowSettings(true)}
                   className="btn-secondary !px-2.5 !min-h-[36px] !min-w-[36px]"
@@ -1495,32 +1784,36 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 >
                   <Settings className="w-4 h-4" />
                 </button>
-                <button
-                  onClick={() => setShowAddGame(true)}
-                  className="btn-primary !px-2.5 !min-h-[36px] !min-w-[36px]"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
+                {!bottomNav && (
+                  <button
+                    onClick={() => setShowAddGame(true)}
+                    className="btn-primary !px-2.5 !min-h-[36px] !min-w-[36px]"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
-            <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
-              {[
-                { id: 'home',  label: 'Home',    Icon: Home },
-                { id: 'games', label: 'Library', Icon: Gamepad2 },
-                { id: 'stats', label: 'Stats',   Icon: BarChart2 },
-              ].map(({ id, label, Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setLibraryView(id)}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    libraryView === id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <Icon className="w-3.5 h-3.5" />
-                  {label}
-                </button>
-              ))}
-            </div>
+            {!bottomNav && (
+              <div className="flex gap-0.5 bg-white/5 rounded-lg p-0.5">
+                {[
+                  { id: 'home',  label: 'Home',    Icon: Home },
+                  { id: 'games', label: 'Library', Icon: Gamepad2 },
+                  { id: 'stats', label: 'Stats',   Icon: BarChart2 },
+                ].map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => setLibraryView(id)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                      libraryView === id ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ── Desktop header: single row ── */}
@@ -1560,6 +1853,16 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 <ShoppingBag className="w-4 h-4" />
                 <span>Wishlist</span>
               </a>
+              {trash.length > 0 && (
+                <button
+                  onClick={() => setShowTrash(true)}
+                  className="btn-secondary !px-3 text-sm gap-1.5 relative"
+                  title="Trash"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{trash.length}</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowSettings(true)}
                 className="btn-secondary !px-3 text-sm gap-1.5"
@@ -1675,9 +1978,9 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                     {viewMode === 'grid' ? <List className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
                   </button>
 
-                  {/* Grid size control — only visible in grid mode */}
+                  {/* Grid size control — only visible in grid mode on sm+ screens */}
                   {viewMode === 'grid' && (
-                    <div className="flex items-center rounded-lg overflow-hidden border border-white/10" title="Columns per row">
+                    <div className="hidden sm:flex items-center rounded-lg overflow-hidden border border-white/10" title="Columns per row">
                       <div className="bg-slate-800 px-1.5 py-2 border-r border-white/10 flex items-center">
                         <LayoutGrid className="w-3 h-3 text-gray-500" />
                       </div>
@@ -1917,7 +2220,10 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div
+        className="max-w-7xl mx-auto px-4 py-4"
+        style={bottomNav ? { paddingBottom: 'calc(5.5rem + env(safe-area-inset-bottom))' } : undefined}
+      >
 
         {libraryView === 'home' ? (
           <HomeView
@@ -1932,6 +2238,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
               setCollapsedSections(prev => ({ ...prev, [status]: !prev[status] }))
             }
             search={search}
+            homeSession={homeSession}
+            homeSessionElapsed={homeSessionElapsed}
+            onStartSession={handleStartHomeSession}
+            onStopSession={handleStopHomeSession}
+            onTogglePin={handleTogglePin}
+            onAddGame={() => setShowAddGame(true)}
           />
         ) : libraryView === 'stats' ? (
           <LibraryStats library={library} />
@@ -2130,18 +2442,6 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 />
               </div>
 
-              {/* Franchise */}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Franchise / Series (optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Zelda, Mario, Metroid…"
-                  value={manualFranchise}
-                  onChange={e => setManualFranchise(e.target.value)}
-                  className="input-field"
-                />
-              </div>
-
               {/* Platform */}
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Platform</label>
@@ -2189,45 +2489,62 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 </div>
               </div>
 
-              {/* Year Played */}
+              {/* More details (collapsible) */}
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Year Played / Beaten (optional)</label>
-                <input
-                  type="number"
-                  placeholder={`e.g. ${new Date().getFullYear()}`}
-                  min="1970"
-                  max={new Date().getFullYear() + 1}
-                  value={manualYearPlayed}
-                  onChange={e => setManualYearPlayed(e.target.value)}
-                  className="input-field text-sm"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Tags (optional)</label>
-                {newGameTags.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {newGameTags.map(tag => (
-                      <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/60 text-purple-200 flex items-center gap-1">
-                        #{tag}
-                        <button
-                          onClick={() => setNewGameTags(prev => prev.filter(t => t !== tag))}
-                          className="hover:text-white ml-0.5"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
+                <button
+                  type="button"
+                  onClick={() => setShowMoreDetails(p => !p)}
+                  className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1"
+                >
+                  {showMoreDetails ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                  {showMoreDetails ? 'Fewer details' : 'More details (franchise, year, tags)'}
+                </button>
+                {showMoreDetails && (
+                  <div className="mt-3 space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Franchise / Series</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Zelda, Mario, Metroid…"
+                        value={manualFranchise}
+                        onChange={e => setManualFranchise(e.target.value)}
+                        className="input-field"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Year Played / Beaten</label>
+                      <input
+                        type="number"
+                        placeholder={`e.g. ${new Date().getFullYear()}`}
+                        min="1970"
+                        max={new Date().getFullYear() + 1}
+                        value={manualYearPlayed}
+                        onChange={e => setManualYearPlayed(e.target.value)}
+                        className="input-field text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 mb-1 block">Tags</label>
+                      {newGameTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {newGameTags.map(tag => (
+                            <span key={tag} className="px-2.5 py-1 rounded-full text-xs font-medium bg-purple-600/60 text-purple-200 flex items-center gap-1">
+                              #{tag}
+                              <button onClick={() => setNewGameTags(prev => prev.filter(t => t !== tag))} className="hover:text-white ml-0.5">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <TagInput
+                        suggestions={allLibraryTags.filter(t => !newGameTags.includes(t))}
+                        onAdd={(val) => { if (!newGameTags.includes(val)) setNewGameTags(prev => [...prev, val]); }}
+                        placeholder="Add a tag…"
+                      />
+                    </div>
                   </div>
                 )}
-                <TagInput
-                  suggestions={allLibraryTags.filter(t => !newGameTags.includes(t))}
-                  onAdd={(val) => {
-                    if (!newGameTags.includes(val)) setNewGameTags(prev => [...prev, val]);
-                  }}
-                  placeholder="Add a tag…"
-                />
               </div>
 
               <button
@@ -2264,6 +2581,23 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       {/* ── Settings Modal ───────────────────────────────────────────────────── */}
       {showSettings && (
         <Modal onClose={() => setShowSettings(false)} title="Settings">
+          {/* Display preferences */}
+          <div className="mb-5 pb-5 border-b border-white/[0.08]">
+            <h4 className="text-sm font-medium text-gray-300 mb-3">Display</h4>
+            <button
+              onClick={toggleBottomNav}
+              className="w-full flex items-center justify-between gap-3 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/10"
+            >
+              <div className="text-left">
+                <div className="text-sm text-gray-200">Bottom navigation bar</div>
+                <div className="text-xs text-gray-500 mt-0.5">Move tabs and Add to bottom for one-handed use</div>
+              </div>
+              <div className={`w-11 h-6 rounded-full flex-shrink-0 transition-colors flex items-center px-0.5 ${bottomNav ? 'bg-purple-600' : 'bg-white/20'}`}>
+                <div className={`w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${bottomNav ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
+            </button>
+          </div>
+
           {/* Default platforms */}
           <div className="mb-6">
             <h4 className="text-sm font-medium text-gray-300 mb-2">Default Platforms</h4>
@@ -2319,12 +2653,12 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
       {deleteConfirmId && (() => {
         const game = library.find(g => g.id === deleteConfirmId);
         return (
-          <Modal onClose={() => setDeleteConfirmId(null)} title="Remove Game">
+          <Modal onClose={() => setDeleteConfirmId(null)} title="Move to Trash">
             <p className="text-gray-300 mb-2">
-              Remove <span className="font-semibold text-white">{game?.name}</span> from your library?
+              Move <span className="font-semibold text-white">{game?.name}</span> to trash?
             </p>
             <p className="text-gray-500 text-sm mb-5">
-              This will delete all saves and tracking data. This cannot be undone.
+              You can restore it from the trash within 30 days.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirmId(null)} className="btn-secondary flex-1">Cancel</button>
@@ -2332,7 +2666,7 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
                 onClick={() => handleDeleteGame(deleteConfirmId)}
                 className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
               >
-                Remove
+                Move to Trash
               </button>
             </div>
           </Modal>
@@ -2341,21 +2675,122 @@ export default function Library({ data, updateData, onOpenGame, libraryView, set
 
       {/* Bulk delete confirmation */}
       {bulkDeleteConfirm && (
-        <Modal onClose={() => setBulkDeleteConfirm(false)} title="Delete Games">
+        <Modal onClose={() => setBulkDeleteConfirm(false)} title="Move to Trash">
           <p className="text-gray-300 mb-1">
-            Permanently delete <span className="text-white font-semibold">{selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}</span>?
+            Move <span className="text-white font-semibold">{selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}</span> to trash?
           </p>
-          <p className="text-gray-500 text-sm mb-6">All tracking data and saves will be lost. This cannot be undone.</p>
+          <p className="text-gray-500 text-sm mb-6">You can restore them within 30 days.</p>
           <div className="flex gap-3">
             <button onClick={() => setBulkDeleteConfirm(false)} className="btn-secondary flex-1">Cancel</button>
             <button
               onClick={handleBulkDelete}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors"
             >
-              Delete {selectedIds.size} game{selectedIds.size !== 1 ? 's' : ''}
+              Move {selectedIds.size} to Trash
             </button>
           </div>
         </Modal>
+      )}
+
+      {/* ── Trash modal ──────────────────────────────────────────────────────── */}
+      {showTrash && (
+        <Modal onClose={() => setShowTrash(false)} title={`Trash (${trash.length})`}>
+          <p className="text-gray-500 text-xs mb-4">
+            Games are permanently deleted after 30 days. Restore them anytime before then.
+          </p>
+          {trash.length === 0 ? (
+            <p className="text-gray-500 text-sm text-center py-4">Trash is empty.</p>
+          ) : (
+            <div className="space-y-2">
+              {trash.map(game => {
+                const daysLeft = game.deletedAt
+                  ? Math.max(0, 30 - Math.floor((Date.now() - new Date(game.deletedAt).getTime()) / (1000 * 60 * 60 * 24)))
+                  : 30;
+                const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+                return (
+                  <div key={game.id} className="flex items-center gap-3 p-2.5 bg-black/20 rounded-lg border border-white/5">
+                    <div className="w-8 h-10 flex-shrink-0 rounded overflow-hidden bg-purple-900/20">
+                      {coverUrl ? (
+                        <img src={coverUrl} alt={game.name} className="w-full h-full object-cover" onError={e => { e.target.style.display='none'; }} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-xs">🎮</div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-200 truncate">{game.name}</div>
+                      <div className="text-xs text-gray-600">{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</div>
+                    </div>
+                    <div className="flex gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => handleRestoreGame(game.id)}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-green-700/40 bg-green-900/20 text-green-400 hover:bg-green-900/40 transition-colors"
+                      >
+                        Restore
+                      </button>
+                      <button
+                        onClick={() => handlePurgeGame(game.id)}
+                        className="text-xs px-2 py-1.5 rounded-lg border border-red-700/30 text-red-500 hover:bg-red-900/20 transition-colors"
+                        title="Delete permanently"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Bottom navigation bar ─────────────────────────────────────────────── */}
+      {bottomNav && (
+        <div
+          className="fixed bottom-0 left-0 right-0 z-[45] sm:hidden bg-slate-900/90 backdrop-blur-lg border-t border-white/10"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="flex items-center px-2 pt-2 pb-1">
+            {[
+              { id: 'home',  label: 'Home',    Icon: Home },
+              { id: 'games', label: 'Library', Icon: Gamepad2 },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setLibraryView(id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-lg transition-colors ${
+                  libraryView === id ? 'text-purple-400' : 'text-gray-500'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            ))}
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="flex flex-col items-center gap-0.5 py-0.5 px-4"
+            >
+              <div className="w-10 h-10 rounded-2xl bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-600/30">
+                <Plus className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-[10px] font-medium text-gray-500 mt-0.5">Add</span>
+            </button>
+            {[
+              { id: 'stats', label: 'Stats', Icon: BarChart2 },
+              { id: 'settings', label: 'Settings', Icon: Settings },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => id === 'settings' ? setShowSettings(true) : setLibraryView(id)}
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1 rounded-lg transition-colors ${
+                  libraryView === id ? 'text-purple-400' : 'text-gray-500'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                <span className="text-[10px] font-medium">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

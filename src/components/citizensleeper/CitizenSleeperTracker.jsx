@@ -423,7 +423,7 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={migratedSave?.totalPlaytime || 0}
+        totalPlaytime={(migratedSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0)}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -433,7 +433,6 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
         onAddSession={(session) => updateCurrentSave(s => ({
           ...s,
           sessions: [...(s.sessions || []), session],
-          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
           activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
@@ -453,12 +452,15 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
             />
             <div>
               <label className="text-xs text-gray-400 block mb-1.5">Class</label>
-              <div className="flex gap-2 flex-wrap">
-                {['machinist', 'operator', 'scholar'].map(cls => (
-                  <button key={cls}
-                    onClick={() => setSelectedClass(cls)}
-                    className={`px-3 py-1.5 rounded-lg text-sm capitalize border ${selectedClass === cls ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/30 border-white/10 text-gray-400 hover:text-white'}`}
-                  >{cls}</button>
+              <div className="flex flex-col gap-2">
+                {CLASSES.map(cls => (
+                  <button key={cls.id}
+                    onClick={() => setSelectedClass(cls.id)}
+                    className={`text-left px-3 py-2 rounded-lg text-sm border transition-colors ${selectedClass === cls.id ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/30 border-white/10 text-gray-400 hover:text-white hover:border-white/20'}`}
+                  >
+                    <span className="font-medium capitalize">{cls.name}</span>
+                    <span className={`text-xs ml-2 ${selectedClass === cls.id ? 'text-indigo-200' : 'text-gray-600'}`}>{cls.description}</span>
+                  </button>
                 ))}
               </div>
             </div>

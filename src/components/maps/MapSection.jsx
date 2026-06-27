@@ -258,7 +258,7 @@ export default function MapSection({
   const handleDelete = async (map) => {
     const { updatedGame, storagePath } = removeMapFromGame(game, map.id);
     onUpdateGame(updatedGame);
-    if (storagePath) deleteMapImage(storagePath);
+    if (storagePath) deleteMapImage(storagePath).catch(e => console.error('Map cleanup failed:', e));
     if (activeMapId === map.id && onActiveMapChange) onActiveMapChange(null);
     if (viewingMapId === map.id) setViewingMapId(null);
   };
@@ -275,12 +275,23 @@ export default function MapSection({
                 <span className="text-xs text-gray-500">{maps.length}</span>
               )}
             </div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-gray-300 hover:text-white transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add map
-            </button>
+            <div className="flex items-center gap-1.5">
+              {maps.length > 0 && !showGenie && (
+                <button
+                  onClick={() => setShowGenie(true)}
+                  className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs text-gray-500 hover:text-purple-400 hover:bg-white/5 transition-colors"
+                  title="Ask Genie to find maps"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-sm text-gray-300 hover:text-white transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add map
+              </button>
+            </div>
           </div>
         )}
 
@@ -339,15 +350,6 @@ export default function MapSection({
           </div>
         )}
 
-        {!panelMode && !showGenie && maps.length > 0 && (
-          <button
-            onClick={() => setShowGenie(true)}
-            className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 hover:text-purple-400 transition-colors"
-          >
-            <Sparkles className="w-3 h-3" />
-            Ask Genie to find more maps
-          </button>
-        )}
       </div>
 
       {/* Mobile MapViewer modal */}

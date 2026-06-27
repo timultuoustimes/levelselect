@@ -99,10 +99,12 @@ export const MUSIC_NOTES = [
 ];
 
 export const PHOBEKINS = [
-  { id: 'phob-1', name: 'Claustro',  location: 'Bamboo Creek',    description: 'Found via wingsuit glide at the top of the tall waterfall. Glide to the far side to find a small opening.' },
-  { id: 'phob-2', name: 'Acro',      location: 'Searing Crags',   description: 'Found in a hidden area within Searing Crags.' },
-  { id: 'phob-3', name: 'Pyro',      location: 'Cloud Ruins',     description: 'Found in Cloud Ruins.' },
-  { id: 'phob-4', name: 'Dextro',    location: 'Underworld',      description: 'Found in the Underworld.' },
+  // Names are phobia-based: Necro (necrophobia), Claustro (claustrophobia),
+  // Acro (acrophobia/heights), Pyro (pyrophobia/fire).
+  { id: 'phob-1', name: 'Necro',    location: 'Catacombs',     description: 'Found at the very start of the Catacombs. Cannot be missed — Ninja speaks to Necro automatically on arrival.' },
+  { id: 'phob-2', name: 'Claustro', location: 'Bamboo Creek',  description: 'Found in a tight hidden area accessible via wingsuit glide at the top of a tall waterfall room.' },
+  { id: 'phob-3', name: 'Acro',     location: 'Cloud Ruins',   description: 'Found on a small platform in Cloud Ruins.' },
+  { id: 'phob-4', name: 'Pyro',     location: 'Searing Crags', description: 'Found on a lava-filled platform on the path between Searing Crags and the Underworld.' },
 ];
 
 export const SHOP_UPGRADES = [
@@ -113,21 +115,24 @@ export const SHOP_UPGRADES = [
   { id: 'upg-4',  name: 'Fairy Bottle',         cost: 'story',  category: 'ability',   description: 'One-time auto-revive.' },
   { id: 'upg-5',  name: 'Magic Firefly',        cost: 'story',  category: 'ability',   description: 'Needed to traverse Corrupted Future.' },
   // Shop purchases
-  { id: 'upg-6',  name: 'Ki Shuriken',          cost: 50,    category: 'shop',    description: 'Ranged attack — throw energy shurikens.' },
-  { id: 'upg-7',  name: 'HP +1',                cost: 50,    category: 'shop',    description: 'Increase max health by 1.' },
-  { id: 'upg-8',  name: 'Ki Refill Globe',      cost: 50,    category: 'shop',    description: 'Enemies sometimes drop Ki charge globes.' },
-  { id: 'upg-9',  name: 'HP Refill Globe',      cost: 50,    category: 'shop',    description: 'Enemies sometimes drop HP globes.' },
-  { id: 'upg-10', name: 'Ki +1 (pierce 1)',     cost: 250,   category: 'shop',    description: 'Ki charges +1, shurikens pierce 1 target.' },
-  { id: 'upg-11', name: 'Ki +1 (pierce 2)',     cost: 350,   category: 'shop',    description: 'Ki charges +1, shurikens pierce 2 targets.' },
-  { id: 'upg-12', name: 'Rift Map',             cost: 250,   category: 'shop',    description: 'Adds blue glow to rooms on Area Map where time rifts exist.' },
-  { id: 'upg-13', name: 'Devil\'s Due',         cost: 100,   category: 'shop',    description: 'Quarble sticks around for 30s instead of 60s. Must die once to unlock.' },
-  { id: 'upg-14', name: 'Attack Projectiles',   cost: 40,    category: 'shop',    description: 'Empower attacks to destroy enemy projectiles. Can cloudstep off them.' },
-  { id: 'upg-15', name: 'Power of Resilience',  cost: 1000,  category: 'shop',    description: 'HP +1 (second upgrade tier).' },
-  { id: 'upg-16', name: 'Aerobatics Warrior',   cost: 250,   category: 'shop',    description: 'Wingsuit attack — attack downward while gliding. Requires Wingsuit.' },
-  { id: 'upg-17', name: 'Attack Boost',         cost: 2000,  category: 'shop',    description: 'Passive charge next attack for triple damage.' },
-  { id: 'upg-18', name: 'Energy Shuriken',      cost: 'seal', category: 'shop',   description: 'Windmill Shuriken — unlock by collecting all 45 Power Seals.' },
+  { id: 'upg-6',  name: 'Ki Shuriken',        cost: 50,    category: 'shop', description: 'Ranged attack — throw energy shurikens.' },
+  { id: 'upg-7',  name: 'HP +1',              cost: 50,    category: 'shop', description: 'Increase max health by 1.' },
+  { id: 'upg-8',  name: 'Ki Refill Globe',    cost: 50,    category: 'shop', description: 'Enemies sometimes drop Ki charge globes.' },
+  { id: 'upg-9',  name: 'HP Refill Globe',    cost: 50,    category: 'shop', description: 'Enemies sometimes drop HP globes.' },
+  { id: 'upg-10', name: 'Second Wind',        cost: 80,    category: 'shop', description: 'Press JUMP while knocked back to do an air recovery jump.' },
+  { id: 'upg-11', name: 'Second Wind II',     cost: 250,   category: 'shop', description: 'Ki charges +1, shurikens pierce 1 target.' },
+  { id: 'upg-12', name: 'Focused Mind',       cost: 350,   category: 'shop', description: 'Ki charges +1, shurikens pierce 2 targets.' },
+  { id: 'upg-13', name: 'Time Sense',         cost: 250,   category: 'shop', description: 'Adds blue glow to rooms on Area Map where time rifts exist.' },
+  { id: 'upg-14', name: 'Devil\'s Due',       cost: 100,   category: 'shop', description: 'Quarble sticks around for 30s instead of 60s. Must die once to unlock.' },
+  { id: 'upg-15', name: 'Strike of the Ninja', cost: 40,   category: 'shop', description: 'Empower attacks to destroy enemy projectiles. Can cloudstep off them.' },
+  { id: 'upg-16', name: 'Path of Resilience', cost: 1000,  category: 'shop', description: 'Incoming damage of 2 or more is reduced by 1 (defense upgrade).' },
+  { id: 'upg-17', name: 'Aerobatics Warrior', cost: 250,   category: 'shop', description: 'Wingsuit attack — attack downward while gliding. Requires Wingsuit.' },
+  { id: 'upg-18', name: 'Demon\'s Bane',      cost: 2000,  category: 'shop', description: 'Master patience and focus to passively charge your next attack for triple damage.' },
+  { id: 'upg-19', name: 'Energy Shuriken',    cost: 'seal', category: 'shop', description: 'Windmill Shuriken — unlock by collecting all 45 Power Seals.' },
 ];
 
 // Total power seals in main game
 export const TOTAL_POWER_SEALS_MAIN = 45;
-export const TOTAL_POWER_SEALS_DLC = 14;
+// Picnic Panic DLC has 14 collectibles (skulls/totems), NOT Power Seals —
+// tracked separately and not counted in the main-game 45-seal total.
+export const TOTAL_DLC_COLLECTIBLES = 14;

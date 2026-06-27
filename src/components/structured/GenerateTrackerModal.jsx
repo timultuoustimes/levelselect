@@ -157,7 +157,7 @@ export default function GenerateTrackerModal({ game, onSave, onClose }) {
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div
         className="fixed inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={result ? handleSave : onClose}
+        onClick={result ? () => setShowCloseWarning(true) : onClose}
       />
       <div
         className="flex min-h-full items-center justify-center px-4"

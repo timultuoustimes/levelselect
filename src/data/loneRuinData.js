@@ -61,10 +61,16 @@ export const STARTING_SPELLS = [
 
 // Additional spells that can be acquired during runs (not starting spells)
 export const RUN_SPELLS = [
-  { id: 'blizzard', name: 'Blizzard', icon: '❄️', description: 'Slows enemies in an area. Excellent boss tool.' },
-  { id: 'grenade', name: 'Grenade', icon: '💣', description: 'Lobbed explosive. Good area denial.' },
-  { id: 'nova', name: 'Nova', icon: '✨', description: 'Expanding ring of energy.' },
+  { id: 'blizzard',      name: 'Blizzard',      icon: '❄️', description: 'Slows enemies in an area. Excellent boss tool.' },
+  { id: 'grenade-toss', name: 'Grenade Toss',  icon: '💣', description: 'Lobbed explosive. Good area denial.' },
+  { id: 'nova',          name: 'Nova',          icon: '✨', description: 'Expanding ring of energy.' },
+  { id: 'black-hole',   name: 'Black Hole',    icon: '🌑', description: 'Pulls enemies toward a point. Strong crowd control.' },
+  { id: 'barrier',      name: 'Barrier',       icon: '🧊', description: 'Place a wall of ice at cursor. Blocks enemies and projectiles.' },
+  { id: 'berserk',      name: 'Berserk',       icon: '🔴', description: 'Refreshes all other cooldowns instantly on a timer. Speeds you up.' },
 ];
 
 export const DIFFICULTIES = ['Easy', 'Normal', 'Hard'];
 export const MODES = ['Campaign', 'Survival'];
+
+// NOTE: Campaign floor count — sources conflict between 21 floors (3 bosses, every 7th floor)
+// and 24 floors. Multiple reviews cite 21; leaving as a known discrepancy until confirmed in-game.
