@@ -201,21 +201,16 @@ function formatDuration(seconds) {
 }
 
 function getGamePlaytime(game) {
-  const save = game.saves?.[0];
-  if (!save) return 0;
-  // General tracker
-  if (typeof save.totalPlaytime === 'number') return save.totalPlaytime;
-  // Checklist tracker
-  if (typeof save.totalPlaytime === 'number') return save.totalPlaytime;
-  // Sessions array
-  if (Array.isArray(save.sessions)) {
-    return save.sessions.reduce((acc, s) => acc + (s.duration || 0), 0);
-  }
-  // Runs array
-  if (Array.isArray(save.runs)) {
-    return save.runs.reduce((acc, r) => acc + (r.duration || 0), 0);
-  }
-  return 0;
+  let total = 0;
+  (game.saves || []).forEach(save => {
+    if (typeof save.totalPlaytime === 'number') {
+      total += save.totalPlaytime;
+    } else {
+      total += (save.sessions || []).reduce((acc, s) => acc + (s.duration || 0), 0);
+      total += (save.runs || []).reduce((acc, r) => acc + (r.duration || 0), 0);
+    }
+  });
+  return total;
 }
 
 function getGameRating(game) {
@@ -235,27 +230,33 @@ function getLibraryStats(library) {
   let ratingSum = 0;
   const byPlatform = {};
   const byFranchise = {};
+  const byRating = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  const byYear = {};
+  const byTag = {};
 
   library.forEach(g => {
-    // Status
     byStatus[g.status] = (byStatus[g.status] || 0) + 1;
 
-    // Playtime
     totalPlaytime += getGamePlaytime(g);
 
-    // Rating
     const r = getGameRating(g);
-    if (r) { ratedCount++; ratingSum += r; }
+    if (r) { ratedCount++; ratingSum += r; byRating[r]++; }
 
-    // Platform
     (g.platforms || []).forEach(p => {
       byPlatform[p] = (byPlatform[p] || 0) + 1;
     });
 
-    // Franchise
     if (g.franchise) {
       byFranchise[g.franchise] = (byFranchise[g.franchise] || 0) + 1;
     }
+
+    // Years from play periods, falling back to legacy yearPlayed
+    const years = new Set();
+    (g.playPeriods || []).forEach(p => { if (p.startYear) years.add(p.startYear); });
+    if (!years.size && g.yearPlayed) years.add(g.yearPlayed);
+    years.forEach(y => { byYear[y] = (byYear[y] || 0) + 1; });
+
+    (g.userTags || []).forEach(t => { byTag[t] = (byTag[t] || 0) + 1; });
   });
 
   return {
@@ -266,6 +267,9 @@ function getLibraryStats(library) {
     ratedCount,
     byPlatform,
     byFranchise,
+    byRating,
+    byYear,
+    byTag,
     completionRate: total > 0 ? Math.round(((byStatus.completed || 0) / total) * 100) : 0,
   };
 }
@@ -512,15 +516,27 @@ function LibraryStats({ library }) {
   const maxPlatformCount = platformEntries[0]?.[1] || 1;
   const maxFranchiseCount = franchiseEntries[0]?.[1] || 1;
 
+  const yearEntries = Object.entries(stats.byYear).sort((a,b) => Number(a[0]) - Number(b[0]));
+  const maxYearCount = Math.max(...yearEntries.map(([,c]) => c), 1);
+
+  const tagEntries = Object.entries(stats.byTag).sort((a,b) => b[1]-a[1]).slice(0, 20);
+
+  const topByPlaytime = [...library]
+    .map(g => ({ game: g, playtime: getGamePlaytime(g) }))
+    .filter(x => x.playtime > 0)
+    .sort((a, b) => b.playtime - a.playtime)
+    .slice(0, 8);
+  const maxPlaytime = topByPlaytime[0]?.playtime || 1;
+
   return (
     <div className="space-y-4 pb-8">
       {/* Headline stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total Games', value: stats.total, color: 'text-white' },
-          { label: 'Completed', value: stats.byStatus.completed || 0, color: 'text-blue-400' },
-          { label: 'Playing', value: stats.byStatus.playing || 0, color: 'text-green-400' },
-          { label: 'Completion Rate', value: `${stats.completionRate}%`, color: 'text-purple-400' },
+          { label: 'Total Games',      value: stats.total,                        color: 'text-white'    },
+          { label: 'Completed',        value: stats.byStatus.completed || 0,      color: 'text-blue-400' },
+          { label: 'Playing',          value: stats.byStatus.playing || 0,        color: 'text-green-400'},
+          { label: 'Completion Rate',  value: `${stats.completionRate}%`,         color: 'text-purple-400'},
         ].map(s => (
           <div key={s.label} className="card p-4 text-center">
             <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
@@ -529,7 +545,7 @@ function LibraryStats({ library }) {
         ))}
       </div>
 
-      {/* Playtime + Rating */}
+      {/* Playtime + Rating quick glance */}
       <div className="grid grid-cols-2 gap-3">
         <div className="card p-4 text-center">
           <div className="text-2xl font-bold text-purple-300">{formatDuration(stats.totalPlaytime)}</div>
@@ -544,6 +560,40 @@ function LibraryStats({ library }) {
           </div>
         </div>
       </div>
+
+      {/* Most played */}
+      {topByPlaytime.length > 0 && (
+        <div className="card p-4">
+          <h3 className="text-sm font-medium mb-3">Most Played</h3>
+          <div className="space-y-2.5">
+            {topByPlaytime.map(({ game, playtime }, i) => {
+              const coverUrl = game.coverImageId ? igdbCoverUrl(game.coverImageId) : game.coverUrl || null;
+              return (
+                <div key={game.id} className="flex items-center gap-3">
+                  <span className="text-xs text-gray-600 w-4 text-right flex-shrink-0 font-mono">{i + 1}</span>
+                  <div className="w-7 h-9 rounded flex-shrink-0 overflow-hidden bg-purple-900/30">
+                    {coverUrl ? (
+                      <img src={coverUrl} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display='none'; }} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[8px]">🎮</div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-gray-200 truncate">{game.name}</div>
+                    <div className="mt-1 h-1.5 bg-black/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 rounded-full"
+                        style={{ width: `${(playtime / maxPlaytime) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-xs text-gray-400 flex-shrink-0 w-14 text-right tabular-nums">{formatDuration(playtime)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Status breakdown */}
       <div className="card p-4">
@@ -569,6 +619,52 @@ function LibraryStats({ library }) {
         </div>
       </div>
 
+      {/* Rating distribution */}
+      {stats.ratedCount > 0 && (
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium">Rating Distribution</h3>
+            <span className="text-xs text-gray-500">{stats.avgRating} avg · {stats.ratedCount} rated</span>
+          </div>
+          <div className="space-y-1.5">
+            {[5, 4, 3, 2, 1].map(star => {
+              const count = stats.byRating[star] || 0;
+              const pct = stats.ratedCount > 0 ? (count / stats.ratedCount) * 100 : 0;
+              return (
+                <div key={star} className="flex items-center gap-2.5">
+                  <span className="text-xs text-yellow-400 w-5 text-right flex-shrink-0">{star}★</span>
+                  <div className="flex-1 bg-black/40 rounded-full h-2">
+                    <div className="bg-yellow-500 h-2 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500 w-5 text-right">{count || ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Games by year */}
+      {yearEntries.length > 0 && (
+        <div className="card p-4">
+          <h3 className="text-sm font-medium mb-3">Games Played by Year</h3>
+          <div className="space-y-1.5">
+            {yearEntries.map(([year, count]) => (
+              <div key={year} className="flex items-center gap-3">
+                <span className="text-xs text-gray-400 w-10 flex-shrink-0 tabular-nums">{year}</span>
+                <div className="flex-1 bg-black/40 rounded-full h-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all"
+                    style={{ width: `${(count / maxYearCount) * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-400 w-6 text-right">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Platform breakdown */}
       {platformEntries.length > 0 && (
         <div className="card p-4">
@@ -578,10 +674,7 @@ function LibraryStats({ library }) {
               <div key={platform} className="flex items-center gap-3">
                 <span className="text-sm text-gray-300 w-28 flex-shrink-0 truncate">{platform}</span>
                 <div className="flex-1 bg-black/40 rounded-full h-2">
-                  <div
-                    className="bg-purple-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(count / maxPlatformCount) * 100}%` }}
-                  />
+                  <div className="bg-purple-600 h-2 rounded-full transition-all" style={{ width: `${(count / maxPlatformCount) * 100}%` }} />
                 </div>
                 <span className="text-sm text-gray-400 w-6 text-right">{count}</span>
               </div>
@@ -599,13 +692,25 @@ function LibraryStats({ library }) {
               <div key={franchise} className="flex items-center gap-3">
                 <span className="text-sm text-gray-300 flex-1 truncate">{franchise}</span>
                 <div className="w-24 bg-black/40 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(count / maxFranchiseCount) * 100}%` }}
-                  />
+                  <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${(count / maxFranchiseCount) * 100}%` }} />
                 </div>
                 <span className="text-sm text-gray-400 w-6 text-right">{count}</span>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top tags */}
+      {tagEntries.length > 0 && (
+        <div className="card p-4">
+          <h3 className="text-sm font-medium mb-3">Top Tags</h3>
+          <div className="flex flex-wrap gap-2">
+            {tagEntries.map(([tag, count]) => (
+              <span key={tag} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-purple-900/30 border border-purple-500/20 text-purple-300">
+                #{tag}
+                <span className="text-gray-500 text-[10px]">{count}</span>
+              </span>
             ))}
           </div>
         </div>
