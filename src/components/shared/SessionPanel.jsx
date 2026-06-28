@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Square, Clock, ChevronDown, Check, Plus } from 'lucide-react';
+import { Play, Square, Clock, ChevronDown, Check, Plus, Trash2, Pencil } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,6 +47,12 @@ function formatDurationShort(seconds) {
 }
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
 
 // ─── Status Picker ────────────────────────────────────────────────────────────
 
@@ -107,7 +113,7 @@ function StatusPicker({ status, onChange }) {
  *   onSessionStart  — ({ id, startTime }) => void — called immediately on Start so parent can persist activeSession
  *   onAddSession    — ({ id, startTime, endTime, duration }) => void — called on Stop to complete the session
  */
-export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, onSessionStart, onAddSession }) {
+export default function SessionPanel({ game, totalPlaytime = 0, sessions = [], onUpdateGame, onSessionStart, onAddSession, onDeleteSession, onUpdateSession }) {
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionDisplay, setSessionDisplay] = useState(0);
   const [notesOpen, setNotesOpen] = useState(false);
@@ -117,10 +123,15 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
   const [logMinutes, setLogMinutes] = useState('');
   const [logNote, setLogNote] = useState('');
   const [logDate, setLogDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editHours, setEditHours] = useState('');
+  const [editMinutes, setEditMinutes] = useState('');
   const sessionStartRef = useRef(null);
   const sessionIdRef = useRef(null);
   const intervalRef = useRef(null);
   const logRef = useRef(null);
+  const historyRef = useRef(null);
 
   // Close log form when clicking outside
   useEffect(() => {
@@ -131,6 +142,19 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [logOpen]);
+
+  // Close history when clicking outside
+  useEffect(() => {
+    if (!historyOpen) return;
+    const handler = (e) => {
+      if (historyRef.current && !historyRef.current.contains(e.target)) {
+        setHistoryOpen(false);
+        setEditingId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [historyOpen]);
 
   // Timestamp-based timer — accurate even when app is backgrounded
   useEffect(() => {
@@ -157,6 +181,24 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
   }, [sessionActive]);
+
+  const startEditSession = (session) => {
+    setEditingId(session.id);
+    const h = Math.floor(session.duration / 3600);
+    const m = Math.floor((session.duration % 3600) / 60);
+    setEditHours(h > 0 ? String(h) : '');
+    setEditMinutes(m > 0 ? String(m) : '');
+  };
+
+  const saveEditSession = (session) => {
+    const h = parseInt(editHours, 10) || 0;
+    const m = parseInt(editMinutes, 10) || 0;
+    const duration = h * 3600 + m * 60;
+    if (duration > 0 && onUpdateSession) {
+      onUpdateSession({ ...session, duration });
+    }
+    setEditingId(null);
+  };
 
   const startSession = () => {
     const id = generateId();
@@ -312,10 +354,80 @@ export default function SessionPanel({ game, totalPlaytime = 0, onUpdateGame, on
         {/* Separator */}
         <div className="w-px h-4 bg-white/10 hidden sm:block" />
 
-        {/* Total playtime */}
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+        {/* Total playtime + session history */}
+        <div ref={historyRef} className="relative flex items-center gap-1.5 text-xs text-gray-400">
           <Clock className="w-3.5 h-3.5" />
           <span>Total: <span className="text-gray-200 font-medium">{formatDuration(totalPlaytime + (sessionActive ? sessionDisplay : 0))}</span></span>
+          {sessions.length > 0 && (
+            <button
+              onClick={() => { setHistoryOpen(o => !o); setEditingId(null); }}
+              className="text-gray-600 hover:text-gray-300 underline underline-offset-2 transition-colors"
+            >
+              {sessions.length} session{sessions.length !== 1 ? 's' : ''}
+            </button>
+          )}
+          {historyOpen && (
+            <div className="absolute left-0 top-full mt-1 z-30 bg-slate-800 border border-white/10 rounded-xl shadow-2xl w-72 max-h-72 overflow-y-auto">
+              <div className="px-3 py-2 border-b border-white/10 text-xs text-gray-400 font-medium">Session History</div>
+              {[...sessions].reverse().map(session => (
+                <div key={session.id} className="px-3 py-2 border-b border-white/5 last:border-0">
+                  {editingId === session.id ? (
+                    <div className="space-y-1.5">
+                      <div className="text-xs text-gray-500">{formatDate(session.startTime)}</div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number" min="0" placeholder="0" value={editHours}
+                          onChange={e => setEditHours(e.target.value)}
+                          className="w-14 bg-black/40 border border-white/10 rounded px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-purple-500/50 text-center"
+                        />
+                        <span className="text-xs text-gray-500">h</span>
+                        <input
+                          type="number" min="0" max="59" placeholder="0" value={editMinutes}
+                          onChange={e => setEditMinutes(e.target.value)}
+                          className="w-14 bg-black/40 border border-white/10 rounded px-1.5 py-1 text-xs text-gray-200 focus:outline-none focus:border-purple-500/50 text-center"
+                        />
+                        <span className="text-xs text-gray-500">m</span>
+                        <button
+                          onClick={() => saveEditSession(session)}
+                          disabled={!editHours && !editMinutes}
+                          className="ml-auto px-2 py-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 rounded text-xs transition-colors"
+                        >Save</button>
+                        <button
+                          onClick={() => setEditingId(null)}
+                          className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
+                        >✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-gray-300 font-medium">{formatDuration(session.duration)}</div>
+                        <div className="text-[11px] text-gray-600">{formatDate(session.startTime)}{session.notes ? ` · ${session.notes}` : ''}</div>
+                      </div>
+                      {onUpdateSession && (
+                        <button
+                          onClick={() => startEditSession(session)}
+                          className="p-1 text-gray-600 hover:text-gray-300 transition-colors"
+                          title="Edit duration"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      )}
+                      {onDeleteSession && (
+                        <button
+                          onClick={() => onDeleteSession(session.id)}
+                          className="p-1 text-gray-600 hover:text-red-400 transition-colors"
+                          title="Delete session"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Separator */}
