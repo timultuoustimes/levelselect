@@ -206,6 +206,7 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
           (currentSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0)
         }
         onUpdateGame={onUpdateGame}
+        sessions={currentSave?.sessions || []}
         onSessionStart={({ id, startTime }) => updateSave(s => ({
           ...s,
           activeSession: { id, startTime, endTime: null, duration: 0 },
@@ -216,6 +217,14 @@ export default function LoneRuinTracker({ game, onBack, onUpdateGame }) {
           sessions: [...(s.sessions || []), session],
           activeSession: null,
           lastPlayedAt: session.endTime,
+        }))}
+        onDeleteSession={(id) => updateSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).filter(sess => sess.id !== id),
+        }))}
+        onUpdateSession={(updated) => updateSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).map(sess => sess.id === updated.id ? updated : sess),
         }))}
       />
 

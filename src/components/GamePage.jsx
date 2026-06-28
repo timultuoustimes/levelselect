@@ -408,6 +408,33 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesDraft, setNotesDraft] = useState('');
 
+  // Log session
+  const [showLogSession, setShowLogSession] = useState(false);
+  const [logHours, setLogHours] = useState('');
+  const [logMinutes, setLogMinutes] = useState('');
+
+  const handleLogSession = () => {
+    const h = parseInt(logHours, 10) || 0;
+    const m = parseInt(logMinutes, 10) || 0;
+    const duration = h * 3600 + m * 60;
+    if (duration <= 0) { setShowLogSession(false); return; }
+    const now = new Date().toISOString();
+    const session = { id: generateId(), startTime: now, endTime: now, duration };
+    const saves = game.saves || [];
+    let updatedSaves;
+    if (saves.length > 0) {
+      updatedSaves = saves.map((s, i) =>
+        i === 0 ? { ...s, sessions: [...(s.sessions || []), session] } : s
+      );
+    } else {
+      updatedSaves = [{ id: generateId(), sessions: [session], runs: [] }];
+    }
+    onUpdateGame({ ...game, saves: updatedSaves });
+    setLogHours('');
+    setLogMinutes('');
+    setShowLogSession(false);
+  };
+
   // Play history
   const [playPeriods, setPlayPeriods] = useState(() => migratePlayPeriods(game));
   const [editingPeriodId, setEditingPeriodId] = useState(null);
@@ -782,9 +809,16 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
 
         {/* Play stats */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="card p-4 text-center">
+          <div className="card p-4 text-center relative group">
             <div className="text-2xl font-bold text-purple-300">{formatDuration(totalPlaytime)}</div>
             <div className="text-xs text-gray-500 mt-1">Time Played</div>
+            <button
+              onClick={() => setShowLogSession(v => !v)}
+              className="absolute top-1.5 right-1.5 p-1 rounded text-gray-700 hover:text-purple-400 hover:bg-white/5 transition-colors opacity-0 group-hover:opacity-100"
+              title="Log play time"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
           </div>
           <div className="card p-4 text-center">
             <div className="text-2xl font-bold text-blue-300">{(game.saves || []).length}</div>
@@ -811,6 +845,50 @@ export default function GamePage({ game, library, deviceId, navSource = 'library
             )}
           </div>
         </div>
+
+        {/* Log session inline form */}
+        {showLogSession && (
+          <div className="card p-3 flex items-center gap-2 flex-wrap">
+            <Clock className="w-4 h-4 text-purple-400 shrink-0" />
+            <span className="text-sm text-gray-400 shrink-0">Log time:</span>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min="0"
+                placeholder="0"
+                value={logHours}
+                onChange={e => setLogHours(e.target.value)}
+                className="input-field !py-1 !px-2 text-sm w-16 text-center"
+              />
+              <span className="text-xs text-gray-500">h</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min="0"
+                max="59"
+                placeholder="0"
+                value={logMinutes}
+                onChange={e => setLogMinutes(e.target.value)}
+                className="input-field !py-1 !px-2 text-sm w-16 text-center"
+              />
+              <span className="text-xs text-gray-500">m</span>
+            </div>
+            <button
+              onClick={handleLogSession}
+              disabled={!logHours && !logMinutes}
+              className="btn-primary !px-3 !py-1.5 !min-h-0 text-sm disabled:opacity-50"
+            >
+              Save
+            </button>
+            <button
+              onClick={() => { setShowLogSession(false); setLogHours(''); setLogMinutes(''); }}
+              className="text-gray-600 hover:text-gray-400 p-1"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Open tracker / save selector */}
         <div className="card p-4">

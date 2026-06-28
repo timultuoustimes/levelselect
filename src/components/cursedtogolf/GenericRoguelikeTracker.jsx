@@ -358,6 +358,7 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
       <SessionPanel
         game={game}
         totalPlaytime={(currentSave?.runs || []).reduce((sum, r) => sum + (r.duration || 0), 0)}
+        sessions={currentSave?.sessions || []}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -369,6 +370,14 @@ export default function GenericRoguelikeTracker({ game, config, onBack, onUpdate
           sessions: [...(s.sessions || []), session],
           activeSession: null,
           lastPlayedAt: session.endTime,
+        }))}
+        onDeleteSession={(id) => updateCurrentSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).filter(sess => sess.id !== id),
+        }))}
+        onUpdateSession={(updated) => updateCurrentSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).map(sess => sess.id === updated.id ? updated : sess),
         }))}
       />
 

@@ -453,6 +453,7 @@ export default function DeadCellsTracker({ game, onBack, onUpdateGame }) {
       <SessionPanel
         game={game}
         totalPlaytime={migratedSave?.totalPlaytime || 0}
+        sessions={migratedSave?.sessions || []}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -466,6 +467,22 @@ export default function DeadCellsTracker({ game, onBack, onUpdateGame }) {
           activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
+        onDeleteSession={(id) => updateCurrentSave(s => {
+          const removed = (s.sessions || []).find(sess => sess.id === id);
+          return {
+            ...s,
+            sessions: (s.sessions || []).filter(sess => sess.id !== id),
+            totalPlaytime: Math.max(0, (s.totalPlaytime || 0) - (removed?.duration || 0)),
+          };
+        })}
+        onUpdateSession={(updated) => updateCurrentSave(s => {
+          const old = (s.sessions || []).find(sess => sess.id === updated.id);
+          return {
+            ...s,
+            sessions: (s.sessions || []).map(sess => sess.id === updated.id ? updated : sess),
+            totalPlaytime: Math.max(0, (s.totalPlaytime || 0) - (old?.duration || 0) + updated.duration),
+          };
+        })}
       />
 
       <div className="max-w-2xl mx-auto px-4 py-4 space-y-4">

@@ -218,6 +218,7 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
       <SessionPanel
         game={game}
         totalPlaytime={totalPlaytime}
+        sessions={currentSave?.sessions || []}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateSave(s => ({
           ...s,
@@ -229,6 +230,14 @@ export default function HadesTracker({ game, onBack, onUpdateGame }) {
           sessions: [...(s.sessions || []), session],
           activeSession: null,
           lastPlayedAt: session.endTime,
+        }))}
+        onDeleteSession={(id) => updateSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).filter(sess => sess.id !== id),
+        }))}
+        onUpdateSession={(updated) => updateSave(s => ({
+          ...s,
+          sessions: (s.sessions || []).map(sess => sess.id === updated.id ? updated : sess),
         }))}
       />
 
