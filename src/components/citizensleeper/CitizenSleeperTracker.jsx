@@ -263,11 +263,7 @@ function EndingsTab({ save, onUpdateSave }) {
                   <Star className="w-3 h-3" /> {ending.achievement}
                 </div>
               )}
-              {ending.exclusive && (
-                <div className="text-xs text-orange-300/70 mt-1 flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3" /> Exclusive — locks out other endings
-                </div>
-              )}
+
             </div>
           </div>
         </button>
@@ -423,7 +419,7 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
       {/* Session Panel */}
       <SessionPanel
         game={game}
-        totalPlaytime={(migratedSave?.sessions || []).reduce((sum, s) => sum + (s.duration || 0), 0)}
+        totalPlaytime={migratedSave?.totalPlaytime || 0}
         onUpdateGame={onUpdateGame}
         onSessionStart={({ id, startTime }) => updateCurrentSave(s => ({
           ...s,
@@ -433,6 +429,7 @@ export default function CitizenSleeperTracker({ game, onBack, onUpdateGame }) {
         onAddSession={(session) => updateCurrentSave(s => ({
           ...s,
           sessions: [...(s.sessions || []), session],
+          totalPlaytime: (s.totalPlaytime || 0) + session.duration,
           activeSession: null,
           lastPlayedAt: session.endTime,
         }))}
