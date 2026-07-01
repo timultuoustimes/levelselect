@@ -1,3 +1,17 @@
 node_modules/
 dist/
 .DS_Store
+
+# --- native conversion: local-only working artifacts (repo is PUBLIC) ---
+# Personal library exports (game names, notes, ratings, reviews) — never commit
+native/fixtures/*.json
+# Third-party app announcement screenshots (design reference only) — do not redistribute
+native/design-references/
+
+# --- native (Xcode / xcodegen) ---
+# .xcodeproj is generated from project.yml by xcodegen — do not commit
+native/LevelSelect/*.xcodeproj
+native/LevelSelect/DerivedData/
+native/**/.build/
+*.xcuserstate
+xcuserdata/
