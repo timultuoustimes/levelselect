@@ -30,3 +30,26 @@ targets:
       - path: LevelSelect
         excludes:
           - "**/.DS_Store"
+
+  LevelSelectTests:
+    type: bundle.unit-test
+    supportedDestinations: [macOS]
+    sources:
+      - path: Tests
+    dependencies:
+      - target: LevelSelect
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/LevelSelect.app/Contents/MacOS/LevelSelect"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  LevelSelect:
+    build:
+      targets:
+        LevelSelect: all
+        LevelSelectTests: [test]
+    test:
+      targets:
+        - LevelSelectTests

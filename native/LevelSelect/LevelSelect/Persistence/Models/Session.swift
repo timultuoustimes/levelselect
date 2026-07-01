@@ -16,19 +16,20 @@ final class Session {
 
     var startDate: Date
     var endDate: Date?
-    var accumulatedDuration: TimeInterval   // completed segments before current run
-    var pausedAt: Date?
+    var accumulatedDuration: TimeInterval   // completed segments before the current running segment
+    var resumedAt: Date?                     // anchor the current running segment counts from (nil ⇒ startDate)
+    var pausedAt: Date?                       // when it was last paused (display only)
     var state: SessionState
     var isManual: Bool
     var notes: String?
 
     var playthrough: Playthrough?
 
-    /// Elapsed time up to `asOf` (default now). Stopped sessions use accumulated only.
+    /// Elapsed time up to `asOf` (default now). Stopped/paused sessions use accumulated only.
     func elapsed(asOf now: Date = .now) -> TimeInterval {
         switch state {
         case .running:
-            return accumulatedDuration + now.timeIntervalSince(pausedAt ?? startDate)
+            return accumulatedDuration + now.timeIntervalSince(resumedAt ?? startDate)
         case .paused, .stopped:
             return accumulatedDuration
         }
@@ -50,6 +51,7 @@ final class Session {
         self.startDate = startDate
         self.endDate = nil
         self.accumulatedDuration = 0
+        self.resumedAt = nil
         self.pausedAt = nil
         self.state = state
         self.isManual = isManual

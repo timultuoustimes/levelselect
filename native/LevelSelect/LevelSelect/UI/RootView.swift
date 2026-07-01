@@ -6,7 +6,8 @@ import SwiftData
 /// come in Phase 1.6.
 struct RootView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Game.name) private var games: [Game]
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
+    private var games: [Game]
 
     var body: some View {
         NavigationSplitView {
@@ -32,7 +33,7 @@ struct RootView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add sample", systemImage: "plus") {
-                        context.insert(Game(name: "Sample Game", status: .playing))
+                        Repository(context).addGame(name: "Sample Game", status: .playing)
                     }
                 }
             }
