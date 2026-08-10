@@ -1,171 +1,177 @@
 import SwiftUI
 import SwiftData
 
-/// The library. NavigationSplitView on iPad/Mac, collapses to a stack on iPhone.
-/// Continue Playing card + status-grouped sections + search + status filter.
+/// Home: Continue Playing hero + horizontal cover carousels per status,
+/// on the purple-gradient dark theme (web-app parity). Searching switches to
+/// a results list.
 struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
 
-    @State private var selectionID: UUID?
     @State private var searchText = ""
-    @State private var statusFilter: GameStatus?
     @State private var showingAdd = false
     @State private var showingSettings = false
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationTitle("LevelSelect")
-                .searchable(text: $searchText, prompt: "Search games")
-                .toolbar { toolbarContent }
-        } detail: {
-            if let id = selectionID, let game = games.first(where: { $0.id == id }) {
-                NavigationStack { GameDetailView(game: game) }
-            } else {
-                ContentUnavailableView("Select a game", systemImage: "gamecontroller")
+        NavigationStack(path: $path) {
+            Group {
+                if games.isEmpty {
+                    emptyState
+                } else if searching {
+                    searchResults
+                } else {
+                    home
+                }
             }
+            .lsBackground()
+            .navigationTitle("LevelSelect")
+            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
+            .searchable(text: $searchText, prompt: "Search games")
+            .toolbar { toolbarContent }
         }
+        .tint(LSTheme.purple)
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
-    // MARK: Sidebar
+    // MARK: Home
 
-    @ViewBuilder
-    private var sidebar: some View {
-        if games.isEmpty {
-            ContentUnavailableView {
-                Label("Your library is empty", systemImage: "gamecontroller")
-            } description: {
-                Text("Add a game to get started.")
-            } actions: {
-                Button("Add Game") { showingAdd = true }
-                    .buttonStyle(.borderedProminent)
-            }
-        } else {
-            List(selection: $selectionID) {
-                if showContinue, let cp = continueGame {
-                    Section("Continue Playing") {
-                        ContinueRow(game: cp).tag(cp.id)
+    private var home: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 26) {
+                if let cp = continueGame {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("CONTINUE PLAYING")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .kerning(1)
+                        NavigationLink(value: cp) {
+                            ContinueHeroCard(game: cp) { play(cp) }
+                        }
+                        .buttonStyle(.plain)
                     }
+                    .padding(.horizontal)
                 }
+
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty {
-                        Section("\(status.sectionTitle) (\(items.count))") {
-                            ForEach(items) { game in
-                                GameRow(game: game).tag(game.id)
-                            }
+                        StatusCarousel(status: status, games: items) {
+                            path.append(status)
                         }
                     }
                 }
             }
-            .overlay {
-                if visible.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                }
+            .padding(.vertical)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    private var searchResults: some View {
+        List {
+            ForEach(visible) { game in
+                NavigationLink(value: game) { GameRow(game: game) }
+                    .listRowBackground(Color.clear)
             }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .overlay {
+            if visible.isEmpty { ContentUnavailableView.search(text: searchText) }
+        }
+    }
+
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("Your library is empty", systemImage: "gamecontroller")
+        } description: {
+            Text("Add a game or import your library from Settings.")
+        } actions: {
+            Button("Add Game") { showingAdd = true }
+                .buttonStyle(.borderedProminent)
         }
     }
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItem {
-            Menu {
-                Picker("Status", selection: $statusFilter) {
-                    Text("All").tag(GameStatus?.none)
-                    ForEach(GameStatus.displayOrder, id: \.self) { s in
-                        Text(s.sectionTitle).tag(GameStatus?.some(s))
-                    }
-                }
-            } label: {
-                Label("Filter", systemImage: statusFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-            }
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                showingAdd = true
-            } label: {
-                Label("Add Game", systemImage: "plus")
-            }
-        }
-        ToolbarItem {
-            Button {
-                showingSettings = true
-            } label: {
+            Button { showingSettings = true } label: {
                 Label("Settings", systemImage: "gearshape")
             }
         }
-    }
-
-    // MARK: Derived data
-
-    private var showContinue: Bool { searchText.isEmpty && statusFilter == nil }
-
-    private var visible: [Game] {
-        games.filter { g in
-            (statusFilter == nil || g.status == statusFilter)
-                && (searchText.isEmpty || g.name.localizedCaseInsensitiveContains(searchText))
+        ToolbarItem(placement: .primaryAction) {
+            Button { showingAdd = true } label: {
+                Label("Add Game", systemImage: "plus")
+            }
         }
     }
 
+    // MARK: Derived
+
+    private var searching: Bool { !searchText.isEmpty }
+
+    private var visible: [Game] {
+        games.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
+
     private var grouped: [GameStatus: [Game]] {
-        Dictionary(grouping: visible, by: \.status)
+        Dictionary(grouping: games, by: \.status)
+            .mapValues { $0.sorted { sortKey($0) > sortKey($1) } }
     }
 
     private var continueGame: Game? {
         games
             .filter { $0.status == .playing || $0.status == .paused }
-            .max { lastActivity($0) < lastActivity($1) }
+            .max { sortKey($0) < sortKey($1) }
     }
 
-    private func lastActivity(_ g: Game) -> Date {
-        (g.playthroughs ?? []).compactMap(\.lastPlayedAt).max() ?? g.addedAt
+    /// Pinned first, then most recent activity.
+    private func sortKey(_ g: Game) -> (Bool, Date) {
+        (g.pinned, (g.playthroughs ?? []).compactMap(\.lastPlayedAt).max() ?? g.addedAt)
+    }
+
+    private func play(_ game: Game) {
+        let repo = Repository(context)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        if pt.activeSession == nil {
+            repo.startSession(on: pt)
+        }
+        // Stay on Home; the hero card flips to "Session in progress".
     }
 }
 
-/// Richer "Continue Playing" row: cover, name, status, and last-session hint.
-private struct ContinueRow: View {
-    let game: Game
+/// "See all" for one status: vertical rows.
+struct StatusListView: View {
+    let status: GameStatus
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
+    private var allGames: [Game]
 
-    private var playthrough: Playthrough? {
-        (game.playthroughs ?? []).first { $0.deletedAt == nil }
-    }
+    private var games: [Game] { allGames.filter { $0.status == status } }
 
     var body: some View {
-        HStack(spacing: 12) {
-            CoverThumb(urlString: game.coverURLString)
-                .frame(width: 56, height: 74)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(game.name).font(.headline).lineLimit(1)
-
-                if let active = playthrough?.activeSession {
-                    Label(active.state == .running ? "In progress" : "Paused",
-                          systemImage: active.state == .running ? "record.circle" : "pause.circle")
-                        .font(.caption)
-                        .foregroundStyle(active.state == .running ? .green : .orange)
-                } else if let last = playthrough?.lastPlayedAt {
-                    Text("Last played \(last, format: .relative(presentation: .named))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                let total = playthrough?.totalPlaytime() ?? 0
-                if total > 0 {
-                    Text(Format.duration(total) + " played")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+        List {
+            ForEach(games) { game in
+                NavigationLink(value: game) { GameRow(game: game) }
+                    .listRowBackground(Color.clear)
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 4)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .lsBackground()
+        .navigationTitle(status.sectionTitle)
     }
 }
+
+// Tuple comparison helper for (Bool, Date) sort keys: pinned wins, then date.
+private func > (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool {
+    if lhs.0 != rhs.0 { return lhs.0 }
+    return lhs.1 > rhs.1
+}
+private func < (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool { rhs > lhs }
 
 #Preview {
     RootView()
