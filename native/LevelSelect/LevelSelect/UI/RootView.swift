@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var searchText = ""
     @State private var statusFilter: GameStatus?
     @State private var showingAdd = false
+    @State private var showingSettings = false
 
     var body: some View {
         NavigationSplitView {
@@ -27,6 +28,7 @@ struct RootView: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
+        .sheet(isPresented: $showingSettings) { SettingsView() }
     }
 
     // MARK: Sidebar
@@ -87,6 +89,13 @@ struct RootView: View {
                 showingAdd = true
             } label: {
                 Label("Add Game", systemImage: "plus")
+            }
+        }
+        ToolbarItem {
+            Button {
+                showingSettings = true
+            } label: {
+                Label("Settings", systemImage: "gearshape")
             }
         }
     }

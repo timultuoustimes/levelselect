@@ -39,6 +39,8 @@ targets:
       - path: LevelSelect
         excludes:
           - "**/.DS_Store"
+      # legacy-import.json under Resources/ is auto-routed to the resources
+      # build phase by xcodegen (non-code file type).
 
   LevelSelectTests:
     type: bundle.unit-test
