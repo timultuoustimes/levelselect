@@ -1,26 +1,25 @@
 import Foundation
 import SwiftData
 
-/// Immutable tracker definition (legacy `structuredData`). Stored as versioned
-/// JSON; decoded into typed Codable DTOs before display. Separate from progress.
+/// Immutable tracker definition (legacy `structuredData`). CloudKit-compatible.
+/// Stored as versioned JSON; decoded into typed Codable DTOs before display.
 @Model
 final class TrackerSchemaRecord {
-    // Sync metadata
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var userID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var revision: Int
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
     var deletedAt: Date?
     var legacyID: String?
 
-    var schemaVersion: Int
-    var source: TrackerSource
-    var engine: TrackerEngine
+    var schemaVersion: Int = 1
+    var source: TrackerSource = TrackerSource.builtIn
+    var engine: TrackerEngine = TrackerEngine.objective
     var generatedAt: Date?
     var generatedBy: String?
-    var jsonData: Data          // encoded schema tree (sections→items and/or runTemplate)
-    var sourcesJSON: Data?      // reference URLs/notes
+    var jsonData: Data = Data()      // encoded schema tree (sections→items and/or runTemplate)
+    var sourcesJSON: Data?           // reference URLs/notes
 
     var game: Game?
 
@@ -32,18 +31,11 @@ final class TrackerSchemaRecord {
         jsonData: Data = Data()
     ) {
         self.id = id
-        self.userID = nil
         self.createdAt = .now
         self.updatedAt = .now
-        self.revision = 0
-        self.deletedAt = nil
-        self.legacyID = nil
         self.schemaVersion = schemaVersion
         self.source = source
         self.engine = engine
-        self.generatedAt = nil
-        self.generatedBy = nil
         self.jsonData = jsonData
-        self.sourcesJSON = nil
     }
 }

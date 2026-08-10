@@ -1,19 +1,20 @@
 import Foundation
 import SwiftData
 
-/// The signed-in user (one row locally). `id` = Supabase auth.uid().
+/// The signed-in user. With CloudKit the account is implicit (iCloud), so this
+/// is mostly a convenience record. CloudKit-compatible.
 @Model
 final class Profile {
-    @Attribute(.unique) var id: UUID
-    var appleUserIdentifier: String
+    var id: UUID = UUID()
+    var appleUserIdentifier: String = ""
     var email: String?
     var displayName: String?
-    var createdAt: Date
-    var updatedAt: Date
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
 
     init(
         id: UUID = UUID(),
-        appleUserIdentifier: String,
+        appleUserIdentifier: String = "",
         email: String? = nil,
         displayName: String? = nil
     ) {
@@ -21,7 +22,5 @@ final class Profile {
         self.appleUserIdentifier = appleUserIdentifier
         self.email = email
         self.displayName = displayName
-        self.createdAt = .now
-        self.updatedAt = .now
     }
 }

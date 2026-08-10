@@ -1,26 +1,25 @@
 import Foundation
 import SwiftData
 
-/// A play session (legacy `saves[].sessions[]`).
+/// A play session (legacy `saves[].sessions[]`). CloudKit-compatible.
 /// Duration is DERIVED from timestamps — never stored as a ticking value.
 @Model
 final class Session {
-    // Sync metadata
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var userID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var revision: Int
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
     var deletedAt: Date?
     var legacyID: String?
 
-    var startDate: Date
+    var startDate: Date = Date.now
     var endDate: Date?
-    var accumulatedDuration: TimeInterval   // completed segments before the current running segment
-    var resumedAt: Date?                     // anchor the current running segment counts from (nil ⇒ startDate)
-    var pausedAt: Date?                       // when it was last paused (display only)
-    var state: SessionState
-    var isManual: Bool
+    var accumulatedDuration: TimeInterval = 0   // completed segments before the current running segment
+    var resumedAt: Date?                          // anchor the current running segment counts from (nil ⇒ startDate)
+    var pausedAt: Date?                           // when it was last paused (display only)
+    var state: SessionState = SessionState.stopped
+    var isManual: Bool = false
     var notes: String?
 
     var playthrough: Playthrough?
@@ -42,19 +41,10 @@ final class Session {
         isManual: Bool = false
     ) {
         self.id = id
-        self.userID = nil
         self.createdAt = .now
         self.updatedAt = .now
-        self.revision = 0
-        self.deletedAt = nil
-        self.legacyID = nil
         self.startDate = startDate
-        self.endDate = nil
-        self.accumulatedDuration = 0
-        self.resumedAt = nil
-        self.pausedAt = nil
         self.state = state
         self.isManual = isManual
-        self.notes = nil
     }
 }

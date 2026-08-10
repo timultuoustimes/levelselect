@@ -26,6 +26,9 @@ targets:
   LevelSelect:
     type: application
     supportedDestinations: [iOS, iPadOS, macOS]
+    # CloudKit entitlements are ready to enable (see README "Enabling CloudKit").
+    # Left off until the bundle id is finalized and the App ID / iCloud container
+    # are registered — adding them requires a provisioning profile + Apple account.
     sources:
       - path: LevelSelect
         excludes:

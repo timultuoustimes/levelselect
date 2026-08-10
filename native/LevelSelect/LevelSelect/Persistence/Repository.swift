@@ -1,24 +1,19 @@
 import Foundation
 import SwiftData
 
-/// The mutation layer over SwiftData. Every write bumps sync metadata and
-/// enqueues an outbox op, so the (future) sync engine has a complete change
-/// log. Views read via `@Query`; all writes go through here.
+/// The mutation layer over SwiftData. Every write bumps sync metadata
+/// (`updatedAt`/`revision`) for UI + ordering. Cross-device sync is handled by
+/// CloudKit automatically — there is no outbox to maintain. Views read via
+/// `@Query`; all writes go through here.
 @MainActor
 struct Repository {
     let context: ModelContext
 
     init(_ context: ModelContext) { self.context = context }
 
-    // MARK: Sync bookkeeping
-
     private func touch<T: Syncable>(_ model: T, at date: Date = .now) {
         model.updatedAt = date
         model.revision += 1
-    }
-
-    private func enqueue(_ entityType: String, _ id: UUID, _ op: SyncOpType) {
-        context.insert(SyncOperation(entityType: entityType, entityID: id, opType: op))
     }
 
     // MARK: Games
@@ -27,15 +22,14 @@ struct Repository {
     func addGame(name: String, status: GameStatus = .backlog) -> Game {
         let game = Game(name: name, status: status)
         context.insert(game)
-        enqueue("Game", game.id, .upsert)
         return game
     }
 
-    /// Soft delete — sets a tombstone so the deletion can propagate.
+    /// Soft delete — sets a tombstone so trash/undo is possible and the deletion
+    /// propagates via CloudKit.
     func softDelete(_ game: Game, at date: Date = .now) {
         game.deletedAt = date
         touch(game, at: date)
-        enqueue("Game", game.id, .delete)
     }
 
     // MARK: Playthroughs
@@ -51,11 +45,10 @@ struct Repository {
         game.playthroughs.append(pt)   // sets inverse
         game.currentPlaythroughID = pt.id
         touch(game)
-        enqueue("Playthrough", pt.id, .upsert)
         return pt
     }
 
-    // MARK: Sessions (timer is derived from timestamps — no ticking writes)
+    // MARK: Sessions (timer derived from timestamps — no ticking writes)
 
     @discardableResult
     func startSession(on pt: Playthrough, at date: Date = .now) -> Session {
@@ -65,7 +58,6 @@ struct Repository {
         pt.sessions.append(session)
         pt.lastPlayedAt = date
         touch(pt, at: date)
-        enqueue("Session", session.id, .upsert)
         return session
     }
 
@@ -76,7 +68,6 @@ struct Repository {
         session.resumedAt = nil
         session.state = .paused
         touch(session, at: date)
-        enqueue("Session", session.id, .upsert)
     }
 
     func resumeSession(_ session: Session, at date: Date = .now) {
@@ -85,7 +76,6 @@ struct Repository {
         session.pausedAt = nil
         session.state = .running
         touch(session, at: date)
-        enqueue("Session", session.id, .upsert)
     }
 
     func stopSession(_ session: Session, at date: Date = .now) {
@@ -100,7 +90,6 @@ struct Repository {
             pt.lastPlayedAt = date
             touch(pt, at: date)
         }
-        enqueue("Session", session.id, .upsert)
     }
 
     /// Hand-logged session (already-known duration, no live timer).
@@ -119,7 +108,6 @@ struct Repository {
         pt.sessions.append(session)
         pt.lastPlayedAt = date
         touch(pt, at: date)
-        enqueue("Session", session.id, .upsert)
         return session
     }
 
@@ -138,7 +126,6 @@ struct Repository {
             game.status = .completed
         }
         touch(game, at: date)
-        enqueue("CompletionEvent", event.id, .upsert)
         return event
     }
 }
@@ -146,7 +133,7 @@ struct Repository {
 // MARK: - Derived helpers
 
 extension Playthrough {
-    /// Total time across all sessions (accumulated; active session counted live via `asOf`).
+    /// Total time across all sessions (active session counted live via `asOf`).
     func totalPlaytime(asOf now: Date = .now) -> TimeInterval {
         sessions.reduce(0) { $0 + $1.elapsed(asOf: now) }
     }

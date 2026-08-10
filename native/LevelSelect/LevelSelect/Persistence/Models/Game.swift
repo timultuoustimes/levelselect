@@ -1,25 +1,24 @@
 import Foundation
 import SwiftData
 
-/// A game in the library. Maps from a legacy `library[]` element.
-/// Cut legacy fields (NOT ported): complexity, coverColor, yearPlayed,
-/// root currentSaveId, the always-empty `games` map, per-save duplicate
-/// rating/review (consolidated here), playPeriods.
+/// A game in the library (legacy `library[]`).
+/// CloudKit-compatible: no unique constraints, every property optional or
+/// inline-defaulted, relationships optional/defaulted.
 @Model
 final class Game {
     // Sync metadata
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var userID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var revision: Int
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
     var deletedAt: Date?
     var legacyID: String?
 
     // Identity & metadata
-    var name: String
+    var name: String = ""
     var summary: String?
-    var notes: String
+    var notes: String = ""
     var igdbID: Int?
     var igdbSlug: String?
     var firstReleaseDate: Date?
@@ -28,30 +27,30 @@ final class Game {
     var coverImageID: String?
 
     // User state
-    var status: GameStatus
-    var pinned: Bool
+    var status: GameStatus = GameStatus.backlog
+    var pinned: Bool = false
     var rating: Int?          // consolidated game-level (1–5)
     var review: String?
-    var addedAt: Date
+    var addedAt: Date = Date.now
     var currentPlaythroughID: UUID?
 
     // Value metadata arrays
-    var platforms: [String]
-    var userTags: [String]
-    var genres: [String]
-    var themes: [String]
-    var gameModes: [String]
-    var playerPerspectives: [String]
-    var developers: [String]
-    var publishers: [String]
+    var platforms: [String] = []
+    var userTags: [String] = []
+    var genres: [String] = []
+    var themes: [String] = []
+    var gameModes: [String] = []
+    var playerPerspectives: [String] = []
+    var developers: [String] = []
+    var publishers: [String] = []
 
-    // Relationships
+    // Relationships (optional to-one inverses; defaulted to-many)
     @Relationship(deleteRule: .cascade, inverse: \Playthrough.game)
-    var playthroughs: [Playthrough]
+    var playthroughs: [Playthrough] = []
     @Relationship(deleteRule: .cascade, inverse: \CompletionEvent.game)
-    var completionEvents: [CompletionEvent]
+    var completionEvents: [CompletionEvent] = []
     @Relationship(deleteRule: .cascade, inverse: \GameMap.game)
-    var maps: [GameMap]
+    var maps: [GameMap] = []
     @Relationship(deleteRule: .cascade, inverse: \TrackerSchemaRecord.game)
     var trackerSchema: TrackerSchemaRecord?
 
@@ -64,38 +63,12 @@ final class Game {
         pinned: Bool = false
     ) {
         self.id = id
-        self.userID = nil
         self.createdAt = .now
         self.updatedAt = .now
-        self.revision = 0
-        self.deletedAt = nil
-        self.legacyID = nil
         self.name = name
-        self.summary = nil
         self.notes = notes
-        self.igdbID = nil
-        self.igdbSlug = nil
-        self.firstReleaseDate = nil
-        self.franchise = nil
-        self.coverURLString = nil
-        self.coverImageID = nil
         self.status = status
         self.pinned = pinned
-        self.rating = nil
-        self.review = nil
         self.addedAt = addedAt
-        self.currentPlaythroughID = nil
-        self.platforms = []
-        self.userTags = []
-        self.genres = []
-        self.themes = []
-        self.gameModes = []
-        self.playerPerspectives = []
-        self.developers = []
-        self.publishers = []
-        self.playthroughs = []
-        self.completionEvents = []
-        self.maps = []
-        self.trackerSchema = nil
     }
 }

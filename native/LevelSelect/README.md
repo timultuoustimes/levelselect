@@ -10,9 +10,11 @@ for the plan.
 LevelSelect/
   App/            LevelSelectApp.swift  (@main, ModelContainer)
   Domain/         Enums.swift
-  Persistence/    Schema.swift (VersionedSchema V1 + MigrationPlan + container)
-    Models/       12 @Model types (Game, Playthrough, Session, …)
+  Persistence/    Schema.swift (VersionedSchema V1 + MigrationPlan + container),
+                  Repository.swift, Syncable.swift, LegacyImporter.swift
+    Models/       11 @Model types (Game, Playthrough, Session, …)
   UI/             RootView.swift (placeholder Library shell)
+Tests/            Swift Testing (macOS): repository, timer, importer, dry-run
 ```
 
 ## Build
@@ -29,9 +31,32 @@ env DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   xcodebuild -project LevelSelect.xcodeproj -scheme LevelSelect \
   -destination 'platform=macOS' build
 ```
-The macOS build is the fast verification signal. There is no unit-test target yet.
+The macOS build is the fast verification signal. Run the tests with `test`
+instead of `build`.
+
+## Sync: SwiftData + CloudKit
+Cross-device sync is **CloudKit** (decision 2026-08-10) — automatic iCloud sync
+across the user's Apple devices, no accounts/device-codes, free. The app
+container uses `cloudKitDatabase: .automatic`; tests/previews use an in-memory
+(non-CloudKit) container so they run headless. Models are CloudKit-compatible
+(no `@Attribute(.unique)`, every property optional-or-defaulted, relationships
+optional/defaulted). There is no outbox — CloudKit is the sync engine.
+
+Supabase is retained ONLY for the stateless AI tracker-generation edge function.
+
+### Enabling CloudKit (manual, needs Xcode + Apple account)
+Not wired into `project.yml` yet because it requires a provisioning profile and
+registering the App ID + iCloud container. When ready to test on a device/sim
+signed into iCloud:
+1. Finalize the **bundle id** (currently placeholder `com.levelselect.LevelSelect`).
+2. In Xcode → target → Signing & Capabilities: add **iCloud** → check **CloudKit**,
+   create container `iCloud.<bundle-id>`. Add **Background Modes → Remote notifications**.
+   (Or re-add the `entitlements` block to `project.yml` and build with
+   `-allowProvisioningUpdates`.)
+3. Run on a device/sim signed into iCloud; verify a record created on one device
+   appears on another.
 
 ## Status
-Scaffold only (roadmap 7g#3, in progress): SwiftData V1 schema + all 12 models
-compile clean; app launches to an empty Library shell with an "Add sample" button.
-Next: repository layer, then Sign in with Apple + Supabase sync (Phase 1).
+Phase 1 foundation in place: SwiftData V1 (11 models, CloudKit-ready), Repository,
+LegacyImporter (validated against the real 158-game library), 18 tests green.
+Next: enable CloudKit on-device (above), then Library/GamePage UI + session controls.

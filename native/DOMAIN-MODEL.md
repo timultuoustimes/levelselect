@@ -2,9 +2,11 @@
 
 *Roadmap step 7g #2 ("Design native domain model and migration fixtures"). Designed against `fixtures/LEGACY-SCHEMA.md` (frozen 2026-06-30). This is the spec for 7g #3 (implement SwiftData V1 + repository layer). Targets iOS 26 / macOS 26, Swift 6.*
 
+> **⚠️ Sync backend changed 2026-08-10 → CloudKit** (was Supabase). Native sync is now **SwiftData + CloudKit** (automatic iCloud sync, no auth, free, Apple-only). The `SyncOperation` outbox and the paired Supabase per-record tables are **dropped/dormant**; CloudKit is the sync engine. Models are CloudKit-compatible (no `@Attribute(.unique)`, all properties optional-or-defaulted, relationships optional/defaulted). Sync-metadata columns (`updatedAt`/`revision`/`deletedAt`) are kept for UI + soft-delete but conflict handling is CloudKit's. Everything else below still holds. See [[LevelSelect native conversion roadmap]] 2026-08-10 entry.
+
 ## Design principles
 
-1. **SwiftData is the source of truth; Supabase is backup + cross-device sync** (roadmap §Phase 1.3). Every model carries sync metadata; a separate outbox drives upserts.
+1. **SwiftData is the source of truth; CloudKit provides automatic cross-device sync.** Every model carries sync metadata (`updatedAt`/`revision`/`deletedAt`) for UI ordering + soft-delete; CloudKit handles the actual sync and conflict merge (no outbox to maintain).
 2. **Identity is the account, not the device.** No device IDs. `userID` = Supabase `auth.uid()`. The legacy device-ID / JSON-blob model is cut entirely (the 20 device blobs were one library snapshotted 20× — see LEGACY-SCHEMA.md).
 3. **Immutable tracker schema is stored separately from mutable progress** (roadmap §Phase 2.1) so a schema can be replaced/regenerated without touching a playthrough's checked-off state.
 4. **Two tracker engines, not 13.** Legacy `trackerType` strings map onto either an *objective schema* (StructuredTracker family) or a *run template* (roguelikes). Hades stays bespoke but reuses these records.

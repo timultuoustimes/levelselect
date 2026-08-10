@@ -18,7 +18,6 @@ enum LevelSelectSchemaV1: VersionedSchema {
             Run.self,
             GameMap.self,
             Marker.self,
-            SyncOperation.self,
             MigrationReceipt.self,
         ]
     }
@@ -31,12 +30,16 @@ enum LevelSelectMigrationPlan: SchemaMigrationPlan {
     static var stages: [MigrationStage] { [] }   // none yet; add on V2
 }
 
-/// Shared container builder used by the app (and later, tests/previews).
+/// Shared container builder.
+/// - App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
+/// - Tests/previews: in-memory, non-CloudKit, so they run headless without iCloud.
 enum LevelSelectStore {
     @MainActor
     static func makeContainer(inMemory: Bool = false) -> ModelContainer {
         let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: inMemory)
+        let config: ModelConfiguration = inMemory
+            ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            : ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
         do {
             return try ModelContainer(
                 for: schema,

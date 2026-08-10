@@ -1,24 +1,22 @@
 import Foundation
 import SwiftData
 
-/// Mutable per-playthrough progress for one schema item (sparse — only items
-/// with non-default state get a row). "Personal Goals" items live here too.
+/// Mutable per-playthrough progress for one schema item (sparse). CloudKit-compatible.
 @Model
 final class TrackerStateRecord {
-    // Sync metadata
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var userID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var revision: Int
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
     var deletedAt: Date?
     var legacyID: String?
 
-    var itemID: String          // stable id of the schema item
-    var completed: Bool
+    var itemID: String = ""          // stable id of the schema item
+    var completed: Bool = false
     var count: Int?
     var rank: Int?
-    var revealed: Bool
+    var revealed: Bool = false
     var notes: String?
 
     var playthrough: Playthrough?
@@ -32,17 +30,12 @@ final class TrackerStateRecord {
         revealed: Bool = false
     ) {
         self.id = id
-        self.userID = nil
         self.createdAt = .now
         self.updatedAt = .now
-        self.revision = 0
-        self.deletedAt = nil
-        self.legacyID = nil
         self.itemID = itemID
         self.completed = completed
         self.count = count
         self.rank = rank
         self.revealed = revealed
-        self.notes = nil
     }
 }

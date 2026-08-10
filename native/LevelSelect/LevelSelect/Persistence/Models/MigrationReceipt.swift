@@ -1,15 +1,15 @@
 import Foundation
 import SwiftData
 
-/// Idempotency record for the one-time legacy import. A second import of the
-/// same source device is a no-op.
+/// Idempotency record for the one-time legacy import. Syncs via CloudKit so a
+/// second device won't re-import. CloudKit-compatible.
 @Model
 final class MigrationReceipt {
-    @Attribute(.unique) var id: UUID
-    var sourceDeviceID: String
-    var importedAt: Date
-    var appVersion: String
-    var countsJSON: Data
+    var id: UUID = UUID()
+    var sourceDeviceID: String = ""
+    var importedAt: Date = Date.now
+    var appVersion: String = ""
+    var countsJSON: Data = Data()
 
     init(
         id: UUID = UUID(),
@@ -19,7 +19,6 @@ final class MigrationReceipt {
     ) {
         self.id = id
         self.sourceDeviceID = sourceDeviceID
-        self.importedAt = .now
         self.appVersion = appVersion
         self.countsJSON = countsJSON
     }

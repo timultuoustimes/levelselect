@@ -1,33 +1,32 @@
 import Foundation
 import SwiftData
 
-/// A game map (legacy `maps[]`). Image bytes stay in Supabase Storage;
-/// only metadata + path are stored/synced. `localCacheURL` holds cached bytes.
+/// A game map (legacy `maps[]`). CloudKit-compatible. Image bytes live in
+/// CloudKit assets / Supabase Storage (Phase 3); this stores metadata + path.
 @Model
 final class GameMap {
-    // Sync metadata
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
     var userID: UUID?
-    var createdAt: Date
-    var updatedAt: Date
-    var revision: Int
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
     var deletedAt: Date?
     var legacyID: String?
 
-    var name: String
-    var kind: MapKind
-    var storageType: String
-    var remoteStoragePath: String    // canonical reference (NOT a public URL)
+    var name: String = ""
+    var kind: MapKind = MapKind.other
+    var storageType: String = "upload"
+    var remoteStoragePath: String = ""    // canonical reference (NOT a public URL)
     var remoteURLString: String?
     var localCacheURL: URL?
     var pixelWidth: Int?
     var pixelHeight: Int?
-    var addedAt: Date
+    var addedAt: Date = Date.now
 
     var game: Game?
 
     @Relationship(deleteRule: .cascade, inverse: \Marker.map)
-    var markers: [Marker]
+    var markers: [Marker] = []
 
     init(
         id: UUID = UUID(),
@@ -38,21 +37,12 @@ final class GameMap {
         addedAt: Date = .now
     ) {
         self.id = id
-        self.userID = nil
         self.createdAt = .now
         self.updatedAt = .now
-        self.revision = 0
-        self.deletedAt = nil
-        self.legacyID = nil
         self.name = name
         self.kind = kind
         self.storageType = storageType
         self.remoteStoragePath = remoteStoragePath
-        self.remoteURLString = nil
-        self.localCacheURL = nil
-        self.pixelWidth = nil
-        self.pixelHeight = nil
         self.addedAt = addedAt
-        self.markers = []
     }
 }

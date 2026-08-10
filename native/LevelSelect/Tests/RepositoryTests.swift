@@ -50,19 +50,6 @@ struct RepositoryTests {
         #expect(g.completionEvents.count == 1)
     }
 
-    @Test func writesEnqueueOutboxOps() throws {
-        let ctx = newContext()
-        let repo = Repository(ctx)
-        let g = repo.addGame(name: "Tunic")
-        let pt = repo.ensureDefaultPlaythrough(for: g)
-        _ = repo.startSession(on: pt, at: .now)
-        let ops = try ctx.fetch(FetchDescriptor<SyncOperation>())
-        // at least: Game upsert, Playthrough upsert, Session upsert
-        #expect(ops.count >= 3)
-        #expect(ops.contains { $0.entityType == "Game" && $0.opType == .upsert })
-        #expect(ops.contains { $0.entityType == "Session" && $0.opType == .upsert })
-    }
-
     @Test func totalPlaytimeSumsSessions() {
         let ctx = newContext()
         let repo = Repository(ctx)
