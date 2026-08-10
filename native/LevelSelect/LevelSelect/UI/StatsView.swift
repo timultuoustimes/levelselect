@@ -1,0 +1,200 @@
+import SwiftUI
+import SwiftData
+
+/// Stats tab: actionable summaries (per the feature audit) — totals, recent
+/// playtime, status breakdown, most-played leaderboard, completions by year.
+struct StatsTab: View {
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
+    private var games: [Game]
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 16) {
+                    overviewCard
+                    recentCard
+                    statusBreakdownCard
+                    if !topPlayed.isEmpty { topPlayedCard }
+                    if !completionsByYear.isEmpty { completionsCard }
+                }
+                .padding()
+            }
+            .scrollIndicators(.hidden)
+            .lsBackground()
+            .navigationTitle("Stats")
+            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+        }
+    }
+
+    // MARK: Cards
+
+    private var overviewCard: some View {
+        HStack(spacing: 0) {
+            stat(number: "\(games.count)", label: "Games")
+            divider
+            stat(number: Format.duration(totalPlaytime), label: "Played")
+            divider
+            stat(number: "\(allSessions.count)", label: "Sessions")
+        }
+        .frame(maxWidth: .infinity)
+        .lsCard()
+    }
+
+    private var recentCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Recent Play", systemImage: "clock.fill")
+                .font(.headline)
+            HStack(spacing: 0) {
+                stat(number: Format.duration(playtime(since: startOfWeek)), label: "This week")
+                divider
+                stat(number: Format.duration(playtime(since: startOfMonth)), label: "This month")
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    private var statusBreakdownCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Library", systemImage: "books.vertical.fill")
+                .font(.headline)
+            ForEach(GameStatus.displayOrder, id: \.self) { status in
+                let count = statusCounts[status] ?? 0
+                if count > 0 {
+                    HStack(spacing: 10) {
+                        Image(systemName: status.systemImage)
+                            .foregroundStyle(status.color)
+                            .frame(width: 22)
+                        Text(status.sectionTitle)
+                            .font(.subheadline)
+                        Spacer()
+                        Text("\(count)")
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    bar(fraction: Double(count) / Double(max(games.count, 1)), color: status.color)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    private var topPlayedCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Most Played", systemImage: "trophy.fill")
+                .font(.headline)
+            let maxTime = topPlayed.first?.1 ?? 1
+            ForEach(topPlayed, id: \.0.id) { game, time in
+                NavigationLink(value: game) {
+                    HStack(spacing: 10) {
+                        CoverThumb(urlString: game.coverURLString)
+                            .frame(width: 30, height: 40)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(game.name).font(.subheadline).lineLimit(1)
+                            bar(fraction: time / maxTime, color: LSTheme.purple)
+                        }
+                        Spacer()
+                        Text(Format.duration(time))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    private var completionsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Completions", systemImage: "checkmark.seal.fill")
+                .font(.headline)
+            ForEach(completionsByYear, id: \.0) { year, count in
+                HStack {
+                    Text(String(year)).font(.subheadline)
+                    Spacer()
+                    Text("\(count)")
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    // MARK: Pieces
+
+    private func stat(number: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(number)
+                .font(.title3.bold().monospacedDigit())
+                .foregroundStyle(LSTheme.purple)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 34)
+    }
+
+    private func bar(fraction: Double, color: Color) -> some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule().fill(.white.opacity(0.06))
+                Capsule()
+                    .fill(LinearGradient(colors: [color, color.opacity(0.55)],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(4, geo.size.width * fraction))
+            }
+        }
+        .frame(height: 6)
+    }
+
+    // MARK: Derived data
+
+    private var allSessions: [Session] {
+        games.flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+    }
+
+    private var totalPlaytime: TimeInterval {
+        allSessions.reduce(0) { $0 + $1.elapsed() }
+    }
+
+    private func playtime(since date: Date) -> TimeInterval {
+        allSessions.filter { $0.startDate >= date }.reduce(0) { $0 + $1.elapsed() }
+    }
+
+    private var startOfWeek: Date {
+        Calendar.current.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now
+    }
+
+    private var startOfMonth: Date {
+        Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
+    }
+
+    private var statusCounts: [GameStatus: Int] {
+        Dictionary(grouping: games, by: \.status).mapValues(\.count)
+    }
+
+    private var topPlayed: [(Game, TimeInterval)] {
+        games
+            .map { g in (g, (g.playthroughs ?? []).reduce(0) { $0 + $1.totalPlaytime() }) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+            .prefix(5)
+            .map { $0 }
+    }
+
+    private var completionsByYear: [(Int, Int)] {
+        let events = games.flatMap { $0.completionEvents ?? [] }
+        let byYear = Dictionary(grouping: events) { Calendar.current.component(.year, from: $0.date) }
+        return byYear.mapValues(\.count).sorted { $0.key > $1.key }
+    }
+}

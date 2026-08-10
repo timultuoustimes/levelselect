@@ -35,4 +35,22 @@ extension View {
     func lsBackground() -> some View {
         background(LSTheme.background.ignoresSafeArea())
     }
+
+    /// Card surface used across Stats/Home.
+    func lsCard() -> some View {
+        padding(14)
+            .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.07), lineWidth: 1))
+    }
+}
+
+/// Springy pressed state for tappable cards ("fluid buttons" — everything
+/// moves, nothing snaps). Honors Reduce Motion by keeping the scale subtle.
+struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
+    }
 }

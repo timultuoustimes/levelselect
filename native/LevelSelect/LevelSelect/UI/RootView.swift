@@ -1,15 +1,27 @@
 import SwiftUI
 import SwiftData
 
-/// Home: Continue Playing hero + horizontal cover carousels per status,
-/// on the purple-gradient dark theme (web-app parity). Searching switches to
-/// a results list.
+/// App shell: Home / Library / Stats tabs (web-app parity) on the purple theme.
 struct RootView: View {
+    var body: some View {
+        TabView {
+            Tab("Home", systemImage: "house.fill") { HomeTab() }
+            Tab("Library", systemImage: "square.grid.2x2.fill") { LibraryTab() }
+            Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
+        }
+        .tint(LSTheme.purple)
+        .preferredColorScheme(.dark)
+    }
+}
+
+// MARK: - Home
+
+/// Continue Playing hero + horizontal cover carousels per status.
+struct HomeTab: View {
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
 
-    @State private var searchText = ""
     @State private var showingAdd = false
     @State private var showingSettings = false
     @State private var path = NavigationPath()
@@ -17,28 +29,28 @@ struct RootView: View {
     var body: some View {
         NavigationStack(path: $path) {
             Group {
-                if games.isEmpty {
-                    emptyState
-                } else if searching {
-                    searchResults
-                } else {
-                    home
-                }
+                if games.isEmpty { emptyState } else { home }
             }
             .lsBackground()
             .navigationTitle("LevelSelect")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
-            .searchable(text: $searchText, prompt: "Search games")
-            .toolbar { toolbarContent }
+            .toolbar {
+                ToolbarItem {
+                    Button { showingSettings = true } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingAdd = true } label: {
+                        Label("Add Game", systemImage: "plus")
+                    }
+                }
+            }
         }
-        .tint(LSTheme.purple)
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
     }
-
-    // MARK: Home
 
     private var home: some View {
         ScrollView {
@@ -52,7 +64,7 @@ struct RootView: View {
                         NavigationLink(value: cp) {
                             ContinueHeroCard(game: cp) { play(cp) }
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableCardStyle())
                     }
                     .padding(.horizontal)
                 }
@@ -71,20 +83,6 @@ struct RootView: View {
         .scrollIndicators(.hidden)
     }
 
-    private var searchResults: some View {
-        List {
-            ForEach(visible) { game in
-                NavigationLink(value: game) { GameRow(game: game) }
-                    .listRowBackground(Color.clear)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .overlay {
-            if visible.isEmpty { ContentUnavailableView.search(text: searchText) }
-        }
-    }
-
     private var emptyState: some View {
         ContentUnavailableView {
             Label("Your library is empty", systemImage: "gamecontroller")
@@ -96,27 +94,7 @@ struct RootView: View {
         }
     }
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem {
-            Button { showingSettings = true } label: {
-                Label("Settings", systemImage: "gearshape")
-            }
-        }
-        ToolbarItem(placement: .primaryAction) {
-            Button { showingAdd = true } label: {
-                Label("Add Game", systemImage: "plus")
-            }
-        }
-    }
-
     // MARK: Derived
-
-    private var searching: Bool { !searchText.isEmpty }
-
-    private var visible: [Game] {
-        games.filter { searchText.isEmpty || $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
 
     private var grouped: [GameStatus: [Game]] {
         Dictionary(grouping: games, by: \.status)
@@ -140,7 +118,6 @@ struct RootView: View {
         if pt.activeSession == nil {
             repo.startSession(on: pt)
         }
-        // Stay on Home; the hero card flips to "Session in progress".
     }
 }
 
@@ -166,12 +143,12 @@ struct StatusListView: View {
     }
 }
 
-// Tuple comparison helper for (Bool, Date) sort keys: pinned wins, then date.
-private func > (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool {
+// Tuple comparison helpers for (pinned, lastActivity) sort keys.
+func > (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool {
     if lhs.0 != rhs.0 { return lhs.0 }
     return lhs.1 > rhs.1
 }
-private func < (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool { rhs > lhs }
+func < (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool { rhs > lhs }
 
 #Preview {
     RootView()

@@ -61,11 +61,19 @@ struct StatusCarousel: View {
                         NavigationLink(value: game) {
                             CoverCard(game: game)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(PressableCardStyle())
+                        // Covers breathe as they enter/leave the viewport.
+                        .scrollTransition(axis: .horizontal) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.92)
+                                .opacity(phase.isIdentity ? 1 : 0.7)
+                        }
                     }
                 }
                 .padding(.horizontal)
+                .scrollTargetLayout()
             }
+            .scrollTargetBehavior(.viewAligned)
         }
     }
 }
