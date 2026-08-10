@@ -44,13 +44,13 @@ final class Game {
     var developers: [String] = []
     var publishers: [String] = []
 
-    // Relationships (optional to-one inverses; defaulted to-many)
+    // Relationships — all optional (CloudKit requires optional relationships).
     @Relationship(deleteRule: .cascade, inverse: \Playthrough.game)
-    var playthroughs: [Playthrough] = []
+    var playthroughs: [Playthrough]?
     @Relationship(deleteRule: .cascade, inverse: \CompletionEvent.game)
-    var completionEvents: [CompletionEvent] = []
+    var completionEvents: [CompletionEvent]?
     @Relationship(deleteRule: .cascade, inverse: \GameMap.game)
-    var maps: [GameMap] = []
+    var maps: [GameMap]?
     @Relationship(deleteRule: .cascade, inverse: \TrackerSchemaRecord.game)
     var trackerSchema: TrackerSchemaRecord?
 

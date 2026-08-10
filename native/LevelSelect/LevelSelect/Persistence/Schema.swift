@@ -37,16 +37,25 @@ enum LevelSelectStore {
     @MainActor
     static func makeContainer(inMemory: Bool = false) -> ModelContainer {
         let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
-        let config: ModelConfiguration = inMemory
-            ? ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            : ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+        // Never use CloudKit under XCTest (the app is the test host) or in-memory.
+        let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        let memory = inMemory || underTest
+
+        if memory {
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return try! ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [config])
+        }
+
+        // App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
         do {
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: LevelSelectMigrationPlan.self,
-                configurations: [config]
-            )
+            let config = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
+            return try ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [config])
         } catch {
+            // Resilience: if CloudKit is unavailable, keep working from a local store.
+            let local = ModelConfiguration(schema: schema)
+            if let container = try? ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [local]) {
+                return container
+            }
             fatalError("Failed to create ModelContainer: \(error)")
         }
     }

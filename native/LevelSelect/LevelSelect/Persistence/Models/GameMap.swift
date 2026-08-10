@@ -26,7 +26,7 @@ final class GameMap {
     var game: Game?
 
     @Relationship(deleteRule: .cascade, inverse: \Marker.map)
-    var markers: [Marker] = []
+    var markers: [Marker]?
 
     init(
         id: UUID = UUID(),

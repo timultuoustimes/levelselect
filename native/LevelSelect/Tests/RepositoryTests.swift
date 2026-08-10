@@ -37,7 +37,7 @@ struct RepositoryTests {
         let p1 = repo.ensureDefaultPlaythrough(for: g)
         let p2 = repo.ensureDefaultPlaythrough(for: g)
         #expect(p1.id == p2.id)
-        #expect(g.playthroughs.filter { $0.deletedAt == nil }.count == 1)
+        #expect((g.playthroughs ?? []).filter { $0.deletedAt == nil }.count == 1)
         #expect(g.currentPlaythroughID == p1.id)
     }
 
@@ -47,7 +47,7 @@ struct RepositoryTests {
         let g = repo.addGame(name: "Celeste", status: .playing)
         repo.addCompletion(to: g, label: .completed)
         #expect(g.status == .completed)
-        #expect(g.completionEvents.count == 1)
+        #expect((g.completionEvents ?? []).count == 1)
     }
 
     @Test func totalPlaytimeSumsSessions() {

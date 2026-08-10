@@ -1,6 +1,6 @@
 name: LevelSelect
 options:
-  bundleIdPrefix: com.levelselect
+  bundleIdPrefix: com.timultuoustimes
   deploymentTarget:
     iOS: "26.0"
     macOS: "26.0"
@@ -26,9 +26,11 @@ targets:
   LevelSelect:
     type: application
     supportedDestinations: [iOS, iPadOS, macOS]
-    # CloudKit entitlements are ready to enable (see README "Enabling CloudKit").
-    # Left off until the bundle id is finalized and the App ID / iCloud container
-    # are registered — adding them requires a provisioning profile + Apple account.
+    entitlements:
+      path: LevelSelect/LevelSelect.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
     sources:
       - path: LevelSelect
         excludes:

@@ -37,12 +37,12 @@ struct Repository {
     /// Returns the game's active playthrough, creating a default one on first use.
     @discardableResult
     func ensureDefaultPlaythrough(for game: Game) -> Playthrough {
-        if let existing = game.playthroughs.first(where: { $0.deletedAt == nil }) {
+        if let existing = (game.playthroughs ?? []).first(where: { $0.deletedAt == nil }) {
             return existing
         }
         let pt = Playthrough()
         context.insert(pt)
-        game.playthroughs.append(pt)   // sets inverse
+        pt.game = game                 // set to-one; SwiftData maintains the inverse
         game.currentPlaythroughID = pt.id
         touch(game)
         return pt
@@ -55,7 +55,7 @@ struct Repository {
         if let active = pt.activeSession { stopSession(active, at: date) }
         let session = Session(startDate: date, state: .running)
         context.insert(session)
-        pt.sessions.append(session)
+        session.playthrough = pt
         pt.lastPlayedAt = date
         touch(pt, at: date)
         return session
@@ -105,7 +105,7 @@ struct Repository {
         session.endDate = date.addingTimeInterval(duration)
         session.notes = notes
         context.insert(session)
-        pt.sessions.append(session)
+        session.playthrough = pt
         pt.lastPlayedAt = date
         touch(pt, at: date)
         return session
@@ -121,7 +121,7 @@ struct Repository {
     ) -> CompletionEvent {
         let event = CompletionEvent(date: date, label: label)
         context.insert(event)
-        game.completionEvents.append(event)
+        event.game = game
         if label == .completed, game.status != .completed {
             game.status = .completed
         }
@@ -135,6 +135,6 @@ struct Repository {
 extension Playthrough {
     /// Total time across all sessions (active session counted live via `asOf`).
     func totalPlaytime(asOf now: Date = .now) -> TimeInterval {
-        sessions.reduce(0) { $0 + $1.elapsed(asOf: now) }
+        (sessions ?? []).reduce(0) { $0 + $1.elapsed(asOf: now) }
     }
 }

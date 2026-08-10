@@ -21,15 +21,15 @@ final class Playthrough {
     var game: Game?
 
     @Relationship(deleteRule: .cascade, inverse: \Session.playthrough)
-    var sessions: [Session] = []
+    var sessions: [Session]?
     @Relationship(deleteRule: .cascade, inverse: \TrackerStateRecord.playthrough)
-    var trackerStates: [TrackerStateRecord] = []
+    var trackerStates: [TrackerStateRecord]?
     @Relationship(deleteRule: .cascade, inverse: \Run.playthrough)
-    var runs: [Run] = []
+    var runs: [Run]?
 
     /// Active session = the one not yet stopped (no separate stored flag).
     var activeSession: Session? {
-        sessions.first { $0.state != .stopped }
+        (sessions ?? []).first { $0.state != .stopped }
     }
 
     init(

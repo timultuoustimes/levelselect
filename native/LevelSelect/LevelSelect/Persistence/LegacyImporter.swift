@@ -109,25 +109,25 @@ struct LegacyImporter {
 
         // Playthroughs (+ sessions). Consolidate rating: userRating ?? first save rating.
         var consolidatedRating: Int? = int(g, "userRating")
+        var firstPlaythroughID: UUID?
         let saves = arr(g, "saves")
         for s in saves {
             let pt = importPlaythrough(s, into: &report)
-            pt.game = game
-            game.playthroughs.append(pt)
+            pt.game = game                 // set to-one; SwiftData maintains the inverse
+            if firstPlaythroughID == nil { firstPlaythroughID = pt.id }
             if consolidatedRating == nil, let r = int(s, "rating"), r > 0 {
                 consolidatedRating = r
             }
         }
         game.rating = consolidatedRating
-        game.currentPlaythroughID = game.playthroughs.first?.id
+        game.currentPlaythroughID = firstPlaythroughID
 
         // Completion events (legacy clears[]).
         for c in arr(g, "clears") {
             let ev = CompletionEvent(date: date(c["clearedAt"]) ?? .now, label: .cleared)
             ev.legacyID = str(c, "id")
-            ev.game = game
-            game.completionEvents.append(ev)
             context.insert(ev)
+            ev.game = game
             report.completionEvents += 1
         }
 
@@ -141,9 +141,8 @@ struct LegacyImporter {
             )
             rec.generatedAt = date(sd["generatedAt"])
             rec.generatedBy = str(sd, "generatedBy")
-            rec.game = game
-            game.trackerSchema = rec
             context.insert(rec)
+            rec.game = game
             report.trackerSchemas += 1
         }
 
@@ -158,9 +157,8 @@ struct LegacyImporter {
             )
             map.legacyID = str(m, "id")
             map.remoteURLString = str(m, "imageUrl")
-            map.game = game
-            game.maps.append(map)
             context.insert(map)
+            map.game = game
             report.maps += 1
 
             for mk in arr(m, "markers") {
@@ -173,9 +171,8 @@ struct LegacyImporter {
                 marker.legacyID = str(mk, "id")
                 marker.notes = str(mk, "notes")
                 marker.createdAt = date(mk["createdAt"]) ?? .now
-                marker.map = map
-                map.markers.append(marker)
                 context.insert(marker)
+                marker.map = map
                 report.markers += 1
             }
         }
@@ -208,9 +205,8 @@ struct LegacyImporter {
                 seen.insert(sid)
             }
             let session = importSession(raw)
-            session.playthrough = pt
-            pt.sessions.append(session)
             context.insert(session)
+            session.playthrough = pt
             report.sessions += 1
         }
         return pt

@@ -60,7 +60,7 @@ struct LegacyImporterTests {
         try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
         let g = try game(ctx, legacyID: "g-none")
         #expect(g.status == .completed)
-        #expect(g.completionEvents.count == 1)
+        #expect((g.completionEvents ?? []).count == 1)
     }
 
     @Test func trackerSchemaEngineAndSource() throws {
@@ -78,8 +78,8 @@ struct LegacyImporterTests {
         let ctx = newContext()
         try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
         let g = try game(ctx, legacyID: "g-active")
-        let pt = try #require(g.playthroughs.first)
-        let s = try #require(pt.sessions.first)
+        let pt = try #require((g.playthroughs ?? []).first)
+        let s = try #require((pt.sessions ?? []).first)
         #expect(s.state == .paused)
         #expect(abs(s.accumulatedDuration - 120) < 0.001)
         #expect(pt.activeSession?.id == s.id)      // paused counts as active
@@ -89,8 +89,8 @@ struct LegacyImporterTests {
         let ctx = newContext()
         try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
         let g = try game(ctx, legacyID: "g-none")
-        let pt = try #require(g.playthroughs.first)
-        #expect(pt.sessions.contains { $0.isManual })
+        let pt = try #require((g.playthroughs ?? []).first)
+        #expect((pt.sessions ?? []).contains { $0.isManual })
         #expect(abs(pt.totalPlaytime() - 5400) < 0.001)   // 3600 + 1800, both stopped
     }
 
