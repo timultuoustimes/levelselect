@@ -15,12 +15,25 @@ struct WishlistTab: View {
     @State private var searchText = ""
     @State private var browserTarget: DekuLinkTarget?
     @State private var addSearch: AddTarget?
+    @State private var paneURL: URL = DekuLinks.home
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var isSplit: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         NavigationStack {
             Group {
                 if !store.isConfigured {
                     setupPrompt
+                } else if isSplit {
+                    HStack(spacing: 0) {
+                        list
+                            .frame(maxWidth: 420)
+                        Divider()
+                        DekuBrowserPane(url: $paneURL) {
+                            Task { await store.refresh() }
+                        }
+                    }
                 } else {
                     list
                 }
@@ -30,7 +43,8 @@ struct WishlistTab: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        browserTarget = DekuLinkTarget(url: DekuLinks.home)
+                        if isSplit { paneURL = DekuLinks.home }
+                        else { browserTarget = DekuLinkTarget(url: DekuLinks.home) }
                     } label: {
                         Label("Browse Deku Deals", systemImage: "globe")
                     }
@@ -68,7 +82,8 @@ struct WishlistTab: View {
             ForEach(visible) { item in
                 Button {
                     if let url = item.url {
-                        browserTarget = DekuLinkTarget(url: url)
+                        if isSplit { paneURL = url }
+                        else { browserTarget = DekuLinkTarget(url: url) }
                     }
                 } label: {
                     row(item)
@@ -82,7 +97,10 @@ struct WishlistTab: View {
                         Label("Add to Library", systemImage: "plus.square.on.square")
                     }
                     Button {
-                        if let url = item.url { browserTarget = DekuLinkTarget(url: url) }
+                        if let url = item.url {
+                            if isSplit { paneURL = url }
+                            else { browserTarget = DekuLinkTarget(url: url) }
+                        }
                     } label: {
                         Label("View on Deku Deals", systemImage: "globe")
                     }
