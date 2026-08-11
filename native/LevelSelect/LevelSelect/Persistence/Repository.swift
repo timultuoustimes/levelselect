@@ -61,11 +61,14 @@ struct Repository {
 
     // MARK: Playthroughs
 
-    /// Returns the game's active playthrough, creating a default one on first use.
+    /// Returns the game's ACTIVE playthrough, creating a default one on first use.
     @discardableResult
     func ensureDefaultPlaythrough(for game: Game) -> Playthrough {
-        if let existing = (game.playthroughs ?? []).first(where: { $0.deletedAt == nil }) {
-            return existing
+        if let active = game.activePlaythrough {
+            if game.currentPlaythroughID != active.id {
+                game.currentPlaythroughID = active.id
+            }
+            return active
         }
         let pt = Playthrough()
         context.insert(pt)
@@ -73,6 +76,41 @@ struct Repository {
         game.currentPlaythroughID = pt.id
         touch(game)
         return pt
+    }
+
+    /// Create a new playthrough and switch to it immediately (per Tim).
+    @discardableResult
+    func addPlaythrough(to game: Game, named name: String) -> Playthrough {
+        let pt = Playthrough(name: name.isEmpty ? "Playthrough" : name)
+        context.insert(pt)
+        pt.game = game
+        game.currentPlaythroughID = pt.id
+        touch(game)
+        return pt
+    }
+
+    func setActivePlaythrough(_ pt: Playthrough, for game: Game) {
+        game.currentPlaythroughID = pt.id
+        touch(game)
+    }
+
+    func renamePlaythrough(_ pt: Playthrough, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        pt.name = trimmed
+        touch(pt)
+    }
+
+    /// Soft-delete a playthrough. A running session is stopped first (records
+    /// its time); if it was active, the newest remaining playthrough takes over.
+    func deletePlaythrough(_ pt: Playthrough, from game: Game, at date: Date = .now) {
+        if let active = pt.activeSession { stopSession(active, at: date) }
+        pt.deletedAt = date
+        touch(pt, at: date)
+        if game.currentPlaythroughID == pt.id {
+            game.currentPlaythroughID = game.livePlaythroughs.last?.id
+        }
+        touch(game, at: date)
     }
 
     // MARK: Sessions (timer derived from timestamps — no ticking writes)
@@ -300,7 +338,7 @@ struct Repository {
         let categories = TrackerSchemaJSON.categories(from: schema.jsonData)
         let allItems = categories.flatMap(\.items)
         guard !allItems.isEmpty,
-              let pt = (game.playthroughs ?? []).first(where: { $0.deletedAt == nil })
+              let pt = game.activePlaythrough
         else { return }
         let doneIDs = Set((pt.trackerStates ?? [])
             .filter { $0.completed && $0.deletedAt == nil }
@@ -330,6 +368,25 @@ struct Repository {
 }
 
 // MARK: - Derived helpers
+
+extension Game {
+    /// Live (non-deleted) playthroughs, oldest first (stable ordering).
+    var livePlaythroughs: [Playthrough] {
+        (playthroughs ?? [])
+            .filter { $0.deletedAt == nil }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    /// The playthrough all per-playthrough UI reads: the current selection,
+    /// falling back to the oldest live one.
+    var activePlaythrough: Playthrough? {
+        let live = livePlaythroughs
+        if let id = currentPlaythroughID, let match = live.first(where: { $0.id == id }) {
+            return match
+        }
+        return live.first
+    }
+}
 
 extension Playthrough {
     /// Total time across all sessions (active session counted live via `asOf`;

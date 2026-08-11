@@ -161,7 +161,7 @@ struct StatsTab: View {
 
     private var allSessions: [Session] {
         games
-            .flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+            .flatMap { $0.livePlaythroughs.flatMap { $0.sessions ?? [] } }
             .filter { $0.deletedAt == nil }
     }
 
@@ -187,7 +187,7 @@ struct StatsTab: View {
 
     private var topPlayed: [(Game, TimeInterval)] {
         games
-            .map { g in (g, (g.playthroughs ?? []).reduce(0) { $0 + $1.totalPlaytime() }) }
+            .map { g in (g, g.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime() }) }
             .filter { $0.1 > 0 }
             .sorted { $0.1 > $1.1 }
             .prefix(5)

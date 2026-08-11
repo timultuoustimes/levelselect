@@ -28,7 +28,7 @@ struct StaleSessionGuard: ViewModifier {
             .onReceive(NotificationCenter.default.publisher(for: .lsEndSessionRequested)) { note in
                 guard let id = note.object as? UUID else { return }
                 ending = games
-                    .flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+                    .flatMap { $0.livePlaythroughs.flatMap { $0.sessions ?? [] } }
                     .first { $0.id == id && $0.state != .stopped }
             }
             .alert("Still playing?", isPresented: isPresented) {
@@ -68,7 +68,7 @@ struct StaleSessionGuard: ViewModifier {
 
     private func check() {
         let candidates = games
-            .flatMap { ($0.playthroughs ?? []) }
+            .flatMap { $0.livePlaythroughs }
             .compactMap(\.activeSession)
 
         // Reconcile local notifications with active sessions — including

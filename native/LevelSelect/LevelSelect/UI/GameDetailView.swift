@@ -8,10 +8,21 @@ struct GameDetailView: View {
     @State private var confirmingDelete = false
     @State private var browserTarget: DekuLinkTarget?
 
+    // Playthrough management
+    @State private var namingNewPlaythrough = false
+    @State private var renamingPlaythrough = false
+    @State private var playthroughName = ""
+    @State private var confirmingPlaythroughDelete = false
+
+    private var repo: Repository { Repository(context) }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
+                if game.livePlaythroughs.count > 1 {
+                    playthroughPicker
+                }
                 Divider()
                 CollapsibleSection("Sessions", icon: "stopwatch") {
                     SessionControlsView(game: game)
@@ -73,6 +84,13 @@ struct GameDetailView: View {
                         }
                     }
                     Divider()
+                    Button {
+                        playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
+                        namingNewPlaythrough = true
+                    } label: {
+                        Label("New Playthrough…", systemImage: "plus.square.on.square")
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {
@@ -83,6 +101,38 @@ struct GameDetailView: View {
                 }
             }
         }
+        .alert("New Playthrough", isPresented: $namingNewPlaythrough) {
+            TextField("Name", text: $playthroughName)
+            Button("Create") {
+                repo.addPlaythrough(to: game, named: playthroughName)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Fresh sessions and tracker progress. Your other playthroughs keep theirs.")
+        }
+        .alert("Rename Playthrough", isPresented: $renamingPlaythrough) {
+            TextField("Name", text: $playthroughName)
+            Button("Rename") {
+                if let pt = game.activePlaythrough {
+                    repo.renamePlaythrough(pt, to: playthroughName)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete \(game.activePlaythrough?.name ?? "playthrough")?",
+            isPresented: $confirmingPlaythroughDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Playthrough", role: .destructive) {
+                if let pt = game.activePlaythrough {
+                    repo.deletePlaythrough(pt, from: game)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its sessions and tracker progress move to trash. A running session is stopped and recorded first.")
+        }
         .confirmationDialog("Delete \(game.name)?", isPresented: $confirmingDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Repository(context).softDelete(game)
@@ -91,6 +141,64 @@ struct GameDetailView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Moves it to trash (recoverable).")
+        }
+    }
+
+    // MARK: Playthrough picker (appears only with 2+)
+
+    private var playthroughPicker: some View {
+        HStack(spacing: 10) {
+            Menu {
+                ForEach(game.livePlaythroughs) { pt in
+                    Button {
+                        repo.setActivePlaythrough(pt, for: game)
+                    } label: {
+                        if pt.id == game.activePlaythrough?.id {
+                            Label(pt.name, systemImage: "checkmark")
+                        } else {
+                            Text(pt.name)
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
+                    namingNewPlaythrough = true
+                } label: {
+                    Label("New Playthrough…", systemImage: "plus")
+                }
+                Button {
+                    playthroughName = game.activePlaythrough?.name ?? ""
+                    renamingPlaythrough = true
+                } label: {
+                    Label("Rename…", systemImage: "pencil")
+                }
+                Button(role: .destructive) {
+                    confirmingPlaythroughDelete = true
+                } label: {
+                    Label("Delete…", systemImage: "trash")
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.crop.square.on.square.angled")
+                        .font(.caption)
+                    Text(game.activePlaythrough?.name ?? "Playthrough")
+                        .font(.subheadline.weight(.semibold))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(LSTheme.accent.opacity(0.16), in: .capsule)
+                .overlay(Capsule().strokeBorder(LSTheme.accent.opacity(0.4), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
+            Text("\(game.livePlaythroughs.count) playthroughs")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
         }
     }
 

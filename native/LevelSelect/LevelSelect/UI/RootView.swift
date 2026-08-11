@@ -126,7 +126,7 @@ struct HomeTab: View {
 
     /// Pinned first, then most recent activity.
     private func sortKey(_ g: Game) -> (Bool, Date) {
-        (g.pinned, (g.playthroughs ?? []).compactMap(\.lastPlayedAt).max() ?? g.addedAt)
+        (g.pinned, g.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? g.addedAt)
     }
 
     private func play(_ game: Game) {

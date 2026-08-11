@@ -14,7 +14,7 @@ struct SessionControlsView: View {
 
     /// The game's active (non-deleted) playthrough, if created yet.
     private var playthrough: Playthrough? {
-        (game.playthroughs ?? []).first { $0.deletedAt == nil }
+        game.activePlaythrough
     }
 
     private var sessions: [Session] {
@@ -51,15 +51,29 @@ struct SessionControlsView: View {
     // MARK: Sections
 
     private var header: some View {
-        HStack {
-            let total = playthrough?.totalPlaytime() ?? 0
-            Text("Total played")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(Format.duration(total))
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .foregroundStyle(LSTheme.accent)
+        VStack(spacing: 4) {
+            HStack {
+                let total = playthrough?.totalPlaytime() ?? 0
+                Text(game.livePlaythroughs.count > 1 ? "This playthrough" : "Total played")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(Format.duration(total))
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(LSTheme.accent)
+            }
+            if game.livePlaythroughs.count > 1 {
+                HStack {
+                    Text("All playthroughs")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    let all = game.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime() }
+                    Text(Format.duration(all))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                }
+            }
         }
     }
 

@@ -88,7 +88,7 @@ struct ContinueHeroCard: View {
     var onPlay: () -> Void
 
     private var playthrough: Playthrough? {
-        (game.playthroughs ?? []).first { $0.deletedAt == nil }
+        game.activePlaythrough
     }
 
     var body: some View {

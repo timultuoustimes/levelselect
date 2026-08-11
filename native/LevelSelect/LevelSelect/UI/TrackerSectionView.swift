@@ -18,7 +18,7 @@ struct TrackerSectionView: View {
     private var repo: Repository { Repository(context) }
 
     private var playthrough: Playthrough? {
-        (game.playthroughs ?? []).first { $0.deletedAt == nil }
+        game.activePlaythrough
     }
 
     private var categories: [TrackerCategoryDTO] {

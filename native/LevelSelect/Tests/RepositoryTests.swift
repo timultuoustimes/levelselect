@@ -50,6 +50,49 @@ struct RepositoryTests {
         #expect((g.completionEvents ?? []).count == 1)
     }
 
+    @Test func multiplePlaythroughsSwitchAndIsolate() {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let g = repo.addGame(name: "Hades", status: .playing)
+        let first = repo.ensureDefaultPlaythrough(for: g)
+        repo.logManualSession(on: first, duration: 1000)
+        repo.setTrackerItem(first, itemID: "boss-1", done: true)
+
+        // New playthrough switches immediately (Tim's confirmed behavior).
+        let second = repo.addPlaythrough(to: g, named: "Playthrough 2")
+        #expect(g.activePlaythrough?.id == second.id)
+        #expect(g.livePlaythroughs.count == 2)
+
+        // Fresh state: no sessions, no tracker progress on the new one.
+        #expect(second.totalPlaytime() == 0)
+        #expect((second.trackerStates ?? []).isEmpty)
+        // Old playthrough keeps everything.
+        #expect(abs(first.totalPlaytime() - 1000) < 0.001)
+        #expect((first.trackerStates ?? []).contains { $0.itemID == "boss-1" && $0.completed })
+
+        // ensureDefault honors the active selection.
+        #expect(repo.ensureDefaultPlaythrough(for: g).id == second.id)
+
+        // Switch back.
+        repo.setActivePlaythrough(first, for: g)
+        #expect(g.activePlaythrough?.id == first.id)
+    }
+
+    @Test func deletingActivePlaythroughFallsBack() {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let g = repo.addGame(name: "Celeste")
+        let first = repo.ensureDefaultPlaythrough(for: g)
+        let second = repo.addPlaythrough(to: g, named: "NG+")
+        _ = repo.startSession(on: second, at: Date(timeIntervalSince1970: 5_000_000))
+
+        repo.deletePlaythrough(second, from: g)
+        #expect(second.deletedAt != nil)
+        #expect(second.activeSession == nil)          // running session stopped
+        #expect(g.activePlaythrough?.id == first.id)  // fell back
+        #expect(g.livePlaythroughs.count == 1)
+    }
+
     @Test func totalPlaytimeSumsSessions() {
         let ctx = newContext()
         let repo = Repository(ctx)

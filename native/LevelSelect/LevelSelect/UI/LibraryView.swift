@@ -261,11 +261,11 @@ struct LibraryTab: View {
     }
 
     private func lastPlayed(_ g: Game) -> Date {
-        (g.playthroughs ?? []).compactMap(\.lastPlayedAt).max() ?? .distantPast
+        g.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? .distantPast
     }
 
     private func playtime(_ g: Game) -> TimeInterval {
-        (g.playthroughs ?? []).reduce(0) { $0 + $1.totalPlaytime() }
+        g.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime() }
     }
 }
 
