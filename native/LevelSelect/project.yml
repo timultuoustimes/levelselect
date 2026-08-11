@@ -44,6 +44,13 @@ targets:
         # Standard HTTPS only — skips the export-compliance question on
         # every TestFlight upload.
         ITSAppUsesNonExemptEncryption: false
+        # All four orientations (App Store validation requires them for
+        # iPad multitasking support).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
