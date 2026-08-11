@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var importing = false
     @State private var result: ImportReport?
     @State private var errorMessage: String?
+    @State private var progressSynced: Int?
 
     // The canonical legacy device this bundled export came from.
     private let sourceDeviceID = "7f86df1b-a815-4798-a9d5-00974419eec3"
@@ -49,6 +50,20 @@ struct SettingsView: View {
                 } footer: {
                     Text("Brings your existing library in from the web app's data. Safe to tap more than once. Syncs to your other devices via iCloud.")
                 }
+
+                Section {
+                    if let n = progressSynced {
+                        Label("Synced \(n) tracker items", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    Button {
+                        syncProgress()
+                    } label: {
+                        Label("Sync tracker progress", systemImage: "checklist")
+                    }
+                } footer: {
+                    Text("Backfills checked-off tracker items from the web app's data into an already-imported library. Safe to repeat.")
+                }
             }
             .navigationTitle("Settings")
             #if !os(macOS)
@@ -78,6 +93,21 @@ struct SettingsView: View {
             }
         }
         .font(.subheadline)
+    }
+
+    private func syncProgress() {
+        errorMessage = nil
+        guard let url = Bundle.main.url(forResource: "legacy-import", withExtension: "json"),
+              let data = try? Data(contentsOf: url) else {
+            errorMessage = "Bundled export not found."
+            return
+        }
+        do {
+            progressSynced = try LegacyImporter(context).syncTrackerProgress(data: data)
+            try context.save()
+        } catch {
+            errorMessage = String(describing: error)
+        }
     }
 
     private func runImport() {

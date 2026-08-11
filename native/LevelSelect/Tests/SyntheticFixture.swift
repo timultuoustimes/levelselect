@@ -53,7 +53,8 @@ enum SyntheticFixture {
           "saves": [{
             "id": "so1", "name": "Playthrough", "createdAt": "2026-02-01T00:00:00.000Z", "lastPlayedAt": null,
             "notes": "", "rating": 0, "review": "", "progressPercent": 10, "totalPlaytime": 0,
-            "milestones": [], "activeSession": null, "sessions": []
+            "milestones": [], "activeSession": null, "sessions": [],
+            "itemState": { "i1": { "done": true } }
           }]
         },
         {

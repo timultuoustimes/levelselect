@@ -10,6 +10,7 @@ struct ImportReport: Equatable, Sendable {
     var maps = 0
     var markers = 0
     var trackerSchemas = 0
+    var trackerStates = 0
     var skipped: [String] = []      // "game name — reason"
     var alreadyImported = false
 }
@@ -217,7 +218,60 @@ struct LegacyImporter {
             session.playthrough = pt
             report.sessions += 1
         }
+
+        // Tracker progress (legacy `itemState`: itemID → {done, rank?, …}).
+        report.trackerStates += importItemState(s, into: pt)
         return pt
+    }
+
+    /// Upsert TrackerStateRecords from a legacy save's `itemState`. Returns
+    /// the number of records created/updated. Idempotent per (pt, itemID).
+    @discardableResult
+    private func importItemState(_ s: [String: Any], into pt: Playthrough) -> Int {
+        guard let itemState = s["itemState"] as? [String: Any] else { return 0 }
+        var count = 0
+        for (itemID, rawValue) in itemState {
+            guard let value = rawValue as? [String: Any] else { continue }
+            let done = (value["done"] as? Bool) ?? false
+            let rank = (value["rank"] as? NSNumber)?.intValue
+            let existing = (pt.trackerStates ?? []).first { $0.itemID == itemID }
+            let record: TrackerStateRecord
+            if let existing {
+                record = existing
+            } else {
+                record = TrackerStateRecord(itemID: itemID)
+                context.insert(record)
+                record.playthrough = pt
+            }
+            record.completed = done
+            if let rank { record.rank = rank }
+            record.updatedAt = .now
+            count += 1
+        }
+        return count
+    }
+
+    /// Backfill tracker progress into an ALREADY-imported library (matching
+    /// playthroughs by legacyID). Safe to run repeatedly.
+    @discardableResult
+    func syncTrackerProgress(data: Data) throws -> Int {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let library = root["library"] as? [Any] else { throw ImportError.malformedRoot }
+        let playthroughs = try context.fetch(FetchDescriptor<Playthrough>())
+        let byLegacyID = Dictionary(grouping: playthroughs.compactMap { pt in
+            pt.legacyID.map { ($0, pt) }
+        }, by: \.0).compactMapValues { $0.first?.1 }
+
+        var total = 0
+        for entry in library {
+            guard let g = entry as? [String: Any] else { continue }
+            for s in arr(g, "saves") {
+                guard let saveID = str(s, "id"), let pt = byLegacyID[saveID] else { continue }
+                total += importItemState(s, into: pt)
+                if let game = pt.game { Repository(context).recomputeProgress(game) }
+            }
+        }
+        return total
     }
 
     private func importSession(_ raw: [String: Any]) -> Session {

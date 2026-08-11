@@ -15,6 +15,8 @@ struct GameDetailView: View {
                 Divider()
                 SessionControlsView(game: game)
                 Divider()
+                TrackerSectionView(game: game)
+                Divider()
                 notes
                 dekuButton
             }

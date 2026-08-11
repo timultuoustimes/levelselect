@@ -208,6 +208,81 @@ struct Repository {
         return session
     }
 
+    // MARK: Tracker
+
+    /// Existing state row for one schema item, if any.
+    func trackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord? {
+        (pt.trackerStates ?? []).first { $0.itemID == itemID && $0.deletedAt == nil }
+    }
+
+    @discardableResult
+    private func ensureTrackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord {
+        if let existing = trackerState(pt, itemID: itemID) { return existing }
+        let record = TrackerStateRecord(itemID: itemID)
+        context.insert(record)
+        record.playthrough = pt
+        return record
+    }
+
+    func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        record.completed = done
+        touch(record)
+        touch(pt)
+    }
+
+    /// Rank items auto-complete at max rank.
+    func setTrackerRank(_ pt: Playthrough, itemID: String, rank: Int, maxRank: Int?) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        record.rank = max(0, rank)
+        if let maxRank { record.completed = rank >= maxRank }
+        touch(record)
+        touch(pt)
+    }
+
+    func revealTrackerItem(_ pt: Playthrough, itemID: String) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        record.revealed = true
+        touch(record)
+    }
+
+    /// Ensure the game has a tracker schema record (creating an empty one for
+    /// Personal Goals on first use) and append a user goal to it.
+    func addPersonalGoal(to game: Game, named name: String) {
+        let schema: TrackerSchemaRecord
+        if let existing = game.trackerSchema {
+            schema = existing
+        } else {
+            schema = TrackerSchemaRecord(
+                source: .builtIn, engine: .objective,
+                jsonData: TrackerSchemaJSON.emptySchema()
+            )
+            context.insert(schema)
+            schema.game = game
+        }
+        if let updated = TrackerSchemaJSON.addingGoal(named: name, to: schema.jsonData) {
+            schema.jsonData = updated
+            touch(schema)
+            touch(game)
+        }
+    }
+
+    /// Recompute the active playthrough's progress % from schema + state.
+    func recomputeProgress(_ game: Game) {
+        guard let schema = game.trackerSchema else { return }
+        let categories = TrackerSchemaJSON.categories(from: schema.jsonData)
+        let allItems = categories.flatMap(\.items)
+        guard !allItems.isEmpty,
+              let pt = (game.playthroughs ?? []).first(where: { $0.deletedAt == nil })
+        else { return }
+        let doneIDs = Set((pt.trackerStates ?? [])
+            .filter { $0.completed && $0.deletedAt == nil }
+            .map(\.itemID))
+        let done = allItems.filter { doneIDs.contains($0.id) }.count
+        pt.progressPercent = Double(done) / Double(allItems.count) * 100
+        touch(pt)
+    }
+
     // MARK: Completion
 
     @discardableResult

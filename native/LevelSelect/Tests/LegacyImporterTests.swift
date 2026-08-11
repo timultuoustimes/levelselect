@@ -63,6 +63,32 @@ struct LegacyImporterTests {
         #expect((g.completionEvents ?? []).count == 1)
     }
 
+    @Test func importsItemStateAsTrackerRecords() throws {
+        let ctx = newContext()
+        let report = try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
+        #expect(report.trackerStates == 1)
+        let g = try game(ctx, legacyID: "g-obj")
+        let pt = try #require((g.playthroughs ?? []).first)
+        let state = try #require((pt.trackerStates ?? []).first { $0.itemID == "i1" })
+        #expect(state.completed == true)
+    }
+
+    @Test func syncTrackerProgressBackfillsExistingLibrary() throws {
+        let ctx = newContext()
+        let importer = LegacyImporter(ctx)
+        try importer.import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
+        // Wipe the imported state to simulate a library imported before
+        // itemState support existed, then backfill.
+        for state in try ctx.fetch(FetchDescriptor<TrackerStateRecord>()) {
+            ctx.delete(state)
+        }
+        let n = try importer.syncTrackerProgress(data: SyntheticFixture.data)
+        #expect(n == 1)
+        let g = try game(ctx, legacyID: "g-obj")
+        let pt = try #require((g.playthroughs ?? []).first)
+        #expect((pt.trackerStates ?? []).contains { $0.itemID == "i1" && $0.completed })
+    }
+
     @Test func trackerSchemaEngineAndSource() throws {
         let ctx = newContext()
         try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
