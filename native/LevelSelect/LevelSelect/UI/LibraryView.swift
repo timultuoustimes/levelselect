@@ -21,6 +21,7 @@ struct LibraryTab: View {
                             ForEach(items) { game in
                                 NavigationLink(value: game) { GameRow(game: game) }
                                     .listRowBackground(Color.clear)
+                                    .gameContextMenu(game)
                             }
                         } header: {
                             Label("\(status.sectionTitle) (\(items.count))", systemImage: status.systemImage)

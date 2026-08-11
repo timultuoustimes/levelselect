@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import UserNotifications
 
 /// Local "still playing?" reminders. When a session starts (or is discovered
@@ -8,10 +9,42 @@ import UserNotifications
 /// StaleSessionGuard presents the resolve prompt.
 enum NotificationManager {
     private static let prefix = "stale-session-"
+    static let categoryID = "STALE_SESSION"
+    static let actionStillPlaying = "STALE_STILL_PLAYING"
+    static let actionEnd = "STALE_END"
+    static let actionDiscard = "STALE_DISCARD"
 
     /// Never touch notification APIs inside the unit-test host.
     private static var enabled: Bool {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+    }
+
+    static func sessionID(fromNotificationID id: String) -> UUID? {
+        guard id.hasPrefix(prefix) else { return nil }
+        return UUID(uuidString: String(id.dropFirst(prefix.count)))
+    }
+
+    /// One-time launch setup: delegate + action buttons on the reminder.
+    @MainActor
+    static func configure(container: ModelContainer) {
+        guard enabled else { return }
+        NotificationDelegate.shared.container = container
+        let center = UNUserNotificationCenter.current()
+        center.delegate = NotificationDelegate.shared
+
+        let still = UNNotificationAction(
+            identifier: actionStillPlaying, title: "Still Playing")
+        let end = UNNotificationAction(
+            identifier: actionEnd, title: "End Session…",
+            options: [.foreground])           // opens the app → end-time sheet
+        let discard = UNNotificationAction(
+            identifier: actionDiscard, title: "Discard Session",
+            options: [.destructive])
+        let category = UNNotificationCategory(
+            identifier: categoryID,
+            actions: [still, end, discard],
+            intentIdentifiers: [])
+        center.setNotificationCategories([category])
     }
 
     static func requestAuthorizationIfNeeded() {
@@ -36,8 +69,9 @@ enum NotificationManager {
 
         let content = UNMutableNotificationContent()
         content.title = "Still playing \(gameName)?"
-        content.body = "Your session has been running for \(Int(threshold / 3600)) hours. Tap to keep it going or end it."
+        content.body = "Your session has been running for \(Int(threshold / 3600)) hours. Press and hold for options."
         content.sound = .default
+        content.categoryIdentifier = categoryID
 
         let request = UNNotificationRequest(
             identifier: prefix + sessionID.uuidString,

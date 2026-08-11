@@ -8,6 +8,7 @@ struct LevelSelectApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .task { NotificationManager.configure(container: container) }
         }
         .modelContainer(container)
     }

@@ -138,6 +138,7 @@ struct StatusListView: View {
             ForEach(games) { game in
                 NavigationLink(value: game) { GameRow(game: game) }
                     .listRowBackground(Color.clear)
+                    .gameContextMenu(game)
             }
         }
         .listStyle(.plain)

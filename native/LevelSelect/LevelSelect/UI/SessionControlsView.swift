@@ -8,6 +8,7 @@ struct SessionControlsView: View {
     let game: Game
     @Environment(\.modelContext) private var context
     @State private var showingLog = false
+    @State private var editing: Session?
 
     private var repo: Repository { Repository(context) }
 
@@ -17,7 +18,9 @@ struct SessionControlsView: View {
     }
 
     private var sessions: [Session] {
-        (playthrough?.sessions ?? []).sorted { $0.startDate > $1.startDate }
+        (playthrough?.sessions ?? [])
+            .filter { $0.deletedAt == nil }
+            .sorted { $0.startDate > $1.startDate }
     }
 
     var body: some View {
@@ -39,6 +42,9 @@ struct SessionControlsView: View {
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.logManualSession(on: pt, duration: duration, date: date, notes: notes)
             }
+        }
+        .sheet(item: $editing) { session in
+            EditSessionSheet(session: session)
         }
     }
 
@@ -107,21 +113,35 @@ struct SessionControlsView: View {
 
     private var recentSessions: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Recent")
+            Text("Recent — tap to edit")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
             ForEach(sessions.prefix(5)) { s in
-                HStack {
-                    Image(systemName: s.isManual ? "square.and.pencil" : "stopwatch")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(s.startDate, format: .dateTime.month().day().hour().minute())
-                        .font(.subheadline)
-                    Spacer()
-                    Text(Format.duration(s.elapsed()))
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                Button {
+                    if s.state == .stopped { editing = s }
+                } label: {
+                    HStack {
+                        Image(systemName: s.isManual ? "square.and.pencil" : "stopwatch")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(s.startDate, format: .dateTime.month().day().hour().minute())
+                            .font(.subheadline)
+                        if s.notes != nil {
+                            Image(systemName: "note.text")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer()
+                        Text(Format.duration(s.elapsed()))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
             }
         }
     }

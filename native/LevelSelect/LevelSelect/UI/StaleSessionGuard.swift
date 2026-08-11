@@ -15,6 +15,7 @@ struct StaleSessionGuard: ViewModifier {
     private var games: [Game]
 
     @State private var stale: Session?
+    @State private var ending: Session?             // end-time sheet target
     @State private var snoozed: Set<UUID> = []      // per-launch "still playing" answers
 
     func body(content: Content) -> some View {
@@ -23,17 +24,21 @@ struct StaleSessionGuard: ViewModifier {
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { check() }
             }
+            // "End Session…" chosen on a notification → open the sheet directly.
+            .onReceive(NotificationCenter.default.publisher(for: .lsEndSessionRequested)) { note in
+                guard let id = note.object as? UUID else { return }
+                ending = games
+                    .flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+                    .first { $0.id == id && $0.state != .stopped }
+            }
             .alert("Still playing?", isPresented: isPresented) {
                 Button("Still Playing") {
                     if let s = stale { snoozed.insert(s.id) }
                     stale = nil
                 }
-                Button("End Session") {
-                    if let s = stale {
-                        Repository(context).endStaleSession(s, cappedAt: Self.threshold)
-                    }
+                Button("End Session…") {
+                    ending = stale
                     stale = nil
-                    check()
                 }
                 Button("Discard Session", role: .destructive) {
                     if let s = stale {
@@ -45,6 +50,9 @@ struct StaleSessionGuard: ViewModifier {
             } message: {
                 Text(messageText)
             }
+            .sheet(item: $ending) { session in
+                EndSessionSheet(session: session)
+            }
     }
 
     private var isPresented: Binding<Bool> {
@@ -55,7 +63,7 @@ struct StaleSessionGuard: ViewModifier {
         guard let s = stale else { return "" }
         let name = s.playthrough?.game?.name ?? "A game"
         return "\(name) has a session running for \(Format.duration(s.elapsed())). "
-            + "End keeps up to \(Format.duration(Self.threshold)); Discard records no time."
+            + "End lets you pick when you stopped; Discard records no time."
     }
 
     private func check() {

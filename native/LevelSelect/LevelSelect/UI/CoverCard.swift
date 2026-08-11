@@ -64,6 +64,7 @@ struct StatusCarousel: View {
                         } label: {
                             CoverCard(game: game)
                         }
+                        .gameContextMenu(game)
                         // Covers breathe + tilt like a shelf as they scroll.
                         .scrollTransition(axis: .horizontal) { content, phase in
                             content

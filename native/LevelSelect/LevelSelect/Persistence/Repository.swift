@@ -110,20 +110,43 @@ struct Repository {
         NotificationManager.cancelStaleReminder(sessionID: session.id)
     }
 
-    /// End a forgotten/runaway session, capping the recorded time at `cap`
-    /// (the true duration is unknowable — the timer was left running).
-    func endStaleSession(_ session: Session, cappedAt cap: TimeInterval, at date: Date = .now) {
+    /// End a forgotten/runaway session at a user-chosen stop time (the timer
+    /// was left running, so the user tells us when they actually stopped).
+    func endStaleSession(_ session: Session, stoppedAt stop: Date) {
         guard session.state != .stopped else { return }
-        session.accumulatedDuration = min(session.elapsed(asOf: date), cap)
-        session.endDate = session.startDate.addingTimeInterval(session.accumulatedDuration)
+        let clamped = max(session.startDate, stop)
+        session.accumulatedDuration = clamped.timeIntervalSince(session.startDate)
+        session.endDate = clamped
         session.pausedAt = nil
         session.resumedAt = nil
         session.state = .stopped
-        touch(session, at: date)
+        touch(session)
         if let pt = session.playthrough {
-            pt.lastPlayedAt = session.endDate
-            touch(pt, at: date)
+            pt.lastPlayedAt = clamped
+            touch(pt)
         }
+        NotificationManager.cancelStaleReminder(sessionID: session.id)
+    }
+
+    /// Edit a completed session's times and notes.
+    func updateSession(_ session: Session, start: Date, end: Date, notes: String?) {
+        let clampedEnd = max(start, end)
+        session.startDate = start
+        session.endDate = clampedEnd
+        session.accumulatedDuration = clampedEnd.timeIntervalSince(start)
+        session.notes = (notes?.isEmpty == true) ? nil : notes
+        touch(session)
+        if let pt = session.playthrough { touch(pt) }
+    }
+
+    /// Remove a session from history (tombstoned so the removal syncs).
+    func deleteSession(_ session: Session, at date: Date = .now) {
+        session.deletedAt = date
+        if session.state != .stopped {
+            session.state = .stopped
+            session.endDate = session.startDate
+        }
+        touch(session, at: date)
         NotificationManager.cancelStaleReminder(sessionID: session.id)
     }
 
