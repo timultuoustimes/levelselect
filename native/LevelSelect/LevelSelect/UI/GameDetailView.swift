@@ -24,6 +24,7 @@ struct GameDetailView: View {
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .background { ambientBackdrop }
         .dekuBrowser(target: $browserTarget)
         .navigationTitle(game.name)
         #if !os(macOS)
@@ -66,6 +67,45 @@ struct GameDetailView: View {
         } message: {
             Text("Moves it to trash (recoverable).")
         }
+    }
+
+    // MARK: Backdrop
+
+    /// Ambient page background: the game's own cover, blurred and saturated,
+    /// glowing behind the top of the page and fading into the app gradient —
+    /// every game gets its own atmosphere.
+    private var ambientBackdrop: some View {
+        ZStack(alignment: .top) {
+            LSTheme.background
+
+            if let s = game.coverURLString, let url = URL(string: s) {
+                AsyncImage(url: url) { phase in
+                    if case .success(let image) = phase {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .frame(height: 420)
+                            .frame(maxWidth: .infinity)
+                            .clipped()
+                            .blur(radius: 60, opaque: true)
+                            .saturation(1.5)
+                            .opacity(0.55)
+                            .mask(
+                                LinearGradient(
+                                    stops: [
+                                        .init(color: .black, location: 0),
+                                        .init(color: .black.opacity(0.6), location: 0.55),
+                                        .init(color: .clear, location: 1),
+                                    ],
+                                    startPoint: .top, endPoint: .bottom
+                                )
+                            )
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .ignoresSafeArea()
     }
 
     // MARK: Sections
