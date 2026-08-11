@@ -82,14 +82,19 @@ struct HomeTab: View {
             .toolbar {
                 #if !os(macOS)
                 ToolbarItem(placement: .principal) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 7) {
                         Image("DoorMark")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 28)
+                            .frame(height: 26)
                         Text("LevelSelect")
-                            .font(LSTheme.pixel(15))
+                            .font(LSTheme.pixel(12))
                             .foregroundStyle(LSTheme.torch)
+                            // Press Start 2P's tall line box centers oddly;
+                            // optically center the glyphs on the door.
+                            .offset(y: -0.5)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("LevelSelect")
