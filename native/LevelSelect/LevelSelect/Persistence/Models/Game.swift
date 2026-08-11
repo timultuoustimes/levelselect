@@ -33,6 +33,8 @@ final class Game {
     var review: String?
     var addedAt: Date = Date.now
     var currentPlaythroughID: UUID?
+    /// Per-game tracker display override; nil = follow the library default.
+    var trackerDisplayRaw: String?
 
     // Value metadata arrays
     var platforms: [String] = []
@@ -53,6 +55,8 @@ final class Game {
     var maps: [GameMap]?
     @Relationship(deleteRule: .cascade, inverse: \TrackerSchemaRecord.game)
     var trackerSchema: TrackerSchemaRecord?
+    @Relationship(deleteRule: .cascade, inverse: \GameVideo.game)
+    var videos: [GameVideo]?
 
     init(
         id: UUID = UUID(),

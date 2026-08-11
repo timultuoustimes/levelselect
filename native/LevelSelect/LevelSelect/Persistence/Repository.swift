@@ -408,6 +408,53 @@ struct Repository {
         touch(run, at: date)
     }
 
+    // MARK: Videos
+
+    /// Add a video/playlist from a URL. Playlists auto-group under their
+    /// title; loose videos land in "Videos". Metadata is filled from oEmbed
+    /// by the caller (async) — this just persists.
+    @discardableResult
+    func addVideo(
+        to game: Game,
+        parsed: YouTubeService.Parsed,
+        urlString: String,
+        metadata: YouTubeService.Metadata?
+    ) -> GameVideo {
+        let title = metadata?.title
+            ?? (parsed.kind == .playlist ? "YouTube Playlist" : "YouTube Video")
+        let video = GameVideo(kind: parsed.kind, urlString: urlString,
+                              youtubeID: parsed.id, title: title)
+        video.channel = metadata?.channel
+        video.thumbnailURL = metadata?.thumbnailURL
+        video.groupName = parsed.kind == .playlist ? title : "Videos"
+        video.orderIndex = ((game.videos ?? []).map(\.orderIndex).max() ?? -1) + 1
+        context.insert(video)
+        video.game = game
+        touch(game)
+        return video
+    }
+
+    func deleteVideo(_ video: GameVideo, at date: Date = .now) {
+        video.deletedAt = date
+        touch(video, at: date)
+    }
+
+    func moveVideo(_ video: GameVideo, toGroup group: String) {
+        let trimmed = group.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        video.groupName = trimmed
+        touch(video)
+    }
+
+    /// Persist the synced resume position (called by the player bridge,
+    /// debounced upstream).
+    func updateVideoProgress(_ video: GameVideo, seconds: Double, partIndex: Int?) {
+        video.watchedSeconds = max(0, seconds)
+        if let partIndex, partIndex >= 0 { video.watchedPartIndex = partIndex }
+        video.lastWatchedAt = .now
+        touch(video)
+    }
+
     // MARK: Completion
 
     @discardableResult
@@ -430,6 +477,14 @@ struct Repository {
 // MARK: - Derived helpers
 
 extension Game {
+    /// Effective tracker display: explicit per-game choice wins; otherwise
+    /// the library default (which can never override an explicit choice).
+    @MainActor
+    var resolvedTrackerDisplay: TrackerDisplay {
+        trackerDisplayRaw.flatMap { TrackerDisplay(rawValue: $0) }
+            ?? ThemePalette.defaultTrackerDisplay
+    }
+
     /// Live (non-deleted) playthroughs, oldest first (stable ordering).
     var livePlaythroughs: [Playthrough] {
         (playthroughs ?? [])

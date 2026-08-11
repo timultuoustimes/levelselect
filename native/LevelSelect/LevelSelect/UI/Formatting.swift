@@ -10,6 +10,14 @@ enum Format {
         return "\(sec)s"
     }
 
+    /// Video timestamp, e.g. "4:02" or "1:12:41".
+    static func timestamp(_ t: TimeInterval) -> String {
+        let s = max(0, Int(t))
+        let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
+        return h > 0 ? String(format: "%d:%02d:%02d", h, m, sec)
+                     : String(format: "%d:%02d", m, sec)
+    }
+
     /// Stopwatch clock, e.g. "01:02:03".
     static func clock(_ t: TimeInterval) -> String {
         let s = max(0, Int(t))

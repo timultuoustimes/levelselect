@@ -14,6 +14,12 @@ struct AppearanceSettingsSection: View {
         Section {
             ColorPicker("Accent color", selection: accentBinding, supportsOpacity: false)
 
+            Picker("Tracker display", selection: trackerDisplayBinding) {
+                ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+
             Picker("Game page background", selection: pageBackgroundBinding) {
                 ForEach(ThemePageBackground.allCases, id: \.rawValue) { choice in
                     Text(choice.label).tag(choice)
@@ -50,6 +56,19 @@ struct AppearanceSettingsSection: View {
             set: { color in
                 let s = ensureSettings()
                 s.accentHex = color.hexString()
+                save(s)
+            }
+        )
+    }
+
+    private var trackerDisplayBinding: Binding<TrackerDisplay> {
+        Binding(
+            get: {
+                settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
+            },
+            set: { choice in
+                let s = ensureSettings()
+                s.defaultTrackerDisplayRaw = choice.rawValue
                 save(s)
             }
         )

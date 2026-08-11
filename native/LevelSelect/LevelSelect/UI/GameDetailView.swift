@@ -8,6 +8,11 @@ struct GameDetailView: View {
     @State private var confirmingDelete = false
     @State private var browserTarget: DekuLinkTarget?
 
+    @State private var pagePlaying: GameVideo?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
+    @State private var stage = 1
+
     // Playthrough management
     @State private var namingNewPlaythrough = false
     @State private var renamingPlaythrough = false
@@ -17,56 +22,25 @@ struct GameDetailView: View {
     private var repo: Repository { Repository(context) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                hero
-                if game.livePlaythroughs.count > 1 {
-                    playthroughPicker
-                }
-                Divider()
-                CollapsibleSection("Sessions", icon: "stopwatch") {
-                    SessionControlsView(game: game)
-                }
-                if let template = game.trackerSchema.flatMap({
-                    TrackerSchemaJSON.runTemplate(from: $0.jsonData)
-                }) {
-                    Divider()
-                    CollapsibleSection("Runs", icon: "flag.checkered") {
-                        RunSectionView(game: game, template: template)
+        GeometryReader { geo in
+            let stageMode = horizontalSizeClass == .regular
+                && geo.size.width > geo.size.height
+                && game.resolvedTrackerDisplay == .compact
+            Group {
+                if stageMode {
+                    stageLayout(width: geo.size.width)
+                } else {
+                    VStack(spacing: 0) {
+                        if let video = pagePlaying {
+                            VideoPlayerDock(video: video) { pagePlaying = nil }
+                        }
+                        standardScroll(stageMode: false)
                     }
-                }
-                Divider()
-                CollapsibleSection("Tracker", icon: "checklist") {
-                    TrackerSectionView(game: game)
-                }
-                Divider()
-                if let summary = game.summary, !summary.isEmpty {
-                    CollapsibleSection("About", icon: "text.alignleft", defaultExpanded: false) {
-                        Text(summary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Divider()
-                }
-                CollapsibleSection("Game Info", icon: "info.circle", defaultExpanded: false) {
-                    gameInfo
-                }
-                Divider()
-                CollapsibleSection("Tags", icon: "tag", defaultExpanded: false) {
-                    tagsEditor
-                }
-                Divider()
-                CollapsibleSection("Review", icon: "star.bubble", defaultExpanded: false) {
-                    reviewEditor
-                }
-                Divider()
-                CollapsibleSection("Notes", icon: "note.text") {
-                    notesField
                 }
             }
-            .padding()
-            .frame(maxWidth: 640, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            .onChange(of: pagePlaying != nil) { _, hasVideo in
+                if stageMode, hasVideo { stage = 3 }
+            }
         }
         .background { ambientBackdrop }
         .dekuBrowser(target: $browserTarget)
@@ -97,6 +71,22 @@ struct GameDetailView: View {
                         namingNewPlaythrough = true
                     } label: {
                         Label("New Playthrough…", systemImage: "plus.square.on.square")
+                    }
+                    Menu("Tracker Display") {
+                        Button {
+                            game.trackerDisplayRaw = nil
+                        } label: {
+                            Label("Follow Default (\(ThemePalette.defaultTrackerDisplay.label))",
+                                  systemImage: game.trackerDisplayRaw == nil ? "checkmark" : "circle.dashed")
+                        }
+                        ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
+                            Button {
+                                game.trackerDisplayRaw = choice.rawValue
+                            } label: {
+                                Label(choice.label, systemImage:
+                                      game.trackerDisplayRaw == choice.rawValue ? "checkmark" : "circle")
+                            }
+                        }
                     }
                     Divider()
                     Button(role: .destructive) {
@@ -207,6 +197,178 @@ struct GameDetailView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
+        }
+    }
+
+    // MARK: Standard layout
+
+    private func standardScroll(stageMode: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                hero
+                if game.livePlaythroughs.count > 1 {
+                    playthroughPicker
+                }
+                Divider()
+                CollapsibleSection("Sessions", icon: "stopwatch") {
+                    SessionControlsView(game: game)
+                }
+                if game.resolvedTrackerDisplay == .compact {
+                    Divider()
+                    CollapsibleSection("Tracker", icon: "checklist") {
+                        CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
+                    }
+                } else {
+                    if let template = game.trackerSchema.flatMap({
+                        TrackerSchemaJSON.runTemplate(from: $0.jsonData)
+                    }) {
+                        Divider()
+                        CollapsibleSection("Runs", icon: "flag.checkered") {
+                            RunSectionView(game: game, template: template)
+                        }
+                    }
+                    Divider()
+                    CollapsibleSection("Tracker", icon: "checklist") {
+                        TrackerSectionView(game: game)
+                    }
+                }
+                Divider()
+                CollapsibleSection("Guides & Videos", icon: "play.rectangle", defaultExpanded: false) {
+                    VideoListView(game: game, playing: $pagePlaying)
+                }
+                Divider()
+                if let summary = game.summary, !summary.isEmpty {
+                    CollapsibleSection("About", icon: "text.alignleft", defaultExpanded: false) {
+                        Text(summary)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Divider()
+                }
+                CollapsibleSection("Game Info", icon: "info.circle", defaultExpanded: false) {
+                    gameInfo
+                }
+                Divider()
+                CollapsibleSection("Tags", icon: "tag", defaultExpanded: false) {
+                    tagsEditor
+                }
+                Divider()
+                CollapsibleSection("Review", icon: "star.bubble", defaultExpanded: false) {
+                    reviewEditor
+                }
+                Divider()
+                CollapsibleSection("Notes", icon: "note.text") {
+                    notesField
+                }
+            }
+            .padding()
+            .frame(maxWidth: 640, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .scrollIndicators(.hidden)
+    }
+
+    // MARK: Sliding stage (iPad landscape / macOS, compact display)
+
+    private func stageLayout(width: CGFloat) -> some View {
+        ZStack(alignment: .topLeading) {
+            standardScroll(stageMode: true)
+                .frame(width: stage == 1 ? width : width * 0.58)
+                .offset(x: stage == 3 ? -width * 0.58 : 0)
+
+            trackerPanel
+                .frame(width: stage == 3 ? width * 0.46 : width * 0.42)
+                .offset(x: stage == 1 ? width
+                        : (stage == 2 ? width * 0.58 : 0))
+
+            videoPanel
+                .frame(width: width * 0.54)
+                .offset(x: stage == 3 ? width * 0.46 : width * 1.02)
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.85), value: stage)
+        .clipped()
+    }
+
+    private var trackerPanel: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Circle().fill(.green).frame(width: 7, height: 7)
+                Text(game.activePlaythrough?.name ?? "Playthrough")
+                    .font(.subheadline.weight(.semibold))
+                Text("tracker").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    stage = 3
+                } label: {
+                    Label("Videos", systemImage: "play.rectangle.fill")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .tint(LSTheme.accent)
+                Button {
+                    stage = 1
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .padding(6)
+                        .background(.white.opacity(0.08), in: .circle)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    if let template = game.trackerSchema.flatMap({
+                        TrackerSchemaJSON.runTemplate(from: $0.jsonData)
+                    }) {
+                        CollapsibleSection("Runs", icon: "flag.checkered") {
+                            RunSectionView(game: game, template: template)
+                        }
+                        Divider()
+                    }
+                    TrackerSectionView(game: game)
+                }
+                .padding()
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(LSTheme.accent.opacity(0.25)).frame(width: 1)
+        }
+    }
+
+    private var videoPanel: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Label("Guides & Videos", systemImage: "play.rectangle.fill")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    stage = 2
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .padding(6)
+                        .background(.white.opacity(0.08), in: .circle)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(12)
+            Divider()
+            if let video = pagePlaying {
+                VideoPlayerDock(video: video) { pagePlaying = nil }
+            }
+            ScrollView {
+                VideoListView(game: game, playing: $pagePlaying)
+                    .padding()
+            }
+            .scrollIndicators(.hidden)
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(LSTheme.accent.opacity(0.25)).frame(width: 1)
         }
     }
 

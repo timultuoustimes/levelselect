@@ -49,6 +49,7 @@ struct HomeTab: View {
             .navigationTitle("LevelSelect")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
+            .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .toolbar {
                 ToolbarItem {
                     Button { showingSettings = true } label: {

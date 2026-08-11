@@ -14,6 +14,9 @@ final class ThemeSettings {
     var statusColorsData: Data?
     /// Game-page backdrop: "cover" (ambient art) or "status" (status color).
     var pageBackgroundRaw: String = ThemePageBackground.cover.rawValue
+    /// Library-wide default tracker display ("inline"/"compact"). Per-game
+    /// overrides (Game.trackerDisplayRaw) always win over this.
+    var defaultTrackerDisplayRaw: String = TrackerDisplay.inline.rawValue
 
     init() {}
 

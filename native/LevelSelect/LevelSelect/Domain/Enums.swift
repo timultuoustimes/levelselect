@@ -42,3 +42,16 @@ enum MarkerCategory: String, Codable, CaseIterable, Sendable {
 enum SyncOpType: String, Codable, Sendable {
     case upsert, delete
 }
+
+/// How a game presents its tracker on the game page.
+enum TrackerDisplay: String, Codable, CaseIterable, Sendable {
+    case inline     // embedded sections (original)
+    case compact    // playthrough card + dedicated tracker page/panel
+
+    var label: String {
+        switch self {
+        case .inline: "Inline"
+        case .compact: "Compact"
+        }
+    }
+}

@@ -30,6 +30,7 @@ struct LibraryTab: View {
             .lsBackground()
             .navigationTitle("Library")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .searchable(text: $searchText, prompt: "Search games or franchises")
             .toolbar { toolbarContent }
         }

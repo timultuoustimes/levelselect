@@ -8,6 +8,7 @@ import SwiftData
 enum ThemePalette {
     private(set) static var accent: Color = LSTheme.purple
     private(set) static var pageBackground: ThemePageBackground = .cover
+    private(set) static var defaultTrackerDisplay: TrackerDisplay = .inline
     private static var statusOverrides: [GameStatus: Color] = [:]
 
     /// Built-in defaults (the palette shipped before theming existed).
@@ -31,6 +32,7 @@ enum ThemePalette {
     static func refresh(from settings: ThemeSettings?) {
         accent = settings?.accentHex.flatMap { Color(hex: $0) } ?? LSTheme.purple
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
+        defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
         var overrides: [GameStatus: Color] = [:]
         for (raw, hex) in settings?.statusColors ?? [:] {
             if let status = GameStatus(rawValue: raw), let color = Color(hex: hex) {
