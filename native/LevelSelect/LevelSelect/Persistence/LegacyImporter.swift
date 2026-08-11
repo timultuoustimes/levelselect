@@ -119,9 +119,10 @@ struct LegacyImporter {
         // Playthroughs (+ sessions). Consolidate rating: userRating ?? first save rating.
         var consolidatedRating: Int? = int(g, "userRating")
         var firstPlaythroughID: UUID?
+        let trackerType = str(g, "trackerType") ?? "None"
         let saves = arr(g, "saves")
         for s in saves {
-            let pt = importPlaythrough(s, into: &report)
+            let pt = importPlaythrough(s, trackerType: trackerType, into: &report)
             pt.game = game                 // set to-one; SwiftData maintains the inverse
             if firstPlaythroughID == nil { firstPlaythroughID = pt.id }
             if consolidatedRating == nil, let r = int(s, "rating"), r > 0 {
@@ -187,7 +188,7 @@ struct LegacyImporter {
         }
     }
 
-    private func importPlaythrough(_ s: [String: Any], into report: inout ImportReport) -> Playthrough {
+    private func importPlaythrough(_ s: [String: Any], trackerType: String = "None", into report: inout ImportReport) -> Playthrough {
         let pt = Playthrough(
             name: str(s, "name") ?? "Playthrough",
             progressPercent: dbl(s, "progressPercent") ?? 0,
@@ -219,9 +220,26 @@ struct LegacyImporter {
             report.sessions += 1
         }
 
-        // Tracker progress (legacy `itemState`: itemID → {done, rank?, …}).
+        // Tracker progress: generic `itemState` + bespoke per-game fields.
         report.trackerStates += importItemState(s, into: pt)
+        report.trackerStates += importBespokeState(trackerType: trackerType, save: s, into: pt)
         return pt
+    }
+
+    /// Create-or-update one tracker state row (idempotent per (pt, itemID)).
+    private func upsertState(_ pt: Playthrough, itemID: String, done: Bool?, rank: Int?) {
+        let existing = (pt.trackerStates ?? []).first { $0.itemID == itemID }
+        let record: TrackerStateRecord
+        if let existing {
+            record = existing
+        } else {
+            record = TrackerStateRecord(itemID: itemID)
+            context.insert(record)
+            record.playthrough = pt
+        }
+        if let done { record.completed = done }
+        if let rank { record.rank = rank }
+        record.updatedAt = .now
     }
 
     /// Upsert TrackerStateRecords from a legacy save's `itemState`. Returns
@@ -234,19 +252,56 @@ struct LegacyImporter {
             guard let value = rawValue as? [String: Any] else { continue }
             let done = (value["done"] as? Bool) ?? false
             let rank = (value["rank"] as? NSNumber)?.intValue
-            let existing = (pt.trackerStates ?? []).first { $0.itemID == itemID }
-            let record: TrackerStateRecord
-            if let existing {
-                record = existing
-            } else {
-                record = TrackerStateRecord(itemID: itemID)
-                context.insert(record)
-                record.playthrough = pt
-            }
-            record.completed = done
-            if let rank { record.rank = rank }
-            record.updatedAt = .now
+            upsertState(pt, itemID: itemID, done: done, rank: rank)
             count += 1
+        }
+        return count
+    }
+
+    /// Map bespoke per-game save fields (Messenger / Citizen Sleeper / Mina)
+    /// onto tracker state, using the same ids as the built-in schemas. Only
+    /// non-default values create records (keeps state sparse).
+    @discardableResult
+    private func importBespokeState(trackerType: String, save s: [String: Any], into pt: Playthrough) -> Int {
+        var count = 0
+        func boolMap(_ key: String) {
+            for (id, value) in (s[key] as? [String: Any]) ?? [:] {
+                if (value as? Bool) == true {
+                    upsertState(pt, itemID: id, done: true, rank: nil)
+                    count += 1
+                }
+            }
+        }
+        switch trackerType {
+        case "messenger":
+            boolMap("collected")
+            for (id, value) in (s["levelData"] as? [String: Any]) ?? [:] {
+                guard let level = value as? [String: Any] else { continue }
+                let cleared = (level["cleared"] as? Bool) == true
+                let seals = (level["powerSeals"] as? NSNumber)?.intValue ?? 0
+                if cleared || seals > 0 {
+                    upsertState(pt, itemID: id, done: cleared ? true : nil,
+                                rank: seals > 0 ? seals : nil)
+                    count += 1
+                }
+            }
+        case "citizen-sleeper":
+            boolMap("driveCompleted")
+            boolMap("clockCompleted")
+            boolMap("endingCompleted")
+        case "mina-the-hollower":
+            boolMap("bossesDefeated")
+            boolMap("secretBossesDefeated")
+            boolMap("questsCompleted")
+            boolMap("jouleBoxes")
+            for (id, value) in (s["trinketCounts"] as? [String: Any]) ?? [:] {
+                if let n = (value as? NSNumber)?.intValue, n > 0 {
+                    upsertState(pt, itemID: id, done: nil, rank: n)
+                    count += 1
+                }
+            }
+        default:
+            break
         }
         return count
     }
@@ -265,9 +320,11 @@ struct LegacyImporter {
         var total = 0
         for entry in library {
             guard let g = entry as? [String: Any] else { continue }
+            let trackerType = str(g, "trackerType") ?? "None"
             for s in arr(g, "saves") {
                 guard let saveID = str(s, "id"), let pt = byLegacyID[saveID] else { continue }
                 total += importItemState(s, into: pt)
+                total += importBespokeState(trackerType: trackerType, save: s, into: pt)
                 if let game = pt.game { Repository(context).recomputeProgress(game) }
             }
         }
