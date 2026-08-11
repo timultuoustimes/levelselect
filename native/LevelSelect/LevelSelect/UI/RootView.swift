@@ -7,6 +7,7 @@ struct RootView: View {
         TabView {
             Tab("Home", systemImage: "house.fill") { HomeTab() }
             Tab("Library", systemImage: "square.grid.2x2.fill") { LibraryTab() }
+            Tab("Wishlist", systemImage: "heart.fill") { WishlistTab() }
             Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
         }
         .tint(LSTheme.purple)

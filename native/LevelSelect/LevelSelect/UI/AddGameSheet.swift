@@ -4,13 +4,22 @@ import SwiftUI
 /// quick Platform + Status confirm → Add. Manual entry stays as a fallback
 /// for games not on IGDB.
 struct AddGameSheet: View {
+    /// Pre-filled search (e.g. promoting a Deku wishlist item) and an optional
+    /// status override (wishlist promotions default to `.wishlist`).
+    init(initialSearch: String = "", defaultStatus: GameStatus? = nil) {
+        _searchText = State(initialValue: initialSearch)
+        self.defaultStatus = defaultStatus
+    }
+
+    private let defaultStatus: GameStatus?
+
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("lastPlatform") private var lastPlatform = ""
     @AppStorage("lastStatusRaw") private var lastStatusRaw = GameStatus.playing.rawValue
 
-    @State private var searchText = ""
+    @State private var searchText: String
     @State private var results: [IGDBGame] = []
     @State private var idMatch: IGDBGame?
     @State private var isSearching = false
@@ -27,7 +36,7 @@ struct AddGameSheet: View {
                     ConfirmAddView(
                         game: selected,
                         lastPlatform: lastPlatform,
-                        lastStatus: GameStatus(rawValue: lastStatusRaw) ?? .playing,
+                        lastStatus: defaultStatus ?? GameStatus(rawValue: lastStatusRaw) ?? .playing,
                         onBack: { self.selected = nil },
                         onAdd: add(igdb:platform:status:)
                     )
@@ -209,7 +218,8 @@ struct AddGameSheet: View {
     private func add(igdb: IGDBGame, platform: String?, status: GameStatus) {
         Repository(context).addGame(from: igdb, platform: platform, status: status)
         if let platform, !platform.isEmpty { lastPlatform = platform }
-        lastStatusRaw = status.rawValue
+        // Don't let a wishlist promotion hijack the everyday default status.
+        if defaultStatus == nil { lastStatusRaw = status.rawValue }
         dismiss()
     }
 }

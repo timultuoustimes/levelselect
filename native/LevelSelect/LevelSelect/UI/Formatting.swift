@@ -29,6 +29,7 @@ extension GameStatus {
         case .backlog:   .gray
         case .shelved:   .brown
         case .abandoned: .red
+        case .wishlist:  .pink
         }
     }
 
@@ -41,12 +42,13 @@ extension GameStatus {
         case .backlog:   "tray.full"
         case .shelved:   "archivebox"
         case .abandoned: "xmark.circle"
+        case .wishlist:  "heart.fill"
         }
     }
 
     /// Display order for grouped library sections.
     static var displayOrder: [GameStatus] {
-        [.playing, .paused, .queued, .backlog, .completed, .shelved, .abandoned]
+        [.playing, .paused, .queued, .backlog, .wishlist, .completed, .shelved, .abandoned]
     }
 
     var sectionTitle: String {
@@ -58,6 +60,7 @@ extension GameStatus {
         case .completed: "Completed"
         case .shelved:   "Shelved"
         case .abandoned: "Abandoned"
+        case .wishlist:  "Wishlist"
         }
     }
 }

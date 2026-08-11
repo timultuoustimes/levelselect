@@ -3,9 +3,10 @@ import Foundation
 // MARK: - Domain enums (see native/DOMAIN-MODEL.md)
 // All String-raw for direct SwiftData attribute storage.
 
-/// Legacy `status` — 7 values verified against the frozen library.
+/// Legacy `status` — 7 values verified against the frozen library — plus
+/// `wishlist` (added 2026-08: games not yet owned, promoted from Deku Deals).
 enum GameStatus: String, Codable, CaseIterable, Sendable {
-    case backlog, playing, paused, completed, queued, shelved, abandoned
+    case backlog, playing, paused, completed, queued, shelved, abandoned, wishlist
 }
 
 enum SessionState: String, Codable, Sendable {

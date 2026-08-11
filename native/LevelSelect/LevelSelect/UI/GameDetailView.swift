@@ -6,6 +6,7 @@ struct GameDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    @State private var browserTarget: DekuLinkTarget?
 
     var body: some View {
         ScrollView {
@@ -15,11 +16,13 @@ struct GameDetailView: View {
                 SessionControlsView(game: game)
                 Divider()
                 notes
+                dekuButton
             }
             .padding()
             .frame(maxWidth: 640, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        .dekuBrowser(target: $browserTarget)
         .navigationTitle(game.name)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -117,5 +120,16 @@ struct GameDetailView: View {
                 .lineLimit(3...)
                 .textFieldStyle(.roundedBorder)
         }
+    }
+
+    private var dekuButton: some View {
+        Button {
+            browserTarget = DekuLinkTarget(url: DekuLinks.search(for: game.name))
+        } label: {
+            Label("View on Deku Deals", systemImage: "tag.fill")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(LSTheme.purple)
     }
 }
