@@ -285,6 +285,9 @@ struct GameDetailView: View {
                 .frame(width: width * 0.54)
                 .offset(x: stage == 3 ? width * 0.46 : width * 1.02)
         }
+        // The ZStack must span the FULL stage, not shrink to its widest child
+        // — otherwise offset panels land outside the clip and vanish.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(.spring(response: 0.5, dampingFraction: 0.85), value: stage)
         .clipped()
     }
