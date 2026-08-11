@@ -188,33 +188,54 @@ struct GameDetailView: View {
 
     // MARK: Game Info
 
+    @State private var editingInfo = false
+
     private var gameInfo: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
-                GridRow {
-                    infoCell("Released", game.firstReleaseDate.map {
-                        String(Calendar.current.component(.year, from: $0))
-                    })
-                    infoCell("Series", game.franchise)
+            HStack {
+                Spacer()
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        editingInfo.toggle()
+                    }
+                } label: {
+                    Label(editingInfo ? "Done" : "Edit",
+                          systemImage: editingInfo ? "checkmark" : "pencil")
+                        .font(.subheadline)
                 }
-                GridRow {
-                    infoCell("Developer", game.developers.first)
-                    infoCell("Publisher", game.publishers.first)
-                }
+                .buttonStyle(.borderless)
+                .tint(LSTheme.purple)
             }
 
-            if !game.platforms.isEmpty {
-                chipGroup("Platforms", game.platforms, tint: .blue)
-            }
-            let genreTheme = game.genres + game.themes
-            if !genreTheme.isEmpty {
-                chipGroup("Genre / Theme", genreTheme, tint: LSTheme.purple)
-            }
-            if !game.gameModes.isEmpty {
-                chipGroup("Game Modes", game.gameModes, tint: .teal)
-            }
-            if !game.playerPerspectives.isEmpty {
-                chipGroup("Perspective", game.playerPerspectives, tint: .gray)
+            if editingInfo {
+                editForm
+            } else {
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+                    GridRow {
+                        infoCell("Released", game.firstReleaseDate.map {
+                            String(Calendar.current.component(.year, from: $0))
+                        })
+                        infoCell("Series", game.franchise)
+                    }
+                    GridRow {
+                        infoCell("Developer", game.developers.first)
+                        infoCell("Publisher", game.publishers.first)
+                    }
+                }
+
+                if !game.platforms.isEmpty {
+                    chipGroup("Platforms", game.platforms, tint: .blue)
+                }
+                let genreTheme = game.genres + game.themes
+                if !genreTheme.isEmpty {
+                    chipGroup("Genre / Theme", genreTheme, tint: LSTheme.purple)
+                }
+                if !game.gameModes.isEmpty {
+                    chipGroup("Game Modes", game.gameModes, tint: .teal)
+                }
+                if !game.playerPerspectives.isEmpty {
+                    chipGroup("Perspective", game.playerPerspectives, tint: .gray)
+                }
             }
 
             HStack(spacing: 18) {
@@ -236,6 +257,68 @@ struct GameDetailView: View {
             .buttonStyle(.borderless)
             .tint(LSTheme.purple)
         }
+    }
+
+    /// Edit mode: everything IGDB filled in is overridable per game.
+    private var editForm: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                labeledField("Released", text: Binding(
+                    get: {
+                        game.firstReleaseDate.map {
+                            String(Calendar.current.component(.year, from: $0))
+                        } ?? ""
+                    },
+                    set: { text in
+                        if let year = Int(text), (1950..<3000).contains(year) {
+                            game.firstReleaseDate = DateComponents(
+                                calendar: .current, year: year, month: 1, day: 1).date
+                        } else if text.isEmpty {
+                            game.firstReleaseDate = nil
+                        }
+                    }
+                ))
+                labeledField("Series", text: Binding(
+                    get: { game.franchise ?? "" },
+                    set: { game.franchise = $0.isEmpty ? nil : $0 }
+                ))
+            }
+            HStack(spacing: 12) {
+                labeledField("Developer", text: firstElementBinding(\.developers))
+                labeledField("Publisher", text: firstElementBinding(\.publishers))
+            }
+            EditableChips(title: "Platforms", values: $game.platforms, tint: .blue)
+            EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.purple)
+            EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.purple)
+            EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)
+            EditableChips(title: "Perspective", values: $game.playerPerspectives, tint: .gray)
+        }
+    }
+
+    private func labeledField(_ label: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            TextField(label, text: text)
+                .textFieldStyle(.roundedBorder)
+                .font(.subheadline)
+        }
+    }
+
+    private func firstElementBinding(_ keyPath: ReferenceWritableKeyPath<Game, [String]>) -> Binding<String> {
+        Binding(
+            get: { game[keyPath: keyPath].first ?? "" },
+            set: { value in
+                var array = game[keyPath: keyPath]
+                if value.isEmpty {
+                    if !array.isEmpty { array.removeFirst() }
+                } else if array.isEmpty {
+                    array = [value]
+                } else {
+                    array[0] = value
+                }
+                game[keyPath: keyPath] = array
+            }
+        )
     }
 
     private func infoCell(_ label: String, _ value: String?) -> some View {

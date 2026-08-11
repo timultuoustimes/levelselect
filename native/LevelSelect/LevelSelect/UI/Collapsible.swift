@@ -91,6 +91,39 @@ struct FlowLayout: Layout {
     }
 }
 
+/// Editable chip group: removable chips + an add field.
+struct EditableChips: View {
+    let title: String
+    @Binding var values: [String]
+    var tint: Color = LSTheme.purple
+    @State private var newValue = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            if !values.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(values, id: \.self) { value in
+                        Chip(text: value, tint: tint) {
+                            values.removeAll { $0 == value }
+                        }
+                    }
+                }
+            }
+            TextField("Add \(title.lowercased())…", text: $newValue)
+                .textFieldStyle(.roundedBorder)
+                .font(.caption)
+                .onSubmit {
+                    let value = newValue.trimmingCharacters(in: .whitespaces)
+                    if !value.isEmpty, !values.contains(value) {
+                        values.append(value)
+                    }
+                    newValue = ""
+                }
+        }
+    }
+}
+
 /// Metadata chip.
 struct Chip: View {
     let text: String
