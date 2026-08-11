@@ -11,6 +11,7 @@ struct ImportReport: Equatable, Sendable {
     var markers = 0
     var trackerSchemas = 0
     var trackerStates = 0
+    var runs = 0
     var skipped: [String] = []      // "game name — reason"
     var alreadyImported = false
 }
@@ -223,7 +224,60 @@ struct LegacyImporter {
         // Tracker progress: generic `itemState` + bespoke per-game fields.
         report.trackerStates += importItemState(s, into: pt)
         report.trackerStates += importBespokeState(trackerType: trackerType, save: s, into: pt)
+        report.runs += importRuns(s, into: pt)
         return pt
+    }
+
+    /// Migrate legacy `runs[]` (+ a dangling `activeRun`) into Run records.
+    /// Idempotent per legacy run id.
+    @discardableResult
+    private func importRuns(_ s: [String: Any], into pt: Playthrough) -> Int {
+        var rawRuns = arr(s, "runs")
+        if let active = s["activeRun"] as? [String: Any] {
+            let aid = str(active, "id")
+            if aid == nil || !rawRuns.contains(where: { str($0, "id") == aid }) {
+                rawRuns.append(active)
+            }
+        }
+        guard !rawRuns.isEmpty else { return 0 }
+        let existingLegacy = Set((pt.runs ?? []).compactMap(\.legacyID))
+        var count = 0
+        for raw in rawRuns {
+            if let rid = str(raw, "id"), existingLegacy.contains(rid) { continue }
+            let started = date(raw["startTime"]) ?? .now
+            let ended = date(raw["endTime"])
+            // Loadout + any extra per-game fields (aspect/heat/boons/…), with
+            // standard bookkeeping keys stripped.
+            var fields: [String: Any] = [:]
+            let standard: Set<String> = ["id", "notes", "outcome", "startTime", "endTime",
+                                         "duration", "pausedAt", "accumulatedTime", "loadout"]
+            for (k, v) in raw where !standard.contains(k) { fields[k] = v }
+            for (k, v) in (raw["loadout"] as? [String: Any]) ?? [:] { fields[k] = v }
+
+            let run = Run(
+                templateID: "default",
+                startedAt: started,
+                outcome: mapOutcome(str(raw, "outcome"), stillRunning: ended == nil),
+                fieldsJSON: (try? JSONSerialization.data(withJSONObject: fields)) ?? Data()
+            )
+            run.endedAt = ended ?? (dbl(raw, "duration").map { started.addingTimeInterval($0) })
+            run.notes = str(raw, "notes")
+            run.legacyID = str(raw, "id")
+            context.insert(run)
+            run.playthrough = pt
+            count += 1
+        }
+        return count
+    }
+
+    private func mapOutcome(_ raw: String?, stillRunning: Bool) -> RunOutcome {
+        if stillRunning, raw == nil { return .inProgress }
+        switch raw?.lowercased() {
+        case "victory", "escaped", "escape", "win", "cleared": return .success
+        case "death", "defeated", "loss": return .failure
+        case nil: return .neutral
+        default: return .neutral
+        }
     }
 
     /// Create-or-update one tracker state row (idempotent per (pt, itemID)).
@@ -289,6 +343,34 @@ struct LegacyImporter {
             boolMap("driveCompleted")
             boolMap("clockCompleted")
             boolMap("endingCompleted")
+        case "hades":
+            for key in ["weaponAspects", "keepsakes", "companions"] {
+                for entry in (s[key] as? [[String: Any]]) ?? [] {
+                    guard let id = entry["id"] as? String else { continue }
+                    let unlocked = (entry["unlocked"] as? Bool) == true
+                    let rank = (entry["rank"] as? NSNumber)?.intValue
+                    if unlocked || (rank ?? 0) > 0 {
+                        upsertState(pt, itemID: id, done: unlocked ? true : nil,
+                                    rank: (rank ?? 0) > 0 ? rank : nil)
+                        count += 1
+                    }
+                }
+            }
+            if let list = s["mirrorUpgrades"] as? [[String: Any]] {
+                for entry in list {
+                    guard let id = entry["id"] as? String,
+                          let rank = (entry["rank"] as? NSNumber)?.intValue, rank > 0
+                    else { continue }
+                    upsertState(pt, itemID: id, done: nil, rank: rank)
+                    count += 1
+                }
+            } else if let dict = s["mirrorUpgrades"] as? [String: Any] {
+                for (id, value) in dict {
+                    guard let rank = (value as? NSNumber)?.intValue, rank > 0 else { continue }
+                    upsertState(pt, itemID: id, done: nil, rank: rank)
+                    count += 1
+                }
+            }
         case "mina-the-hollower":
             boolMap("bossesDefeated")
             boolMap("secretBossesDefeated")
@@ -325,6 +407,7 @@ struct LegacyImporter {
                 guard let saveID = str(s, "id"), let pt = byLegacyID[saveID] else { continue }
                 total += importItemState(s, into: pt)
                 total += importBespokeState(trackerType: trackerType, save: s, into: pt)
+                total += importRuns(s, into: pt)
                 if let game = pt.game { Repository(context).recomputeProgress(game) }
             }
         }

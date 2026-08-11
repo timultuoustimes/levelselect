@@ -120,6 +120,28 @@ struct LegacyImporterTests {
         #expect(abs(pt.totalPlaytime() - 5400) < 0.001)   // 3600 + 1800, both stopped
     }
 
+    @Test func importsLegacyRuns() throws {
+        let ctx = newContext()
+        let report = try LegacyImporter(ctx).import(data: SyntheticFixture.data, sourceDeviceID: "dev-1")
+        #expect(report.runs == 2)
+        let g = try game(ctx, legacyID: "g-run")
+        let pt = try #require((g.playthroughs ?? []).first)
+        let runs = pt.liveRuns
+        #expect(runs.count == 2)
+        let win = try #require(runs.first { $0.legacyID == "run2" })
+        #expect(win.outcome == .success)
+        #expect(win.fieldsDict["startingSpell"] == "Fireball")
+        #expect(abs((win.duration ?? 0) - 1800) < 0.001)
+        let loss = try #require(runs.first { $0.legacyID == "run1" })
+        #expect(loss.outcome == .failure)
+        #expect(loss.notes == "so close")
+
+        // Backfill path is idempotent per legacy run id.
+        let added = try LegacyImporter(ctx).syncTrackerProgress(data: SyntheticFixture.data)
+        #expect((pt.runs ?? []).count == 2)
+        _ = added
+    }
+
     @Test func secondImportIsIdempotentNoOp() throws {
         let ctx = newContext()
         let importer = LegacyImporter(ctx)

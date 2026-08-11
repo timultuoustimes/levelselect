@@ -27,6 +27,14 @@ struct GameDetailView: View {
                 CollapsibleSection("Sessions", icon: "stopwatch") {
                     SessionControlsView(game: game)
                 }
+                if let template = game.trackerSchema.flatMap({
+                    TrackerSchemaJSON.runTemplate(from: $0.jsonData)
+                }) {
+                    Divider()
+                    CollapsibleSection("Runs", icon: "flag.checkered") {
+                        RunSectionView(game: game, template: template)
+                    }
+                }
                 Divider()
                 CollapsibleSection("Tracker", icon: "checklist") {
                     TrackerSectionView(game: game)

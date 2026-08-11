@@ -348,6 +348,66 @@ struct Repository {
         touch(pt)
     }
 
+    // MARK: Runs (roguelikes / Hades)
+
+    /// Start a live run with the loadout chosen up front.
+    @discardableResult
+    func startRun(on pt: Playthrough, fields: [String: String], at date: Date = .now) -> Run {
+        let run = Run(
+            templateID: "default",
+            startedAt: date,
+            outcome: .inProgress,
+            fieldsJSON: (try? JSONSerialization.data(withJSONObject: fields)) ?? Data()
+        )
+        context.insert(run)
+        run.playthrough = pt
+        pt.lastPlayedAt = date
+        touch(pt, at: date)
+        return run
+    }
+
+    func endRun(_ run: Run, outcome: RunOutcome, notes: String?, at date: Date = .now) {
+        run.endedAt = date
+        run.outcome = outcome
+        run.notes = (notes?.isEmpty == true) ? nil : notes
+        touch(run, at: date)
+        if let pt = run.playthrough {
+            pt.lastPlayedAt = date
+            touch(pt, at: date)
+        }
+    }
+
+    /// Log a finished run after the fact.
+    @discardableResult
+    func logRun(
+        on pt: Playthrough,
+        fields: [String: String],
+        outcome: RunOutcome,
+        started: Date,
+        duration: TimeInterval,
+        notes: String?
+    ) -> Run {
+        let run = Run(
+            templateID: "default",
+            startedAt: started,
+            outcome: outcome,
+            fieldsJSON: (try? JSONSerialization.data(withJSONObject: fields)) ?? Data()
+        )
+        run.endedAt = started.addingTimeInterval(max(0, duration))
+        run.notes = (notes?.isEmpty == true) ? nil : notes
+        context.insert(run)
+        run.playthrough = pt
+        pt.lastPlayedAt = started
+        touch(pt)
+        return run
+    }
+
+    func deleteRun(_ run: Run, at date: Date = .now) {
+        run.deletedAt = date
+        if run.outcome == .inProgress { run.outcome = .neutral; run.endedAt = date }
+        touch(run, at: date)
+    }
+
     // MARK: Completion
 
     @discardableResult
@@ -385,6 +445,36 @@ extension Game {
             return match
         }
         return live.first
+    }
+}
+
+extension Run {
+    /// Decoded loadout/field values.
+    var fieldsDict: [String: String] {
+        guard let obj = try? JSONSerialization.jsonObject(with: fieldsJSON) as? [String: Any]
+        else { return [:] }
+        return obj.compactMapValues {
+            if let s = $0 as? String { return s }
+            if let n = $0 as? NSNumber { return n.stringValue }
+            return nil
+        }
+    }
+
+    var duration: TimeInterval? {
+        endedAt.map { $0.timeIntervalSince(startedAt) }
+    }
+}
+
+extension Playthrough {
+    /// Live runs, newest first.
+    var liveRuns: [Run] {
+        (runs ?? [])
+            .filter { $0.deletedAt == nil }
+            .sorted { $0.startedAt > $1.startedAt }
+    }
+
+    var activeRun: Run? {
+        liveRuns.first { $0.outcome == .inProgress }
     }
 }
 

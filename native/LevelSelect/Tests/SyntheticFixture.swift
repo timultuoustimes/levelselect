@@ -64,7 +64,15 @@ enum SyntheticFixture {
           "trackerType": "lone-ruin", "coverImageId": "", "currentSaveId": "sr1", "addedAt": "2026-03-01T00:00:00.000Z",
           "saves": [{
             "id": "sr1", "name": "Playthrough", "createdAt": "2026-03-01T00:00:00.000Z",
-            "progressPercent": 0, "totalPlaytime": 0, "milestones": [], "activeSession": null, "sessions": []
+            "progressPercent": 0, "totalPlaytime": 0, "milestones": [], "activeSession": null, "sessions": [],
+            "runs": [
+              { "id": "run1", "startTime": "2026-03-02T10:00:00.000Z", "endTime": "2026-03-02T10:20:00.000Z",
+                "duration": 1200, "outcome": "death", "notes": "so close",
+                "loadout": { "startingSpell": "Shards", "mode": "Campaign" } },
+              { "id": "run2", "startTime": "2026-03-03T10:00:00.000Z", "endTime": "2026-03-03T10:30:00.000Z",
+                "duration": 1800, "outcome": "victory", "notes": "",
+                "loadout": { "startingSpell": "Fireball", "mode": "Campaign" } }
+            ]
           }]
         },
         {

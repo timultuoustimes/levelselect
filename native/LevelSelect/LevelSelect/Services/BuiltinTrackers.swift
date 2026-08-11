@@ -33,9 +33,10 @@ enum BuiltinTrackers {
                 if let id = game.igdbID, igdbIDs.contains(id) { return true }
                 return !name.isEmpty && game.name.caseInsensitiveCompare(name) == .orderedSame
             }
+            let engine = TrackerEngine(rawValue: (entry["engine"] as? String) ?? "") ?? .objective
             for game in matches where game.trackerSchema == nil {
                 let record = TrackerSchemaRecord(
-                    source: .builtIn, engine: .objective, jsonData: schemaData)
+                    source: .builtIn, engine: engine, jsonData: schemaData)
                 context.insert(record)
                 record.game = game
                 repo.recomputeProgress(game)

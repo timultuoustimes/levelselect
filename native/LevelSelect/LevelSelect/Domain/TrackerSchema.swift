@@ -22,8 +22,52 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     let items: [TrackerItemDTO]
 }
 
+// MARK: - Run template (roguelikes / Hades)
+
+struct RunFieldDTO: Identifiable, Hashable, Sendable {
+    let id: String
+    let label: String
+    let kind: String            // "text" | "select"
+    let options: [String]
+}
+
+struct RunOutcomeDTO: Identifiable, Hashable, Sendable {
+    let id: String
+    let label: String
+    let result: RunOutcome      // success / failure / neutral
+}
+
+struct RunTemplateDTO: Hashable, Sendable {
+    let fields: [RunFieldDTO]
+    let outcomes: [RunOutcomeDTO]
+}
+
 enum TrackerSchemaJSON {
     static let personalGoalsID = "personal-goals"
+
+    /// Parse the run template out of stored schema JSON, if present.
+    static func runTemplate(from data: Data) -> RunTemplateDTO? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = root["runTemplate"] as? [String: Any] else { return nil }
+        let fields: [RunFieldDTO] = ((raw["fields"] as? [[String: Any]]) ?? []).compactMap { f in
+            guard let id = f["id"] as? String, let label = f["label"] as? String else { return nil }
+            return RunFieldDTO(
+                id: id, label: label,
+                kind: (f["type"] as? String) ?? "text",
+                options: (f["options"] as? [Any])?.compactMap { $0 as? String } ?? []
+            )
+        }
+        let outcomes: [RunOutcomeDTO] = ((raw["outcomes"] as? [[String: Any]]) ?? []).compactMap { o in
+            guard let id = o["id"] as? String else { return nil }
+            return RunOutcomeDTO(
+                id: id,
+                label: (o["label"] as? String) ?? id.capitalized,
+                result: RunOutcome(rawValue: (o["result"] as? String) ?? "") ?? .neutral
+            )
+        }
+        guard !outcomes.isEmpty else { return nil }
+        return RunTemplateDTO(fields: fields, outcomes: outcomes)
+    }
 
     /// Parse categories out of stored schema JSON (lenient).
     static func categories(from data: Data) -> [TrackerCategoryDTO] {
