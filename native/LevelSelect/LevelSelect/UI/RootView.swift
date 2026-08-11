@@ -1,8 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// App shell: Home / Library / Stats tabs (web-app parity) on the purple theme.
+/// App shell: Home / Library / Stats tabs (web-app parity) on the themed accent.
 struct RootView: View {
+    @Query private var themeSettings: [ThemeSettings]
+    // Palette version bump forces dependent views to re-read theme colors.
+    @State private var themeVersion = 0
+
     var body: some View {
         TabView {
             Tab("Home", systemImage: "house.fill") { HomeTab() }
@@ -10,9 +14,17 @@ struct RootView: View {
             Tab("Wishlist", systemImage: "heart.fill") { WishlistTab() }
             Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
         }
-        .tint(LSTheme.purple)
+        .tint(LSTheme.accent)
         .preferredColorScheme(.dark)
         .staleSessionGuard()
+        .id(themeVersion)
+        .onAppear {
+            ThemePalette.refresh(from: themeSettings.first)
+        }
+        .onChange(of: themeSettings.first?.updatedAt) { _, _ in
+            ThemePalette.refresh(from: themeSettings.first)
+            themeVersion += 1
+        }
     }
 }
 

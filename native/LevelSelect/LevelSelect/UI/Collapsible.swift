@@ -95,7 +95,7 @@ struct FlowLayout: Layout {
 struct EditableChips: View {
     let title: String
     @Binding var values: [String]
-    var tint: Color = LSTheme.purple
+    var tint: Color = LSTheme.accent
     @State private var newValue = ""
 
     var body: some View {
@@ -127,7 +127,7 @@ struct EditableChips: View {
 /// Metadata chip.
 struct Chip: View {
     let text: String
-    var tint: Color = LSTheme.purple
+    var tint: Color = LSTheme.accent
     var onRemove: (() -> Void)? = nil
 
     var body: some View {

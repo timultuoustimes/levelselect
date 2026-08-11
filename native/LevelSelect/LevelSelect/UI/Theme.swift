@@ -4,8 +4,12 @@ import SwiftUI
 /// matching the web app's look (Tim: "purple as the main color, and I like
 /// the gradients").
 enum LSTheme {
-    static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)   // primary accent
+    static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)   // brand default accent
     static let purpleDeep = Color(red: 0.30, green: 0.16, blue: 0.55)
+
+    /// The live accent — user's choice (synced) or the default purple.
+    @MainActor
+    static var accent: Color { ThemePalette.accent }
 
     /// App background: near-black with a purple cast at the top.
     static var background: LinearGradient {

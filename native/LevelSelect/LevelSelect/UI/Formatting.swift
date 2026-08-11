@@ -20,17 +20,10 @@ enum Format {
 extension GameStatus {
     var label: String { rawValue.capitalized }
 
+    /// Themed status color (user override → default palette).
+    @MainActor
     var color: Color {
-        switch self {
-        case .playing:   .green
-        case .paused:    .orange
-        case .completed: .blue
-        case .queued:    .purple
-        case .backlog:   .gray
-        case .shelved:   .brown
-        case .abandoned: .red
-        case .wishlist:  .pink
-        }
+        ThemePalette.color(for: self)
     }
 
     var systemImage: String {

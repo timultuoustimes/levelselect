@@ -155,10 +155,10 @@ struct LibraryTab: View {
                             .font(.caption)
                             .padding(.horizontal, 10).padding(.vertical, 5)
                             .background(
-                                active ? LSTheme.purple.opacity(0.45) : .white.opacity(0.07),
+                                active ? LSTheme.accent.opacity(0.45) : .white.opacity(0.07),
                                 in: .capsule)
                             .overlay(Capsule().strokeBorder(
-                                active ? LSTheme.purple : .white.opacity(0.12), lineWidth: 1))
+                                active ? LSTheme.accent : .white.opacity(0.12), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }

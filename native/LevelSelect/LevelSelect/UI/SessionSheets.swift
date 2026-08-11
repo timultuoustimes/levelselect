@@ -29,7 +29,7 @@ struct EndSessionSheet: View {
                                in: session.startDate ... .now)
                     LabeledContent("Records") {
                         Text(Format.duration(stopTime.timeIntervalSince(session.startDate)))
-                            .foregroundStyle(LSTheme.purple)
+                            .foregroundStyle(LSTheme.accent)
                     }
                 }
             }
@@ -80,7 +80,7 @@ struct EditSessionSheet: View {
                     DatePicker("Ended", selection: $end, in: start...)
                     LabeledContent("Duration") {
                         Text(Format.duration(end.timeIntervalSince(start)))
-                            .foregroundStyle(LSTheme.purple)
+                            .foregroundStyle(LSTheme.accent)
                     }
                 }
                 Section("Notes") {

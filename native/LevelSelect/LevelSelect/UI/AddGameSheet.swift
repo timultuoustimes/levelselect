@@ -54,7 +54,7 @@ struct AddGameSheet: View {
                 }
             }
         }
-        .tint(LSTheme.purple)
+        .tint(LSTheme.accent)
     }
 
     // MARK: Search stage
@@ -149,7 +149,7 @@ struct AddGameSheet: View {
                     Text(badge)
                         .font(.caption2.monospacedDigit())
                         .padding(.horizontal, 6).padding(.vertical, 3)
-                        .background(LSTheme.purple.opacity(0.25), in: .capsule)
+                        .background(LSTheme.accent.opacity(0.25), in: .capsule)
                 }
             }
         }

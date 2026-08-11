@@ -103,7 +103,15 @@ struct GameDetailView: View {
         ZStack(alignment: .top) {
             LSTheme.background
 
-            if let s = game.coverURLString, let url = URL(string: s) {
+            if ThemePalette.pageBackground == .status {
+                // Status-color gradient variant (user-selectable in Appearance).
+                LinearGradient(
+                    colors: [game.status.color.opacity(0.45), .clear],
+                    startPoint: .top, endPoint: .center
+                )
+                .frame(height: 420)
+                .frame(maxWidth: .infinity)
+            } else if let s = game.coverURLString, let url = URL(string: s) {
                 AsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image
@@ -204,7 +212,7 @@ struct GameDetailView: View {
                         .font(.subheadline)
                 }
                 .buttonStyle(.borderless)
-                .tint(LSTheme.purple)
+                .tint(LSTheme.accent)
             }
 
             if editingInfo {
@@ -228,7 +236,7 @@ struct GameDetailView: View {
                 }
                 let genreTheme = game.genres + game.themes
                 if !genreTheme.isEmpty {
-                    chipGroup("Genre / Theme", genreTheme, tint: LSTheme.purple)
+                    chipGroup("Genre / Theme", genreTheme, tint: LSTheme.accent)
                 }
                 if !game.gameModes.isEmpty {
                     chipGroup("Game Modes", game.gameModes, tint: .teal)
@@ -255,7 +263,7 @@ struct GameDetailView: View {
             }
             .font(.subheadline)
             .buttonStyle(.borderless)
-            .tint(LSTheme.purple)
+            .tint(LSTheme.accent)
         }
     }
 
@@ -288,8 +296,8 @@ struct GameDetailView: View {
                 labeledField("Publisher", text: firstElementBinding(\.publishers))
             }
             EditableChips(title: "Platforms", values: $game.platforms, tint: .blue)
-            EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.purple)
-            EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.purple)
+            EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
+            EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)
             EditableChips(title: "Perspective", values: $game.playerPerspectives, tint: .gray)
         }
@@ -347,7 +355,7 @@ struct GameDetailView: View {
             if !game.userTags.isEmpty {
                 FlowLayout(spacing: 6) {
                     ForEach(game.userTags, id: \.self) { tag in
-                        Chip(text: "#\(tag)", tint: LSTheme.purple) {
+                        Chip(text: "#\(tag)", tint: LSTheme.accent) {
                             game.userTags.removeAll { $0 == tag }
                         }
                     }

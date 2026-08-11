@@ -93,7 +93,7 @@ struct StatsTab: View {
                             .frame(width: 30, height: 40)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(game.name).font(.subheadline).lineLimit(1)
-                            bar(fraction: time / maxTime, color: LSTheme.purple)
+                            bar(fraction: time / maxTime, color: LSTheme.accent)
                         }
                         Spacer()
                         Text(Format.duration(time))
@@ -132,7 +132,7 @@ struct StatsTab: View {
         VStack(spacing: 3) {
             Text(number)
                 .font(.title3.bold().monospacedDigit())
-                .foregroundStyle(LSTheme.purple)
+                .foregroundStyle(LSTheme.accent)
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)

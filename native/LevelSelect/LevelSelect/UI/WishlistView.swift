@@ -142,7 +142,7 @@ struct WishlistTab: View {
             VStack(spacing: 18) {
                 Image(systemName: "heart.text.square")
                     .font(.system(size: 44))
-                    .foregroundStyle(LSTheme.purple)
+                    .foregroundStyle(LSTheme.accent)
                 Text("Connect your Deku Deals wishlist")
                     .font(.title3.bold())
                 Text("In Deku Deals: Settings → Sharing → enable “Allow my wishlist to be publicly viewed”, then paste the wishlist link here.")

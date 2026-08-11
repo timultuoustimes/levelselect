@@ -59,7 +59,7 @@ struct SessionControlsView: View {
             Spacer()
             Text(Format.duration(total))
                 .font(.subheadline.monospacedDigit().weight(.semibold))
-                .foregroundStyle(LSTheme.purple)
+                .foregroundStyle(LSTheme.accent)
         }
     }
 

@@ -88,7 +88,7 @@ struct TrackerSectionView: View {
                 .disabled(generating)
             }
             .buttonStyle(.borderless)
-            .tint(LSTheme.purple)
+            .tint(LSTheme.accent)
         }
         .confirmationDialog(
             "Regenerate this tracker?",
@@ -156,7 +156,7 @@ struct TrackerSectionView: View {
             }
             if !allItems.isEmpty {
                 ProgressView(value: Double(done), total: Double(allItems.count))
-                    .tint(LSTheme.purple)
+                    .tint(LSTheme.accent)
             }
         }
     }
@@ -219,7 +219,7 @@ struct TrackerSectionView: View {
                 }
             } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(done ? AnyShapeStyle(LSTheme.purple) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(done ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
                     .font(.body)
             }
             .buttonStyle(.borderless)

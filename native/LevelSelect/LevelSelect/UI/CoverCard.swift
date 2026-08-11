@@ -42,7 +42,7 @@ struct StatusCarousel: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: status.systemImage)
-                    .foregroundStyle(status == .playing ? AnyShapeStyle(LSTheme.purple) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(status == .playing ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
                 Text(status.sectionTitle)
                     .font(.title3.bold())
                 Text("(\(games.count))")
@@ -51,7 +51,7 @@ struct StatusCarousel: View {
                 Spacer()
                 Button("See all") { onSeeAll() }
                     .font(.subheadline)
-                    .foregroundStyle(LSTheme.purple)
+                    .foregroundStyle(LSTheme.accent)
                     .buttonStyle(.plain)
             }
             .padding(.horizontal)
@@ -144,7 +144,7 @@ struct ContinueHeroCard: View {
         .background(LSTheme.heroGradient, in: .rect(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(LSTheme.purple.opacity(0.35), lineWidth: 1)
+                .strokeBorder(LSTheme.accent.opacity(0.35), lineWidth: 1)
         )
     }
 }

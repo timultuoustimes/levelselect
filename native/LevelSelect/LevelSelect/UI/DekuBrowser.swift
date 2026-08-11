@@ -10,7 +10,7 @@ struct SafariView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
         let vc = SFSafariViewController(url: url, configuration: config)
-        vc.preferredControlTintColor = UIColor(LSTheme.purple)
+        vc.preferredControlTintColor = UIColor(LSTheme.accent)
         vc.dismissButtonStyle = .done
         return vc
     }

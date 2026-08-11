@@ -23,6 +23,8 @@ struct SettingsView: View {
                     LabeledContent("Games", value: "\(games.count)")
                 }
 
+                AppearanceSettingsSection()
+
                 Section {
                     if let r = result {
                         importSummary(r)
