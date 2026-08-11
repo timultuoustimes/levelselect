@@ -8,7 +8,10 @@ struct LevelSelectApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
-                .task { NotificationManager.configure(container: container) }
+                .task {
+                    NotificationManager.configure(container: container)
+                    BuiltinTrackers.installMissing(context: container.mainContext)
+                }
         }
         .modelContainer(container)
     }
