@@ -66,14 +66,28 @@ struct HomeTab: View {
     @State private var showingSettings = false
     @State private var path = NavigationPath()
 
+    /// Trailing toolbar placement; declaration order controls layout there
+    /// (lockup, then gear, then add).
+    private static var trailing: ToolbarItemPlacement {
+        #if os(macOS)
+        .automatic
+        #else
+        .topBarTrailing
+        #endif
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             Group {
                 if games.isEmpty { emptyState } else { home }
             }
             .lsBackground()
+            #if os(macOS)
             .navigationTitle("LevelSelect")
-            #if !os(macOS)
+            #else
+            // The toolbar lockup IS the title on iOS; an empty title keeps
+            // the system's text title from doubling it.
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
@@ -81,18 +95,20 @@ struct HomeTab: View {
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .toolbar {
                 #if !os(macOS)
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: 7) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    // Door bottom flush with glyph bottoms (Press Start 2P has
+                    // no descenders, so the baseline IS the glyph bottom).
+                    HStack(alignment: .lastTextBaseline, spacing: 7) {
                         Image("DoorMark")
                             .resizable()
                             .scaledToFit()
                             .frame(height: 26)
+                            // The door art's ragged base scatters below its
+                            // visual mass; sit it a touch above the baseline.
+                            .alignmentGuide(.lastTextBaseline) { $0[.bottom] + 3 }
                         Text("LevelSelect")
                             .font(LSTheme.pixel(12))
                             .foregroundStyle(LSTheme.torch)
-                            // Press Start 2P's tall line box centers oddly;
-                            // optically center the glyphs on the door.
-                            .offset(y: -0.5)
                             .lineLimit(1)
                             .fixedSize()
                     }
@@ -100,13 +116,14 @@ struct HomeTab: View {
                     .accessibilityLabel("LevelSelect")
                     .accessibilityAddTraits(.isHeader)
                 }
+                .sharedBackgroundVisibility(.hidden)
                 #endif
-                ToolbarItem {
+                ToolbarItem(placement: Self.trailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
                 }
-                ToolbarItem(placement: .primaryAction) {
+                ToolbarItem(placement: Self.trailing) {
                     Button { showingAdd = true } label: {
                         Label("Add Game", systemImage: "plus")
                     }
