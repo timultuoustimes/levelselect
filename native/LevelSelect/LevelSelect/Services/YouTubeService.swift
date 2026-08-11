@@ -67,6 +67,23 @@ enum YouTubeService {
         )
     }
 
+    /// Titles for a batch of video ids via oEmbed (concurrent, soft-fail).
+    static func titles(for ids: [String]) async -> [String: String] {
+        await withTaskGroup(of: (String, String?).self) { group in
+            for id in ids {
+                group.addTask {
+                    let meta = await metadata(for: "https://www.youtube.com/watch?v=\(id)")
+                    return (id, meta?.title)
+                }
+            }
+            var out: [String: String] = [:]
+            for await (id, title) in group {
+                if let title { out[id] = title }
+            }
+            return out
+        }
+    }
+
     /// Embed URL for the in-app player (IFrame API enabled for the resume
     /// bridge). Resumes at the stored position — playlists also restore the
     /// last-watched part.

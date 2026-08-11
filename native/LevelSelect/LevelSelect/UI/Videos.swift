@@ -17,10 +17,12 @@ struct VideoPlayerDock: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            YouTubePlayerView(video: video) { seconds, part in
+            YouTubePlayerView(video: video, onProgress: { seconds, part in
                 Repository(context).updateVideoProgress(video, seconds: seconds, partIndex: part)
                 try? context.save()
-            }
+            }, onPlaylist: { ids in
+                harvestParts(ids: ids)
+            })
             .aspectRatio(16 / 9, contentMode: .fit)
             .background(.black)
 
@@ -35,12 +37,119 @@ struct VideoPlayerDock: View {
             .padding(8)
         }
     }
+
+    /// Fill the parts cache the first time the player reports the playlist.
+    private func harvestParts(ids: [String]) {
+        guard video.kind == .playlist, video.parts.count != ids.count else { return }
+        Task {
+            let titles = await YouTubeService.titles(for: ids)
+            Repository(context).cachePlaylistParts(video, ids: ids, titles: titles)
+            try? context.save()
+        }
+    }
+}
+
+// MARK: - Playlist parts sheet
+
+/// "View parts": lists a playlist's individual videos; pick one to jump the
+/// player straight to it. Parts load via a hidden cued player on first open.
+struct PlaylistPartsSheet: View {
+    let video: GameVideo
+    var onSelect: (Int) -> Void
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if video.parts.isEmpty {
+                    VStack(spacing: 14) {
+                        ProgressView()
+                        Text("Loading parts…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        // Hidden cued player — exists only to report the
+                        // playlist contents; never visibly plays.
+                        YouTubePlayerView(video: video, onProgress: { _, _ in }, onPlaylist: { ids in
+                            Task {
+                                let titles = await YouTubeService.titles(for: ids)
+                                Repository(context).cachePlaylistParts(video, ids: ids, titles: titles)
+                                try? context.save()
+                            }
+                        })
+                        .frame(width: 1, height: 1)
+                        .opacity(0.01)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        ForEach(Array(video.parts.enumerated()), id: \.offset) { index, part in
+                            Button {
+                                onSelect(index)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Text("\(index + 1)")
+                                        .font(.caption.monospacedDigit().weight(.semibold))
+                                        .frame(width: 26, height: 26)
+                                        .background(
+                                            index == video.watchedPartIndex
+                                                ? LSTheme.accent.opacity(0.35)
+                                                : Color.white.opacity(0.07),
+                                            in: .circle)
+                                    Text(part.title)
+                                        .font(.subheadline)
+                                        .lineLimit(2)
+                                        .multilineTextAlignment(.leading)
+                                    Spacer()
+                                    if index == video.watchedPartIndex {
+                                        Label(Format.timestamp(video.watchedSeconds),
+                                              systemImage: "play.fill")
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(.green)
+                                    }
+                                }
+                                .contentShape(.rect)
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(Color.clear)
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle(video.title)
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
 }
 
 #if canImport(WebKit) && !os(watchOS)
+extension Notification.Name {
+    /// Sends JS to a live player (object: [videoID: UUID, js: String]).
+    static let lsPlayerCommand = Notification.Name("lsPlayerCommand")
+}
+
 struct YouTubePlayerView {
     let video: GameVideo
     var onProgress: @MainActor (Double, Int?) -> Void
+    var onPlaylist: (@MainActor ([String]) -> Void)? = nil
+
+    /// Command a live player for this video (e.g. jump to a playlist part).
+    @MainActor
+    static func command(videoID: UUID, js: String) {
+        NotificationCenter.default.post(
+            name: .lsPlayerCommand, object: nil,
+            userInfo: ["videoID": videoID.uuidString, "js": js])
+    }
 
     func makeWebView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
@@ -51,6 +160,7 @@ struct YouTubePlayerView {
         config.preferences.isElementFullscreenEnabled = true
         config.userContentController.add(context.coordinator, name: "progress")
         let webView = WKWebView(frame: .zero, configuration: config)
+        context.coordinator.attach(webView: webView, videoID: video.id.uuidString)
         #if os(iOS)
         webView.isOpaque = false
         webView.backgroundColor = .black
@@ -61,17 +171,51 @@ struct YouTubePlayerView {
         return webView
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator(onProgress: onProgress) }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onProgress: onProgress, onPlaylist: onPlaylist)
+    }
 
     final class Coordinator: NSObject, WKScriptMessageHandler {
         let onProgress: @MainActor (Double, Int?) -> Void
-        init(onProgress: @escaping @MainActor (Double, Int?) -> Void) { self.onProgress = onProgress }
+        let onPlaylist: (@MainActor ([String]) -> Void)?
+        private weak var webView: WKWebView?
+        private var videoID = ""
+        private var observer: (any NSObjectProtocol)?
+
+        init(onProgress: @escaping @MainActor (Double, Int?) -> Void,
+             onPlaylist: (@MainActor ([String]) -> Void)?) {
+            self.onProgress = onProgress
+            self.onPlaylist = onPlaylist
+            super.init()
+        }
+
+        func attach(webView: WKWebView, videoID: String) {
+            self.webView = webView
+            self.videoID = videoID
+            observer = NotificationCenter.default.addObserver(
+                forName: .lsPlayerCommand, object: nil, queue: .main
+            ) { [weak self] note in
+                guard let self,
+                      (note.userInfo?["videoID"] as? String) == self.videoID,
+                      let js = note.userInfo?["js"] as? String else { return }
+                MainActor.assumeIsolated {
+                    self.webView?.evaluateJavaScript(js)
+                }
+            }
+        }
+
+        // NOTE: no deinit removal — accessing the token from a nonisolated
+        // deinit trips Swift 6 sendability; the block observer dies with us.
 
         func userContentController(_ controller: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             guard message.name == "progress",
-                  let body = message.body as? [String: Any],
-                  let t = (body["t"] as? NSNumber)?.doubleValue else { return }
+                  let body = message.body as? [String: Any] else { return }
+
+            if let ids = body["pl"] as? [String], !ids.isEmpty, let onPlaylist {
+                Task { @MainActor in onPlaylist(ids) }
+            }
+            guard let t = (body["t"] as? NSNumber)?.doubleValue else { return }
             let part = (body["i"] as? NSNumber)?.intValue
             let resolvedPart = (part ?? -1) >= 0 ? part : nil
             let handler = onProgress
@@ -99,11 +243,21 @@ struct YouTubePlayerView {
         <div id="p"></div>
         <script src="https://www.youtube.com/iframe_api"></script>
         <script>
-        let player;
+        let player, sentList = false;
         function onYouTubeIframeAPIReady(){
           player = new YT.Player('p', {\(setup),
-            events:{ onStateChange: report }});
+            events:{ onReady: sendList, onStateChange: function(e){ sendList(); report(); } }});
           setInterval(report, 5000);
+        }
+        function sendList(){
+          try{
+            if (sentList || !player.getPlaylist) return;
+            const list = player.getPlaylist();
+            if (list && list.length){
+              sentList = true;
+              window.webkit.messageHandlers.progress.postMessage({pl:list, t:0, i:player.getPlaylistIndex()||0});
+            }
+          }catch(e){}
         }
         function report(){
           try{
@@ -145,6 +299,7 @@ struct VideoListView: View {
     @State private var addError: String?
     @State private var movingVideo: GameVideo?
     @State private var newGroupName = ""
+    @State private var partsVideo: GameVideo?
 
     private var repo: Repository { Repository(context) }
 
@@ -176,6 +331,18 @@ struct VideoListView: View {
             }
 
             addField
+        }
+        .sheet(item: $partsVideo) { plVideo in
+            PlaylistPartsSheet(video: plVideo) { index in
+                Repository(context).updateVideoProgress(plVideo, seconds: 0, partIndex: index)
+                try? context.save()
+                if playing?.id == plVideo.id {
+                    YouTubePlayerView.command(
+                        videoID: plVideo.id, js: "player.playVideoAt(\(index))")
+                } else {
+                    playing = plVideo
+                }
+            }
         }
         .alert("Move to group", isPresented: Binding(
             get: { movingVideo != nil },
@@ -223,6 +390,13 @@ struct VideoListView: View {
         }
         .buttonStyle(.plain)
         .contextMenu {
+            if video.kind == .playlist {
+                Button {
+                    partsVideo = video
+                } label: {
+                    Label("View Parts…", systemImage: "list.number")
+                }
+            }
             Button {
                 newGroupName = video.groupName
                 movingVideo = video

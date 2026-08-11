@@ -33,8 +33,18 @@ final class GameVideo {
     /// For playlists: which part was last playing (0-based).
     var watchedPartIndex: Int = 0
     var lastWatchedAt: Date?
+    /// Cached playlist parts: JSON [[id, title]] (filled on first load/play).
+    var partsData: Data?
 
     var game: Game?
+
+    /// Decoded playlist parts (id → title), in playlist order.
+    var parts: [(id: String, title: String)] {
+        guard let data = partsData,
+              let raw = try? JSONSerialization.jsonObject(with: data) as? [[String]]
+        else { return [] }
+        return raw.compactMap { $0.count == 2 ? (id: $0[0], title: $0[1]) : nil }
+    }
 
     var kind: VideoKind {
         get { VideoKind(rawValue: kindRaw) ?? .video }

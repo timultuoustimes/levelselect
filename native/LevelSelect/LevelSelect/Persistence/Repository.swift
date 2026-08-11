@@ -446,6 +446,13 @@ struct Repository {
         touch(video)
     }
 
+    /// Cache a playlist's parts (id + title, playlist order) on the record.
+    func cachePlaylistParts(_ video: GameVideo, ids: [String], titles: [String: String]) {
+        let payload = ids.map { [$0, titles[$0] ?? "Part"] }
+        video.partsData = try? JSONSerialization.data(withJSONObject: payload)
+        touch(video)
+    }
+
     /// Persist the synced resume position (called by the player bridge,
     /// debounced upstream).
     func updateVideoProgress(_ video: GameVideo, seconds: Double, partIndex: Int?) {
