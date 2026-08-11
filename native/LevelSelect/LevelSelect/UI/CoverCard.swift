@@ -35,6 +35,7 @@ struct CoverCard: View {
 struct StatusCarousel: View {
     let status: GameStatus
     let games: [Game]
+    var onOpen: (Game) -> Void
     var onSeeAll: () -> Void
 
     var body: some View {
@@ -58,15 +59,17 @@ struct StatusCarousel: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(games) { game in
-                        NavigationLink(value: game) {
+                        BouncyTap {
+                            onOpen(game)
+                        } label: {
                             CoverCard(game: game)
                         }
-                        .buttonStyle(PressableCardStyle())
-                        // Covers breathe as they enter/leave the viewport.
+                        // Covers breathe + tilt like a shelf as they scroll.
                         .scrollTransition(axis: .horizontal) { content, phase in
                             content
-                                .scaleEffect(phase.isIdentity ? 1 : 0.92)
-                                .opacity(phase.isIdentity ? 1 : 0.7)
+                                .scaleEffect(phase.isIdentity ? 1 : 0.86)
+                                .opacity(phase.isIdentity ? 1 : 0.6)
+                                .rotation3DEffect(.degrees(phase.value * -12), axis: (x: 0, y: 1, z: 0))
                         }
                     }
                 }

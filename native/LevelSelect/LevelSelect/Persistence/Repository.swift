@@ -58,6 +58,13 @@ struct Repository {
         session.playthrough = pt
         pt.lastPlayedAt = date
         touch(pt, at: date)
+        NotificationManager.requestAuthorizationIfNeeded()
+        NotificationManager.scheduleStaleReminder(
+            sessionID: session.id,
+            gameName: pt.game?.name ?? "A game",
+            sessionStart: date,
+            threshold: StaleSessionGuard.threshold
+        )
         return session
     }
 
@@ -68,6 +75,8 @@ struct Repository {
         session.resumedAt = nil
         session.state = .paused
         touch(session, at: date)
+        // Paused time doesn't accrue — no alarm while paused.
+        NotificationManager.cancelStaleReminder(sessionID: session.id)
     }
 
     func resumeSession(_ session: Session, at date: Date = .now) {
@@ -76,6 +85,14 @@ struct Repository {
         session.pausedAt = nil
         session.state = .running
         touch(session, at: date)
+        // Re-arm for the REMAINING time: backdating the start by the already-
+        // accumulated play makes (threshold - elapsed-since-start) = remaining.
+        NotificationManager.scheduleStaleReminder(
+            sessionID: session.id,
+            gameName: session.playthrough?.game?.name ?? "A game",
+            sessionStart: date.addingTimeInterval(-session.accumulatedDuration),
+            threshold: StaleSessionGuard.threshold
+        )
     }
 
     func stopSession(_ session: Session, at date: Date = .now) {
@@ -90,6 +107,36 @@ struct Repository {
             pt.lastPlayedAt = date
             touch(pt, at: date)
         }
+        NotificationManager.cancelStaleReminder(sessionID: session.id)
+    }
+
+    /// End a forgotten/runaway session, capping the recorded time at `cap`
+    /// (the true duration is unknowable — the timer was left running).
+    func endStaleSession(_ session: Session, cappedAt cap: TimeInterval, at date: Date = .now) {
+        guard session.state != .stopped else { return }
+        session.accumulatedDuration = min(session.elapsed(asOf: date), cap)
+        session.endDate = session.startDate.addingTimeInterval(session.accumulatedDuration)
+        session.pausedAt = nil
+        session.resumedAt = nil
+        session.state = .stopped
+        touch(session, at: date)
+        if let pt = session.playthrough {
+            pt.lastPlayedAt = session.endDate
+            touch(pt, at: date)
+        }
+        NotificationManager.cancelStaleReminder(sessionID: session.id)
+    }
+
+    /// Discard a session entirely (records no time; tombstoned so the removal syncs).
+    func discardSession(_ session: Session, at date: Date = .now) {
+        session.accumulatedDuration = 0
+        session.endDate = session.startDate
+        session.pausedAt = nil
+        session.resumedAt = nil
+        session.state = .stopped
+        session.deletedAt = date
+        touch(session, at: date)
+        NotificationManager.cancelStaleReminder(sessionID: session.id)
     }
 
     /// Hand-logged session (already-known duration, no live timer).
@@ -133,8 +180,11 @@ struct Repository {
 // MARK: - Derived helpers
 
 extension Playthrough {
-    /// Total time across all sessions (active session counted live via `asOf`).
+    /// Total time across all sessions (active session counted live via `asOf`;
+    /// discarded/tombstoned sessions excluded).
     func totalPlaytime(asOf now: Date = .now) -> TimeInterval {
-        (sessions ?? []).reduce(0) { $0 + $1.elapsed(asOf: now) }
+        (sessions ?? [])
+            .filter { $0.deletedAt == nil }
+            .reduce(0) { $0 + $1.elapsed(asOf: now) }
     }
 }

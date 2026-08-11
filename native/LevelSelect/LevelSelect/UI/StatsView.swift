@@ -160,7 +160,9 @@ struct StatsTab: View {
     // MARK: Derived data
 
     private var allSessions: [Session] {
-        games.flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+        games
+            .flatMap { ($0.playthroughs ?? []).flatMap { $0.sessions ?? [] } }
+            .filter { $0.deletedAt == nil }
     }
 
     private var totalPlaytime: TimeInterval {

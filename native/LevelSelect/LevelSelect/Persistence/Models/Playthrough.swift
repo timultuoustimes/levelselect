@@ -29,7 +29,7 @@ final class Playthrough {
 
     /// Active session = the one not yet stopped (no separate stored flag).
     var activeSession: Session? {
-        (sessions ?? []).first { $0.state != .stopped }
+        (sessions ?? []).first { $0.state != .stopped && $0.deletedAt == nil }
     }
 
     init(

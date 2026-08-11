@@ -54,3 +54,28 @@ struct PressableCardStyle: ButtonStyle {
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
+
+/// Tap wrapper that ALWAYS bounces — even on a quick tap inside a scroll view
+/// (where the system delays touch-down, so ButtonStyle press states never
+/// show). Plays a light haptic, dips with a spring, then fires the action.
+struct BouncyTap<Label: View>: View {
+    var action: () -> Void
+    @ViewBuilder var label: Label
+    @State private var pressed = false
+
+    var body: some View {
+        Button {
+            withAnimation(.spring(response: 0.16, dampingFraction: 0.5)) { pressed = true }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(110))
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) { pressed = false }
+                action()
+            }
+        } label: {
+            label
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(pressed ? 0.92 : 1)
+        .sensoryFeedback(.impact(weight: .light), trigger: pressed) { _, new in new }
+    }
+}

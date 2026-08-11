@@ -11,6 +11,7 @@ struct RootView: View {
         }
         .tint(LSTheme.purple)
         .preferredColorScheme(.dark)
+        .staleSessionGuard()
     }
 }
 
@@ -61,10 +62,11 @@ struct HomeTab: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .kerning(1)
-                        NavigationLink(value: cp) {
+                        BouncyTap {
+                            path.append(cp)
+                        } label: {
                             ContinueHeroCard(game: cp) { play(cp) }
                         }
-                        .buttonStyle(PressableCardStyle())
                     }
                     .padding(.horizontal)
                 }
@@ -72,7 +74,9 @@ struct HomeTab: View {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty {
-                        StatusCarousel(status: status, games: items) {
+                        StatusCarousel(status: status, games: items) { game in
+                            path.append(game)
+                        } onSeeAll: {
                             path.append(status)
                         }
                     }
