@@ -76,8 +76,6 @@ struct TrackerSectionView: View {
         let done = allItems.filter { stateByItem[$0.id]?.completed == true }.count
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Label("Tracker", systemImage: "checklist")
-                    .font(.headline)
                 Spacer()
                 if !allItems.isEmpty {
                     Text("\(done)/\(allItems.count)")

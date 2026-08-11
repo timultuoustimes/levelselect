@@ -52,13 +52,14 @@ struct SessionControlsView: View {
 
     private var header: some View {
         HStack {
-            Label("Sessions", systemImage: "stopwatch")
-                .font(.headline)
-            Spacer()
             let total = playthrough?.totalPlaytime() ?? 0
-            Text(Format.duration(total))
-                .font(.subheadline.monospacedDigit())
+            Text("Total played")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+            Spacer()
+            Text(Format.duration(total))
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .foregroundStyle(LSTheme.purple)
         }
     }
 
