@@ -21,6 +21,7 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_NSSupportsLiveActivities: YES
 
 targets:
   LevelSelect:
@@ -39,8 +40,33 @@ targets:
       - path: LevelSelect
         excludes:
           - "**/.DS_Store"
+      - path: Shared
       # legacy-import.json under Resources/ is auto-routed to the resources
       # build phase by xcodegen (non-code file type).
+    dependencies:
+      - target: LevelSelectWidgets
+        embed: true
+        destinationFilters: [iOS]
+
+  LevelSelectWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: Widgets
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+        SKIP_INSTALL: YES
+    info:
+      path: Widgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   LevelSelectTests:
     type: bundle.unit-test

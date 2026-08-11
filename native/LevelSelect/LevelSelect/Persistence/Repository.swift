@@ -92,6 +92,7 @@ struct Repository {
             sessionStart: date,
             threshold: StaleSessionGuard.threshold
         )
+        LiveActivityManager.sessionChanged(session, gameName: pt.game?.name ?? "A game")
         return session
     }
 
@@ -104,6 +105,7 @@ struct Repository {
         touch(session, at: date)
         // Paused time doesn't accrue — no alarm while paused.
         NotificationManager.cancelStaleReminder(sessionID: session.id)
+        LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
     }
 
     func resumeSession(_ session: Session, at date: Date = .now) {
@@ -120,6 +122,7 @@ struct Repository {
             sessionStart: date.addingTimeInterval(-session.accumulatedDuration),
             threshold: StaleSessionGuard.threshold
         )
+        LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
     }
 
     func stopSession(_ session: Session, at date: Date = .now) {
@@ -135,6 +138,7 @@ struct Repository {
             touch(pt, at: date)
         }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
+        LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
     }
 
     /// End a forgotten/runaway session at a user-chosen stop time (the timer
@@ -153,6 +157,7 @@ struct Repository {
             touch(pt)
         }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
+        LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
     }
 
     /// Edit a completed session's times and notes.
@@ -187,6 +192,7 @@ struct Repository {
         session.deletedAt = date
         touch(session, at: date)
         NotificationManager.cancelStaleReminder(sessionID: session.id)
+        LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
     }
 
     /// Hand-logged session (already-known duration, no live timer).

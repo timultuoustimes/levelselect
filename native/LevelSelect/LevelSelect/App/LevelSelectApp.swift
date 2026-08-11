@@ -3,7 +3,7 @@ import SwiftData
 
 @main
 struct LevelSelectApp: App {
-    let container: ModelContainer = LevelSelectStore.makeContainer()
+    let container: ModelContainer = LevelSelectStore.shared
 
     var body: some Scene {
         WindowGroup {
