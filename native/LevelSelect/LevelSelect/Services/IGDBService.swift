@@ -10,6 +10,7 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     let franchise: String?
     let releaseYear: Int?
     let summary: String?
+    let gameType: Int?
     let platforms: [String]
     let genres: [String]
     let themes: [String]
@@ -17,6 +18,27 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     let playerPerspectives: [String]
     let developers: [String]
     let publishers: [String]
+
+    /// Human label for non-main game types (nil for main games).
+    var typeLabel: String? {
+        switch gameType {
+        case 1: "DLC"
+        case 2: "Expansion"
+        case 3: "Bundle"
+        case 4: "Standalone"
+        case 5: "Mod"
+        case 6: "Episode"
+        case 7: "Season"
+        case 8: "Remake"
+        case 9: "Remaster"
+        case 10: "Expanded"
+        case 11: "Port"
+        case 12: "Fork"
+        case 13: "Pack"
+        case 14: "Update"
+        default: nil
+        }
+    }
 
     var coverURLString: String? {
         coverImageID.map { "https://images.igdb.com/igdb/image/upload/t_cover_big/\($0).jpg" }
@@ -32,18 +54,22 @@ enum IGDBService {
         string: "https://sextftevxqrtodlmnyve.supabase.co/functions/v1/igdb-proxy")!
 
     private static let fields = """
-        fields name, slug, summary, cover.image_id, franchises.name, collection.name, \
+        fields name, slug, summary, game_type, cover.image_id, franchises.name, collection.name, \
         first_release_date, platforms.name, genres.name, themes.name, game_modes.name, \
         player_perspectives.name, involved_companies.developer, involved_companies.publisher, \
         involved_companies.company.name;
         """
 
-    /// Name search — main games only (matches the web app's behavior).
+    /// Name search — UNFILTERED (the web app's main-games-only filter hid
+    /// bundles/editions like "Ultimate Bundle"). Main games sort first;
+    /// bundles/DLC/remasters follow, badged via `typeLabel`.
     static func search(name: String) async throws -> [IGDBGame] {
         let clean = name.replacingOccurrences(of: "\"", with: "")
         guard clean.trimmingCharacters(in: .whitespaces).count >= 2 else { return [] }
-        let query = "search \"\(clean)\"; \(fields) where game_type = (0) & version_parent = null; limit 10;"
-        return try await perform(query)
+        let query = "search \"\(clean)\"; \(fields) limit 15;"
+        let results = try await perform(query)
+        // Stable partition: main games first, IGDB relevance preserved within groups.
+        return results.filter { ($0.gameType ?? 0) == 0 } + results.filter { ($0.gameType ?? 0) != 0 }
     }
 
     /// Direct ID lookup — deliberately UNFILTERED so specific editions,
@@ -80,6 +106,7 @@ enum IGDBService {
         let name: String
         let slug: String?
         let summary: String?
+        let game_type: Int?
         let cover: Cover?
         let franchises: [Named]?
         let collection: Named?
@@ -109,6 +136,7 @@ enum IGDBService {
                     Calendar.current.component(.year, from: Date(timeIntervalSince1970: $0))
                 },
                 summary: summary,
+                gameType: game_type,
                 platforms: (platforms ?? []).map(\.name),
                 genres: (genres ?? []).map(\.name),
                 themes: (themes ?? []).map(\.name),

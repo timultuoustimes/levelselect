@@ -130,7 +130,7 @@ struct AddGameSheet: View {
                     Text(game.name).font(.subheadline.weight(.medium)).lineLimit(2)
                     HStack(spacing: 4) {
                         if let year = game.releaseYear { Text(String(year)) }
-                        if let first = game.platforms.first {
+                        if let first = PlatformPreference.sorted(game.platforms).first {
                             Text("· \(first)\(game.platforms.count > 1 ? " +\(game.platforms.count - 1)" : "")")
                         }
                     }
@@ -138,6 +138,13 @@ struct AddGameSheet: View {
                     .foregroundStyle(.secondary)
                 }
                 Spacer()
+                if let type = game.typeLabel {
+                    Text(type)
+                        .font(.caption2)
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(.gray.opacity(0.3), in: .capsule)
+                        .foregroundStyle(.secondary)
+                }
                 if let badge {
                     Text(badge)
                         .font(.caption2.monospacedDigit())
@@ -235,6 +242,11 @@ private struct ConfirmAddView: View {
     @State private var platform: String = ""
     @State private var status: GameStatus = .playing
 
+    /// Picker options in preference order (Switch 2 → Switch → PC → …).
+    private var orderedPlatforms: [String] {
+        PlatformPreference.sorted(game.platforms)
+    }
+
     var body: some View {
         Form {
             Section {
@@ -246,9 +258,10 @@ private struct ConfirmAddView: View {
                         HStack(spacing: 4) {
                             if let year = game.releaseYear { Text(String(year)) }
                             if let franchise = game.franchise { Text("· \(franchise)") }
+                            if let type = game.typeLabel { Text("· \(type)") }
                         }
                         .font(.caption).foregroundStyle(.secondary)
-                        Text("IGDB #\(game.id)")
+                        Text("IGDB #\(String(game.id))")
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.tertiary)
                     }
@@ -259,7 +272,7 @@ private struct ConfirmAddView: View {
                     TextField("Platform", text: $platform)
                 } else {
                     Picker("Platform", selection: $platform) {
-                        ForEach(game.platforms, id: \.self) { Text($0).tag($0) }
+                        ForEach(orderedPlatforms, id: \.self) { Text($0).tag($0) }
                     }
                 }
                 Picker("Status", selection: $status) {
@@ -276,11 +289,15 @@ private struct ConfirmAddView: View {
         }
         .onAppear {
             status = lastStatus
-            // Prefer the last-used platform when this game supports it.
-            if game.platforms.contains(lastPlatform) {
+            // Default: highest-preference platform (Switch 2 → Switch → PC)
+            // when the game supports one; otherwise the last platform picked;
+            // otherwise IGDB's first.
+            if let top = orderedPlatforms.first, PlatformPreference.rank(top) < 100 {
+                platform = top
+            } else if game.platforms.contains(lastPlatform) {
                 platform = lastPlatform
             } else {
-                platform = game.platforms.first ?? ""
+                platform = orderedPlatforms.first ?? ""
             }
         }
     }

@@ -65,6 +65,27 @@ extension GameStatus {
     }
 }
 
+/// Tim's platform preference for defaulting new adds: Nintendo eShop first
+/// (Switch 2, then Switch), then Steam/PC, then Mac; everything else after,
+/// in IGDB's order.
+enum PlatformPreference {
+    static func rank(_ platform: String) -> Int {
+        let p = platform.lowercased()
+        if p.contains("switch 2") { return 0 }
+        if p.contains("switch") { return 1 }
+        if p.contains("windows") || p == "pc" || p.contains("steam") { return 2 }
+        if p.contains("mac") { return 3 }
+        return 100
+    }
+
+    /// Stable sort: preferred platforms first, original order preserved otherwise.
+    static func sorted(_ platforms: [String]) -> [String] {
+        platforms.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
+    }
+}
+
 /// Async cover art with a themed placeholder. Box-art aspect ratio.
 struct CoverThumb: View {
     let urlString: String?
