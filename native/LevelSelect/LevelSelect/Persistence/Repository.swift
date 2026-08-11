@@ -25,6 +25,33 @@ struct Repository {
         return game
     }
 
+    /// Add a game from an IGDB search result with full metadata. The chosen
+    /// platform is placed first in `platforms`; the rest are preserved.
+    @discardableResult
+    func addGame(from igdb: IGDBGame, platform: String?, status: GameStatus) -> Game {
+        let game = Game(name: igdb.name, status: status)
+        game.igdbID = igdb.id
+        game.igdbSlug = igdb.slug
+        game.coverImageID = igdb.coverImageID
+        game.coverURLString = igdb.coverURLString
+        game.franchise = igdb.franchise
+        game.firstReleaseDate = igdb.releaseDate
+        game.summary = igdb.summary
+        game.genres = igdb.genres
+        game.themes = igdb.themes
+        game.gameModes = igdb.gameModes
+        game.playerPerspectives = igdb.playerPerspectives
+        game.developers = igdb.developers
+        game.publishers = igdb.publishers
+        if let platform, !platform.isEmpty {
+            game.platforms = [platform] + igdb.platforms.filter { $0 != platform }
+        } else {
+            game.platforms = igdb.platforms
+        }
+        context.insert(game)
+        return game
+    }
+
     /// Soft delete — sets a tombstone so trash/undo is possible and the deletion
     /// propagates via CloudKit.
     func softDelete(_ game: Game, at date: Date = .now) {

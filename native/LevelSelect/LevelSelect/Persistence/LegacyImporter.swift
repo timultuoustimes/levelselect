@@ -89,7 +89,15 @@ struct LegacyImporter {
         game.summary = str(g, "summary")
         game.igdbID = int(g, "igdbId")
         game.igdbSlug = str(g, "igdbSlug")
-        game.firstReleaseDate = date(g["firstReleaseDate"])
+        // Legacy stores a bare YEAR (e.g. 2003), not an epoch — treat small
+        // numbers as years; anything else goes through normal date parsing.
+        if let year = int(g, "firstReleaseDate"), (1950..<3000).contains(year) {
+            game.firstReleaseDate = DateComponents(
+                calendar: .current, year: year, month: 1, day: 1
+            ).date
+        } else {
+            game.firstReleaseDate = date(g["firstReleaseDate"])
+        }
         game.franchise = str(g, "franchise")
         game.coverURLString = str(g, "coverUrl")
         game.coverImageID = str(g, "coverImageId")
