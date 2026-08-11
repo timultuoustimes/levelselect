@@ -47,10 +47,21 @@ struct HomeTab: View {
             }
             .lsBackground()
             .navigationTitle("LevelSelect")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .toolbar {
+                #if !os(macOS)
+                ToolbarItem(placement: .principal) {
+                    Text("LevelSelect")
+                        .font(LSTheme.pixel(15))
+                        .foregroundStyle(LSTheme.torch)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                #endif
                 ToolbarItem {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")

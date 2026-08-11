@@ -32,6 +32,15 @@ enum LSTheme {
 
     /// Subtle card surface on the dark background.
     static var cardFill: Color { .white.opacity(0.06) }
+
+    /// Torch orange from the dungeon-door icon/wordmark artwork.
+    static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
+
+    /// Display face: Press Start 2P (bundled, registered at launch). Use for
+    /// wordmarks and small display moments only — never body text.
+    static func pixel(_ size: CGFloat) -> Font {
+        .custom("Press Start 2P", size: size)
+    }
 }
 
 extension View {

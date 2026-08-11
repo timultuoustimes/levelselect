@@ -19,6 +19,18 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    Image("LockupWide")
+                        .resizable()
+                        .scaledToFit()
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .frame(maxWidth: 420)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityLabel("LevelSelect")
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+
                 Section("Library") {
                     LabeledContent("Games", value: "\(games.count)")
                 }

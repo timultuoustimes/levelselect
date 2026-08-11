@@ -20,7 +20,6 @@ settings:
     GENERATE_INFOPLIST_FILE: YES
     INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
-    INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_NSSupportsLiveActivities: YES
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
@@ -34,6 +33,14 @@ targets:
         com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
+    # Explicit UILaunchScreen (stacked lockup on the navy brand color) replaces
+    # the generated blank launch screen. Merged with INFOPLIST_KEY_* settings.
+    info:
+      path: LevelSelect/Info.plist
+      properties:
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect

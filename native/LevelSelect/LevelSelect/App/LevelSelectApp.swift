@@ -5,6 +5,10 @@ import SwiftData
 struct LevelSelectApp: App {
     let container: ModelContainer = LevelSelectStore.shared
 
+    init() {
+        FontRegistrar.registerBundledFonts()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
