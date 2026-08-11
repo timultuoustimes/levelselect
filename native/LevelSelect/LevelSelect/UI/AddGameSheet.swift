@@ -240,11 +240,23 @@ private struct ConfirmAddView: View {
     var onAdd: (IGDBGame, String?, GameStatus) -> Void
 
     @State private var platform: String = ""
+    @State private var customPlatform: String = ""
+    private let customOption = "Other…"
+
     @State private var status: GameStatus = .playing
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
         PlatformPreference.sorted(game.platforms)
+    }
+
+    /// IGDB's platform lists are community data and sometimes incomplete
+    /// (e.g. bundles missing their Switch release). Offer the preferred
+    /// Nintendo platforms even when IGDB omits them, plus free entry.
+    private var extraPlatforms: [String] {
+        ["Nintendo Switch 2", "Nintendo Switch"].filter { extra in
+            !game.platforms.contains { $0.caseInsensitiveCompare(extra) == .orderedSame }
+        }
     }
 
     var body: some View {
@@ -268,20 +280,32 @@ private struct ConfirmAddView: View {
                 }
             }
             Section {
-                if game.platforms.isEmpty {
-                    TextField("Platform", text: $platform)
-                } else {
-                    Picker("Platform", selection: $platform) {
-                        ForEach(orderedPlatforms, id: \.self) { Text($0).tag($0) }
+                Picker("Platform", selection: $platform) {
+                    ForEach(orderedPlatforms, id: \.self) { Text($0).tag($0) }
+                    if !extraPlatforms.isEmpty {
+                        Divider()
+                        ForEach(extraPlatforms, id: \.self) { Text($0).tag($0) }
                     }
+                    Divider()
+                    Text(customOption).tag(customOption)
+                }
+                if platform == customOption {
+                    TextField("Platform name", text: $customPlatform)
                 }
                 Picker("Status", selection: $status) {
                     ForEach(GameStatus.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
+            } footer: {
+                if !extraPlatforms.isEmpty {
+                    Text("Platform list from IGDB — sometimes incomplete; pick or type the real one.")
+                }
             }
             Section {
                 Button("Add to Library") {
-                    onAdd(game, platform.isEmpty ? nil : platform, status)
+                    let chosen = platform == customOption
+                        ? customPlatform.trimmingCharacters(in: .whitespaces)
+                        : platform
+                    onAdd(game, chosen.isEmpty ? nil : chosen, status)
                 }
                 .font(.headline)
                 Button("Back to search", action: onBack)
@@ -291,13 +315,15 @@ private struct ConfirmAddView: View {
             status = lastStatus
             // Default: highest-preference platform (Switch 2 → Switch → PC)
             // when the game supports one; otherwise the last platform picked;
-            // otherwise IGDB's first.
+            // otherwise IGDB's first; otherwise free entry.
             if let top = orderedPlatforms.first, PlatformPreference.rank(top) < 100 {
                 platform = top
             } else if game.platforms.contains(lastPlatform) {
                 platform = lastPlatform
+            } else if let first = orderedPlatforms.first {
+                platform = first
             } else {
-                platform = orderedPlatforms.first ?? ""
+                platform = customOption
             }
         }
     }
