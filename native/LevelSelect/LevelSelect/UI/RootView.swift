@@ -6,18 +6,27 @@ struct RootView: View {
     @Query private var themeSettings: [ThemeSettings]
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
+    @State private var showingSplash = true
 
     var body: some View {
-        TabView {
-            Tab("Home", systemImage: "house.fill") { HomeTab() }
-            Tab("Library", systemImage: "square.grid.2x2.fill") { LibraryTab() }
-            Tab("Wishlist", systemImage: "heart.fill") { WishlistTab() }
-            Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
+        ZStack {
+            TabView {
+                Tab("Home", systemImage: "house.fill") { HomeTab() }
+                Tab("Library", systemImage: "square.grid.2x2.fill") { LibraryTab() }
+                Tab("Wishlist", systemImage: "heart.fill") { WishlistTab() }
+                Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
+            }
+            .tint(LSTheme.accent)
+            .staleSessionGuard()
+            .id(themeVersion)
+
+            if showingSplash {
+                SplashView()
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
         }
-        .tint(LSTheme.accent)
         .preferredColorScheme(.dark)
-        .staleSessionGuard()
-        .id(themeVersion)
         .onAppear {
             ThemePalette.refresh(from: themeSettings.first)
         }
@@ -25,6 +34,23 @@ struct RootView: View {
             ThemePalette.refresh(from: themeSettings.first)
             themeVersion += 1
         }
+        .task {
+            try? await Task.sleep(for: .seconds(1.0))
+            withAnimation(.easeOut(duration: 0.5)) { showingSplash = false }
+        }
+    }
+}
+
+/// Pixel-matches the static launch screen (stacked lockup centered on the
+/// navy brand color) so the OS launch image hands off invisibly, letting the
+/// splash linger a beat before fading into the app.
+private struct SplashView: View {
+    var body: some View {
+        ZStack {
+            Color("LaunchBackground").ignoresSafeArea()
+            Image("LaunchLogo")
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -56,10 +82,18 @@ struct HomeTab: View {
             .toolbar {
                 #if !os(macOS)
                 ToolbarItem(placement: .principal) {
-                    Text("LevelSelect")
-                        .font(LSTheme.pixel(15))
-                        .foregroundStyle(LSTheme.torch)
-                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: 8) {
+                        Image("DoorMark")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(height: 28)
+                        Text("LevelSelect")
+                            .font(LSTheme.pixel(15))
+                            .foregroundStyle(LSTheme.torch)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("LevelSelect")
+                    .accessibilityAddTraits(.isHeader)
                 }
                 #endif
                 ToolbarItem {
