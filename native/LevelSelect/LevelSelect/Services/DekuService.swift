@@ -26,14 +26,19 @@ final class DekuWishlistStore {
     var isLoading = false
     var errorMessage: String?
 
+    /// STORED so @Observable tracks it (a computed UserDefaults passthrough is
+    /// invisible to Observation — the setup screen never re-rendered on
+    /// Connect). Persisted via didSet.
     var configuredURL: String {
-        get { UserDefaults.standard.string(forKey: Self.urlDefaultsKey) ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: Self.urlDefaultsKey) }
+        didSet { UserDefaults.standard.set(configuredURL, forKey: Self.urlDefaultsKey) }
     }
 
-    var isConfigured: Bool { !configuredURL.isEmpty }
+    var isConfigured: Bool {
+        !configuredURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     init() {
+        configuredURL = UserDefaults.standard.string(forKey: Self.urlDefaultsKey) ?? ""
         loadCache()
     }
 
