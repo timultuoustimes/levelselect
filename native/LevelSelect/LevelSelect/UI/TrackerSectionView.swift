@@ -11,6 +11,9 @@ struct TrackerSectionView: View {
     @State private var addingGoal = false
     @State private var goalName = ""
     @State private var expanded: Set<String> = []
+    @State private var generating = false
+    @State private var generateError: String?
+    @State private var confirmingRegenerate = false
 
     private var repo: Repository { Repository(context) }
 
@@ -37,25 +40,65 @@ struct TrackerSectionView: View {
         VStack(alignment: .leading, spacing: 12) {
             header(cats)
 
-            if cats.isEmpty {
-                Text("No tracker yet — add a personal goal to start one.")
+            if generating {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Generating with AI — usually about a minute…")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            } else if cats.isEmpty {
+                Text("No tracker yet — generate one with AI or add a personal goal.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-            } else {
+            }
+
+            if !generating {
                 ForEach(cats) { category in
                     categoryView(category)
                 }
             }
 
-            Button {
-                goalName = ""
-                addingGoal = true
-            } label: {
-                Label("Add Personal Goal", systemImage: "plus.circle")
-                    .font(.subheadline)
+            if let error = generateError {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            HStack(spacing: 18) {
+                Button {
+                    goalName = ""
+                    addingGoal = true
+                } label: {
+                    Label("Add Personal Goal", systemImage: "plus.circle")
+                        .font(.subheadline)
+                }
+                Button {
+                    if hasNonGoalContent {
+                        confirmingRegenerate = true
+                    } else {
+                        generate()
+                    }
+                } label: {
+                    Label(hasNonGoalContent ? "Regenerate with AI" : "Generate with AI",
+                          systemImage: "sparkles")
+                        .font(.subheadline)
+                }
+                .disabled(generating)
             }
             .buttonStyle(.borderless)
             .tint(LSTheme.purple)
+        }
+        .confirmationDialog(
+            "Regenerate this tracker?",
+            isPresented: $confirmingRegenerate,
+            titleVisibility: .visible
+        ) {
+            Button("Regenerate", role: .destructive) { generate() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Replaces the current tracker content. Personal Goals are kept, but checked items may not match the new tracker.")
         }
         .alert("New Personal Goal", isPresented: $addingGoal) {
             TextField("Goal", text: $goalName)
@@ -66,6 +109,26 @@ struct TrackerSectionView: View {
                 expanded.insert(TrackerSchemaJSON.personalGoalsID)
             }
             Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    /// Any tracker content beyond user-created Personal Goals?
+    private var hasNonGoalContent: Bool {
+        categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
+    }
+
+    private func generate() {
+        generating = true
+        generateError = nil
+        let name = game.name
+        Task {
+            do {
+                let jsonData = try await AITrackerService.generate(gameName: name)
+                repo.setGeneratedSchema(for: game, jsonData: jsonData)
+            } catch {
+                generateError = error.localizedDescription
+            }
+            generating = false
         }
     }
 

@@ -80,4 +80,24 @@ enum TrackerSchemaJSON {
     static func emptySchema() -> Data {
         (try? JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": []])) ?? Data()
     }
+
+    /// Carry the user's Personal Goals category from an old schema into a
+    /// newly generated one (regeneration must never eat user-created goals).
+    static func mergingPersonalGoals(from oldData: Data, into newData: Data) -> Data {
+        guard let old = (try? JSONSerialization.jsonObject(with: oldData)) as? [String: Any],
+              let oldCats = old["categories"] as? [[String: Any]],
+              let goals = oldCats.first(where: { ($0["id"] as? String) == personalGoalsID }),
+              !((goals["items"] as? [[String: Any]]) ?? []).isEmpty
+        else { return newData }
+
+        guard var new = (try? JSONSerialization.jsonObject(with: newData)) as? [String: Any] else {
+            return newData
+        }
+        var newCats = (new["categories"] as? [[String: Any]]) ?? []
+        if !newCats.contains(where: { ($0["id"] as? String) == personalGoalsID }) {
+            newCats.append(goals)
+            new["categories"] = newCats
+        }
+        return (try? JSONSerialization.data(withJSONObject: new)) ?? newData
+    }
 }

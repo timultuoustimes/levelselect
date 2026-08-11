@@ -267,6 +267,27 @@ struct Repository {
         }
     }
 
+    /// Apply an AI-generated schema to a game (create or replace), keeping
+    /// the user's Personal Goals across regeneration.
+    func setGeneratedSchema(for game: Game, jsonData: Data) {
+        let schema: TrackerSchemaRecord
+        if let existing = game.trackerSchema {
+            schema = existing
+            schema.jsonData = TrackerSchemaJSON.mergingPersonalGoals(
+                from: existing.jsonData, into: jsonData)
+        } else {
+            schema = TrackerSchemaRecord(source: .aiGenerated, engine: .objective, jsonData: jsonData)
+            context.insert(schema)
+            schema.game = game
+        }
+        schema.source = .aiGenerated
+        schema.generatedAt = .now
+        schema.generatedBy = "claude"
+        touch(schema)
+        touch(game)
+        recomputeProgress(game)
+    }
+
     /// Recompute the active playthrough's progress % from schema + state.
     func recomputeProgress(_ game: Game) {
         guard let schema = game.trackerSchema else { return }
