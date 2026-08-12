@@ -70,6 +70,40 @@ targets:
       - target: LevelSelectWidgets
         embed: true
         destinationFilters: [iOS]
+      # LevelSelectWatch is fully scaffolded below but NOT embedded yet:
+      # embedding makes the iOS build require the watchOS runtime, which isn't
+      # installed on this Mac (only the build SDK is). Re-add this dependency
+      # once the watchOS 26 simulator runtime is installed, then it ships with
+      # the phone app.
+      # - target: LevelSelectWatch
+      #   embed: true
+      #   destinationFilters: [iOS]
+
+  LevelSelectWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "26.0"
+    entitlements:
+      path: Watch/LevelSelectWatch.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
+        com.apple.developer.icloud-services: [CloudKit]
+    # Reuse the phone's data layer — same models, schema, store, Repository —
+    # so the watch syncs the same iCloud data. Watch-only stubs (in Watch/)
+    # satisfy Repository's iOS-only side effects.
+    sources:
+      - path: LevelSelect/Persistence/Models
+      - path: LevelSelect/Persistence/Schema.swift
+      - path: LevelSelect/Persistence/Repository.swift
+      - path: LevelSelect/Domain
+      - path: Watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect.watchkitapp
+        INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.timultuoustimes.levelselect
+        INFOPLIST_KEY_WKApplication: YES
+        GENERATE_INFOPLIST_FILE: YES
 
   LevelSelectWidgets:
     type: app-extension

@@ -484,13 +484,16 @@ struct Repository {
 // MARK: - Derived helpers
 
 extension Game {
+    #if os(iOS) || os(macOS)
     /// Effective tracker display: explicit per-game choice wins; otherwise
     /// the library default (which can never override an explicit choice).
+    /// (iOS/macOS only — `ThemePalette` is UI; the watch never reads this.)
     @MainActor
     var resolvedTrackerDisplay: TrackerDisplay {
         trackerDisplayRaw.flatMap { TrackerDisplay(rawValue: $0) }
             ?? ThemePalette.defaultTrackerDisplay
     }
+    #endif
 
     /// Live (non-deleted) playthroughs, oldest first (stable ordering).
     var livePlaythroughs: [Playthrough] {
