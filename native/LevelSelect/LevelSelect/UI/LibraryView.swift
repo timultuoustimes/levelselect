@@ -66,7 +66,7 @@ struct LibraryTab: View {
                 if let groups = sectionGroups {
                     ForEach(groups.indices, id: \.self) { i in
                         sectionHeader(title: groups[i].title, status: groups[i].status,
-                                      count: groups[i].items.count)
+                                      platform: groups[i].platform, count: groups[i].items.count)
                         grid(groups[i].items)
                     }
                 } else {
@@ -106,9 +106,16 @@ struct LibraryTab: View {
                         }
                     } header: {
                         let g = groups[i]
-                        Label("\(g.title) (\(g.items.count))",
-                              systemImage: g.status?.systemImage ?? "gamecontroller.fill")
-                            .foregroundStyle(g.status.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(LSTheme.accent))
+                        if let asset = g.platform.flatMap(PlatformIcon.assetName) {
+                            HStack(spacing: 6) {
+                                Image(asset).resizable().scaledToFit().frame(width: 20, height: 20)
+                                Text("\(g.title) (\(g.items.count))")
+                            }
+                        } else {
+                            Label("\(g.title) (\(g.items.count))",
+                                  systemImage: g.status?.systemImage ?? "gamecontroller.fill")
+                                .foregroundStyle(g.status.map { AnyShapeStyle($0.color) } ?? AnyShapeStyle(LSTheme.accent))
+                        }
                     }
                 }
             } else {
@@ -123,9 +130,11 @@ struct LibraryTab: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func sectionHeader(title: String, status: GameStatus?, count: Int) -> some View {
+    private func sectionHeader(title: String, status: GameStatus?, platform: String? = nil, count: Int) -> some View {
         HStack(spacing: 6) {
-            if let status {
+            if let asset = platform.flatMap(PlatformIcon.assetName) {
+                Image(asset).resizable().scaledToFit().frame(width: 24, height: 24)
+            } else if let status {
                 Circle().fill(status.color).frame(width: 8, height: 8)
             } else {
                 Image(systemName: "gamecontroller.fill")
@@ -142,7 +151,12 @@ struct LibraryTab: View {
     }
 
     /// Grouped sections for the grid/list (status or system), else nil = flat.
-    private struct LibGroup { let title: String; let status: GameStatus?; let items: [Game] }
+    private struct LibGroup {
+        let title: String
+        let status: GameStatus?
+        var platform: String? = nil   // raw platform key (system sort) for its icon
+        let items: [Game]
+    }
 
     private var sectionGroups: [LibGroup]? {
         switch sort {
@@ -158,7 +172,7 @@ struct LibraryTab: View {
                 PlatformPreference.sorted($0.platforms).first ?? "Other"
             }
             return byPlatform
-                .map { LibGroup(title: PlatformShort.name($0.key), status: nil,
+                .map { LibGroup(title: PlatformShort.name($0.key), status: nil, platform: $0.key,
                                 items: $0.value.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) }
                 .sorted { ($1.items.count, $0.title) < ($0.items.count, $1.title) }
         default:
@@ -353,6 +367,17 @@ enum LibrarySort: String, CaseIterable {
         case .recentlyPlayed: "clock"
         case .mostPlayed: "trophy"
         case .rating: "star"
+        }
+    }
+}
+
+/// Maps a platform to its soft-3D console icon asset (added as they're made).
+/// Returns nil → the header falls back to the generic controller glyph.
+enum PlatformIcon {
+    static func assetName(_ platform: String) -> String? {
+        switch platform {
+        case "Mac": "platform-mac"
+        default: nil
         }
     }
 }
