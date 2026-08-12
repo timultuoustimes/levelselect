@@ -11,8 +11,28 @@ struct WishlistTab: View {
         var id: String { name }
     }
 
+    enum WishlistSort: String, CaseIterable, Identifiable {
+        case dateNewest, dateOldest, nameAZ
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .dateNewest: "Recently added"
+            case .dateOldest: "Oldest first"
+            case .nameAZ: "Name (A–Z)"
+            }
+        }
+        var systemImage: String {
+            switch self {
+            case .dateNewest: "clock.arrow.circlepath"
+            case .dateOldest: "clock"
+            case .nameAZ: "textformat"
+            }
+        }
+    }
+
     @State private var store = DekuWishlistStore()
     @State private var searchText = ""
+    @State private var sort: WishlistSort = .dateNewest
     @State private var browserTarget: DekuLinkTarget?
     @State private var addSearch: AddTarget?
     @State private var paneURL: URL = DekuLinks.home
@@ -41,6 +61,17 @@ struct WishlistTab: View {
             .lsBackground()
             .navigationTitle("Wishlist")
             .toolbar {
+                ToolbarItem {
+                    Menu {
+                        Picker("Sort", selection: $sort) {
+                            ForEach(WishlistSort.allCases) { option in
+                                Label(option.label, systemImage: option.systemImage).tag(option)
+                            }
+                        }
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         if isSplit { paneURL = DekuLinks.home }
@@ -65,9 +96,17 @@ struct WishlistTab: View {
     // MARK: List
 
     private var visible: [DekuWishlistItem] {
-        searchText.isEmpty
+        let base = searchText.isEmpty
             ? store.items
             : store.items.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        switch sort {
+        case .dateNewest:
+            return base.sorted { ($0.addedAt ?? .distantPast) > ($1.addedAt ?? .distantPast) }
+        case .dateOldest:
+            return base.sorted { ($0.addedAt ?? .distantPast) < ($1.addedAt ?? .distantPast) }
+        case .nameAZ:
+            return base.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
     }
 
     private var list: some View {
@@ -125,9 +164,10 @@ struct WishlistTab: View {
 
     private func row(_ item: DekuWishlistItem) -> some View {
         HStack(spacing: 10) {
-            Image(systemName: "heart.fill")
+            // A shopping bag reads as "want to buy" rather than "favorited".
+            Image(systemName: "bag.fill")
                 .font(.caption)
-                .foregroundStyle(.pink.opacity(0.8))
+                .foregroundStyle(LSTheme.accent)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
                     .font(.subheadline.weight(.medium))

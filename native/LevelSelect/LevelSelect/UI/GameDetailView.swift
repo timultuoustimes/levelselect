@@ -444,7 +444,7 @@ struct GameDetailView: View {
                 }
                 .font(.subheadline)
 
-                ratingStars
+                RatingControl(rating: $game.rating)
 
                 if let franchise = game.franchise, !franchise.isEmpty {
                     Text(franchise)
@@ -454,19 +454,6 @@ struct GameDetailView: View {
             }
             Spacer(minLength: 0)
         }
-    }
-
-    private var ratingStars: some View {
-        HStack(spacing: 3) {
-            ForEach(1...5, id: \.self) { i in
-                Image(systemName: (game.rating ?? 0) >= i ? "star.fill" : "star")
-                    .foregroundStyle(.yellow)
-                    .onTapGesture {
-                        game.rating = (game.rating == i) ? nil : i
-                    }
-            }
-        }
-        .font(.subheadline)
     }
 
     private var notesField: some View {
@@ -660,7 +647,7 @@ struct GameDetailView: View {
 
     private var reviewEditor: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ratingStars
+            RatingControl(rating: $game.rating)
             TextField("Your review…", text: Binding(
                 get: { game.review ?? "" },
                 set: { game.review = $0.isEmpty ? nil : $0 }
