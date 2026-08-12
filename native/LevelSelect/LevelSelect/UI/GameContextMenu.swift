@@ -51,6 +51,21 @@ struct GameContextMenuModifier: ViewModifier {
                 Label("Status", systemImage: game.status.systemImage)
             }
 
+            // Ownership (multi-select toggles)
+            Menu {
+                ForEach(Ownership.allCases, id: \.self) { kind in
+                    let on = game.ownership.contains(kind.rawValue)
+                    Button {
+                        if on { game.ownership.removeAll { $0 == kind.rawValue } }
+                        else { game.ownership.append(kind.rawValue) }
+                    } label: {
+                        Label(kind.label, systemImage: on ? "checkmark" : kind.systemImage)
+                    }
+                }
+            } label: {
+                Label("Ownership", systemImage: "shippingbox")
+            }
+
             // Rating
             Menu {
                 ForEach(1...5, id: \.self) { stars in

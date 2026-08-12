@@ -41,10 +41,13 @@ struct GameRow: View {
 
             Spacer(minLength: 0)
 
-            if game.pinned {
-                Image(systemName: "pin.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 5) {
+                if game.pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                OwnershipBadges(ownership: game.ownership, size: 11)
             }
         }
         .padding(.vertical, 2)

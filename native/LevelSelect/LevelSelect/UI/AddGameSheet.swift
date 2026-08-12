@@ -38,7 +38,7 @@ struct AddGameSheet: View {
                         lastPlatform: lastPlatform,
                         lastStatus: defaultStatus ?? GameStatus(rawValue: lastStatusRaw) ?? .playing,
                         onBack: { self.selected = nil },
-                        onAdd: add(igdb:platform:status:)
+                        onAdd: add(igdb:platform:status:ownership:)
                     )
                 } else {
                     searchStage
@@ -222,8 +222,9 @@ struct AddGameSheet: View {
 
     // MARK: Add
 
-    private func add(igdb: IGDBGame, platform: String?, status: GameStatus) {
-        Repository(context).addGame(from: igdb, platform: platform, status: status)
+    private func add(igdb: IGDBGame, platform: String?, status: GameStatus, ownership: [String]) {
+        let game = Repository(context).addGame(from: igdb, platform: platform, status: status)
+        game.ownership = ownership
         if let platform, !platform.isEmpty { lastPlatform = platform }
         // Don't let a wishlist promotion hijack the everyday default status.
         if defaultStatus == nil { lastStatusRaw = status.rawValue }
@@ -237,13 +238,14 @@ private struct ConfirmAddView: View {
     let lastPlatform: String
     let lastStatus: GameStatus
     var onBack: () -> Void
-    var onAdd: (IGDBGame, String?, GameStatus) -> Void
+    var onAdd: (IGDBGame, String?, GameStatus, [String]) -> Void
 
     @State private var platform: String = ""
     @State private var customPlatform: String = ""
     private let customOption = "Other…"
 
     @State private var status: GameStatus = .playing
+    @State private var ownership: [String] = []
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -295,6 +297,10 @@ private struct ConfirmAddView: View {
                 Picker("Status", selection: $status) {
                     ForEach(GameStatus.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Owned").font(.caption).foregroundStyle(.secondary)
+                    OwnershipControl(ownership: $ownership)
+                }
             } footer: {
                 if !extraPlatforms.isEmpty {
                     Text("Platform list from IGDB — sometimes incomplete; pick or type the real one.")
@@ -305,7 +311,7 @@ private struct ConfirmAddView: View {
                     let chosen = platform == customOption
                         ? customPlatform.trimmingCharacters(in: .whitespaces)
                         : platform
-                    onAdd(game, chosen.isEmpty ? nil : chosen, status)
+                    onAdd(game, chosen.isEmpty ? nil : chosen, status, ownership)
                 }
                 .font(.headline)
                 Button("Back to search", action: onBack)

@@ -51,3 +51,27 @@ struct OwnershipControl: View {
         }
     }
 }
+
+/// Tiny read-only ownership icons for library rows and cover cards.
+struct OwnershipBadges: View {
+    let ownership: [String]
+    var size: CGFloat = 10
+    var tint: Color = .secondary
+
+    private var kinds: [Ownership] {
+        Ownership.allCases.filter { ownership.contains($0.rawValue) }
+    }
+
+    var body: some View {
+        if !kinds.isEmpty {
+            HStack(spacing: 4) {
+                ForEach(kinds, id: \.self) { k in
+                    Image(systemName: k.systemImage)
+                        .symbolVariant(.fill)
+                        .font(.system(size: size))
+                }
+            }
+            .foregroundStyle(tint)
+        }
+    }
+}
