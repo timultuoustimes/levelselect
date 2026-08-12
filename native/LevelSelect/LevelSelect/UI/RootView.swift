@@ -8,14 +8,16 @@ struct RootView: View {
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
     @State private var showingSplash = true
+    @State private var nav = AppNavigator.shared
 
     var body: some View {
         ZStack {
-            TabView {
-                Tab("Home", systemImage: "house.fill") { HomeTab() }
-                Tab("Library", systemImage: "square.grid.2x2.fill") { LibraryTab() }
-                Tab("Wishlist", systemImage: "heart.fill") { WishlistTab() }
-                Tab("Stats", systemImage: "chart.bar.fill") { StatsTab() }
+            TabView(selection: Binding(get: { nav.selectedTab },
+                                       set: { nav.selectedTab = $0 })) {
+                Tab("Home", systemImage: "house.fill", value: LSTab.home) { HomeTab() }
+                Tab("Library", systemImage: "square.grid.2x2.fill", value: LSTab.library) { LibraryTab() }
+                Tab("Wishlist", systemImage: "heart.fill", value: LSTab.wishlist) { WishlistTab() }
+                Tab("Stats", systemImage: "chart.bar.fill", value: LSTab.stats) { StatsTab() }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
@@ -28,6 +30,7 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onOpenURL { route($0) }
         .onAppear {
             ThemePalette.refresh(from: themeSettings.first)
         }
@@ -45,6 +48,23 @@ struct RootView: View {
         .task {
             try? await Task.sleep(for: .seconds(1.0))
             withAnimation(.easeOut(duration: 0.5)) { showingSplash = false }
+        }
+    }
+
+    /// Route a `levelselect://` deep link (widgets + App Intents) through the
+    /// shared navigator.
+    private func route(_ url: URL) {
+        guard url.scheme == "levelselect" else { return }
+        switch url.host {
+        case "game":
+            if let last = url.pathComponents.last, let id = UUID(uuidString: last) {
+                nav.open(gameID: id)
+            }
+        case "continue": nav.continuePlaying()
+        case "library": nav.go(to: .library)
+        case "wishlist": nav.go(to: .wishlist)
+        case "stats": nav.go(to: .stats)
+        default: nav.go(to: .home)
         }
     }
 }
@@ -73,6 +93,7 @@ struct HomeTab: View {
     @State private var showingAdd = false
     @State private var showingSettings = false
     @State private var path = NavigationPath()
+    @State private var nav = AppNavigator.shared
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -126,20 +147,34 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
-        .onOpenURL { url in openWidgetLink(url) }
+        // Consume navigation requested by widgets / App Intents.
+        .onAppear { consumePendingNavigation() }
+        .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
+        .onChange(of: nav.pendingContinue) { _, _ in consumePendingNavigation() }
     }
 
-    /// Handle `levelselect://game/<uuid>` deep links from the widgets.
-    private func openWidgetLink(_ url: URL) {
-        guard url.scheme == "levelselect" else { return }
-        if url.host == "game", let idString = url.pathComponents.last,
-           let id = UUID(uuidString: idString) {
+    /// Push a game the navigator asked for (deep link or App Intent).
+    private func consumePendingNavigation() {
+        if let id = nav.pendingGameID {
+            nav.pendingGameID = nil
             let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })
             if let game = try? context.fetch(descriptor).first {
                 path = NavigationPath()
                 path.append(game)
             }
         }
+        if nav.pendingContinue {
+            nav.pendingContinue = false
+            if let game = continueGame ?? mostRecentGame {
+                path = NavigationPath()
+                path.append(game)
+            }
+        }
+    }
+
+    /// Fallback for "Continue" when nothing is playing/paused: most recent play.
+    private var mostRecentGame: Game? {
+        games.max { sortKey($0) < sortKey($1) }
     }
 
     private var home: some View {
