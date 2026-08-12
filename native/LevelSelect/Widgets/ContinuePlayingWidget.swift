@@ -10,6 +10,7 @@ enum LSWidget {
     static let navy = Color(red: 0.094, green: 0.075, blue: 0.176)
     static let navyDeep = Color(red: 0.043, green: 0.031, blue: 0.098)
     static let green = Color(red: 0.29, green: 0.87, blue: 0.50)
+    static let red = Color(red: 0.88, green: 0.33, blue: 0.25)
 }
 
 // MARK: - Timeline
@@ -137,7 +138,7 @@ struct ContinuePlayingSmall: View {
 
 /// Contained box-art poster: the whole cover fits on a navy frame (no crop),
 /// so portrait, square, and landscape covers all read cleanly.
-private struct CoverPoster: View {
+struct CoverPoster: View {
     let image: Image?
     var body: some View {
         ZStack {
@@ -183,9 +184,18 @@ struct ContinuePlayingMedium: View {
 
                     if let objective = snapshot.nextObjective {
                         HStack(spacing: 7) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .strokeBorder(.white.opacity(0.35), lineWidth: 1.5)
-                                .frame(width: 14, height: 14)
+                            if let itemID = snapshot.nextObjectiveID {
+                                Button(intent: ToggleObjectiveIntent(gameID: snapshot.gameID, itemID: itemID)) {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(.white.opacity(0.4), lineWidth: 1.5)
+                                        .frame(width: 16, height: 16)
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .strokeBorder(.white.opacity(0.35), lineWidth: 1.5)
+                                    .frame(width: 14, height: 14)
+                            }
                             VStack(alignment: .leading, spacing: 1) {
                                 Text("NEXT")
                                     .font(.system(size: 8, weight: .bold)).tracking(0.8)

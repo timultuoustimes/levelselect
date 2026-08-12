@@ -30,6 +30,31 @@ struct StartSessionIntent: LiveActivityIntent {
     }
 }
 
+/// Check/uncheck a tracker objective from a widget (interactive checklist).
+struct ToggleObjectiveIntent: LiveActivityIntent {
+    static let title: LocalizedStringResource = "Toggle Objective"
+    static let description = IntentDescription("Marks a tracker objective done or not done.")
+
+    @Parameter(title: "Game ID")
+    var gameID: String
+    @Parameter(title: "Item ID")
+    var itemID: String
+
+    init() {}
+    init(gameID: String, itemID: String) {
+        self.gameID = gameID
+        self.itemID = itemID
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if !WIDGET_EXTENSION
+        SessionIntentHandler.toggleObjective(gameIDString: gameID, itemID: itemID)
+        #endif
+        return .result()
+    }
+}
+
 struct StopSessionIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop Session"
     static let description = IntentDescription("Stops the running play session.")

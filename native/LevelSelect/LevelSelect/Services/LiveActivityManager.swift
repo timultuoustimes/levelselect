@@ -21,6 +21,20 @@ enum SessionIntentHandler {
         WidgetBridge.refresh()
     }
 
+    /// Toggle a tracker objective for a game's active playthrough (widget checklist).
+    static func toggleObjective(gameIDString: String, itemID: String) {
+        guard let id = UUID(uuidString: gameIDString) else { return }
+        let ctx = LevelSelectStore.shared.mainContext
+        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })
+        guard let game = try? ctx.fetch(descriptor).first else { return }
+        let repo = Repository(ctx)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let done = repo.trackerState(pt, itemID: itemID)?.completed ?? false
+        repo.setTrackerItem(pt, itemID: itemID, done: !done)
+        try? ctx.save()
+        WidgetBridge.refresh()
+    }
+
     static func stopSession(idString: String) {
         guard let session = find(idString) else { return }
         let repo = Repository(LevelSelectStore.shared.mainContext)

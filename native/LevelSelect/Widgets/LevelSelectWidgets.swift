@@ -6,8 +6,14 @@ import ActivityKit
 struct LevelSelectWidgets: WidgetBundle {
     var body: some Widget {
         ContinuePlayingWidget()
+        NowPlayingShelfWidget()
+        ObjectivesWidget()
+        CompletionRingWidget()
+        WeekStatWidget()
+        RunTrackerWidget()
         LockRectangularWidget()
         LockInlineWidget()
+        CompletionCircularWidget()
         SessionLiveActivity()
     }
 }

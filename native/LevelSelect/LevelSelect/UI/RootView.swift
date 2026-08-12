@@ -103,28 +103,14 @@ struct HomeTab: View {
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .toolbar {
                 #if !os(macOS)
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Door bottom flush with glyph bottoms (Press Start 2P has
-                    // no descenders, so the baseline IS the glyph bottom).
-                    HStack(alignment: .lastTextBaseline, spacing: 7) {
-                        Image("DoorMark")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: 26)
-                            // The door art's ragged base scatters below its
-                            // visual mass; sit it a touch above the baseline.
-                            .alignmentGuide(.lastTextBaseline) { $0[.bottom] + 3 }
-                        Text("LevelSelect")
-                            .font(LSTheme.pixel(12))
-                            .foregroundStyle(LSTheme.torch)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("LevelSelect")
-                    .accessibilityAddTraits(.isHeader)
+                ToolbarItem(placement: .principal) {
+                    Text("LevelSelect")
+                        .font(LSTheme.pixel(13))
+                        .foregroundStyle(LSTheme.torch)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
                 }
-                .sharedBackgroundVisibility(.hidden)
                 #endif
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingSettings = true } label: {

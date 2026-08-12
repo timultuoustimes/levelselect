@@ -8,24 +8,25 @@ import UIKit
 #endif
 
 /// Writes the shared widget snapshot from the live store and pokes WidgetKit
-/// to reload. Called on launch, on scene changes, and after session mutations.
+/// to reload. Called on launch, on scene changes, and after mutations.
 @MainActor
 enum WidgetBridge {
     static func refresh() {
         let ctx = LevelSelectStore.shared.mainContext
-        guard let (snapshot, coverURL) = build(context: ctx) else {
+        guard let result = build(context: ctx) else {
             WidgetSnapshot.clear()
             reload()
             return
         }
-        snapshot.save()
+        result.snapshot.save()
         reload()
 
-        // Cache the cover out-of-band; reload again once it lands so the tile
-        // swaps its themed placeholder for real box art.
-        if let coverURL, let name = snapshot.coverFileName, !coverExists(name) {
+        // Cache any covers not on disk yet; reload once they land so tiles swap
+        // their placeholder for real box art.
+        let pending = result.covers.filter { !coverExists($0.name) }
+        if !pending.isEmpty {
             Task.detached(priority: .utility) {
-                await cacheCover(from: coverURL, fileName: name)
+                for job in pending { await cacheCover(from: job.url, fileName: job.name) }
                 await MainActor.run { reload() }
             }
         }
@@ -37,17 +38,24 @@ enum WidgetBridge {
         #endif
     }
 
-    // MARK: Snapshot
+    // MARK: Build
 
-    /// Returns the snapshot plus the cover URL to cache (if any).
-    private static func build(context: ModelContext) -> (WidgetSnapshot, URL?)? {
-        let descriptor = FetchDescriptor<Game>(
-            predicate: #Predicate { $0.deletedAt == nil }
-        )
+    private struct CoverJob { let url: URL; let name: String }
+    private struct BuildResult { let snapshot: WidgetSnapshot; let covers: [CoverJob] }
+
+    private static func build(context: ModelContext) -> BuildResult? {
+        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil })
         guard let games = try? context.fetch(descriptor), !games.isEmpty else { return nil }
 
-        // Continue Playing: playing/paused first (most recent activity), else
-        // the most recently played game so the tile is never empty.
+        var covers: [CoverJob] = []
+        func coverName(_ g: Game) -> String? {
+            guard let s = g.coverURLString, let url = URL(string: s) else { return nil }
+            let name = coverFileName(for: s)
+            covers.append(CoverJob(url: url, name: name))
+            return name
+        }
+
+        // Continue Playing: playing/paused (most recent activity) else most recent.
         let active = games
             .filter { $0.status == .playing || $0.status == .paused }
             .max { activityKey($0) < activityKey($1) }
@@ -55,9 +63,22 @@ enum WidgetBridge {
 
         let pt = game.activePlaythrough
         let session = pt?.activeSession
-        let (objective, done, total) = trackerProgress(game: game, pt: pt)
+        let (objectives, done, total) = trackerItems(game: game, pt: pt)
+        let nextIncomplete = objectives.first { !$0.done }
 
-        let coverName = game.coverURLString.map(coverFileName(for:))
+        // Now Playing shelf: currently-playing games, most active first (max 8).
+        let nowPlaying: [WidgetShelfGame] = games
+            .filter { $0.status == .playing }
+            .sorted { activityKey($0) > activityKey($1) }
+            .prefix(8)
+            .map { g in
+                WidgetShelfGame(id: g.id.uuidString, name: g.name,
+                                coverFileName: coverName(g),
+                                isPlaying: g.activePlaythrough?.activeSession?.state == .running)
+            }
+
+        let (weekly, gamesThisWeek) = weeklyStats(context: context)
+        let runGame = mostRecentRunGame(games, coverName: coverName)
 
         let snapshot = WidgetSnapshot(
             gameID: game.id.uuidString,
@@ -67,15 +88,20 @@ enum WidgetBridge {
             isPaused: session?.state == .paused,
             playtimeSeconds: pt?.totalPlaytime() ?? 0,
             lastPlayedAt: pt?.lastPlayedAt,
-            nextObjective: objective,
+            nextObjective: nextIncomplete?.name,
+            nextObjectiveID: nextIncomplete?.id,
             completionDone: done,
             completionTotal: total,
-            coverFileName: coverName,
+            coverFileName: coverName(game),
             activeSessionID: session?.id.uuidString,
-            generatedAt: .now
+            generatedAt: .now,
+            objectives: objectives,
+            nowPlaying: nowPlaying,
+            weeklySeconds: weekly,
+            gamesPlayedThisWeek: gamesThisWeek,
+            runGame: runGame
         )
-        let coverURL = game.coverURLString.flatMap(URL.init(string:))
-        return (snapshot, coverURL)
+        return BuildResult(snapshot: snapshot, covers: covers)
     }
 
     private static func activityKey(_ g: Game) -> (Bool, Date) {
@@ -88,9 +114,9 @@ enum WidgetBridge {
             .max { activityKey($0) < activityKey($1) }
     }
 
-    /// First uncompleted, non-spoiler objective + overall done/total.
-    private static func trackerProgress(game: Game, pt: Playthrough?) -> (String?, Int, Int) {
-        guard let schema = game.trackerSchema else { return (nil, 0, 0) }
+    /// Visible tracker items (spoiler items hidden until revealed) + done/total.
+    private static func trackerItems(game: Game, pt: Playthrough?) -> ([WidgetObjective], Int, Int) {
+        guard let schema = game.trackerSchema else { return ([], 0, 0) }
         let cats = TrackerSchemaJSON.categories(from: schema.jsonData)
         let states = (pt?.trackerStates ?? []).filter { $0.deletedAt == nil }
         let byItem = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
@@ -98,18 +124,67 @@ enum WidgetBridge {
         let allItems = cats.flatMap(\.items)
         let done = allItems.filter { byItem[$0.id]?.completed == true }.count
 
-        // Skip hidden-until-discovered items that haven't been revealed (no spoilers).
-        let next = allItems.first { item in
-            byItem[item.id]?.completed != true &&
-            !(item.hideUntilDiscovered && byItem[item.id]?.revealed != true)
+        // Objectives for the checklist: incomplete non-spoiler items first, in
+        // schema order (capped) — the actionable "what's next" list.
+        let objectives: [WidgetObjective] = allItems
+            .filter { item in !(item.hideUntilDiscovered && byItem[item.id]?.revealed != true) }
+            .filter { byItem[$0.id]?.completed != true }
+            .prefix(8)
+            .map { WidgetObjective(id: $0.id, name: $0.name, done: false) }
+
+        return (objectives, done, allItems.count)
+    }
+
+    /// Playtime per day for the last 7 days (index 0 = 6 days ago, 6 = today)
+    /// plus the count of distinct games played in that window.
+    private static func weeklyStats(context: ModelContext) -> ([Double], Int) {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        guard let windowStart = cal.date(byAdding: .day, value: -6, to: today) else { return ([], 0) }
+        let descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate { $0.deletedAt == nil && $0.startDate >= windowStart }
+        )
+        guard let sessions = try? context.fetch(descriptor) else { return (Array(repeating: 0, count: 7), 0) }
+
+        var buckets = Array(repeating: 0.0, count: 7)
+        var gameIDs = Set<UUID>()
+        for s in sessions {
+            let day = cal.startOfDay(for: s.startDate)
+            let idx = (cal.dateComponents([.day], from: day, to: today).day).map { 6 - $0 } ?? -1
+            guard idx >= 0, idx < 7 else { continue }
+            buckets[idx] += s.elapsed()
+            if let gid = s.playthrough?.game?.id { gameIDs.insert(gid) }
         }
-        return (next?.name, done, allItems.count)
+        return (buckets, gameIDs.count)
+    }
+
+    /// The most recently played game that has runs, with win/loss tallies.
+    private static func mostRecentRunGame(_ games: [Game], coverName: (Game) -> String?) -> WidgetRunGame? {
+        var best: (game: Game, runs: [Run], latest: Date)?
+        for game in games {
+            let runs = game.livePlaythroughs.flatMap { $0.liveRuns }
+            guard let latest = runs.map(\.startedAt).max() else { continue }
+            if best == nil || latest > best!.latest {
+                best = (game, runs, latest)
+            }
+        }
+        guard let best else { return nil }
+        let runs = best.runs
+        let wins = runs.filter { $0.outcome == .success }.count
+        let losses = runs.filter { $0.outcome == .failure }.count
+        let inProgress = runs.contains { $0.outcome == .inProgress }
+        let last = runs.max { $0.startedAt < $1.startedAt }
+        return WidgetRunGame(
+            id: best.game.id.uuidString, name: best.game.name,
+            coverFileName: coverName(best.game),
+            inProgress: inProgress, wins: wins, losses: losses, total: runs.count,
+            lastOutcomeRaw: last?.outcome.rawValue
+        )
     }
 
     // MARK: Cover cache
 
     private static func coverFileName(for urlString: String) -> String {
-        // Stable, filesystem-safe name derived from the URL.
         let hash = UInt64(bitPattern: Int64(urlString.hashValue))
         return "cover-\(hash).jpg"
     }
