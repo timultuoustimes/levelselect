@@ -9,6 +9,7 @@ struct GameDetailView: View {
     @State private var browserTarget: DekuLinkTarget?
 
     @State private var pagePlaying: GameVideo?
+    @State private var showingCover = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
@@ -43,6 +44,11 @@ struct GameDetailView: View {
             }
         }
         .background { ambientBackdrop }
+        .overlay {
+            if showingCover {
+                CoverShowcase(urlString: game.coverURLString, isPresented: $showingCover)
+            }
+        }
         .dekuBrowser(target: $browserTarget)
         .navigationTitle(game.name)
         #if !os(macOS)
@@ -431,6 +437,10 @@ struct GameDetailView: View {
                 .overlay { CoverShine(delay: 0.25) }
                 .clipShape(.rect(cornerRadius: 6))
                 .shadow(radius: 4, y: 2)
+                .contentShape(.rect)
+                .onTapGesture { showingCover = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Enlarge cover")
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(game.name)

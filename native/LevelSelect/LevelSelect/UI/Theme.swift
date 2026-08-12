@@ -72,6 +72,25 @@ extension View {
                 .blendMode(.softLight)
                 .allowsHitTesting(false)
         }
+        // Convex specular hotspot — reads as a glossy 3D surface catching light.
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(EllipticalGradient(colors: [.white.opacity(0.22), .clear],
+                                         center: .init(x: 0.3, y: 0.18),
+                                         startRadiusFraction: 0, endRadiusFraction: 0.6))
+                .blendMode(.softLight)
+                .allowsHitTesting(false)
+        }
+        // Grounding: a soft dark bottom edge gives the card thickness so it
+        // reads as an object sitting on the surface, not a flat sticker.
+        .overlay(alignment: .bottom) {
+            LinearGradient(colors: [.clear, .black.opacity(0.22)],
+                           startPoint: .center, endPoint: .bottom)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .blendMode(.multiply)
+                .allowsHitTesting(false)
+        }
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .strokeBorder(LinearGradient(
@@ -124,7 +143,9 @@ struct LivePulse: View {
             .allowsHitTesting(false)
             .onAppear {
                 guard !reduceMotion else { on = true; return }
-                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { on = true }
+                // Slow, ~6.6s breath — clearly off the 1s tick so the mismatch
+                // reads as an intentional ambient glow, not a stuttering clock.
+                withAnimation(.easeInOut(duration: 3.3).repeatForever(autoreverses: true)) { on = true }
             }
     }
 }
