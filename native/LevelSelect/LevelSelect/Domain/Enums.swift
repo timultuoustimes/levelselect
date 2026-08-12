@@ -13,6 +13,28 @@ enum SessionState: String, Codable, Sendable {
     case running, paused, stopped
 }
 
+/// How you own a game. Multi-select (a game can be owned physically AND
+/// digitally); stored on `Game.ownership` as an array of raw values.
+enum Ownership: String, Codable, CaseIterable, Sendable {
+    case physical, digital, emulated
+
+    var label: String {
+        switch self {
+        case .physical: "Physical"
+        case .digital:  "Digital"
+        case .emulated: "Emulated"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .physical: "opticaldisc"
+        case .digital:  "arrow.down.circle"
+        case .emulated: "cpu"
+        }
+    }
+}
+
 /// Completion event label. `.custom` pairs with `CompletionEvent.customLabel`
 /// (kept as a sibling String to avoid associated-value enums in SwiftData).
 enum CompletionLabel: String, Codable, CaseIterable, Sendable {

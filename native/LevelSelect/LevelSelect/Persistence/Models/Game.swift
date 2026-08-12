@@ -38,6 +38,8 @@ final class Game {
 
     // Value metadata arrays
     var platforms: [String] = []
+    /// How the game is owned (raw `Ownership` values; multi-select).
+    var ownership: [String] = []
     var userTags: [String] = []
     var genres: [String] = []
     var themes: [String] = []

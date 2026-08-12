@@ -458,6 +458,9 @@ struct GameDetailView: View {
 
                 RatingControl(rating: $game.rating)
 
+                OwnershipControl(ownership: $game.ownership)
+                    .padding(.top, 2)
+
                 if let franchise = game.franchise, !franchise.isEmpty {
                     Text(franchise)
                         .font(.caption)
