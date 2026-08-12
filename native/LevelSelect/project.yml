@@ -33,6 +33,7 @@ targets:
         com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
+        com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
     # Explicit UILaunchScreen (stacked lockup on the navy brand color) replaces
     # the generated blank launch screen. Merged with INFOPLIST_KEY_* settings.
     info:
@@ -51,6 +52,10 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+        # Deep-link scheme the widgets use (levelselect://game/<id>).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.timultuoustimes.levelselect
+            CFBundleURLSchemes: [levelselect]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
@@ -70,6 +75,10 @@ targets:
     type: app-extension
     platform: iOS
     deploymentTarget: "26.0"
+    entitlements:
+      path: Widgets/LevelSelectWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
     sources:
       - path: Widgets
       - path: Shared

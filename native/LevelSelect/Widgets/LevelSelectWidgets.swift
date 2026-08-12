@@ -5,6 +5,9 @@ import ActivityKit
 @main
 struct LevelSelectWidgets: WidgetBundle {
     var body: some Widget {
+        ContinuePlayingWidget()
+        LockRectangularWidget()
+        LockInlineWidget()
         SessionLiveActivity()
     }
 }

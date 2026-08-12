@@ -15,6 +15,7 @@ struct LevelSelectApp: App {
                 .task {
                     NotificationManager.configure(container: container)
                     BuiltinTrackers.installMissing(context: container.mainContext)
+                    WidgetBridge.refresh()
                 }
         }
         .modelContainer(container)

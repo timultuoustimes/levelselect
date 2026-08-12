@@ -4,6 +4,7 @@ import SwiftData
 /// App shell: Home / Library / Stats tabs (web-app parity) on the themed accent.
 struct RootView: View {
     @Query private var themeSettings: [ThemeSettings]
+    @Environment(\.scenePhase) private var scenePhase
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
     @State private var showingSplash = true
@@ -33,6 +34,13 @@ struct RootView: View {
         .onChange(of: themeSettings.first?.updatedAt) { _, _ in
             ThemePalette.refresh(from: themeSettings.first)
             themeVersion += 1
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Keep the widget snapshot current whenever the app surfaces or
+            // backs out — catches edits made anywhere in the app.
+            if phase == .active || phase == .background {
+                WidgetBridge.refresh()
+            }
         }
         .task {
             try? await Task.sleep(for: .seconds(1.0))
@@ -132,6 +140,20 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .onOpenURL { url in openWidgetLink(url) }
+    }
+
+    /// Handle `levelselect://game/<uuid>` deep links from the widgets.
+    private func openWidgetLink(_ url: URL) {
+        guard url.scheme == "levelselect" else { return }
+        if url.host == "game", let idString = url.pathComponents.last,
+           let id = UUID(uuidString: idString) {
+            let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })
+            if let game = try? context.fetch(descriptor).first {
+                path = NavigationPath()
+                path.append(game)
+            }
+        }
     }
 
     private var home: some View {

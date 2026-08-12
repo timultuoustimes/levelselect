@@ -8,11 +8,25 @@ import ActivityKit
 /// (LiveActivityIntent runs in the app's process).
 @MainActor
 enum SessionIntentHandler {
+    /// Start a session for a game (Home Screen widget ▶ button).
+    static func startSession(gameIDString: String) {
+        guard let id = UUID(uuidString: gameIDString) else { return }
+        let ctx = LevelSelectStore.shared.mainContext
+        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })
+        guard let game = try? ctx.fetch(descriptor).first else { return }
+        let repo = Repository(ctx)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        if pt.activeSession == nil { repo.startSession(on: pt) }
+        try? ctx.save()
+        WidgetBridge.refresh()
+    }
+
     static func stopSession(idString: String) {
         guard let session = find(idString) else { return }
         let repo = Repository(LevelSelectStore.shared.mainContext)
         repo.stopSession(session)
         try? LevelSelectStore.shared.mainContext.save()
+        WidgetBridge.refresh()
     }
 
     static func togglePause(idString: String) {
@@ -24,6 +38,7 @@ enum SessionIntentHandler {
         case .stopped: break
         }
         try? LevelSelectStore.shared.mainContext.save()
+        WidgetBridge.refresh()
     }
 
     private static func find(_ idString: String) -> Session? {
