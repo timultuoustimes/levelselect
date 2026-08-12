@@ -55,6 +55,78 @@ extension View {
             .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.07), lineWidth: 1))
     }
+
+    /// Glassy sheen for box art — a soft top-left highlight + a bright top
+    /// hairline, giving covers the soft-3D "diamorphic" look. Cheap (static),
+    /// so it's safe to apply to every cover.
+    func coverGloss(cornerRadius: CGFloat = 6) -> some View {
+        overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.32), location: 0),
+                        .init(color: .white.opacity(0.06), location: 0.30),
+                        .init(color: .clear, location: 0.58),
+                    ],
+                    startPoint: .topLeading, endPoint: .bottomTrailing))
+                .blendMode(.softLight)
+                .allowsHitTesting(false)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(LinearGradient(
+                    colors: [.white.opacity(0.45), .white.opacity(0.02)],
+                    startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                .allowsHitTesting(false)
+        }
+    }
+}
+
+/// A one-shot diagonal "shine" that sweeps across a cover when it appears —
+/// the little bit of life Tim wanted on the box art. Respects Reduce Motion.
+struct CoverShine: View {
+    var delay: Double = 0.35
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1.4
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            Rectangle()
+                .fill(LinearGradient(colors: [.clear, .white.opacity(0.35), .clear],
+                                     startPoint: .leading, endPoint: .trailing))
+                .frame(width: w * 0.45)
+                .rotationEffect(.degrees(22))
+                .offset(x: phase * w)
+                .blendMode(.plusLighter)
+                .allowsHitTesting(false)
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 0.85).delay(delay)) { phase = 1.4 }
+        }
+    }
+}
+
+/// A soft breathing glow behind the live session timer — signals "recording"
+/// without a distracting blink. Respects Reduce Motion (holds a steady glow).
+struct LivePulse: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var on = false
+
+    var body: some View {
+        Circle()
+            .fill(LSTheme.accent)
+            .frame(width: 130, height: 130)
+            .blur(radius: 42)
+            .opacity(on ? 0.34 : 0.14)
+            .scaleEffect(on ? 1.08 : 0.9)
+            .allowsHitTesting(false)
+            .onAppear {
+                guard !reduceMotion else { on = true; return }
+                withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { on = true }
+            }
+    }
 }
 
 /// Springy pressed state for tappable cards ("fluid buttons" — everything

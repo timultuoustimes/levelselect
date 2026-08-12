@@ -105,6 +105,7 @@ struct CoverThumb: View {
             }
         }
         .clipShape(.rect(cornerRadius: 6))
+        .coverGloss(cornerRadius: 6)
         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator, lineWidth: 0.5))
     }
 

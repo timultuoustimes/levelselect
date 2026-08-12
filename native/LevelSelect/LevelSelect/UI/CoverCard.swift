@@ -95,6 +95,7 @@ struct ContinueHeroCard: View {
         HStack(spacing: 14) {
             CoverThumb(urlString: game.coverURLString)
                 .frame(width: 76, height: 101)
+                .overlay { CoverShine() }
                 .clipShape(.rect(cornerRadius: 10))
                 .shadow(color: .black.opacity(0.4), radius: 5, y: 2)
 

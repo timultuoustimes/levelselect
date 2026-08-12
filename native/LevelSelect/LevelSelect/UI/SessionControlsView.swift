@@ -83,6 +83,10 @@ struct SessionControlsView: View {
                 Text(Format.clock(active.elapsed(asOf: ctx.date)))
                     .font(.system(.largeTitle, design: .rounded).monospacedDigit())
                     .contentTransition(.numericText())
+                    .foregroundStyle(active.state == .running ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.primary))
+            }
+            .background {
+                if active.state == .running { LivePulse() }
             }
             HStack {
                 if active.state == .running {

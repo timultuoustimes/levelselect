@@ -428,6 +428,8 @@ struct GameDetailView: View {
         HStack(alignment: .top, spacing: 16) {
             CoverThumb(urlString: game.coverURLString)
                 .frame(width: 110, height: 146)
+                .overlay { CoverShine(delay: 0.25) }
+                .clipShape(.rect(cornerRadius: 6))
                 .shadow(radius: 4, y: 2)
 
             VStack(alignment: .leading, spacing: 8) {
