@@ -13,9 +13,12 @@ struct LockRectangularView: View {
                     .font(.system(size: 17, weight: .semibold))
                     .frame(width: 26)
                 VStack(alignment: .leading, spacing: 2) {
+                    // Give long names a second line before truncating; when
+                    // there's an objective to show, keep the title to one line
+                    // so both fit.
                     Text(snapshot.gameName)
                         .font(.system(size: 14, weight: .semibold))
-                        .lineLimit(1)
+                        .lineLimit(snapshot.nextObjective == nil ? 2 : 1)
                     if let objective = snapshot.nextObjective {
                         HStack(spacing: 4) {
                             Image(systemName: "square")

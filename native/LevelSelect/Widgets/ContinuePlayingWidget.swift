@@ -72,24 +72,6 @@ private struct StatusPill: View {
     }
 }
 
-/// Themed placeholder when no cover art is cached yet.
-private struct CoverBackdrop: View {
-    let image: Image?
-    var body: some View {
-        if let image {
-            image.resizable().scaledToFill()
-        } else {
-            LinearGradient(colors: [LSWidget.purple.opacity(0.55), LSWidget.navyDeep],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .overlay(
-                    Image(systemName: "gamecontroller.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.white.opacity(0.18))
-                )
-        }
-    }
-}
-
 // MARK: - Small
 
 struct ContinuePlayingSmall: View {
@@ -97,50 +79,80 @@ struct ContinuePlayingSmall: View {
 
     var body: some View {
         if let snapshot {
-            ZStack {
-                CoverBackdrop(image: coverImage(snapshot))
-                LinearGradient(colors: [.black.opacity(0.05), .black.opacity(0.85)],
-                               startPoint: .center, endPoint: .bottom)
-                VStack(alignment: .leading, spacing: 0) {
-                    StatusPill(snapshot: snapshot)
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .top, spacing: 8) {
+                    // Whole cover, contained (matches the medium's poster).
+                    CoverPoster(image: coverImage(snapshot))
+                        .frame(width: 60, height: 82)
                     Spacer(minLength: 0)
-                    HStack(alignment: .bottom) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(snapshot.gameName)
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(.white)
-                                .lineLimit(2)
-                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
-                            if snapshot.playtimeSeconds > 0 {
-                                Text(playtimeLabel(snapshot.playtimeSeconds))
-                                    .font(.system(size: 11, weight: .medium).monospacedDigit())
-                                    .foregroundStyle(.white.opacity(0.9))
-                            }
-                        }
-                        Spacer(minLength: 4)
-                        if !snapshot.isPlaying {
-                            Button(intent: StartSessionIntent(gameID: snapshot.gameID)) {
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundStyle(LSWidget.navyDeep)
-                                    .frame(width: 32, height: 32)
-                                    .background(LSWidget.torch, in: Circle())
-                            }
-                            .buttonStyle(.plain)
-                        } else {
-                            Image(systemName: "waveform")
-                                .font(.system(size: 15, weight: .bold))
-                                .foregroundStyle(LSWidget.green)
-                                .frame(width: 32, height: 32)
-                        }
-                    }
+                    control(snapshot)
                 }
-                .padding(11)
+                Spacer(minLength: 0)
+                Text(snapshot.gameName)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                Text(subtitle(snapshot))
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .foregroundStyle(statusColor(snapshot))
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .widgetURL(WidgetShared.gameURL(snapshot.gameID))
         } else {
             EmptyWidget()
         }
+    }
+
+    @ViewBuilder
+    private func control(_ s: WidgetSnapshot) -> some View {
+        if s.isPlaying {
+            Image(systemName: "waveform")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(LSWidget.green)
+                .frame(width: 34, height: 34)
+                .background(LSWidget.green.opacity(0.16), in: Circle())
+        } else {
+            Button(intent: StartSessionIntent(gameID: s.gameID)) {
+                Image(systemName: "play.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(LSWidget.navyDeep)
+                    .frame(width: 34, height: 34)
+                    .background(LSWidget.torch, in: Circle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func subtitle(_ s: WidgetSnapshot) -> String {
+        if s.isPlaying { return "Playing" }
+        if s.playtimeSeconds > 0 { return playtimeLabel(s.playtimeSeconds) }
+        return "Continue"
+    }
+
+    private func statusColor(_ s: WidgetSnapshot) -> Color {
+        if s.isPlaying { return LSWidget.green }
+        return s.playtimeSeconds > 0 ? .white.opacity(0.6) : LSWidget.torch
+    }
+}
+
+/// Contained box-art poster: the whole cover fits on a navy frame (no crop),
+/// so portrait, square, and landscape covers all read cleanly.
+private struct CoverPoster: View {
+    let image: Image?
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(LSWidget.navyDeep)
+            if let image {
+                image.resizable().scaledToFit()
+            } else {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(LSWidget.purple.opacity(0.6))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.08)))
     }
 }
 
@@ -152,10 +164,8 @@ struct ContinuePlayingMedium: View {
     var body: some View {
         if let snapshot {
             HStack(spacing: 12) {
-                ZStack { CoverBackdrop(image: coverImage(snapshot)) }
-                    .frame(width: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.08)))
+                CoverPoster(image: coverImage(snapshot))
+                    .frame(width: 74)
 
                 VStack(alignment: .leading, spacing: 0) {
                     StatusPill(snapshot: snapshot)
