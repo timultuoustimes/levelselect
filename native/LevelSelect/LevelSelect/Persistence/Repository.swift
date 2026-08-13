@@ -52,6 +52,26 @@ struct Repository {
         return game
     }
 
+    /// Re-pull metadata from IGDB by id — fixes legacy data (summaries the web
+    /// app capped at 200 chars, bad release dates) and refreshes dev/genre/etc.
+    /// Never touches user data (status, rating, ownership, notes) or the user's
+    /// chosen `platforms`.
+    func refreshFromIGDB(_ game: Game) async {
+        guard let id = game.igdbID, let igdb = try? await IGDBService.lookup(id: id) else { return }
+        if let s = igdb.summary, !s.isEmpty { game.summary = s }
+        if let date = igdb.releaseDate { game.firstReleaseDate = date }
+        if let f = igdb.franchise { game.franchise = f }
+        if let cover = igdb.coverImageID { game.coverImageID = cover; game.coverURLString = igdb.coverURLString }
+        if !igdb.developers.isEmpty { game.developers = igdb.developers }
+        if !igdb.publishers.isEmpty { game.publishers = igdb.publishers }
+        if !igdb.genres.isEmpty { game.genres = igdb.genres }
+        if !igdb.themes.isEmpty { game.themes = igdb.themes }
+        if !igdb.gameModes.isEmpty { game.gameModes = igdb.gameModes }
+        if !igdb.playerPerspectives.isEmpty { game.playerPerspectives = igdb.playerPerspectives }
+        touch(game)
+        try? context.save()
+    }
+
     /// Soft delete — sets a tombstone so trash/undo is possible and the deletion
     /// propagates via CloudKit.
     func softDelete(_ game: Game, at date: Date = .now) {

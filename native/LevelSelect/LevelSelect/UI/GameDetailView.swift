@@ -71,6 +71,13 @@ struct GameDetailView: View {
                             }
                         }
                     }
+                    if game.igdbID != nil {
+                        Button {
+                            Task { await repo.refreshFromIGDB(game) }
+                        } label: {
+                            Label("Refresh from IGDB", systemImage: "arrow.clockwise")
+                        }
+                    }
                     Divider()
                     Button {
                         playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
@@ -582,7 +589,7 @@ struct GameDetailView: View {
                 labeledField("Developer", text: firstElementBinding(\.developers))
                 labeledField("Publisher", text: firstElementBinding(\.publishers))
             }
-            EditableChips(title: "Platforms", values: $game.platforms, tint: .blue)
+            PlatformEditor(platforms: $game.platforms)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)
