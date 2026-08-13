@@ -10,6 +10,7 @@ struct GameDetailView: View {
 
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
+    @State private var didAutoRefresh = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
@@ -47,6 +48,16 @@ struct GameDetailView: View {
         .overlay {
             if showingCover {
                 CoverShowcase(urlString: game.coverURLString, isPresented: $showingCover)
+            }
+        }
+        .task {
+            // Heal legacy data on open: the old web export saved empty summaries
+            // and capped others at 200 chars. Pull fresh metadata once.
+            guard !didAutoRefresh, game.igdbID != nil else { return }
+            let summary = game.summary ?? ""
+            if summary.isEmpty || summary.count == 200 {
+                didAutoRefresh = true
+                await repo.refreshFromIGDB(game)
             }
         }
         .dekuBrowser(target: $browserTarget)
