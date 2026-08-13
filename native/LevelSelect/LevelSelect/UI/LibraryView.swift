@@ -371,14 +371,26 @@ enum LibrarySort: String, CaseIterable {
     }
 }
 
-/// Maps a platform to its soft-3D console icon asset (added as they're made).
-/// Returns nil → the header falls back to the generic controller glyph.
+/// Maps a platform to its soft-3D console icon asset. Matches both the short
+/// legacy names ("Switch", "Genesis") and IGDB's long names ("Nintendo Switch",
+/// "Sega Mega Drive/Genesis"). Order matters (Switch 2 before Switch, Xbox 360
+/// before Xbox, Super Nintendo before Nintendo 64/NES). nil → controller glyph.
 enum PlatformIcon {
     static func assetName(_ platform: String) -> String? {
-        switch platform {
-        case "Mac": "platform-mac"
-        default: nil
-        }
+        let p = platform.lowercased()
+        if p.contains("switch 2")                              { return "platform-switch2" }
+        if p.contains("switch")                                { return "platform-switch" }
+        if p.contains("super nintendo") || p == "snes"
+            || p.contains("super famicom")                     { return "platform-snes" }
+        if p.contains("nintendo 64") || p == "n64"             { return "platform-n64" }
+        if p == "nes" || p.contains("nintendo entertainment")  { return "platform-nes" }
+        if p.contains("gamecube")                              { return "platform-gamecube" }
+        if p.contains("genesis") || p.contains("mega drive")   { return "platform-genesis" }
+        if p.contains("xbox 360")                              { return "platform-xbox360" }
+        if p.contains("xbox")                                  { return "platform-xbox" }
+        if p.contains("recalbox")                              { return "platform-recalbox" }
+        if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
+        return nil
     }
 }
 
