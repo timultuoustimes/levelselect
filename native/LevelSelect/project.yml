@@ -70,14 +70,9 @@ targets:
       - target: LevelSelectWidgets
         embed: true
         destinationFilters: [iOS]
-      # LevelSelectWatch is fully scaffolded below but NOT embedded yet:
-      # embedding makes the iOS build require the watchOS runtime, which isn't
-      # installed on this Mac (only the build SDK is). Re-add this dependency
-      # once the watchOS 26 simulator runtime is installed, then it ships with
-      # the phone app.
-      # - target: LevelSelectWatch
-      #   embed: true
-      #   destinationFilters: [iOS]
+      - target: LevelSelectWatch
+        embed: true
+        destinationFilters: [iOS]
 
   LevelSelectWatch:
     type: application
@@ -95,7 +90,11 @@ targets:
       - path: LevelSelect/Persistence/Models
       - path: LevelSelect/Persistence/Schema.swift
       - path: LevelSelect/Persistence/Repository.swift
+      - path: LevelSelect/Persistence/Syncable.swift
       - path: LevelSelect/Domain
+      # Foundation-only value types Repository references (no UI).
+      - path: LevelSelect/Services/IGDBService.swift
+      - path: LevelSelect/Services/YouTubeService.swift
       - path: Watch
     settings:
       base:
