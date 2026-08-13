@@ -24,3 +24,4 @@ extension Run: Syncable {}
 extension GameMap: Syncable {}
 extension Marker: Syncable {}
 extension GameVideo: Syncable {}
+extension GameCollection: Syncable {}

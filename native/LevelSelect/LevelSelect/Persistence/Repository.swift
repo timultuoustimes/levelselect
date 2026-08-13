@@ -72,6 +72,55 @@ struct Repository {
         try? context.save()
     }
 
+    // MARK: - Collections
+
+    @discardableResult
+    func createCollection(name: String, isBundle: Bool = false) -> GameCollection {
+        let collection = GameCollection(name: name, isBundle: isBundle)
+        context.insert(collection)
+        touch(collection)
+        return collection
+    }
+
+    func renameCollection(_ collection: GameCollection, to name: String) {
+        collection.name = name
+        touch(collection)
+    }
+
+    func setBundle(_ collection: GameCollection, isBundle: Bool) {
+        collection.isBundle = isBundle
+        touch(collection)
+    }
+
+    func deleteCollection(_ collection: GameCollection, at date: Date = .now) {
+        collection.deletedAt = date
+        touch(collection, at: date)
+    }
+
+    func setMembership(_ collection: GameCollection, game: Game, member: Bool) {
+        let key = game.id.uuidString
+        var ids = collection.gameIDs
+        if member {
+            guard !ids.contains(key) else { return }
+            ids.append(key)
+        } else {
+            ids.removeAll { $0 == key }
+        }
+        collection.gameIDs = ids   // reassign so SwiftData tracks the change
+        touch(collection)
+        try? context.save()
+    }
+
+    /// Member games of a collection (non-deleted), fetched by id.
+    func games(in collection: GameCollection) -> [Game] {
+        let ids = collection.gameIDs.compactMap(UUID.init(uuidString:))
+        guard !ids.isEmpty else { return [] }
+        let descriptor = FetchDescriptor<Game>(
+            predicate: #Predicate { ids.contains($0.id) && $0.deletedAt == nil }
+        )
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     /// Soft delete — sets a tombstone so trash/undo is possible and the deletion
     /// propagates via CloudKit.
     func softDelete(_ game: Game, at date: Date = .now) {

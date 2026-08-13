@@ -7,13 +7,19 @@ struct GameContextMenuModifier: ViewModifier {
     let game: Game
     @Environment(\.modelContext) private var context
 
+    @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.name)
+    private var collections: [GameCollection]
+    @State private var newCollection = false
+    @State private var newCollectionName = ""
+
     private var repo: Repository { Repository(context) }
     private var playthrough: Playthrough? {
         game.activePlaythrough
     }
 
     func body(content: Content) -> some View {
-        content.contextMenu {
+        content
+        .contextMenu {
             // Session
             if let active = playthrough?.activeSession {
                 Button {
@@ -83,6 +89,23 @@ struct GameContextMenuModifier: ViewModifier {
                 Label("Rate", systemImage: "star")
             }
 
+            Menu {
+                ForEach(collections) { collection in
+                    Button {
+                        repo.setMembership(collection, game: game, member: !collection.contains(game))
+                    } label: {
+                        Label(collection.name,
+                              systemImage: collection.contains(game) ? "checkmark" : "square.stack")
+                    }
+                }
+                Divider()
+                Button {
+                    newCollectionName = ""; newCollection = true
+                } label: { Label("New Collection…", systemImage: "plus") }
+            } label: {
+                Label("Add to Collection", systemImage: "square.stack")
+            }
+
             Divider()
 
             Button(role: .destructive) {
@@ -90,6 +113,18 @@ struct GameContextMenuModifier: ViewModifier {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .alert("New Collection", isPresented: $newCollection) {
+            TextField("Name", text: $newCollectionName)
+            Button("Create") {
+                let name = newCollectionName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                let collection = repo.createCollection(name: name)
+                repo.setMembership(collection, game: game, member: true)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Adds “\(game.name)” to a new collection.")
         }
     }
 }

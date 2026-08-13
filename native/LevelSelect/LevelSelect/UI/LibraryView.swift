@@ -7,6 +7,9 @@ import SwiftData
 struct LibraryTab: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
+    @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.sortIndex)
+    private var collections: [GameCollection]
+    @Environment(\.modelContext) private var context
 
     @State private var searchText = ""
     @State private var statusFilter: GameStatus?
@@ -14,6 +17,9 @@ struct LibraryTab: View {
     @State private var platformFilter: String?
     @State private var ownershipFilter: String?
     @State private var showingAdd = false
+    @State private var newCollection = false
+    @State private var newCollectionName = ""
+    @AppStorage("libraryHideBundled") private var hideBundled = false
 
     @AppStorage("librarySort") private var sortRaw = LibrarySort.status.rawValue
     @AppStorage("libraryViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
@@ -33,10 +39,25 @@ struct LibraryTab: View {
             .navigationTitle("Library")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
+            .navigationDestination(for: CollectionRoute.self) { route in
+                if let collection = collections.first(where: { $0.id == route.id }) {
+                    CollectionDetailView(collection: collection)
+                }
+            }
             .searchable(text: $searchText, prompt: "Search games or franchises")
             .toolbar { toolbarContent }
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
+        .alert("New Collection", isPresented: $newCollection) {
+            TextField("Name", text: $newCollectionName)
+            Button("Create") {
+                let name = newCollectionName.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { Repository(context).createCollection(name: name) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Group games into a bundle or a list (e.g. comfort games).")
+        }
     }
 
     // MARK: Content
@@ -60,9 +81,19 @@ struct LibraryTab: View {
         }
     }
 
+    @ViewBuilder
+    private var collectionShelf: some View {
+        if !collections.isEmpty {
+            CollectionShelf(collections: collections, games: games) {
+                newCollectionName = ""; newCollection = true
+            }
+        }
+    }
+
     private var gridView: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
+                collectionShelf
                 if let groups = sectionGroups {
                     ForEach(groups.indices, id: \.self) { i in
                         sectionHeader(title: groups[i].title, status: groups[i].status,
@@ -96,6 +127,11 @@ struct LibraryTab: View {
 
     private var listView: some View {
         List {
+            if !collections.isEmpty {
+                collectionShelf
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))
+            }
             if let groups = sectionGroups {
                 ForEach(groups.indices, id: \.self) { i in
                     Section {
@@ -275,13 +311,26 @@ struct LibraryTab: View {
                         }
                     }
                 }
+                if collections.contains(where: \.isBundle) {
+                    Divider()
+                    Toggle(isOn: $hideBundled) {
+                        Label("Hide games in bundles", systemImage: "shippingbox")
+                    }
+                }
             } label: {
                 Label("Sort & View", systemImage: "arrow.up.arrow.down.circle")
             }
         }
         ToolbarItem(placement: .primaryAction) {
-            Button { showingAdd = true } label: {
-                Label("Add Game", systemImage: "plus")
+            Menu {
+                Button { showingAdd = true } label: {
+                    Label("Add Game", systemImage: "gamecontroller")
+                }
+                Button { newCollectionName = ""; newCollection = true } label: {
+                    Label("New Collection", systemImage: "square.stack")
+                }
+            } label: {
+                Label("Add", systemImage: "plus")
             }
         }
     }
@@ -303,12 +352,23 @@ struct LibraryTab: View {
         statusFilter != nil || platformFilter != nil || ownershipFilter != nil
     }
 
+    /// Game ids that live inside a bundle collection (hidden from the main
+    /// library when "Hide games in bundles" is on).
+    private var bundledGameIDs: Set<String> {
+        guard hideBundled else { return [] }
+        var ids = Set<String>()
+        for c in collections where c.isBundle { ids.formUnion(c.gameIDs) }
+        return ids
+    }
+
     private var visible: [Game] {
-        games.filter { g in
+        let hidden = bundledGameIDs
+        return games.filter { g in
             (statusFilter == nil || g.status == statusFilter)
             && (tagFilter == nil || g.userTags.contains(tagFilter!))
             && (platformFilter == nil || g.platforms.contains(platformFilter!))
             && (ownershipFilter == nil || g.ownership.contains(ownershipFilter!))
+            && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
             && matchesSearch(g)
         }
     }

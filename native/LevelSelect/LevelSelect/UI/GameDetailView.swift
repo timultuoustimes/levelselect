@@ -11,6 +11,11 @@ struct GameDetailView: View {
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
     @State private var didAutoRefresh = false
+
+    @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.name)
+    private var collections: [GameCollection]
+    @State private var newCollection = false
+    @State private var newCollectionName = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
@@ -61,6 +66,18 @@ struct GameDetailView: View {
             }
         }
         .dekuBrowser(target: $browserTarget)
+        .alert("New Collection", isPresented: $newCollection) {
+            TextField("Name", text: $newCollectionName)
+            Button("Create") {
+                let name = newCollectionName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                let collection = repo.createCollection(name: name)
+                repo.setMembership(collection, game: game, member: true)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Adds “\(game.name)” to a new collection.")
+        }
         .navigationTitle(game.name)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -81,6 +98,22 @@ struct GameDetailView: View {
                                 Label(s.label, systemImage: game.status == s ? "checkmark" : s.systemImage)
                             }
                         }
+                    }
+                    Menu {
+                        ForEach(collections) { collection in
+                            Button {
+                                repo.setMembership(collection, game: game, member: !collection.contains(game))
+                            } label: {
+                                Label(collection.name,
+                                      systemImage: collection.contains(game) ? "checkmark" : "square.stack")
+                            }
+                        }
+                        Divider()
+                        Button {
+                            newCollectionName = ""; newCollection = true
+                        } label: { Label("New Collection…", systemImage: "plus") }
+                    } label: {
+                        Label("Add to Collection", systemImage: "square.stack")
                     }
                     if game.igdbID != nil {
                         Button {

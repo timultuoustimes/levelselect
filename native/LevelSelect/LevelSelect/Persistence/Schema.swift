@@ -21,6 +21,7 @@ enum LevelSelectSchemaV1: VersionedSchema {
             MigrationReceipt.self,
             ThemeSettings.self,
             GameVideo.self,
+            GameCollection.self,
         ]
     }
 }
