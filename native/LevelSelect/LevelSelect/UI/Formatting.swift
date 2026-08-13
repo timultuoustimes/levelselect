@@ -76,6 +76,12 @@ enum PlatformPreference {
         if p.contains("switch") { return 1 }
         if p.contains("windows") || p == "pc" || p.contains("steam") { return 2 }
         if p.contains("mac") { return 3 }
+        // Emulation frontends rank LAST so the original hardware leads (e.g.
+        // Sonic 2 on Genesis + Recalbox → Genesis).
+        if p.contains("recalbox") || p.contains("retroarch")
+            || p.contains("batocera") || p.contains("emudeck") || p.contains("emulationstation") {
+            return 200
+        }
         return 100
     }
 

@@ -122,6 +122,7 @@ struct HomeTab: View {
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
+            .navigationDestination(for: PlatformRoute.self) { PlatformGamesView(platform: $0.platform) }
             .toolbar {
                 #if !os(macOS)
                 ToolbarItem(placement: .principal) {
@@ -195,6 +196,12 @@ struct HomeTab: View {
                     .padding(.horizontal)
                 }
 
+                if platformGroups.count > 1 {
+                    SystemsRow(groups: platformGroups) { platform in
+                        path.append(PlatformRoute(platform: platform))
+                    }
+                }
+
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty {
@@ -227,6 +234,14 @@ struct HomeTab: View {
     private var grouped: [GameStatus: [Game]] {
         Dictionary(grouping: games, by: \.status)
             .mapValues { $0.sorted { sortKey($0) > sortKey($1) } }
+    }
+
+    /// Platforms across the library (by leading platform) with counts, biggest
+    /// first — the Home "Systems" shelf.
+    private var platformGroups: [(platform: String, count: Int)] {
+        Dictionary(grouping: games) { PlatformPreference.sorted($0.platforms).first ?? "Other" }
+            .map { (platform: $0.key, count: $0.value.count) }
+            .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
     }
 
     private var continueGame: Game? {
