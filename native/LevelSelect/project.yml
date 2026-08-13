@@ -103,6 +103,7 @@ targets:
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.timultuoustimes.levelselect
         INFOPLIST_KEY_WKApplication: YES
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
   LevelSelectWidgets:
     type: app-extension
