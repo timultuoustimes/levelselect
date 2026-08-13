@@ -233,7 +233,14 @@ struct LibraryTab: View {
                 Picker("System", selection: $platformFilter) {
                     Text("All systems").tag(String?.none)
                     ForEach(allPlatforms, id: \.self) { p in
-                        Text(PlatformShort.name(p)).tag(String?.some(p))
+                        Group {
+                            if let asset = PlatformIcon.assetName(p) {
+                                Label { Text(PlatformShort.name(p)) } icon: { Image(asset) }
+                            } else {
+                                Label(PlatformShort.name(p), systemImage: "gamecontroller")
+                            }
+                        }
+                        .tag(String?.some(p))
                     }
                 }
                 Divider()

@@ -35,12 +35,23 @@ struct CoverCard: View {
 struct StatusCarousel: View {
     let status: GameStatus
     let games: [Game]
+    var collapsed = false
     var onOpen: (Game) -> Void
     var onSeeAll: () -> Void
+    var onToggleCollapse: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { onToggleCollapse() }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(collapsed ? 0 : 90))
+                }
+                .buttonStyle(.plain)
                 Image(systemName: status.systemImage)
                     .foregroundStyle(status == .playing ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
                 Text(status.sectionTitle)
@@ -49,13 +60,17 @@ struct StatusCarousel: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("See all") { onSeeAll() }
-                    .font(.subheadline)
-                    .foregroundStyle(LSTheme.accent)
-                    .buttonStyle(.plain)
+                if !collapsed {
+                    Button("See all") { onSeeAll() }
+                        .font(.subheadline)
+                        .foregroundStyle(LSTheme.accent)
+                        .buttonStyle(.plain)
+                }
             }
             .padding(.horizontal)
+            .contentShape(.rect)
 
+            if !collapsed {
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(games) { game in
@@ -78,6 +93,7 @@ struct StatusCarousel: View {
                 .scrollTargetLayout()
             }
             .scrollTargetBehavior(.viewAligned)
+            }
         }
     }
 }

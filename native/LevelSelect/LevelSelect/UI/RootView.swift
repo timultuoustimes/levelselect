@@ -94,6 +94,8 @@ struct HomeTab: View {
     @State private var showingSettings = false
     @State private var path = NavigationPath()
     @State private var nav = AppNavigator.shared
+    /// Home categories the user has collapsed (comma-joined status raw values).
+    @AppStorage("homeCollapsedStatuses") private var collapsedRaw = ""
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -205,11 +207,13 @@ struct HomeTab: View {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty {
-                        StatusCarousel(status: status, games: items) { game in
-                            path.append(game)
-                        } onSeeAll: {
-                            path.append(status)
-                        }
+                        StatusCarousel(
+                            status: status, games: items,
+                            collapsed: collapsedStatuses.contains(status.rawValue),
+                            onOpen: { path.append($0) },
+                            onSeeAll: { path.append(status) },
+                            onToggleCollapse: { toggleCollapse(status) }
+                        )
                     }
                 }
             }
@@ -234,6 +238,17 @@ struct HomeTab: View {
     private var grouped: [GameStatus: [Game]] {
         Dictionary(grouping: games, by: \.status)
             .mapValues { $0.sorted { sortKey($0) > sortKey($1) } }
+    }
+
+    private var collapsedStatuses: Set<String> {
+        Set(collapsedRaw.split(separator: ",").map(String.init))
+    }
+
+    private func toggleCollapse(_ status: GameStatus) {
+        var set = collapsedStatuses
+        if set.contains(status.rawValue) { set.remove(status.rawValue) }
+        else { set.insert(status.rawValue) }
+        collapsedRaw = set.sorted().joined(separator: ",")
     }
 
     /// Platforms across the library (by leading platform) with counts, biggest

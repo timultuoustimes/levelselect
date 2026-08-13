@@ -13,15 +13,17 @@ struct GameRow: View {
                     .font(.headline)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
+                HStack(spacing: 5) {
                     Image(systemName: game.status.systemImage)
                         .foregroundStyle(game.status.color)
                         .font(.caption)
                     Text(game.status.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if let platform = game.platforms.first {
-                        Text("· \(platform)")
+                    if let platform = PlatformPreference.sorted(game.platforms).first {
+                        Text("·").font(.caption).foregroundStyle(.tertiary)
+                        PlatformIconView(platform: platform, size: 15)
+                        Text(PlatformShort.name(platform))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)

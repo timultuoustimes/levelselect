@@ -431,43 +431,47 @@ struct GameDetailView: View {
     // MARK: Sections
 
     private var hero: some View {
-        HStack(alignment: .top, spacing: 16) {
-            CoverThumb(urlString: game.coverURLString)
-                .frame(width: 110, height: 146)
-                .overlay { CoverShine(delay: 0.25) }
-                .clipShape(.rect(cornerRadius: 6))
-                .shadow(radius: 4, y: 2)
-                .contentShape(.rect)
-                .onTapGesture { showingCover = true }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Enlarge cover")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 16) {
+                CoverThumb(urlString: game.coverURLString)
+                    .frame(width: 138, height: 184)
+                    .overlay { CoverShine(delay: 0.25) }
+                    .clipShape(.rect(cornerRadius: 8))
+                    .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
+                    .contentShape(.rect)
+                    .onTapGesture { showingCover = true }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Enlarge cover")
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text(game.name)
-                    .font(.title2.bold())
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(game.name)
+                        .font(.title2.bold())
 
-                HStack(spacing: 6) {
-                    Image(systemName: game.status.systemImage)
-                        .foregroundStyle(game.status.color)
-                    Text(game.status.label)
-                    if let platform = game.platforms.first {
-                        Text("· \(platform)").foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Image(systemName: game.status.systemImage)
+                            .foregroundStyle(game.status.color)
+                        Text(game.status.label)
+                        if let platform = PlatformPreference.sorted(game.platforms).first {
+                            Text("·").foregroundStyle(.tertiary)
+                            PlatformIconView(platform: platform, size: 20)
+                            Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.subheadline)
+
+                    RatingControl(rating: $game.rating)
+
+                    if let franchise = game.franchise, !franchise.isEmpty {
+                        Text(franchise)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
-                .font(.subheadline)
-
-                RatingControl(rating: $game.rating)
-
-                OwnershipControl(ownership: $game.ownership)
-                    .padding(.top, 2)
-
-                if let franchise = game.franchise, !franchise.isEmpty {
-                    Text(franchise)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+
+            // Full-width so the three chips never wrap.
+            OwnershipControl(ownership: $game.ownership)
         }
     }
 
