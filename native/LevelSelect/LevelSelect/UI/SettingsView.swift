@@ -6,6 +6,11 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
+
+    // Tim's one-time migration from the web app. Debug builds only — the
+    // bundled export is personal data and the actions are a developer tool,
+    // so neither ships in a Release build. See project.yml.
+    #if LEGACY_IMPORT
     @Query private var receipts: [MigrationReceipt]
 
     @State private var importing = false
@@ -15,6 +20,7 @@ struct SettingsView: View {
 
     // The canonical legacy device this bundled export came from.
     private let sourceDeviceID = "7f86df1b-a815-4798-a9d5-00974419eec3"
+    #endif
 
     var body: some View {
         NavigationStack {
@@ -37,6 +43,7 @@ struct SettingsView: View {
 
                 AppearanceSettingsSection()
 
+                #if LEGACY_IMPORT
                 Section {
                     if let r = result {
                         importSummary(r)
@@ -78,6 +85,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("Backfills checked-off tracker items from the web app's data into an already-imported library. Safe to repeat.")
                 }
+                #endif
             }
             .navigationTitle("Settings")
             #if !os(macOS)
@@ -91,6 +99,7 @@ struct SettingsView: View {
         }
     }
 
+    #if LEGACY_IMPORT
     private func importSummary(_ r: ImportReport) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             if r.alreadyImported {
@@ -146,4 +155,5 @@ struct SettingsView: View {
             errorMessage = String(describing: error)
         }
     }
+    #endif
 }

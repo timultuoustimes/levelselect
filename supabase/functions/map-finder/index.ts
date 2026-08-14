@@ -3,12 +3,10 @@
 // Deploy: supabase functions deploy map-finder
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const MAX_GAME_NAME = 200;
+const MAX_URL = 500;
 
 const SYSTEM_PROMPT = `You are a game map image finder. Given a game name (and optionally a wiki page URL), find image URLs for game maps — world maps, area maps, and level maps.
 
@@ -41,20 +39,36 @@ serve(async (req: Request) => {
 
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('ANTHROPIC_API_KEY not configured');
+    return jsonResponse({ error: 'Map search is not available right now.' }, 503);
   }
 
+  // Paid upstream (Claude + web search) — deny on quota-store failure.
+  const { rejection, body } = await guard(req, {
+    fn: 'maps',
+    maxBodyBytes: 8_000,
+    quotas: [
+      { scope: 'install', windowSeconds: 3_600, limit: 10 },
+      { scope: 'install', windowSeconds: 86_400, limit: 40 },
+      { scope: 'global', windowSeconds: 86_400, limit: 300 },
+    ],
+    onQuotaError: 'deny',
+  });
+  if (rejection) return rejection;
+
   try {
-    const { gameName, igdbData, pageUrl } = await req.json();
+    const igdbData = body?.igdbData as Record<string, unknown> | null | undefined;
+    const gameName = typeof body?.gameName === 'string' ? body.gameName.trim() : '';
+    const pageUrl = typeof body?.pageUrl === 'string' ? body.pageUrl : null;
 
     if (!gameName) {
-      return new Response(
-        JSON.stringify({ error: 'gameName is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-      );
+      return jsonResponse({ error: 'gameName is required' }, 400);
+    }
+    if (gameName.length > MAX_GAME_NAME) {
+      return jsonResponse({ error: 'Game name is too long.' }, 400);
+    }
+    if (pageUrl && (pageUrl.length > MAX_URL || !/^https:\/\/[\w.-]+\//.test(pageUrl))) {
+      return jsonResponse({ error: 'Page URL must be a plain https link.' }, 400);
     }
 
     const meta: string[] = [];
@@ -106,11 +120,8 @@ serve(async (req: Request) => {
     });
 
     if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      return new Response(
-        JSON.stringify({ error: `Claude API error: ${claudeRes.status}`, detail: errText }),
-        { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-      );
+      console.error('Claude API error:', claudeRes.status, await claudeRes.text());
+      return jsonResponse({ error: 'Map search is busy right now. Try again shortly.' }, 502);
     }
 
     const claudeData = await claudeRes.json();
@@ -121,10 +132,7 @@ serve(async (req: Request) => {
     ) as { text: string } | undefined;
 
     if (!textBlock?.text) {
-      return new Response(
-        JSON.stringify({ suggestions: [] }),
-        { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-      );
+      return jsonResponse({ suggestions: [] });
     }
 
     // Parse the JSON array from Claude's response
@@ -144,15 +152,9 @@ serve(async (req: Request) => {
       return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(s.url) || s.url.includes('/images/');
     });
 
-    return new Response(
-      JSON.stringify({ suggestions }),
-      { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    return jsonResponse({ suggestions });
   } catch (err) {
-    console.error('Map finder error:', err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('Map finder error:', String(err));
+    return jsonResponse({ error: 'Map search failed. Try again.' }, 500);
   }
 });

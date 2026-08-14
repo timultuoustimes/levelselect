@@ -6,12 +6,13 @@
 //   ANTHROPIC_API_KEY — from console.anthropic.com
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// Input caps — every one of these bounds what reaches the Anthropic API.
+const MAX_GAME_NAME = 200;
+const MAX_PAYLOAD = 60_000; // pasted guide text
+const MAX_URL = 500;
+const ALLOWED_MODES = new Set(['auto', 'paste', 'url']);
 
 // ─── Schema definition (embedded in system prompt) ───────────────────────────
 
@@ -252,20 +253,47 @@ serve(async (req: Request) => {
 
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured. Set it via: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('ANTHROPIC_API_KEY not configured');
+    return jsonResponse({ error: 'AI generation is not available right now.' }, 503);
   }
 
+  // The most expensive endpoint in the app (a full Claude generation with web
+  // search, per call). Tight quotas, and a quota-store outage denies rather
+  // than letting spend run unmetered.
+  const { rejection, body } = await guard(req, {
+    fn: 'ai',
+    maxBodyBytes: MAX_PAYLOAD + 8_000,
+    quotas: [
+      { scope: 'install', windowSeconds: 3_600, limit: 5 },
+      { scope: 'install', windowSeconds: 86_400, limit: 20 },
+      { scope: 'global', windowSeconds: 86_400, limit: 150 },
+    ],
+    onQuotaError: 'deny',
+  });
+  if (rejection) return rejection;
+
   try {
-    let { gameName, igdbData, mode, payload } = await req.json();
+    const igdbData = body?.igdbData as Record<string, unknown> | null | undefined;
+    const gameName = typeof body?.gameName === 'string' ? body.gameName.trim() : '';
+    let mode = typeof body?.mode === 'string' ? body.mode : 'auto';
+    let payload = typeof body?.payload === 'string' ? body.payload : null;
 
     if (!gameName) {
-      return new Response(
-        JSON.stringify({ error: 'gameName is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-      );
+      return jsonResponse({ error: 'gameName is required' }, 400);
+    }
+    if (gameName.length > MAX_GAME_NAME) {
+      return jsonResponse({ error: 'Game name is too long.' }, 400);
+    }
+    if (!ALLOWED_MODES.has(mode)) {
+      return jsonResponse({ error: 'Unsupported mode.' }, 400);
+    }
+    if (payload && payload.length > MAX_PAYLOAD) {
+      return jsonResponse({ error: 'Reference text is too long.' }, 413);
+    }
+    if (mode === 'url' && payload) {
+      if (payload.length > MAX_URL || !/^https:\/\/[\w.-]+\//.test(payload)) {
+        return jsonResponse({ error: 'Reference URL must be a plain https link.' }, 400);
+      }
     }
 
     // Auto mode: two-stage — find a guide URL first (fast), then generate from it.
@@ -313,11 +341,12 @@ serve(async (req: Request) => {
     });
 
     if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      console.error('Claude API error:', claudeRes.status, errText);
-      return new Response(
-        JSON.stringify({ error: `Claude API error: ${claudeRes.status}`, detail: errText }),
-        { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+      // Upstream detail goes to logs only — it can echo prompt content and
+      // names the backend the app deliberately doesn't expose.
+      console.error('Claude API error:', claudeRes.status, await claudeRes.text());
+      return jsonResponse(
+        { error: 'The generator is busy right now. Try again in a moment.' },
+        502,
       );
     }
 
@@ -334,9 +363,10 @@ serve(async (req: Request) => {
         .filter((b: { type: string }) => b.type === 'text')
         .map((b: { text: string }) => b.text)
         .join('\n');
-      return new Response(
-        JSON.stringify({ error: 'Claude did not generate tracker data', claudeResponse: textBlocks }),
-        { status: 422, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+      console.warn('no tracker tool call; model said:', textBlocks.slice(0, 500));
+      return jsonResponse(
+        { error: "Couldn't build a tracker for that game. Try a more specific name, or paste a guide." },
+        422,
       );
     }
 
@@ -356,18 +386,9 @@ serve(async (req: Request) => {
       tags: generated.tags || [],
     };
 
-    return new Response(
-      JSON.stringify({
-        structuredData,
-        usage: claudeData.usage || null,
-      }),
-      { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    return jsonResponse({ structuredData, usage: claudeData.usage || null });
   } catch (err) {
-    console.error('Edge function error:', err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('Edge function error:', String(err));
+    return jsonResponse({ error: 'Tracker generation failed. Try again.' }, 500);
   }
 });

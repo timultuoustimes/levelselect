@@ -7,12 +7,21 @@
 //   IGDB_CLIENT_SECRET — from dev.twitch.tv
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// Endpoints the app actually uses. Anything else is refused so the proxy can't
+// be repurposed as a general-purpose IGDB scraper.
+const ALLOWED_ENDPOINTS = new Set([
+  'games',
+  'covers',
+  'platforms',
+  'genres',
+  'screenshots',
+  'artworks',
+]);
+
+// The app's longest query (search + full field list) is ~450 chars.
+const MAX_QUERY_LENGTH = 2000;
 
 // Token cache (in-memory, reused across warm invocations)
 let cachedToken: string | null = null;
@@ -46,14 +55,32 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: CORS_HEADERS });
   }
 
-  try {
-    const { endpoint, query } = await req.json();
+  // Cheap upstream (IGDB is free and rate-limits us anyway), so a quota-store
+  // outage should not break the app's main Add Game flow — fail open.
+  const { rejection, body } = await guard(req, {
+    fn: 'igdb',
+    maxBodyBytes: 4_000,
+    quotas: [
+      { scope: 'install', windowSeconds: 60, limit: 60 },
+      { scope: 'install', windowSeconds: 86_400, limit: 2_000 },
+      { scope: 'global', windowSeconds: 86_400, limit: 20_000 },
+    ],
+    onQuotaError: 'allow',
+  });
+  if (rejection) return rejection;
 
-    if (!endpoint || !query) {
-      return new Response(JSON.stringify({ error: 'endpoint and query required' }), {
-        status: 400,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+  try {
+    const endpoint = body?.endpoint;
+    const query = body?.query;
+
+    if (typeof endpoint !== 'string' || typeof query !== 'string' || !endpoint || !query) {
+      return jsonResponse({ error: 'endpoint and query required' }, 400);
+    }
+    if (!ALLOWED_ENDPOINTS.has(endpoint)) {
+      return jsonResponse({ error: 'Unsupported endpoint.' }, 400);
+    }
+    if (query.length > MAX_QUERY_LENGTH) {
+      return jsonResponse({ error: 'Query too long.' }, 400);
     }
 
     const clientId = Deno.env.get('IGDB_CLIENT_ID');
@@ -70,21 +97,15 @@ serve(async (req: Request) => {
     });
 
     if (!igdbRes.ok) {
-      const text = await igdbRes.text();
-      return new Response(JSON.stringify({ error: text }), {
-        status: igdbRes.status,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+      // Log upstream detail; don't hand backend internals to the client.
+      console.error(`IGDB error ${igdbRes.status}: ${await igdbRes.text()}`);
+      return jsonResponse({ error: 'Game lookup failed. Try again.' }, 502);
     }
 
     const data = await igdbRes.json();
-    return new Response(JSON.stringify(data), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse(data);
   } catch (err) {
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
+    console.error('igdb-proxy error:', String(err));
+    return jsonResponse({ error: 'Game lookup failed. Try again.' }, 500);
   }
 });

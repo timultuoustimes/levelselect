@@ -82,6 +82,7 @@ enum IGDBService {
         var request = URLRequest(url: proxyURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        EdgeFunctions.authorize(&request)
         request.httpBody = try JSONEncoder().encode(["endpoint": "games", "query": query])
 
         let (data, response) = try await URLSession.shared.data(for: request)

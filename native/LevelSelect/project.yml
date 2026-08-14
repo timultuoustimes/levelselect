@@ -34,11 +34,20 @@ targets:
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
         com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
+    # LS_APP_KEY comes from the gitignored Secrets.xcconfig (this repo is
+    # PUBLIC). See Secrets.example.xcconfig for how to create it. Absent or
+    # empty simply means the app sends no app-key header — which the edge
+    # functions tolerate until their LS_APP_SECRET is set.
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
     # Explicit UILaunchScreen (stacked lockup on the navy brand color) replaces
     # the generated blank launch screen. Merged with INFOPLIST_KEY_* settings.
     info:
       path: LevelSelect/Info.plist
       properties:
+        # Read at runtime by EdgeFunctions.appKey.
+        LSAppKey: $(LS_APP_KEY)
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo
@@ -59,13 +68,24 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
+      configs:
+        # Tim's one-time migration from the web app is a developer tool, not a
+        # product feature: the personal export and the Settings actions that
+        # read it exist in Debug only. Release builds — every TestFlight and
+        # App Store build — ship neither.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LEGACY_IMPORT"
+        Release:
+          # Drops legacy-import.json from the Copy Resources phase.
+          EXCLUDED_SOURCE_FILE_NAMES: "legacy-import.json"
     sources:
       - path: LevelSelect
         excludes:
           - "**/.DS_Store"
       - path: Shared
       # legacy-import.json under Resources/ is auto-routed to the resources
-      # build phase by xcodegen (non-code file type).
+      # build phase by xcodegen (non-code file type), then excluded from
+      # Release by EXCLUDED_SOURCE_FILE_NAMES above.
     dependencies:
       - target: LevelSelectWidgets
         embed: true
@@ -95,6 +115,10 @@ targets:
       # Foundation-only value types Repository references (no UI).
       - path: LevelSelect/Services/IGDBService.swift
       - path: LevelSelect/Services/YouTubeService.swift
+      # IGDBService's edge-function headers. The watch generates its Info.plist
+      # without LSAppKey, so appKey is nil here — harmless, since the watch
+      # makes no edge-function calls of its own.
+      - path: LevelSelect/Services/EdgeFunctions.swift
       - path: Watch
     settings:
       base:

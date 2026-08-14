@@ -19,6 +19,7 @@ enum AITrackerService {
         var request = URLRequest(url: functionURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        EdgeFunctions.authorize(&request)
         // Edge functions cap at 150s wall clock; wait just under that.
         request.timeoutInterval = 145
 
