@@ -88,6 +88,8 @@ struct SettingsView: View {
                     Text("Backfills checked-off tracker items from the web app's data into an already-imported library. Safe to repeat.")
                 }
                 #endif
+
+                AboutSection()
             }
             .navigationTitle("Settings")
             #if !os(macOS)

@@ -3,6 +3,11 @@ import SwiftData
 
 /// Versioned from V1 (roadmap §7f.1) so the native app never repeats the web
 /// app's unversioned schema drift — even though V1 has no migration stage yet.
+///
+/// ⚠️ V1 IS FROZEN (2026-08-13, beta P0). Do not add/remove/rename models or
+/// stored properties here — SchemaFreezeTests pins the exact shape and will
+/// fail. New fields go in a LevelSelectSchemaV2 with a migration stage in
+/// LevelSelectMigrationPlan.
 enum LevelSelectSchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
 
