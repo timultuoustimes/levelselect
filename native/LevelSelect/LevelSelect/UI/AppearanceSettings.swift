@@ -109,7 +109,7 @@ struct AppearanceSettingsSection: View {
 
     private func save(_ s: ThemeSettings) {
         s.updatedAt = .now
-        try? context.save()
+        PersistenceMonitor.shared.commit(context)
         ThemePalette.refresh(from: s)
     }
 }

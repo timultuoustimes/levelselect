@@ -41,6 +41,8 @@ struct SettingsView: View {
                     LabeledContent("Games", value: "\(games.count)")
                 }
 
+                SyncStatusSection()
+
                 AppearanceSettingsSection()
 
                 #if LEGACY_IMPORT

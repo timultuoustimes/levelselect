@@ -43,7 +43,7 @@ enum BuiltinTrackers {
                 installed += 1
             }
         }
-        if installed > 0 { try? context.save() }
+        if installed > 0 { PersistenceMonitor.shared.commit(context) }
         return installed
     }
 }

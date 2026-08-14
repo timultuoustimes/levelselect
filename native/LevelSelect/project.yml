@@ -111,6 +111,9 @@ targets:
       - path: LevelSelect/Persistence/Schema.swift
       - path: LevelSelect/Persistence/Repository.swift
       - path: LevelSelect/Persistence/Syncable.swift
+      # Repository persists through the monitor (Foundation+SwiftData only,
+      # no UI) — the watch surfaces failures via the same shared state.
+      - path: LevelSelect/Persistence/PersistenceMonitor.swift
       - path: LevelSelect/Domain
       # Foundation-only value types Repository references (no UI).
       - path: LevelSelect/Services/IGDBService.swift

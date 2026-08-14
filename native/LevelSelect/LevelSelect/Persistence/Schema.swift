@@ -42,6 +42,12 @@ enum LevelSelectStore {
     @MainActor
     static let shared: ModelContainer = makeContainer()
 
+    /// True when the container fell back to a LOCAL (non-CloudKit) store
+    /// because CloudKit failed to initialize. The sync status UI surfaces
+    /// this — the fallback itself must never be silent again (beta P0).
+    @MainActor
+    static private(set) var usingLocalFallback = false
+
     @MainActor
     static func makeContainer(inMemory: Bool = false) -> ModelContainer {
         let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
@@ -62,6 +68,7 @@ enum LevelSelectStore {
             // Resilience: if CloudKit is unavailable, keep working from a local store.
             let local = ModelConfiguration(schema: schema)
             if let container = try? ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [local]) {
+                usingLocalFallback = true
                 return container
             }
             fatalError("Failed to create ModelContainer: \(error)")

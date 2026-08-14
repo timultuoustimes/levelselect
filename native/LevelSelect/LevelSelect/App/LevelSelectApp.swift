@@ -16,6 +16,7 @@ struct LevelSelectApp: App {
                     NotificationManager.configure(container: container)
                     BuiltinTrackers.installMissing(context: container.mainContext)
                     WidgetBridge.refresh()
+                    SyncStatusMonitor.shared.start()
                 }
         }
         .modelContainer(container)

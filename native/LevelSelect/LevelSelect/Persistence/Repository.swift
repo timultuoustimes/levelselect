@@ -16,12 +16,19 @@ struct Repository {
         model.revision += 1
     }
 
+    /// Explicit commit after every mutation (beta P0). Failures surface in
+    /// the retry banner via PersistenceMonitor instead of vanishing.
+    private func persist() {
+        PersistenceMonitor.shared.commit(context)
+    }
+
     // MARK: Games
 
     @discardableResult
     func addGame(name: String, status: GameStatus = .backlog) -> Game {
         let game = Game(name: name, status: status)
         context.insert(game)
+        persist()
         return game
     }
 
@@ -49,6 +56,7 @@ struct Repository {
             game.platforms = igdb.platforms
         }
         context.insert(game)
+        persist()
         return game
     }
 
@@ -69,7 +77,7 @@ struct Repository {
         if !igdb.gameModes.isEmpty { game.gameModes = igdb.gameModes }
         if !igdb.playerPerspectives.isEmpty { game.playerPerspectives = igdb.playerPerspectives }
         touch(game)
-        try? context.save()
+        persist()
     }
 
     // MARK: - Collections
@@ -79,22 +87,26 @@ struct Repository {
         let collection = GameCollection(name: name, isBundle: isBundle)
         context.insert(collection)
         touch(collection)
+        persist()
         return collection
     }
 
     func renameCollection(_ collection: GameCollection, to name: String) {
         collection.name = name
         touch(collection)
+        persist()
     }
 
     func setBundle(_ collection: GameCollection, isBundle: Bool) {
         collection.isBundle = isBundle
         touch(collection)
+        persist()
     }
 
     func deleteCollection(_ collection: GameCollection, at date: Date = .now) {
         collection.deletedAt = date
         touch(collection, at: date)
+        persist()
     }
 
     func setMembership(_ collection: GameCollection, game: Game, member: Bool) {
@@ -108,7 +120,7 @@ struct Repository {
         }
         collection.gameIDs = ids   // reassign so SwiftData tracks the change
         touch(collection)
-        try? context.save()
+        persist()
     }
 
     /// Member games of a collection (non-deleted), fetched by id.
@@ -126,6 +138,7 @@ struct Repository {
     func softDelete(_ game: Game, at date: Date = .now) {
         game.deletedAt = date
         touch(game, at: date)
+        persist()
     }
 
     // MARK: Playthroughs
@@ -144,6 +157,7 @@ struct Repository {
         pt.game = game                 // set to-one; SwiftData maintains the inverse
         game.currentPlaythroughID = pt.id
         touch(game)
+        persist()
         return pt
     }
 
@@ -155,12 +169,14 @@ struct Repository {
         pt.game = game
         game.currentPlaythroughID = pt.id
         touch(game)
+        persist()
         return pt
     }
 
     func setActivePlaythrough(_ pt: Playthrough, for game: Game) {
         game.currentPlaythroughID = pt.id
         touch(game)
+        persist()
     }
 
     func renamePlaythrough(_ pt: Playthrough, to name: String) {
@@ -168,6 +184,7 @@ struct Repository {
         guard !trimmed.isEmpty else { return }
         pt.name = trimmed
         touch(pt)
+        persist()
     }
 
     /// Soft-delete a playthrough. A running session is stopped first (records
@@ -180,6 +197,7 @@ struct Repository {
             game.currentPlaythroughID = game.livePlaythroughs.last?.id
         }
         touch(game, at: date)
+        persist()
     }
 
     // MARK: Sessions (timer derived from timestamps — no ticking writes)
@@ -200,6 +218,7 @@ struct Repository {
             threshold: StaleSessionGuard.threshold
         )
         LiveActivityManager.sessionChanged(session, gameName: pt.game?.name ?? "A game")
+        persist()
         return session
     }
 
@@ -213,6 +232,7 @@ struct Repository {
         // Paused time doesn't accrue — no alarm while paused.
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
     }
 
     func resumeSession(_ session: Session, at date: Date = .now) {
@@ -230,6 +250,7 @@ struct Repository {
             threshold: StaleSessionGuard.threshold
         )
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
     }
 
     func stopSession(_ session: Session, at date: Date = .now) {
@@ -246,6 +267,7 @@ struct Repository {
         }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
     }
 
     /// End a forgotten/runaway session at a user-chosen stop time (the timer
@@ -265,6 +287,7 @@ struct Repository {
         }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
     }
 
     /// Edit a completed session's times and notes.
@@ -276,6 +299,7 @@ struct Repository {
         session.notes = (notes?.isEmpty == true) ? nil : notes
         touch(session)
         if let pt = session.playthrough { touch(pt) }
+        persist()
     }
 
     /// Remove a session from history (tombstoned so the removal syncs).
@@ -287,6 +311,7 @@ struct Repository {
         }
         touch(session, at: date)
         NotificationManager.cancelStaleReminder(sessionID: session.id)
+        persist()
     }
 
     /// Discard a session entirely (records no time; tombstoned so the removal syncs).
@@ -300,6 +325,7 @@ struct Repository {
         touch(session, at: date)
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
     }
 
     /// Hand-logged session (already-known duration, no live timer).
@@ -318,6 +344,7 @@ struct Repository {
         session.playthrough = pt
         pt.lastPlayedAt = date
         touch(pt, at: date)
+        persist()
         return session
     }
 
@@ -342,6 +369,7 @@ struct Repository {
         record.completed = done
         touch(record)
         touch(pt)
+        persist()
     }
 
     /// Rank items auto-complete at max rank.
@@ -351,12 +379,14 @@ struct Repository {
         if let maxRank { record.completed = rank >= maxRank }
         touch(record)
         touch(pt)
+        persist()
     }
 
     func revealTrackerItem(_ pt: Playthrough, itemID: String) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.revealed = true
         touch(record)
+        persist()
     }
 
     /// Ensure the game has a tracker schema record (creating an empty one for
@@ -377,6 +407,7 @@ struct Repository {
             schema.jsonData = updated
             touch(schema)
             touch(game)
+            persist()
         }
     }
 
@@ -399,6 +430,7 @@ struct Repository {
         touch(schema)
         touch(game)
         recomputeProgress(game)
+        persist()
     }
 
     /// Recompute the active playthrough's progress % from schema + state.
@@ -415,6 +447,7 @@ struct Repository {
         let done = allItems.filter { doneIDs.contains($0.id) }.count
         pt.progressPercent = Double(done) / Double(allItems.count) * 100
         touch(pt)
+        persist()
     }
 
     // MARK: Runs (roguelikes / Hades)
@@ -432,6 +465,7 @@ struct Repository {
         run.playthrough = pt
         pt.lastPlayedAt = date
         touch(pt, at: date)
+        persist()
         return run
     }
 
@@ -444,6 +478,7 @@ struct Repository {
             pt.lastPlayedAt = date
             touch(pt, at: date)
         }
+        persist()
     }
 
     /// Log a finished run after the fact.
@@ -468,6 +503,7 @@ struct Repository {
         run.playthrough = pt
         pt.lastPlayedAt = started
         touch(pt)
+        persist()
         return run
     }
 
@@ -475,6 +511,7 @@ struct Repository {
         run.deletedAt = date
         if run.outcome == .inProgress { run.outcome = .neutral; run.endedAt = date }
         touch(run, at: date)
+        persist()
     }
 
     // MARK: Videos
@@ -500,12 +537,14 @@ struct Repository {
         context.insert(video)
         video.game = game
         touch(game)
+        persist()
         return video
     }
 
     func deleteVideo(_ video: GameVideo, at date: Date = .now) {
         video.deletedAt = date
         touch(video, at: date)
+        persist()
     }
 
     func moveVideo(_ video: GameVideo, toGroup group: String) {
@@ -513,6 +552,7 @@ struct Repository {
         guard !trimmed.isEmpty else { return }
         video.groupName = trimmed
         touch(video)
+        persist()
     }
 
     /// Cache a playlist's parts (id + title, playlist order) on the record.
@@ -520,6 +560,7 @@ struct Repository {
         let payload = ids.map { [$0, titles[$0] ?? "Part"] }
         video.partsData = try? JSONSerialization.data(withJSONObject: payload)
         touch(video)
+        persist()
     }
 
     /// Persist the synced resume position (called by the player bridge,
@@ -529,6 +570,7 @@ struct Repository {
         if let partIndex, partIndex >= 0 { video.watchedPartIndex = partIndex }
         video.lastWatchedAt = .now
         touch(video)
+        persist()
     }
 
     // MARK: Completion
@@ -546,6 +588,7 @@ struct Repository {
             game.status = .completed
         }
         touch(game, at: date)
+        persist()
         return event
     }
 }

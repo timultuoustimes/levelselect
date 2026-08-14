@@ -17,7 +17,7 @@ enum SessionIntentHandler {
         let repo = Repository(ctx)
         let pt = repo.ensureDefaultPlaythrough(for: game)
         if pt.activeSession == nil { repo.startSession(on: pt) }
-        try? ctx.save()
+        PersistenceMonitor.shared.commit(ctx)
         WidgetBridge.refresh()
     }
 
@@ -31,7 +31,7 @@ enum SessionIntentHandler {
         let pt = repo.ensureDefaultPlaythrough(for: game)
         let done = repo.trackerState(pt, itemID: itemID)?.completed ?? false
         repo.setTrackerItem(pt, itemID: itemID, done: !done)
-        try? ctx.save()
+        PersistenceMonitor.shared.commit(ctx)
         WidgetBridge.refresh()
     }
 
@@ -39,7 +39,7 @@ enum SessionIntentHandler {
         guard let session = find(idString) else { return }
         let repo = Repository(LevelSelectStore.shared.mainContext)
         repo.stopSession(session)
-        try? LevelSelectStore.shared.mainContext.save()
+        PersistenceMonitor.shared.commit(LevelSelectStore.shared.mainContext)
         WidgetBridge.refresh()
     }
 
@@ -51,7 +51,7 @@ enum SessionIntentHandler {
         case .paused: repo.resumeSession(session)
         case .stopped: break
         }
-        try? LevelSelectStore.shared.mainContext.save()
+        PersistenceMonitor.shared.commit(LevelSelectStore.shared.mainContext)
         WidgetBridge.refresh()
     }
 

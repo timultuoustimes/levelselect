@@ -61,6 +61,6 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         default:
             break
         }
-        try? context.save()
+        PersistenceMonitor.shared.commit(context)
     }
 }

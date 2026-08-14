@@ -5,6 +5,8 @@ import SwiftData
 struct RootView: View {
     @Query private var themeSettings: [ThemeSettings]
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.modelContext) private var context
+    @State private var persistence = PersistenceMonitor.shared
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
     @State private var showingSplash = true
@@ -28,7 +30,21 @@ struct RootView: View {
                     .transition(.opacity)
                     .zIndex(1)
             }
+
+            // Persistence failure surface (beta P0): a save failed and the
+            // change is still pending in the context — offer a real retry.
+            if persistence.lastErrorMessage != nil {
+                VStack {
+                    Spacer()
+                    SaveFailureBanner(monitor: persistence)
+                        .padding(.horizontal)
+                        .padding(.bottom, 64)  // clear the tab bar
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2)
+            }
         }
+        .animation(.spring(duration: 0.35), value: persistence.lastErrorMessage == nil)
         .preferredColorScheme(.dark)
         .onOpenURL { route($0) }
         .onAppear {
@@ -39,6 +55,11 @@ struct RootView: View {
             themeVersion += 1
         }
         .onChange(of: scenePhase) { _, phase in
+            // Backgrounding is the last reliable moment to persist — commit
+            // explicitly so a suspend/kill can't lose the latest edits.
+            if phase == .background || phase == .inactive {
+                PersistenceMonitor.shared.commit(context)
+            }
             // Keep the widget snapshot current whenever the app surfaces or
             // backs out — catches edits made anywhere in the app.
             if phase == .active || phase == .background {
@@ -66,6 +87,44 @@ struct RootView: View {
         case "stats": nav.go(to: .stats)
         default: nav.go(to: .home)
         }
+    }
+}
+
+/// Compact failure banner for a failed SwiftData save. The pending change is
+/// still held by the context, so Retry genuinely re-attempts it.
+private struct SaveFailureBanner: View {
+    let monitor: PersistenceMonitor
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text(monitor.lastErrorMessage ?? "Couldn't save.")
+                .font(.footnote)
+                .lineLimit(2)
+            Spacer(minLength: 4)
+            Button("Retry") { monitor.retry() }
+                .font(.footnote.weight(.semibold))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            Button {
+                monitor.dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(.yellow.opacity(0.35))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 

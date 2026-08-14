@@ -282,7 +282,9 @@ struct LegacyImporter {
 
     /// Create-or-update one tracker state row (idempotent per (pt, itemID)).
     private func upsertState(_ pt: Playthrough, itemID: String, done: Bool?, rank: Int?) {
-        let existing = (pt.trackerStates ?? []).first { $0.itemID == itemID }
+        // Skip records pending deletion — a mutation on one is lost at save
+        // (latent bug surfaced once Repository began committing explicitly).
+        let existing = (pt.trackerStates ?? []).first { $0.itemID == itemID && !$0.isDeleted }
         let record: TrackerStateRecord
         if let existing {
             record = existing

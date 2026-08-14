@@ -19,7 +19,7 @@ struct VideoPlayerDock: View {
         ZStack(alignment: .topTrailing) {
             YouTubePlayerView(video: video, onProgress: { seconds, part in
                 Repository(context).updateVideoProgress(video, seconds: seconds, partIndex: part)
-                try? context.save()
+                PersistenceMonitor.shared.commit(context)
             }, onPlaylist: { ids in
                 harvestParts(ids: ids)
             })
@@ -44,7 +44,7 @@ struct VideoPlayerDock: View {
         Task {
             let titles = await YouTubeService.titles(for: ids)
             Repository(context).cachePlaylistParts(video, ids: ids, titles: titles)
-            try? context.save()
+            PersistenceMonitor.shared.commit(context)
         }
     }
 }
@@ -74,7 +74,7 @@ struct PlaylistPartsSheet: View {
                             Task {
                                 let titles = await YouTubeService.titles(for: ids)
                                 Repository(context).cachePlaylistParts(video, ids: ids, titles: titles)
-                                try? context.save()
+                                PersistenceMonitor.shared.commit(context)
                             }
                         })
                         .frame(width: 1, height: 1)
@@ -335,7 +335,7 @@ struct VideoListView: View {
         .sheet(item: $partsVideo) { plVideo in
             PlaylistPartsSheet(video: plVideo) { index in
                 Repository(context).updateVideoProgress(plVideo, seconds: 0, partIndex: index)
-                try? context.save()
+                PersistenceMonitor.shared.commit(context)
                 if playing?.id == plVideo.id {
                     YouTubePlayerView.command(
                         videoID: plVideo.id, js: "player.playVideoAt(\(index))")

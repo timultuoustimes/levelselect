@@ -158,5 +158,5 @@ struct WatchGameView: View {
         .navigationTitle("Session")
     }
 
-    private func save() { try? context.save() }
+    private func save() { PersistenceMonitor.shared.commit(context) }
 }
