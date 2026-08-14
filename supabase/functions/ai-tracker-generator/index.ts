@@ -264,7 +264,7 @@ serve(async (req: Request) => {
     fn: 'ai',
     maxBodyBytes: MAX_PAYLOAD + 8_000,
     quotas: [
-      { scope: 'install', windowSeconds: 3_600, limit: 5 },
+      { scope: 'install', windowSeconds: 3_600, limit: 10 },
       { scope: 'install', windowSeconds: 86_400, limit: 20 },
       { scope: 'global', windowSeconds: 86_400, limit: 150 },
     ],
