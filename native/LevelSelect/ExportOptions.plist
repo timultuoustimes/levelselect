@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- TestFlight/App Store upload options. Used by the release recipe:
+       xcodegen generate
+       xcodebuild archive -scheme LevelSelect -configuration Release \
+         -destination 'generic/platform=iOS' -archivePath <path>
+       xcodebuild -exportArchive -archivePath <path> \
+         -exportOptionsPlist ExportOptions.plist -allowProvisioningUpdates
+     destination=upload sends it straight to App Store Connect;
+     manageAppVersionAndBuildNumber lets Apple assign the build number, so
+     the deploy is hands-off and auto-distributes to the Internal group.
+     No secrets here — the team ID is already public in project.yml. -->
+<plist version="1.0">
+<dict>
+    <key>method</key>
+    <string>app-store-connect</string>
+    <key>destination</key>
+    <string>upload</string>
+    <key>teamID</key>
+    <string>GYDB3WFZB2</string>
+    <key>uploadSymbols</key>
+    <true/>
+    <key>manageAppVersionAndBuildNumber</key>
+    <true/>
+</dict>
+</plist>

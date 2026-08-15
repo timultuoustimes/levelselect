@@ -37,12 +37,12 @@ targets:
       properties:
         com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
         com.apple.developer.icloud-services: [CloudKit]
-        aps-environment: development
+        aps-environment: $(LS_APS_ENV)
         com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
         # Which CloudKit environment a DEVELOPMENT-signed build talks to.
-        # Defaults to Development (see LS_CK_ENV below); App Store/TestFlight
-        # builds always use Production regardless of this key. Override it to
-        # test the real Production data path from Xcode:
+        # Base is Development (see LS_CK_ENV below); the Release config forces
+        # Production, so archives/TestFlight/App Store always ship Production.
+        # Override it to test the real Production data path from a Debug build:
         #   xcodebuild ... LS_CK_ENV=Production
         com.apple.developer.icloud-container-environment: $(LS_CK_ENV)
     # LS_APP_KEY comes from the gitignored Secrets.xcconfig (this repo is
@@ -83,10 +83,13 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
-        # CloudKit environment for dev-signed builds. Keep Development for
-        # everyday work so experiments never touch the real synced library;
-        # pass LS_CK_ENV=Production on the command line for a Production test.
+        # CloudKit + push environments. Base = Development so everyday
+        # dev-signed builds never touch the real synced library; the Release
+        # config below forces Production, which is what archives/TestFlight/
+        # App Store must use. Override on the command line
+        # (LS_CK_ENV=Production) to point a DEBUG build at Production.
         LS_CK_ENV: Development
+        LS_APS_ENV: development
       configs:
         # Tim's one-time migration from the web app is a developer tool, not a
         # product feature: the personal export and the Settings actions that
@@ -97,6 +100,11 @@ targets:
         Release:
           # Drops legacy-import.json from the Copy Resources phase.
           EXCLUDED_SOURCE_FILE_NAMES: "legacy-import.json"
+          # Distribution builds MUST use the Production CloudKit container and
+          # production APNs — a shipped build pointing at Development would
+          # sync into the wrong zone and silently see no data.
+          LS_CK_ENV: Production
+          LS_APS_ENV: production
     sources:
       - path: LevelSelect
         excludes:
