@@ -124,6 +124,9 @@ struct TrackerSectionView: View {
         Task {
             do {
                 let jsonData = try await AITrackerService.generate(gameName: name)
+                // Progress rows need a playthrough; make sure one exists before
+                // the schema lands, so a never-played game can still be set up.
+                repo.ensureDefaultPlaythrough(for: game)
                 repo.setGeneratedSchema(for: game, jsonData: jsonData)
             } catch {
                 generateError = error.localizedDescription

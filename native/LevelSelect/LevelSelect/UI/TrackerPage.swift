@@ -119,6 +119,10 @@ struct TrackerPageView: View {
             .scrollIndicators(.hidden)
         }
         .lsBackground()
+        // A game whose timer has never run has no playthrough yet, and the
+        // tracker hangs off one — without this you couldn't create or generate
+        // a tracker in compact mode until you'd started a session first.
+        .task { Repository(context).ensureDefaultPlaythrough(for: game) }
         .navigationTitle(game.activePlaythrough?.name ?? game.name)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)

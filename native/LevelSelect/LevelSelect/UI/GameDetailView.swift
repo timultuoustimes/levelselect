@@ -129,6 +129,25 @@ struct GameDetailView: View {
                     } label: {
                         Label("New Playthrough…", systemImage: "plus.square.on.square")
                     }
+                    // Rename/Delete used to live ONLY in the playthrough picker,
+                    // which appears at 2+ playthroughs — so with one, they were
+                    // unreachable. Delete still needs a second one to fall back
+                    // to, but Rename shouldn't have been hidden at all.
+                    if game.activePlaythrough != nil {
+                        Button {
+                            playthroughName = game.activePlaythrough?.name ?? ""
+                            renamingPlaythrough = true
+                        } label: {
+                            Label("Rename Playthrough…", systemImage: "pencil")
+                        }
+                    }
+                    if game.livePlaythroughs.count > 1 {
+                        Button(role: .destructive) {
+                            confirmingPlaythroughDelete = true
+                        } label: {
+                            Label("Delete Playthrough…", systemImage: "trash.slash")
+                        }
+                    }
                     Menu("Tracker Display") {
                         Button {
                             game.trackerDisplayRaw = nil
