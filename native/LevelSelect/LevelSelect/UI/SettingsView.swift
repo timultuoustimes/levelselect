@@ -21,21 +21,20 @@ struct SettingsView: View {
     // The canonical legacy device this bundled export came from.
     private let sourceDeviceID = "7f86df1b-a815-4798-a9d5-00974419eec3"
 
-    /// Result text from the CloudKit schema seeder/purge.
+    /// Result text from the CloudKit schema seeder/purge and demo library.
     @State private var seedResult: String?
+    @State private var seedingDemo = false
     #endif
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Image("LockupWide")
-                        .resizable()
-                        .scaledToFit()
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .frame(maxWidth: 420)
+                    // Live type rather than the baked lockup PNG: stays crisp
+                    // at any size and follows the user's accent color.
+                    Wordmark(size: 22, showsIcon: true)
                         .frame(maxWidth: .infinity)
-                        .accessibilityLabel("LevelSelect")
+                        .padding(.vertical, 18)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
@@ -111,6 +110,32 @@ struct SettingsView: View {
                     Text("Developer — CloudKit schema")
                 } footer: {
                     Text("Writes one hidden, fully-populated record of every model so the Development schema gains every field. Seed → wait for Synced → Deploy Schema Changes to Production in CloudKit Console → Purge.")
+                }
+
+                Section {
+                    Button {
+                        seedingDemo = true
+                        Task {
+                            seedResult = await DemoLibrarySeeder.seed(context: context)
+                            seedingDemo = false
+                        }
+                    } label: {
+                        if seedingDemo {
+                            HStack { ProgressView(); Text("Building demo library…") }
+                        } else {
+                            Label("Load demo library", systemImage: "sparkles")
+                        }
+                    }
+                    .disabled(seedingDemo)
+                    Button(role: .destructive) {
+                        seedResult = DemoLibrarySeeder.purge(context: context)
+                    } label: {
+                        Label("Remove demo library", systemImage: "trash")
+                    }
+                } header: {
+                    Text("Developer — screenshots")
+                } footer: {
+                    Text("12 well-known games with real IGDB art, play history, a populated tracker, a run record, and a collection — so marketing shots contain no personal data. Deterministic, so retakes look identical.")
                 }
                 #endif
 

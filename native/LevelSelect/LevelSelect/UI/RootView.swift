@@ -187,12 +187,9 @@ struct HomeTab: View {
             .toolbar {
                 #if !os(macOS)
                 ToolbarItem(placement: .principal) {
-                    Text("LevelSelect")
-                        .font(LSTheme.pixel(13))
-                        .foregroundStyle(LSTheme.torch)
+                    Wordmark(size: 13)
                         .lineLimit(1)
                         .fixedSize()
-                        .accessibilityAddTraits(.isHeader)
                 }
                 #endif
                 ToolbarItem(placement: Self.trailing) {

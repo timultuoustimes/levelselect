@@ -7,6 +7,9 @@ import SwiftData
 @MainActor
 enum ThemePalette {
     private(set) static var accent: Color = LSTheme.purple
+    /// True once the user has picked their own accent. The wordmark keeps its
+    /// brand torch-orange until then, so the default look is unchanged.
+    private(set) static var accentIsCustom = false
     private(set) static var pageBackground: ThemePageBackground = .cover
     private(set) static var defaultTrackerDisplay: TrackerDisplay = .inline
     private static var statusOverrides: [GameStatus: Color] = [:]
@@ -30,7 +33,9 @@ enum ThemePalette {
     }
 
     static func refresh(from settings: ThemeSettings?) {
-        accent = settings?.accentHex.flatMap { Color(hex: $0) } ?? LSTheme.purple
+        let custom = settings?.accentHex.flatMap { Color(hex: $0) }
+        accent = custom ?? LSTheme.purple
+        accentIsCustom = custom != nil
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
         defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
         var overrides: [GameStatus: Color] = [:]

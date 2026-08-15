@@ -26,6 +26,10 @@ enum CloudKitSchemaSeeder {
     /// Marker used for both `legacyID` and display names, so purge is exact.
     static let marker = "__ls_schema_seed__"
 
+    /// Accent written onto a theme row that had none, so CloudKit materializes
+    /// the field. Reverted by purge() unless the user has since changed it.
+    static let seededAccent = "#8A5CF6"
+
     /// Insert one fully-populated instance of every model in SchemaV1.
     /// Returns a short report for the UI.
     @discardableResult
@@ -233,8 +237,13 @@ enum CloudKitSchemaSeeder {
         //     one drives the app's palette and a second would be ambiguous) ---
         let existingTheme = (try? context.fetch(FetchDescriptor<ThemeSettings>()))?.first
         if let existingTheme {
-            // Populate the optionals on the REAL row instead of adding a second.
-            if existingTheme.accentHex == nil { existingTheme.accentHex = "#8A5CF6" }
+            // Populate the optionals on the REAL row instead of adding a second
+            // (a duplicate would fight ThemePalette, which reads `.first`).
+            // These are USER-VISIBLE settings, so purge() puts them back — a
+            // seeded accent would otherwise silently become the user's choice
+            // and, since the wordmark follows a custom accent, change the
+            // app's look permanently.
+            if existingTheme.accentHex == nil { existingTheme.accentHex = seededAccent }
             if existingTheme.statusColorsData == nil { existingTheme.statusColorsData = stamp }
         } else {
             let theme = ThemeSettings()
@@ -272,6 +281,19 @@ enum CloudKitSchemaSeeder {
         purgeAll(GameCollection.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
+
+        // Undo the theme fields we populated, so a seeding run never leaves the
+        // user with an accent (or status colors) they didn't pick.
+        if let theme = (try? context.fetch(FetchDescriptor<ThemeSettings>()))?.first {
+            if theme.accentHex == seededAccent {
+                theme.accentHex = nil
+                removed += 1
+            }
+            if theme.statusColorsData == Data("{}".utf8) {
+                theme.statusColorsData = nil
+            }
+            ThemePalette.refresh(from: theme)
+        }
 
         PersistenceMonitor.shared.commit(context)
         return "Removed \(removed) seed record(s). The deployed schema is unaffected."

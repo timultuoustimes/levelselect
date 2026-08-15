@@ -36,6 +36,16 @@ enum LSTheme {
     /// Torch orange from the dungeon-door icon/wordmark artwork.
     static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
 
+    /// Darker torch, used as the hard drop shadow under pixel type.
+    static let torchShadow = Color(red: 0.54, green: 0.29, blue: 0.07)
+
+    /// Wordmark tint: the brand torch orange by default, following the user's
+    /// accent once they've chosen one.
+    @MainActor
+    static var wordmark: Color {
+        ThemePalette.accentIsCustom ? ThemePalette.accent : torch
+    }
+
     /// Display face: Press Start 2P (bundled, registered at launch). Use for
     /// wordmarks and small display moments only — never body text.
     static func pixel(_ size: CGFloat) -> Font {
