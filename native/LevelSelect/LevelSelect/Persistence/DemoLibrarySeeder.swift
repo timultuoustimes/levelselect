@@ -108,6 +108,7 @@ enum DemoLibrarySeeder {
         BuiltinTrackers.installMissing(context: context)
 
         addTracker(repo: repo, game: byName["Hollow Knight"])
+        addHadesProgress(repo: repo, game: byName["Hades"])
         addRuns(repo: repo, game: byName["Hades"])
         addCollection(repo: repo, games: ["Stardew Valley", "Celeste", "Sonic the Hedgehog 2"].compactMap { byName[$0] })
 
@@ -186,6 +187,39 @@ enum DemoLibrarySeeder {
             repo.setTrackerItem(pt, itemID: id, done: true)
         }
         repo.setTrackerRank(pt, itemID: "n-nail", rank: 2, maxRank: 4)
+        repo.recomputeProgress(game)
+    }
+
+    /// Partial progress on the built-in Hades tracker — it ships with the app
+    /// (IGDB 113112) and attaches automatically, but an all-zero tracker is a
+    /// poor screenshot. Ranks and unlocks here look like ~30 hours in.
+    private static func addHadesProgress(repo: Repository, game: Game?) {
+        guard let game, let pt = game.activePlaythrough else { return }
+
+        // Weapon aspects: the starting aspects unlocked and levelled, the
+        // hidden ones still untouched.
+        for (id, rank) in [("blade-zagreus", 5), ("blade-nemesis", 3),
+                           ("spear-zagreus", 4), ("spear-achilles", 2),
+                           ("shield-zagreus", 3), ("bow-zagreus", 2)] {
+            repo.setTrackerRank(pt, itemID: id, rank: rank, maxRank: 5)
+        }
+        // Keepsakes: the early-game gifts, a couple maxed.
+        for (id, rank) in [("old-spiked-collar", 3), ("myrmidon-bracer", 2),
+                           ("black-shawl", 3), ("pierced-butterfly", 1),
+                           ("bone-hourglass", 2), ("chthonic-coin-purse", 1)] {
+            repo.setTrackerRank(pt, itemID: id, rank: rank, maxRank: 3)
+        }
+        for id in ["battie", "mort", "rib"] {
+            repo.setTrackerItem(pt, itemID: id, done: true)
+        }
+        // Mirror of Night: the talents you buy first.
+        for (id, rank, max) in [("mirror-death-defiance", 2, 3),
+                                ("mirror-shadow-presence", 3, 5),
+                                ("mirror-chthonic-vitality", 5, 5),
+                                ("mirror-dark-regeneration", 2, 5),
+                                ("mirror-stygian-soul", 1, 1)] {
+            repo.setTrackerRank(pt, itemID: id, rank: rank, maxRank: max)
+        }
         repo.recomputeProgress(game)
     }
 

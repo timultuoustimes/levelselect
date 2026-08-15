@@ -137,7 +137,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Developer — screenshots")
                 } footer: {
-                    Text("12 well-known games with real IGDB art, play history, a populated tracker, a run record, and a collection — so marketing shots contain no personal data. Deterministic, so retakes look identical.")
+                    Text("14 well-known games with real IGDB art, play history, a populated tracker, a run record, and a collection — so marketing shots contain no personal data. Deterministic, so retakes look identical.")
                 }
                 #endif
 

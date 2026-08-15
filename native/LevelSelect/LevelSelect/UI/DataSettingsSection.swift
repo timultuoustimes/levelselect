@@ -14,6 +14,7 @@ struct DataSettingsSection: View {
     @State private var exporting = false
     @State private var confirmingClear: ClearScope?
     @State private var clearResult: String?
+    @State private var showingCSVImport = false
 
     enum ClearScope: String, Identifiable {
         case sessions, trackers
@@ -64,13 +65,22 @@ struct DataSettingsSection: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
+
+            Button {
+                showingCSVImport = true
+            } label: {
+                Label("Import from CSV", systemImage: "square.and.arrow.down")
+            }
         } header: {
             Text("Your data")
         } footer: {
-            Text("Saves everything — games, sessions, tracker progress, playthroughs, runs, and collections — as a JSON file you can keep anywhere. iCloud keeps your devices in sync, but it isn't a backup.")
+            Text("Export saves everything — games, sessions, tracker progress, playthroughs, runs, and collections — as a JSON file you can keep anywhere. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet.")
         }
         .sheet(item: $exportURL) { url in
             ShareSheet(url: url)
+        }
+        .sheet(isPresented: $showingCSVImport) {
+            CSVImportView()
         }
 
         Section {

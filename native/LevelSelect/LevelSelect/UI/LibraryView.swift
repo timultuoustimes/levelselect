@@ -470,6 +470,13 @@ enum PlatformIcon {
         if p.contains("wii")                                   { return "platform-wii" }
         if p.contains("microsoft windows") || p == "pc"
             || p == "windows" || p == "steam"                  { return "platform-pc" }
+        // Game Boy family: the longer names contain "game boy", so they must
+        // be tested first or every handheld collapses to the 1989 DMG.
+        if p.contains("game boy advance") || p == "gba"        { return "platform-gba" }
+        if p.contains("game boy color") || p == "gbc"          { return "platform-gbc" }
+        if p.contains("game boy")                              { return "platform-gameboy" }
+        if p == "ios" || p.contains("iphone")                  { return "platform-iphone" }
+        if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
         return nil
     }
