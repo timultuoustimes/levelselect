@@ -117,13 +117,18 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   background: linear-gradient(135deg, rgba(77,41,140,.85), #1E1436);
   box-shadow: 0 24px 50px -28px #000;
 }
+/* Real cover art, framed the way CoverThumb frames it in the app: a soft
+   top-left gloss so the box reads as a physical object rather than a sticker. */
 .cover {
-  width: 76px; height: 100px; flex: none; border-radius: 12px; position: relative; overflow: hidden;
-  background: linear-gradient(160deg, #3A2A5E, #170F2A);
+  width: 76px; height: 100px; flex: none; border-radius: 12px; object-fit: cover;
   border: 1px solid rgba(255,255,255,.14);
   box-shadow: 0 10px 22px -10px #000, inset 0 1px 0 rgba(255,255,255,.22);
 }
-.cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(150deg, rgba(255,255,255,.28), transparent 46%); }
+.cover-wrap { position: relative; flex: none; }
+.cover-wrap::after {
+  content: ""; position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
+  background: linear-gradient(150deg, rgba(255,255,255,.26), transparent 46%);
+}
 .card-hero .meta { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .card-hero .title { font-weight: 650; font-size: 1.06rem; }
 .card-hero .sub2 { color: var(--muted); font-size: .86rem; }
