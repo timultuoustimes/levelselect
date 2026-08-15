@@ -176,7 +176,7 @@ struct TrackerSectionView: View {
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
                 VStack(spacing: 2) {
                     ForEach(visibleItems) { item in
-                        itemRow(item)
+                        itemRow(item, category: category)
                     }
                 }
                 .padding(.top, 4)
@@ -206,7 +206,7 @@ struct TrackerSectionView: View {
     // MARK: Item row
 
     @ViewBuilder
-    private func itemRow(_ item: TrackerItemDTO) -> some View {
+    private func itemRow(_ item: TrackerItemDTO, category: TrackerCategoryDTO) -> some View {
         let state = stateByItem[item.id]
         let done = state?.completed == true
         let hidden = item.hideUntilDiscovered && state?.revealed != true && !done
@@ -245,8 +245,15 @@ struct TrackerSectionView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                // Descriptions that carry an "(Alt: …)" clause — Hades' Mirror
+                // of Night does — get the alternative behind a chip instead of
+                // running both variants together in one sentence.
+                if !hidden, let description = item.itemDescription, !description.isEmpty {
+                    AltDescription(text: description, tint: LSTheme.accent)
+                }
                 if !hidden, let maxRank = item.maxRank {
-                    rankControl(item, maxRank: maxRank, current: state?.rank ?? 0)
+                    rankControl(item, category: category, maxRank: maxRank,
+                                current: state?.rank ?? 0)
                 }
             }
             Spacer(minLength: 0)
@@ -255,28 +262,23 @@ struct TrackerSectionView: View {
         .padding(.vertical, 3)
     }
 
-    private func rankControl(_ item: TrackerItemDTO, maxRank: Int, current: Int) -> some View {
-        HStack(spacing: 8) {
-            Stepper(value: Binding(
-                get: { current },
-                set: { newValue in
-                    let pt = repo.ensureDefaultPlaythrough(for: game)
-                    repo.setTrackerRank(pt, itemID: item.id, rank: min(newValue, maxRank), maxRank: maxRank)
-                    repo.recomputeProgress(game)
-                }
-            ), in: 0...maxRank) {
-                Text(rankLabel(item, current: current, maxRank: maxRank))
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            .controlSize(.mini)
+    /// Tap-to-set ranks. Replaces the old Stepper, which showed progress as a
+    /// bare "0/5" and made a category of ranked items read as a form.
+    private func rankControl(_ item: TrackerItemDTO, category: TrackerCategoryDTO,
+                             maxRank: Int, current: Int) -> some View {
+        RankPicker(
+            display: RankDisplay.resolve(explicit: item.display,
+                                         categoryName: category.name,
+                                         maxRank: maxRank),
+            current: current,
+            maxRank: maxRank,
+            rankNames: item.rankNames,
+            tint: category.name.localizedCaseInsensitiveContains("keepsake") ? .pink : LSTheme.accent
+        ) { newRank in
+            let pt = repo.ensureDefaultPlaythrough(for: game)
+            repo.setTrackerRank(pt, itemID: item.id,
+                                rank: max(0, min(newRank, maxRank)), maxRank: maxRank)
+            repo.recomputeProgress(game)
         }
-    }
-
-    private func rankLabel(_ item: TrackerItemDTO, current: Int, maxRank: Int) -> String {
-        if let names = item.rankNames, current > 0, current <= names.count {
-            return names[current - 1]
-        }
-        return "\(current)/\(maxRank)"
     }
 }

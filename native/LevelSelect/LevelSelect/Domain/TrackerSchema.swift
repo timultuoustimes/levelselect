@@ -12,6 +12,9 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     let hideUntilDiscovered: Bool
     let maxRank: Int?
     let rankNames: [String]?
+    /// Optional schema hint: "pips" | "hearts" | "numbered" | "stepper".
+    /// Absent in the built-ins, which infer from the data instead.
+    let display: String?
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -86,7 +89,8 @@ enum TrackerSchemaJSON {
                     missable: (item["missable"] as? Bool) ?? false,
                     hideUntilDiscovered: (item["hideUntilDiscovered"] as? Bool) ?? false,
                     maxRank: (item["maxRank"] as? NSNumber)?.intValue,
-                    rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String }
+                    rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String },
+                    display: item["display"] as? String
                 )
             }
             return TrackerCategoryDTO(
