@@ -18,7 +18,9 @@ struct RootView: View {
                                        set: { nav.selectedTab = $0 })) {
                 Tab("Home", systemImage: "house.fill", value: LSTab.home) { HomeTab() }
                 Tab("Library", systemImage: "square.grid.2x2.fill", value: LSTab.library) { LibraryTab() }
-                Tab("Wishlist", systemImage: "heart.fill", value: LSTab.wishlist) { WishlistTab() }
+                // Bag, not a heart: the wishlist is things to buy, and a heart
+                // reads as "favorited" (which is what `pinned` already means).
+                Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
                 Tab("Stats", systemImage: "chart.bar.fill", value: LSTab.stats) { StatsTab() }
             }
             .tint(LSTheme.accent)

@@ -47,6 +47,9 @@ enum DemoLibrarySeeder {
         .init(igdbID:   1103, name: "Super Metroid",        platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
         .init(igdbID:   1802, name: "Chrono Trigger",       platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
         .init(igdbID:  23733, name: "Tunic",                platform: "Nintendo Switch", status: .queued,    rating: nil, ownership: [.digital],          hours: 0),
+        // Current releases, so the demo doesn't read as a 2018 time capsule.
+        .init(igdbID: 305152, name: "Clair Obscur: Expedition 33", platform: "PlayStation 5", status: .playing, rating: 5, ownership: [.digital], hours: 24.9),
+        .init(igdbID: 366893, name: "Pokémon Pokopia",     platform: "Nintendo Switch 2", status: .playing, rating: nil, ownership: [.physical], hours: 8.7),
     ]
 
     /// Create the demo library. Network is used for IGDB metadata; without it
