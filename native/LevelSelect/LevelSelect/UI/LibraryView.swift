@@ -456,6 +456,20 @@ enum PlatformIcon {
         if p.contains("xbox 360")                              { return "platform-xbox360" }
         if p.contains("xbox")                                  { return "platform-xbox" }
         if p.contains("recalbox")                              { return "platform-recalbox" }
+        // Order matters: more specific strings first, since these are
+        // substring matches ("xbox series" before "xbox", "ps5" before "ps").
+        if p.contains("xbox series")                           { return "platform-xbox-series" }
+        if p.contains("steam deck")                            { return "platform-steamdeck" }
+        if p.contains("playstation 5") || p == "ps5"           { return "platform-ps5" }
+        if p.contains("playstation 4") || p == "ps4"           { return "platform-ps4" }
+        if p.contains("playstation 3") || p == "ps3"           { return "platform-ps4" }
+        if p == "playstation" || p.contains("playstation 1")
+            || p == "ps1" || p == "psx"                        { return "platform-ps1" }
+        if p.contains("3ds")                                   { return "platform-3ds" }
+        if p.contains("wii u")                                 { return "platform-wiiu" }
+        if p.contains("wii")                                   { return "platform-wii" }
+        if p.contains("microsoft windows") || p == "pc"
+            || p == "windows" || p == "steam"                  { return "platform-pc" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
         return nil
     }
