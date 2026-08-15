@@ -24,6 +24,15 @@ struct RunSectionView: View {
             if let active = playthrough?.activeRun {
                 activeRunView(active)
             } else {
+                // A run is one attempt; a session is time at the controls.
+                // They're independent — you might play for an hour and log
+                // four runs, or start a run without the timer going — so the
+                // wording says which is which rather than leaving two similar
+                // buttons to be told apart by icon.
+                Text("A run is one attempt. Timing your play is separate.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+
                 HStack {
                     Button {
                         startingRun = true

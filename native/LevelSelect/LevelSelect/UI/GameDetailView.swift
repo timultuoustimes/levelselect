@@ -148,6 +148,18 @@ struct GameDetailView: View {
                             Label("Delete Playthrough…", systemImage: "trash.slash")
                         }
                     }
+                    // Runs are a capability you switch on, not something the
+                    // genre decides. Turning it off leaves existing runs in
+                    // place, so it's never destructive.
+                    Button {
+                        let enabled = repo.runTrackingEnabled(for: game)
+                        repo.setRunTracking(!enabled, for: game)
+                    } label: {
+                        Label(repo.runTrackingEnabled(for: game)
+                                ? "Turn Off Run Logging" : "Log Runs for This Game",
+                              systemImage: repo.runTrackingEnabled(for: game)
+                                ? "flag.slash" : "flag.checkered")
+                    }
                     Menu("Tracker Display") {
                         Button {
                             game.trackerDisplayRaw = nil

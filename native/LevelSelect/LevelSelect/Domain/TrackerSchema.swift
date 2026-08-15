@@ -125,6 +125,42 @@ enum TrackerSchemaJSON {
     }
 
     /// Minimal empty schema for games that have no tracker yet.
+    /// Turn run logging on for a game by injecting a general-purpose run
+    /// template into its schema.
+    ///
+    /// Run logging used to depend entirely on whether the generated or
+    /// built-in schema happened to include a `runTemplate` — so Hades had runs
+    /// and Dead Cells could never have them, with no say from the player. This
+    /// makes it a choice. The template lives inside `jsonData`, so enabling it
+    /// is not a SwiftData migration.
+    static func addingDefaultRunTemplate(to data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        guard root["runTemplate"] == nil else { return data }   // already on
+        root["runTemplate"] = [
+            "fields": [
+                ["id": "loadout", "label": "Loadout", "type": "text"],
+                ["id": "notes", "label": "Notes", "type": "text"],
+            ],
+            "outcomes": [
+                ["id": "success", "label": "Won"],
+                ["id": "failure", "label": "Died"],
+                ["id": "neutral", "label": "Abandoned"],
+            ],
+        ]
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Turn run logging off. Existing runs are untouched — they stay in the
+    /// playthrough and reappear if it's switched back on, so this is never
+    /// a destructive action.
+    static func removingRunTemplate(from data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        root["runTemplate"] = nil
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
     static func emptySchema() -> Data {
         (try? JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": []])) ?? Data()
     }

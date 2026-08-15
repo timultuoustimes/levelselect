@@ -433,6 +433,43 @@ struct Repository {
         persist()
     }
 
+    /// Turn per-game run logging on or off.
+    ///
+    /// Runs are a capability of a tracker, not a property of a genre — Dead
+    /// Cells and Ball x Pit want trackers without a run log, and someone may
+    /// want to log attempts for a game whose generated schema never offered
+    /// it. Creates an empty schema first if the game has none, so enabling
+    /// runs doesn't require generating a tracker first.
+    func setRunTracking(_ enabled: Bool, for game: Game) {
+        let schema: TrackerSchemaRecord
+        if let existing = game.trackerSchema {
+            schema = existing
+        } else {
+            guard enabled else { return }
+            schema = TrackerSchemaRecord(
+                source: .builtIn, engine: .run,
+                jsonData: TrackerSchemaJSON.emptySchema()
+            )
+            context.insert(schema)
+            schema.game = game
+        }
+        let updated = enabled
+            ? TrackerSchemaJSON.addingDefaultRunTemplate(to: schema.jsonData)
+            : TrackerSchemaJSON.removingRunTemplate(from: schema.jsonData)
+        guard let updated else { return }
+        schema.jsonData = updated
+        schema.engine = enabled ? .run : .objective
+        touch(schema)
+        touch(game)
+        persist()
+    }
+
+    /// Whether this game currently logs runs.
+    func runTrackingEnabled(for game: Game) -> Bool {
+        guard let schema = game.trackerSchema else { return false }
+        return TrackerSchemaJSON.runTemplate(from: schema.jsonData) != nil
+    }
+
     /// Recompute the active playthrough's progress % from schema + state.
     func recomputeProgress(_ game: Game) {
         guard let schema = game.trackerSchema else { return }

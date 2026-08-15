@@ -54,7 +54,7 @@ struct SessionControlsView: View {
         VStack(spacing: 4) {
             HStack {
                 let total = playthrough?.totalPlaytime() ?? 0
-                Text(game.livePlaythroughs.count > 1 ? "This playthrough" : "Total played")
+                Text(game.livePlaythroughs.count > 1 ? "This playthrough" : "Time played")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Spacer()
