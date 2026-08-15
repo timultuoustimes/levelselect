@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — LevelSelect</title>
+<meta name="description" content="LevelSelect has no accounts, no ads, no analytics, and no tracking. Your library is stored on your device and synced to your own private iCloud database.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="stylesheet" href="/assets/style.css">
+<meta name="theme-color" content="#0D0A17">
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/assets/icon.png" alt="">
+      <span class="pixel wordmark">LevelSelect</span>
+    </a>
+    <nav class="navlinks">
+      <a href="/#features">Features</a>
+      <a href="/privacy/" aria-current="page">Privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <article class="doc">
+    <h1>Privacy Policy</h1>
+    <p class="stamp">Last updated 15 August 2026</p>
+
+    <div class="callout">
+      <p>LevelSelect has no accounts, no ads, no analytics, and no tracking. Your library is stored on your device and synced to your own private iCloud database. The developer cannot read it.</p>
+    </div>
+
+    <h2>What stays on your device</h2>
+    <p>Your games, play sessions, tracker progress, playthroughs, runs, collections, ratings, notes, and linked videos are stored locally and synced through <strong>your</strong> private iCloud database using CloudKit. That data is under your Apple account's control. Deleting the app and its iCloud data removes it. You can export everything to a file at any time from Settings.</p>
+
+    <h2>What leaves your device</h2>
+    <p>Three features talk to LevelSelect's backend. In each case, only what's listed is sent:</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Feature</th><th>What is sent</th><th>Where it goes</th></tr></thead>
+        <tbody>
+          <tr><td>Game search</td><td>The search text or game id you look up</td><td>Our proxy &rarr; IGDB, for titles, cover art, and release dates</td></tr>
+          <tr><td>AI tracker generation</td><td>The game's name, its public IGDB metadata, and any guide text or URL you provide</td><td>Our generator &rarr; Anthropic's Claude, which may search the web for a guide</td></tr>
+          <tr><td>Map search <em>(planned)</em></td><td>The game's name and an optional wiki page URL</td><td>Our finder &rarr; Anthropic's Claude with web search</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Separately, and entirely from your device: your <strong>public</strong> Deku Deals wishlist is fetched if you configure one, cover art loads from IGDB's image servers, and YouTube titles and thumbnails load for links you add.</p>
+
+    <h2>The install identifier</h2>
+    <p>Requests to our backend carry a random identifier the app generates on first launch, used only to enforce fair-use rate limits. It isn't derived from your device's hardware, isn't linked to you or your iCloud account, and resets if you delete and reinstall the app.</p>
+
+    <h2>What LevelSelect never does</h2>
+    <ul>
+      <li>No user accounts, sign-ins, or passwords</li>
+      <li>No advertising, and no data sold or shared with data brokers</li>
+      <li>No analytics or telemetry SDKs</li>
+      <li>No tracking across apps or websites</li>
+      <li>No access to your contacts, photos, location, microphone, or camera</li>
+    </ul>
+
+    <h2>Crash reports and TestFlight</h2>
+    <p>During the beta, Apple's TestFlight may share crash logs and any feedback you choose to submit, governed by <a href="https://www.apple.com/legal/privacy/">Apple's privacy policy</a>.</p>
+
+    <h2>Children</h2>
+    <p>LevelSelect is not directed at children under 13 and collects no personal information from anyone.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the updated version is posted here with a new date, and material changes are noted in the release notes.</p>
+
+    <h2>Contact</h2>
+    <p>Questions or concerns: <a href="mailto:privacy@levelselect.app">privacy@levelselect.app</a>, or use TestFlight's built-in feedback during the beta.</p>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>&copy; 2026 LevelSelect</span>
+    <span>
+      <a href="/">Home</a> &middot;
+      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
+      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
