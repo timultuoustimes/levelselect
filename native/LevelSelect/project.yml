@@ -1,4 +1,9 @@
 name: LevelSelect
+# Marks the generated project as already reviewed by this Xcode version, so
+# Xcode stops offering "Update to recommended settings" (which xcodegen would
+# overwrite on the next generate anyway). Bump when adopting a new Xcode.
+attributes:
+  LastUpgradeCheck: "2660"
 options:
   bundleIdPrefix: com.timultuoustimes
   deploymentTarget:

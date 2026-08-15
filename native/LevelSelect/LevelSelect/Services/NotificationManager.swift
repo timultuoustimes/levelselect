@@ -7,6 +7,7 @@ import UserNotifications
 /// stale threshold; cancel on stop/pause/discard. Local notifications need no
 /// server and fire even when the app is closed. Tapping opens the app, where
 /// StaleSessionGuard presents the resolve prompt.
+@MainActor
 enum NotificationManager {
     private static let prefix = "stale-session-"
     static let categoryID = "STALE_SESSION"
@@ -25,7 +26,6 @@ enum NotificationManager {
     }
 
     /// One-time launch setup: delegate + action buttons on the reminder.
-    @MainActor
     static func configure(container: ModelContainer) {
         guard enabled else { return }
         NotificationDelegate.shared.container = container
@@ -49,10 +49,13 @@ enum NotificationManager {
 
     static func requestAuthorizationIfNeeded() {
         guard enabled else { return }
-        let center = UNUserNotificationCenter.current()
-        center.getNotificationSettings { settings in
+        // Async notification-center APIs — the completion-handler forms capture
+        // the (non-Sendable) center in @Sendable closures under Swift 6.
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let settings = await center.notificationSettings()
             guard settings.authorizationStatus == .notDetermined else { return }
-            center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
         }
     }
 
@@ -96,8 +99,9 @@ enum NotificationManager {
         threshold: TimeInterval
     ) {
         guard enabled else { return }
-        let center = UNUserNotificationCenter.current()
-        center.getPendingNotificationRequests { pending in
+        Task {
+            let center = UNUserNotificationCenter.current()
+            let pending = await center.pendingNotificationRequests()
             let pendingIDs = Set(pending.map(\.identifier).filter { $0.hasPrefix(prefix) })
             let activeIDs = Set(active.map { prefix + $0.id.uuidString })
 

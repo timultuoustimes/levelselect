@@ -10,7 +10,8 @@ struct SafariView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
         let vc = SFSafariViewController(url: url, configuration: config)
-        vc.preferredControlTintColor = UIColor(LSTheme.accent)
+        // (No preferredControlTintColor — deprecated in iOS 26; tinting now
+        // interferes with the system's Liquid Glass background effects.)
         vc.dismissButtonStyle = .done
         return vc
     }
@@ -106,6 +107,9 @@ struct DekuBrowserPane: View {
     }
 }
 
+// MainActor: everything here drives WKWebView, and the Representable entry
+// points (makeUIView/updateUIView) are main-actor anyway.
+@MainActor
 private struct DekuWebView {
     let url: URL
     @Binding var webView: WKWebView?

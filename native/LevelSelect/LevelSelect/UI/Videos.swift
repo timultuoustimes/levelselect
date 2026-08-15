@@ -138,6 +138,10 @@ extension Notification.Name {
     static let lsPlayerCommand = Notification.Name("lsPlayerCommand")
 }
 
+// MainActor: makeWebView drives WKWebView, and the nested Coordinator is
+// already MainActor-inferred via WKScriptMessageHandler — this aligns the
+// container so the calls between them are same-isolation.
+@MainActor
 struct YouTubePlayerView {
     let video: GameVideo
     var onProgress: @MainActor (Double, Int?) -> Void
@@ -195,10 +199,13 @@ struct YouTubePlayerView {
             observer = NotificationCenter.default.addObserver(
                 forName: .lsPlayerCommand, object: nil, queue: .main
             ) { [weak self] note in
-                guard let self,
-                      (note.userInfo?["videoID"] as? String) == self.videoID,
+                // The block is nonisolated to the compiler; queue .main means
+                // it's really on the main actor. Pull the payload first, then
+                // touch isolated state only inside assumeIsolated.
+                guard let videoID = note.userInfo?["videoID"] as? String,
                       let js = note.userInfo?["js"] as? String else { return }
                 MainActor.assumeIsolated {
+                    guard let self, videoID == self.videoID else { return }
                     self.webView?.evaluateJavaScript(js)
                 }
             }
