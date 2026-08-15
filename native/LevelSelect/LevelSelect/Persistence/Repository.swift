@@ -573,6 +573,59 @@ struct Repository {
         persist()
     }
 
+    // MARK: Bulk clears (Settings → Your data)
+
+    /// Tombstone every session across the library. Games, trackers, and
+    /// collections are untouched — this only removes logged time.
+    @discardableResult
+    func clearAllSessions(at date: Date = .now) -> Int {
+        let sessions = (try? context.fetch(
+            FetchDescriptor<Session>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? []
+        for session in sessions {
+            NotificationManager.cancelStaleReminder(sessionID: session.id)
+            session.deletedAt = date
+            if session.state != .stopped {
+                session.state = .stopped
+                session.endDate = session.startDate
+            }
+            touch(session, at: date)
+        }
+        for pt in ((try? context.fetch(FetchDescriptor<Playthrough>())) ?? []) {
+            pt.lastPlayedAt = nil
+            touch(pt, at: date)
+        }
+        LiveActivityManager.endCurrent()
+        persist()
+        return sessions.count
+    }
+
+    /// Tombstone every tracker state row and run, so trackers read as untouched
+    /// while their structure (the schema) stays in place.
+    @discardableResult
+    func clearAllTrackerProgress(at date: Date = .now) -> Int {
+        let states = (try? context.fetch(
+            FetchDescriptor<TrackerStateRecord>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? []
+        for state in states {
+            state.deletedAt = date
+            touch(state, at: date)
+        }
+        let runs = (try? context.fetch(
+            FetchDescriptor<Run>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? []
+        for run in runs {
+            run.deletedAt = date
+            touch(run, at: date)
+        }
+        for pt in ((try? context.fetch(FetchDescriptor<Playthrough>())) ?? []) {
+            pt.progressPercent = 0
+            touch(pt, at: date)
+        }
+        persist()
+        return states.count + runs.count
+    }
+
     // MARK: Completion
 
     @discardableResult

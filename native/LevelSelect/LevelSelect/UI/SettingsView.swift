@@ -47,6 +47,8 @@ struct SettingsView: View {
 
                 AppearanceSettingsSection()
 
+                DataSettingsSection()
+
                 #if LEGACY_IMPORT
                 Section {
                     if let r = result {

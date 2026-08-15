@@ -19,6 +19,10 @@ enum DemoLibrarySeeder {
     static let marker = "__ls_demo__"
 
     private struct Seed {
+        /// Pinned IGDB id. Search alone is unreliable for a demo that has to
+        /// look identical every time: "Hades" returns a 1995 game before
+        /// Supergiant's, and "Disco Elysium" leads with the Game Boy Edition.
+        let igdbID: Int
         let name: String
         let platform: String
         let status: GameStatus
@@ -31,18 +35,18 @@ enum DemoLibrarySeeder {
     /// Deliberately broad: a few current, a few finished, a few untouched, and
     /// a retro corner so the "By System" shelf has something to show.
     private static let seeds: [Seed] = [
-        .init(name: "Hollow Knight",       platform: "Nintendo Switch", status: .playing,   rating: 5, ownership: [.digital],            hours: 41.2),
-        .init(name: "Hades",               platform: "Nintendo Switch", status: .playing,   rating: 5, ownership: [.digital],            hours: 28.6),
-        .init(name: "Balatro",             platform: "Mac",             status: .playing,   rating: 4, ownership: [.digital],            hours: 19.4),
-        .init(name: "Stardew Valley",      platform: "Mac",             status: .paused,    rating: 5, ownership: [.digital],            hours: 63.0),
-        .init(name: "Disco Elysium",       platform: "PC (Microsoft Windows)", status: .paused, rating: 4, ownership: [.digital],        hours: 12.8),
-        .init(name: "Animal Well",         platform: "Nintendo Switch", status: .paused,    rating: 4, ownership: [.digital],            hours: 6.5),
-        .init(name: "Celeste",             platform: "Nintendo Switch", status: .completed, rating: 5, ownership: [.physical, .digital], hours: 22.1),
-        .init(name: "Outer Wilds",         platform: "PC (Microsoft Windows)", status: .completed, rating: 5, ownership: [.digital],     hours: 31.7),
-        .init(name: "Sonic the Hedgehog 2", platform: "Sega Mega Drive/Genesis", status: .completed, rating: 4, ownership: [.physical, .emulated], hours: 4.3),
-        .init(name: "Super Metroid",       platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
-        .init(name: "Chrono Trigger",      platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
-        .init(name: "Tunic",               platform: "Nintendo Switch", status: .queued,    rating: nil, ownership: [.digital],          hours: 0),
+        .init(igdbID:  14593, name: "Hollow Knight",        platform: "Nintendo Switch", status: .playing,   rating: 5, ownership: [.digital],            hours: 41.2),
+        .init(igdbID: 113112, name: "Hades",                platform: "Nintendo Switch", status: .playing,   rating: 5, ownership: [.digital],            hours: 28.6),
+        .init(igdbID: 251833, name: "Balatro",              platform: "Mac",             status: .playing,   rating: 4, ownership: [.digital],            hours: 19.4),
+        .init(igdbID:  17000, name: "Stardew Valley",       platform: "Mac",             status: .paused,    rating: 5, ownership: [.digital],            hours: 63.0),
+        .init(igdbID:  26472, name: "Disco Elysium",        platform: "PC (Microsoft Windows)", status: .paused, rating: 4, ownership: [.digital],        hours: 12.8),
+        .init(igdbID: 191435, name: "Animal Well",          platform: "Nintendo Switch", status: .paused,    rating: 4, ownership: [.digital],            hours: 6.5),
+        .init(igdbID:  26226, name: "Celeste",              platform: "Nintendo Switch", status: .completed, rating: 5, ownership: [.physical, .digital], hours: 22.1),
+        .init(igdbID:  11737, name: "Outer Wilds",          platform: "PC (Microsoft Windows)", status: .completed, rating: 5, ownership: [.digital],     hours: 31.7),
+        .init(igdbID:   4438, name: "Sonic the Hedgehog 2", platform: "Sega Mega Drive/Genesis", status: .completed, rating: 4, ownership: [.physical, .emulated], hours: 4.3),
+        .init(igdbID:   1103, name: "Super Metroid",        platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
+        .init(igdbID:   1802, name: "Chrono Trigger",       platform: "Super Nintendo Entertainment System", status: .backlog, rating: nil, ownership: [.emulated], hours: 0),
+        .init(igdbID:  23733, name: "Tunic",                platform: "Nintendo Switch", status: .queued,    rating: nil, ownership: [.digital],          hours: 0),
     ]
 
     /// Create the demo library. Network is used for IGDB metadata; without it
@@ -55,11 +59,8 @@ enum DemoLibrarySeeder {
         var byName: [String: Game] = [:]
 
         for seed in seeds {
-            // Prefer an exact title match: a bare search can surface an odd
-            // edition ("… (Game Boy Edition)") that reads wrong in a shot.
-            let hits = (try? await IGDBService.search(name: seed.name)) ?? []
-            let igdb = hits.first { $0.name.caseInsensitiveCompare(seed.name) == .orderedSame }
-                ?? hits.first
+            // Look up by pinned id, not by name — see Seed.igdbID.
+            let igdb = try? await IGDBService.lookup(id: seed.igdbID)
             let game: Game
             if let igdb {
                 game = repo.addGame(from: igdb, platform: seed.platform, status: seed.status)
@@ -82,6 +83,19 @@ enum DemoLibrarySeeder {
 
             if seed.hours > 0 {
                 addSessions(repo: repo, game: game, hours: seed.hours, status: seed.status)
+            }
+        }
+
+        // A second playthrough on one game, so the per-playthrough vs
+        // game-total split is actually visible (SessionControlsView only shows
+        // "All playthroughs" once a game has more than one).
+        if let hk = byName["Hollow Knight"] {
+            let steelSoul = repo.addPlaythrough(to: hk, named: "Steel Soul")
+            repo.logManualSession(on: steelSoul, duration: 3 * 3600 + 1500,
+                                  date: Date.now.addingTimeInterval(-2 * 86_400))
+            // Leave the original as the active one — it's the populated story.
+            if let first = hk.livePlaythroughs.first {
+                repo.setActivePlaythrough(first, for: hk)
             }
         }
 

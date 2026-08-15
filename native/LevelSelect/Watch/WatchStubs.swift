@@ -13,6 +13,7 @@ enum NotificationManager {
 
 enum LiveActivityManager {
     static func sessionChanged(_ session: Session, gameName: String) {}
+    static func endCurrent() {}
 }
 
 enum StaleSessionGuard {

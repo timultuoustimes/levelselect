@@ -104,6 +104,11 @@ struct TrackerPageView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     if tab == .tracker || playing == nil {
+                        // In compact mode the tracker is its own page, so
+                        // without this you'd have to navigate back to the game
+                        // just to start or stop the timer — exactly when you're
+                        // most likely to be playing and checking things off.
+                        SessionControlsView(game: game)
                         trackerContent
                     } else {
                         VideoListView(game: game, playing: $playing)
