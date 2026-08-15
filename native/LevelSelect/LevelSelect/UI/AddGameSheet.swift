@@ -224,6 +224,10 @@ struct AddGameSheet: View {
 
     private func add(igdb: IGDBGame, platform: String?, status: GameStatus, ownership: [String]) {
         let game = Repository(context).addGame(from: igdb, platform: platform, status: status)
+        // Built-ins were only attached at launch, so a game added now didn't
+        // get its hand-built tracker (Hades, Hollow Knight, Dead Cells, …)
+        // until the next cold start. Attach immediately instead.
+        BuiltinTrackers.installMissing(context: context)
         game.ownership = ownership
         if let platform, !platform.isEmpty { lastPlatform = platform }
         // Don't let a wishlist promotion hijack the everyday default status.

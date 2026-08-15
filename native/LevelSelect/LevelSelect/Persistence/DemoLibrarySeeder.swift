@@ -102,6 +102,11 @@ enum DemoLibrarySeeder {
             }
         }
 
+        // Attach hand-built trackers (Hades ships one keyed to IGDB 113112,
+        // with weapon aspects, keepsakes, companions, Mirror of Night, and a
+        // run template) before the hand-written demo tracker below.
+        BuiltinTrackers.installMissing(context: context)
+
         addTracker(repo: repo, game: byName["Hollow Knight"])
         addRuns(repo: repo, game: byName["Hades"])
         addCollection(repo: repo, games: ["Stardew Valley", "Celeste", "Sonic the Hedgehog 2"].compactMap { byName[$0] })
