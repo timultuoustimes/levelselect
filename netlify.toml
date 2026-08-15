@@ -1,30 +1,27 @@
+# Netlify config for the LevelSelect marketing site.
+#
+# This file lives at the REPO ROOT deliberately: Netlify reads netlify.toml
+# from the base directory, and the base here is the repo root. Settings in
+# this file take precedence over the site's UI settings, so the deploy config
+# is versioned rather than living only in someone's dashboard.
+#
+# There is NO build step — site/ is hand-written static HTML. An empty command
+# also stops Netlify auto-detecting the retired web app's `npm run build` from
+# the package.json at the root.
+
 [build]
-  command = "npm run build"
-  publish = "dist"
+  publish = "site"
+  command = ""
 
-[build.environment]
-  NODE_VERSION = "20"
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
 
-# SPA fallback: every unknown path serves index.html so client-side
-# routing (and PWA navigation) works.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
-
-# Long-cache hashed build assets
+# Fonts and images are stable; the HTML is not.
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
-
-# Never cache the HTML shell or the manifest, so PWA updates propagate
-[[headers]]
-  for = "/index.html"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-[[headers]]
-  for = "/manifest.json"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
