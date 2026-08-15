@@ -20,6 +20,9 @@ struct SettingsView: View {
 
     // The canonical legacy device this bundled export came from.
     private let sourceDeviceID = "7f86df1b-a815-4798-a9d5-00974419eec3"
+
+    /// Result text from the CloudKit schema seeder/purge.
+    @State private var seedResult: String?
     #endif
 
     var body: some View {
@@ -86,6 +89,28 @@ struct SettingsView: View {
                     }
                 } footer: {
                     Text("Backfills checked-off tracker items from the web app's data into an already-imported library. Safe to repeat.")
+                }
+
+                Section {
+                    Button {
+                        seedResult = CloudKitSchemaSeeder.seed(context: context)
+                    } label: {
+                        Label("Seed CloudKit schema", systemImage: "cloud.bolt")
+                    }
+                    Button(role: .destructive) {
+                        seedResult = CloudKitSchemaSeeder.purge(context: context)
+                    } label: {
+                        Label("Purge seed records", systemImage: "trash")
+                    }
+                    if let seedResult {
+                        Text(seedResult)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Developer — CloudKit schema")
+                } footer: {
+                    Text("Writes one hidden, fully-populated record of every model so the Development schema gains every field. Seed → wait for Synced → Deploy Schema Changes to Production in CloudKit Console → Purge.")
                 }
                 #endif
 
