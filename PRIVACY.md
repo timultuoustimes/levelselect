@@ -56,4 +56,6 @@ If this policy changes, the updated version will be posted at this address with 
 
 ## Contact
 
-Questions or concerns: open an issue at [github.com/timultuoustimes/levelselect](https://github.com/timultuoustimes/levelselect/issues), or use TestFlight's built-in feedback during the beta.
+Questions or concerns: [privacy@levelselect.app](mailto:privacy@levelselect.app), or use TestFlight's built-in feedback during the beta.
+
+The canonical version of this policy lives at [levelselect.app/privacy](https://levelselect.app/privacy).

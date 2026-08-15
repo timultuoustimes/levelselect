@@ -15,9 +15,10 @@ These must match `PrivacyInfo.xcprivacy` (they do, as written):
 - Everything else: **Not collected**. Game names sent to search/AI are user-initiated
   content requests, not collected data retained about the user; if review pushes back,
   the fallback is adding "Other User Content / App Functionality / not linked".
-- **Privacy Policy URL:** `https://github.com/timultuoustimes/levelselect/blob/main/PRIVACY.md`
-  (⚠️ PRIVACY.md lives on `native-conversion` until that branch merges to `main` —
-  either merge first or temporarily use the `blob/native-conversion/` URL.)
+- **Privacy Policy URL:** `https://levelselect.app/privacy`
+  (Live since 2026-08-15. Replaces the GitHub blob URL used while the site was
+  being built — update it in BOTH places: Distribution → App Privacy, and
+  TestFlight → Test Information.)
 
 ## Beta App Description
 
