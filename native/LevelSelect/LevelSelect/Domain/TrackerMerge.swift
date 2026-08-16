@@ -1,0 +1,255 @@
+import Foundation
+
+// MARK: - Diff model
+
+/// One item that exists on both sides but under a different id — the case that
+/// silently costs you progress, since `TrackerStateRecord` is keyed by item id.
+struct TrackerItemMatch: Hashable, Sendable {
+    let current: TrackerItemDTO
+    let incoming: TrackerItemDTO
+}
+
+struct TrackerCategoryDiff: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    /// The incoming schema introduces this category; nothing here today.
+    let isNewCategory: Bool
+    /// In the incoming schema, not in the current one.
+    let added: [TrackerItemDTO]
+    /// In the current schema, absent from the incoming one — these disappear
+    /// under Replace.
+    let removed: [TrackerItemDTO]
+    /// Same item, different id. Survives Replace as *content* but loses any
+    /// progress recorded against the old id.
+    let renamed: [TrackerItemMatch]
+    /// Matched on the same id, so progress carries across untouched.
+    let unchangedCount: Int
+
+    var hasChanges: Bool { !added.isEmpty || !removed.isEmpty || !renamed.isEmpty }
+}
+
+struct TrackerDiff: Hashable, Sendable {
+    let categories: [TrackerCategoryDiff]
+    /// Items you have progress on today whose progress would NOT survive a
+    /// Replace — either the item is gone, or it came back under a new id.
+    /// This is the number worth putting in front of the user before they
+    /// overwrite a tracker they've been filling in for weeks.
+    let strandedByReplace: [TrackerItemDTO]
+
+    var added: [TrackerItemDTO] { categories.flatMap(\.added) }
+    var removed: [TrackerItemDTO] { categories.flatMap(\.removed) }
+    var renamed: [TrackerItemMatch] { categories.flatMap(\.renamed) }
+    var unchangedCount: Int { categories.reduce(0) { $0 + $1.unchangedCount } }
+    var newCategories: [TrackerCategoryDiff] { categories.filter(\.isNewCategory) }
+
+    /// Nothing would change either way — worth telling the user plainly rather
+    /// than showing them an empty review screen.
+    var isEmpty: Bool { !categories.contains(where: \.hasChanges) }
+}
+
+/// How an incoming schema should be folded into the stored one.
+enum TrackerMergeMode: Hashable, Sendable {
+    /// Incoming wins outright. Today's regeneration behaviour — Personal Goals
+    /// are still carried across, everything else is replaced.
+    case replace
+    /// Keep everything already there and append everything new. Never removes,
+    /// never renames, so no progress can be lost.
+    case addAll
+    /// Append only the incoming items the user ticked. Ids are incoming item
+    /// ids, as reported by `TrackerDiff.added`.
+    case add(itemIDs: Set<String>)
+}
+
+// MARK: - Engine
+
+/// Compares a stored tracker schema against an incoming one and folds them
+/// together on the user's terms.
+///
+/// This exists because applying a generated schema was previously all-or-
+/// nothing: `setGeneratedSchema` overwrites `jsonData` wholesale, while
+/// progress lives in `TrackerStateRecord` keyed by *item id*. AI generation is
+/// nondeterministic, so a regeneration routinely re-slugs ids — and every
+/// checkmark on a re-slugged item stops counting, with no warning and nothing
+/// on screen to explain where the progress went.
+///
+/// Everything here is pure: schema JSON in, schema JSON out. Progress ids are
+/// passed in rather than read from the store, so this stays testable and free
+/// of SwiftData.
+enum TrackerMerge {
+
+    /// Match key for a name or id. Case-, diacritic- and punctuation-
+    /// insensitive, so `"Boss: False Knight"`, `"boss-false-knight"` and
+    /// `"false knight"` all collapse together. This is what lets a
+    /// regeneration that renamed every id still be recognised as the same
+    /// content rather than reported as a wholesale replacement.
+    static func matchKey(_ value: String) -> String {
+        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    // MARK: Diff
+
+    static func diff(current: Data, incoming: Data,
+                     progressIDs: Set<String> = []) -> TrackerDiff {
+        // Personal Goals are user-authored and preserved by every mode, so they
+        // are never part of the comparison — showing them as "removed" would be
+        // both wrong and alarming.
+        let cur = TrackerSchemaJSON.categories(from: current)
+            .filter { $0.id != TrackerSchemaJSON.personalGoalsID }
+        let inc = TrackerSchemaJSON.categories(from: incoming)
+            .filter { $0.id != TrackerSchemaJSON.personalGoalsID }
+
+        var diffs: [TrackerCategoryDiff] = []
+        var matchedCurrent = Set<String>()
+
+        for incCat in inc {
+            let match = cur.first { $0.id == incCat.id }
+                ?? cur.first { matchKey($0.name) == matchKey(incCat.name) }
+            guard let curCat = match else {
+                diffs.append(TrackerCategoryDiff(
+                    id: incCat.id, name: incCat.name, isNewCategory: true,
+                    added: incCat.items, removed: [], renamed: [], unchangedCount: 0))
+                continue
+            }
+            matchedCurrent.insert(curCat.id)
+            diffs.append(categoryDiff(current: curCat, incoming: incCat))
+        }
+
+        // Categories that exist today and the incoming schema never mentions:
+        // under Replace every item in them vanishes.
+        for curCat in cur where !matchedCurrent.contains(curCat.id) {
+            diffs.append(TrackerCategoryDiff(
+                id: curCat.id, name: curCat.name, isNewCategory: false,
+                added: [], removed: curCat.items, renamed: [], unchangedCount: 0))
+        }
+
+        // Progress strands two ways, and the second is the non-obvious one:
+        // the item is still there, but under a new id the state records can't
+        // find.
+        let stranded = diffs.flatMap { d in
+            d.removed.filter { progressIDs.contains($0.id) }
+                + d.renamed.map(\.current).filter { progressIDs.contains($0.id) }
+        }
+
+        return TrackerDiff(categories: diffs, strandedByReplace: stranded)
+    }
+
+    private static func categoryDiff(current: TrackerCategoryDTO,
+                                     incoming: TrackerCategoryDTO) -> TrackerCategoryDiff {
+        let curByID = Dictionary(current.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let curByName = Dictionary(current.items.map { (matchKey($0.name), $0) },
+                                   uniquingKeysWith: { a, _ in a })
+
+        var added: [TrackerItemDTO] = []
+        var renamed: [TrackerItemMatch] = []
+        var unchanged = 0
+        var consumed = Set<String>()
+
+        for item in incoming.items {
+            if let hit = curByID[item.id] {
+                consumed.insert(hit.id)
+                unchanged += 1
+            } else if let hit = curByName[matchKey(item.name)], !consumed.contains(hit.id) {
+                consumed.insert(hit.id)
+                renamed.append(TrackerItemMatch(current: hit, incoming: item))
+            } else {
+                added.append(item)
+            }
+        }
+
+        let removed = current.items.filter { !consumed.contains($0.id) }
+
+        return TrackerCategoryDiff(
+            id: current.id, name: current.name, isNewCategory: false,
+            added: added, removed: removed, renamed: renamed, unchangedCount: unchanged)
+    }
+
+    // MARK: Merge
+
+    static func merged(current: Data, incoming: Data, mode: TrackerMergeMode) -> Data {
+        switch mode {
+        case .replace:
+            // Unchanged from what regeneration has always done.
+            return TrackerSchemaJSON.mergingPersonalGoals(from: current, into: incoming)
+        case .addAll:
+            return additive(current: current, incoming: incoming, accepting: nil)
+        case .add(let ids):
+            guard !ids.isEmpty else { return current }
+            return additive(current: current, incoming: incoming, accepting: ids)
+        }
+    }
+
+    /// Append-only merge. Operates on the raw dictionaries rather than the DTOs
+    /// so unknown fields — anything the parser doesn't surface — survive the
+    /// round trip, the same way `addingGoal` and `mergingPersonalGoals` do.
+    ///
+    /// `accepting == nil` takes every new item; otherwise only incoming items
+    /// whose id is in the set.
+    private static func additive(current: Data, incoming: Data,
+                                 accepting: Set<String>?) -> Data {
+        guard var root = (try? JSONSerialization.jsonObject(with: current)) as? [String: Any],
+              let incRoot = (try? JSONSerialization.jsonObject(with: incoming)) as? [String: Any]
+        else { return current }
+
+        var cats = (root["categories"] as? [[String: Any]]) ?? []
+        let incCats = (incRoot["categories"] as? [[String: Any]]) ?? []
+
+        for incCat in incCats {
+            guard let incID = incCat["id"] as? String,
+                  incID != TrackerSchemaJSON.personalGoalsID else { continue }
+            let incName = (incCat["name"] as? String) ?? incID
+            let incItems = (incCat["items"] as? [[String: Any]]) ?? []
+
+            let wanted = incItems.filter { item in
+                guard let id = item["id"] as? String else { return false }
+                return accepting?.contains(id) ?? true
+            }
+            guard !wanted.isEmpty else { continue }
+
+            let idx = cats.firstIndex { ($0["id"] as? String) == incID }
+                ?? cats.firstIndex { matchKey(($0["name"] as? String) ?? "") == matchKey(incName) }
+
+            guard let idx else {
+                // Whole category is new — take it, but only carrying the items
+                // that were accepted.
+                var fresh = incCat
+                fresh["items"] = wanted
+                cats.append(fresh)
+                continue
+            }
+
+            var existing = cats[idx]
+            var items = (existing["items"] as? [[String: Any]]) ?? []
+            let haveIDs = Set(items.compactMap { $0["id"] as? String })
+            let haveNames = Set(items.compactMap { ($0["name"] as? String).map(matchKey) })
+
+            for item in wanted {
+                let id = (item["id"] as? String) ?? ""
+                let nameKey = matchKey((item["name"] as? String) ?? "")
+                // Skip anything already present under either identity —
+                // otherwise a re-run of the same generation would double every
+                // item, which is exactly the failure additive generation is
+                // meant to avoid.
+                guard !haveIDs.contains(id), !haveNames.contains(nameKey) else { continue }
+                items.append(item)
+            }
+            existing["items"] = items
+            cats[idx] = existing
+        }
+
+        root["categories"] = cats
+        if root["schemaVersion"] == nil { root["schemaVersion"] = 1 }
+
+        // A tracker with no run template yet should still gain one the incoming
+        // schema brought along — that's additive, and never overwrites a
+        // template the game already has (Hades' hand-built one, say).
+        if TrackerSchemaJSON.runTemplate(from: current) == nil,
+           let incTemplate = incRoot["runTemplate"] {
+            root["runTemplate"] = incTemplate
+        }
+
+        return (try? JSONSerialization.data(withJSONObject: root)) ?? current
+    }
+}
