@@ -301,22 +301,25 @@ struct GameDetailView: View {
                 CollapsibleSection("Sessions", icon: "stopwatch") {
                     SessionControlsView(game: game)
                 }
-                if game.resolvedTrackerDisplay == .compact {
+                // Runs render in BOTH display modes. A run is a play-logging
+                // action, the sibling of a session — and Sessions is right
+                // above in compact too. Only the tracker *checklist* moves to
+                // its own page in compact. Keeping Runs inside the inline-only
+                // branch meant turning on "Log Runs for This Game" in compact
+                // changed nothing you could see, so the menu item read as broken.
+                if let template = game.trackerSchema.flatMap({
+                    TrackerSchemaJSON.runTemplate(from: $0.jsonData)
+                }) {
                     Divider()
-                    CollapsibleSection("Tracker", icon: "checklist") {
+                    CollapsibleSection("Runs", icon: "flag.checkered") {
+                        RunSectionView(game: game, template: template)
+                    }
+                }
+                Divider()
+                CollapsibleSection("Tracker", icon: "checklist") {
+                    if game.resolvedTrackerDisplay == .compact {
                         CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
-                    }
-                } else {
-                    if let template = game.trackerSchema.flatMap({
-                        TrackerSchemaJSON.runTemplate(from: $0.jsonData)
-                    }) {
-                        Divider()
-                        CollapsibleSection("Runs", icon: "flag.checkered") {
-                            RunSectionView(game: game, template: template)
-                        }
-                    }
-                    Divider()
-                    CollapsibleSection("Tracker", icon: "checklist") {
+                    } else {
                         TrackerSectionView(game: game)
                     }
                 }
