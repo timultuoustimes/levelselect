@@ -11,8 +11,9 @@ struct TrackerSectionView: View {
     @State private var addingGoal = false
     @State private var goalName = ""
     @State private var expanded: Set<String> = []
-    @State private var generating = false
-    @State private var generateError: String?
+    /// Generation state lives in a shared store, not here — a view's `@State`
+    /// dies when you navigate away, and generation takes a minute or two.
+    @State private var generation = TrackerGenerationStore.shared
     @State private var confirmingRegenerate = false
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
@@ -46,30 +47,33 @@ struct TrackerSectionView: View {
         VStack(alignment: .leading, spacing: 12) {
             header(cats)
 
-            if generating {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Generating with AI — usually about a minute…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+            if let started = generation.startDate(for: game.id) {
+                GeneratingTrackerView(startedAt: started) {
+                    generation.cancel(for: game.id)
                 }
-                .padding(.vertical, 6)
+                .padding(.vertical, 2)
             } else if cats.isEmpty {
                 Text("No tracker yet — generate one with AI or add a personal goal.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
-            if !generating {
-                ForEach(cats) { category in
-                    categoryView(category)
-                }
+            // Existing content stays visible while regenerating — hiding it
+            // made a regenerate look like the tracker had been wiped.
+            ForEach(cats) { category in
+                categoryView(category)
             }
 
-            if let error = generateError {
-                Label(error, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            if let error = generation.error(for: game.id) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(error, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer(minLength: 4)
+                    Button("Dismiss") { generation.clearError(for: game.id) }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                }
             }
 
             HStack(spacing: 18) {
@@ -91,7 +95,7 @@ struct TrackerSectionView: View {
                           systemImage: "sparkles")
                         .font(.subheadline)
                 }
-                .disabled(generating)
+                .disabled(isGenerating)
 
                 if builtinAvailable && !usingBuiltin {
                     Button {
@@ -100,7 +104,7 @@ struct TrackerSectionView: View {
                         Label("Use Built-in Tracker", systemImage: "checkmark.seal")
                             .font(.subheadline)
                     }
-                    .disabled(generating)
+                    .disabled(isGenerating)
                 }
             }
             .buttonStyle(.borderless)
@@ -141,28 +145,15 @@ struct TrackerSectionView: View {
         }
     }
 
+    private var isGenerating: Bool { generation.isGenerating(game.id) }
+
     /// Any tracker content beyond user-created Personal Goals?
     private var hasNonGoalContent: Bool {
         categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
     }
 
     private func generate() {
-        generating = true
-        generateError = nil
-        let name = game.name
-        let igdbID = game.igdbID
-        Task {
-            do {
-                let jsonData = try await AITrackerService.generate(gameName: name, igdbID: igdbID)
-                // Progress rows need a playthrough; make sure one exists before
-                // the schema lands, so a never-played game can still be set up.
-                repo.ensureDefaultPlaythrough(for: game)
-                repo.setGeneratedSchema(for: game, jsonData: jsonData)
-            } catch {
-                generateError = error.localizedDescription
-            }
-            generating = false
-        }
+        generation.generate(for: game, context: context)
     }
 
     // MARK: Header

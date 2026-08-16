@@ -53,7 +53,7 @@ These must match `PrivacyInfo.xcprivacy` (they do, as written):
 ## Review notes (Beta App Review contact section)
 
 > No account is required; all features work immediately. AI tracker
-> generation calls our backend (Supabase + Anthropic) and takes ~30–90s.
+> generation calls our backend (Supabase + Anthropic) and takes 1–2 minutes (longer for large games).
 > The app's data is stored in the user's private iCloud database via
 > CloudKit. Contact: [Tim's email + phone go here].
 

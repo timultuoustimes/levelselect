@@ -19,6 +19,16 @@ struct CompactTrackerCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // A game whose timer has never run has no playthrough, so the list
+            // below renders nothing — which used to leave compact mode with an
+            // empty Tracker section and no way in at all. The destination page
+            // creates the playthrough on arrival; this row is the way to reach
+            // it. (Fixing only the destination missed that you couldn't get
+            // there.)
+            if game.livePlaythroughs.isEmpty {
+                setUpRow
+            }
+
             ForEach(game.livePlaythroughs) { pt in
                 if let onOpen {
                     Button {
@@ -38,6 +48,41 @@ struct CompactTrackerCard: View {
                     })
                 }
             }
+        }
+    }
+
+    /// Entry point for a game with no playthrough yet. Same destination as a
+    /// real row, worded as setup rather than as an existing thing to reopen.
+    @ViewBuilder
+    private var setUpRow: some View {
+        let label = HStack(spacing: 10) {
+            Image(systemName: "checklist")
+                .font(.caption)
+                .foregroundStyle(LSTheme.accent)
+                .frame(width: 28, height: 28)
+                .background(LSTheme.accent.opacity(0.15), in: .rect(cornerRadius: 7))
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Set up a tracker").font(.subheadline.weight(.semibold))
+                Text("Generate one with AI or add your own goals")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .contentShape(.rect)
+
+        if let onOpen {
+            Button {
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                onOpen(pt)
+            } label: { label }
+            .buttonStyle(.plain)
+        } else {
+            NavigationLink(value: TrackerRoute(game: game)) { label }
+                .buttonStyle(.plain)
         }
     }
 

@@ -2,7 +2,7 @@ import Foundation
 
 /// Native client for the deployed `ai-tracker-generator` Supabase edge
 /// function (same backend the web app uses — Claude generates a full tracker
-/// schema server-side; no AI credentials in the app). Takes ~60–90s.
+/// schema server-side; no AI credentials in the app). Takes 1–2 minutes, sometimes longer for big games.
 enum AITrackerService {
     struct GenerationError: LocalizedError {
         let message: String
