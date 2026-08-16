@@ -450,6 +450,29 @@ struct Repository {
         var isNoOp: Bool { added == 0 && removed == 0 && renamed == 0 }
     }
 
+    /// Items in the active playthrough the user has put work into.
+    ///
+    /// Deliberately broader than "completed" — a part-filled rank or count is
+    /// just as much their work, and rank rides on the same record, so a
+    /// half-upgraded Mirror of Night talent has to count as progress worth
+    /// protecting.
+    func progressItemIDs(for game: Game) -> Set<String> {
+        Set((game.activePlaythrough?.trackerStates ?? [])
+            .filter { $0.deletedAt == nil }
+            .filter { $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0 }
+            .map(\.itemID))
+    }
+
+    /// What a generated schema *would* do, without touching anything. Feeds the
+    /// review screen so the choice is made against real numbers.
+    func previewGeneratedSchema(for game: Game, jsonData: Data) -> TrackerDiff {
+        guard let existing = game.trackerSchema else {
+            return TrackerMerge.diff(current: TrackerSchemaJSON.emptySchema(), incoming: jsonData)
+        }
+        return TrackerMerge.diff(current: existing.jsonData, incoming: jsonData,
+                                 progressIDs: progressItemIDs(for: game))
+    }
+
     /// Fold a generated schema into the game's existing one on the user's
     /// terms, carrying progress across items that came back under a new id.
     ///
@@ -471,11 +494,7 @@ struct Repository {
 
         let states = (game.activePlaythrough?.trackerStates ?? [])
             .filter { $0.deletedAt == nil }
-        // "Has progress" is broader than completed — a part-filled rank or
-        // count is just as much the user's work.
-        let progressIDs = Set(states
-            .filter { $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0 }
-            .map(\.itemID))
+        let progressIDs = progressItemIDs(for: game)
 
         let diff = TrackerMerge.diff(current: existing.jsonData,
                                      incoming: jsonData, progressIDs: progressIDs)

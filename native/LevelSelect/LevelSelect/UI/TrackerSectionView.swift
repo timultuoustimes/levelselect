@@ -64,6 +64,10 @@ struct TrackerSectionView: View {
                 categoryView(category)
             }
 
+            if let outcome = generation.outcome(for: game.id), !outcome.isNoOp {
+                mergeSummary(outcome)
+            }
+
             if let error = generation.error(for: game.id) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -84,16 +88,24 @@ struct TrackerSectionView: View {
                     Label("Add Personal Goal", systemImage: "plus.circle")
                         .font(.subheadline)
                 }
-                Button {
-                    if hasNonGoalContent {
-                        confirmingRegenerate = true
-                    } else {
-                        generate()
+                // The button says what it will do, and the menu lets you run it
+                // differently just this once without changing the default —
+                // "this tracker is terrible, replace the lot" shouldn't mean a
+                // trip to Settings.
+                Menu {
+                    ForEach(TrackerGenerationAction.allCases) { choice in
+                        Button {
+                            start(choice)
+                        } label: {
+                            Label(choice.label, systemImage: choice.systemImage)
+                        }
                     }
                 } label: {
-                    Label(hasNonGoalContent ? "Regenerate with AI" : "Generate with AI",
+                    Label(defaultAction.buttonTitle(regenerating: hasNonGoalContent),
                           systemImage: "sparkles")
                         .font(.subheadline)
+                } primaryAction: {
+                    start(defaultAction)
                 }
                 .disabled(isGenerating)
 
@@ -118,10 +130,20 @@ struct TrackerSectionView: View {
             isPresented: $confirmingRegenerate,
             titleVisibility: .visible
         ) {
-            Button("Regenerate", role: .destructive) { generate() }
+            Button("Regenerate", role: .destructive) {
+                generation.generate(for: game, context: context, action: .replace)
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Replaces the current tracker content. Personal Goals are kept, but checked items may not match the new tracker.")
+            Text("Replaces the current tracker content. Personal Goals are kept, and progress follows any item that comes back under a new name — but anything the new tracker drops loses its progress.")
+        }
+        .sheet(isPresented: Binding(
+            get: { generation.pendingMerge(for: game.id) != nil },
+            set: { if !$0 { generation.discardPending(for: game.id) } }
+        )) {
+            if let merge = generation.pendingMerge(for: game.id) {
+                TrackerMergeReviewView(game: game, merge: merge)
+            }
         }
         .confirmationDialog(
             "Switch to the built-in tracker?",
@@ -152,8 +174,88 @@ struct TrackerSectionView: View {
         categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
     }
 
+    /// Library-wide default. Hardcoded until it can be remembered on
+    /// ThemeSettings, which is frozen Schema V1 — a V2 item.
+    private var defaultAction: TrackerGenerationAction { .fallbackDefault }
+
+    private func start(_ action: TrackerGenerationAction) {
+        // Only Replace can cost anything, so only Replace asks. Confirming an
+        // append-only merge would be friction that teaches people to tap
+        // through dialogs without reading them.
+        if action == .replace, hasNonGoalContent {
+            confirmingRegenerate = true
+        } else {
+            generation.generate(for: game, context: context, action: action)
+        }
+    }
+
     private func generate() {
-        generation.generate(for: game, context: context)
+        generation.generate(for: game, context: context, action: defaultAction)
+    }
+
+    // MARK: Merge summary
+
+    /// What the last generation actually did. Shown in place rather than as a
+    /// toast because the rescue offer needs to survive long enough to be read
+    /// and acted on — a completed item the new tracker dropped is exactly the
+    /// thing you don't want disappearing after three seconds.
+    @ViewBuilder
+    private func mergeSummary(_ outcome: Repository.TrackerMergeOutcome) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(LSTheme.accent)
+                Text(summaryText(outcome))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 4)
+                Button("Dismiss") { generation.clearOutcome(for: game.id) }
+                    .font(.caption)
+                    .buttonStyle(.borderless)
+            }
+
+            if !outcome.lostProgress.isEmpty {
+                let names = outcome.lostProgress.prefix(3).map(\.name).joined(separator: ", ")
+                let more = outcome.lostProgress.count > 3
+                    ? " and \(outcome.lostProgress.count - 3) more" : ""
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(outcome.lostProgress.count) item\(outcome.lostProgress.count == 1 ? "" : "s") you'd finished aren't in the new tracker — \(names)\(more).")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            repo.rescueAsPersonalGoals(outcome.lostProgress, for: game)
+                            generation.clearOutcome(for: game.id)
+                            expanded.insert(TrackerSchemaJSON.personalGoalsID)
+                        } label: {
+                            Label("Keep them as Personal Goals", systemImage: "pin")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(LSTheme.accent.opacity(0.08), in: .rect(cornerRadius: 10))
+    }
+
+    private func summaryText(_ outcome: Repository.TrackerMergeOutcome) -> String {
+        var parts: [String] = []
+        if outcome.added > 0 { parts.append("added \(outcome.added)") }
+        if outcome.removed > 0 { parts.append("removed \(outcome.removed)") }
+        // Worth saying out loud: this is the failure mode that used to be
+        // silent, so the fix shouldn't be silent either.
+        if outcome.migrated > 0 {
+            parts.append("kept your progress on \(outcome.migrated) renamed item\(outcome.migrated == 1 ? "" : "s")")
+        } else if outcome.renamed > 0 {
+            parts.append("\(outcome.renamed) renamed")
+        }
+        return parts.isEmpty ? "Tracker updated." : "Tracker updated — \(parts.joined(separator: ", "))."
     }
 
     // MARK: Header
