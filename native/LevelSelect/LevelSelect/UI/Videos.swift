@@ -179,11 +179,29 @@ struct YouTubePlayerView {
         Coordinator(onProgress: onProgress, onPlaylist: onPlaylist)
     }
 
+    /// Point the live player at a different video.
+    ///
+    /// SwiftUI keeps one representable instance (and one web view) for the
+    /// dock and just calls the update pass when `video` changes — so with an
+    /// empty update, tapping a second video in the list re-rendered the row
+    /// highlight while the first video kept playing. Reloading here is also
+    /// what re-seeds the player at the new video's stored resume position,
+    /// and re-attaches the coordinator so playlist-part commands address the
+    /// video actually on screen rather than the first one ever loaded.
+    func refresh(_ webView: WKWebView, context: Context) {
+        guard context.coordinator.videoID != video.id.uuidString else { return }
+        context.coordinator.attach(webView: webView, videoID: video.id.uuidString)
+        webView.loadHTMLString(Self.html(for: video),
+                               baseURL: URL(string: "https://www.youtube-nocookie.com"))
+    }
+
     final class Coordinator: NSObject, WKScriptMessageHandler {
         let onProgress: @MainActor (Double, Int?) -> Void
         let onPlaylist: (@MainActor ([String]) -> Void)?
         private weak var webView: WKWebView?
-        private var videoID = ""
+        /// Which video the live player is currently showing. Read by the
+        /// update pass to notice when the dock has been pointed elsewhere.
+        private(set) var videoID = ""
         private var observer: (any NSObjectProtocol)?
 
         init(onProgress: @escaping @MainActor (Double, Int?) -> Void,
@@ -196,6 +214,10 @@ struct YouTubePlayerView {
         func attach(webView: WKWebView, videoID: String) {
             self.webView = webView
             self.videoID = videoID
+            // Re-attaching on a video switch would otherwise stack a second
+            // observer on the same coordinator, so one command would evaluate
+            // its JS once per video ever loaded into this dock.
+            if let observer { NotificationCenter.default.removeObserver(observer) }
             observer = NotificationCenter.default.addObserver(
                 forName: .lsPlayerCommand, object: nil, queue: .main
             ) { [weak self] note in
@@ -282,12 +304,12 @@ struct YouTubePlayerView {
 #if os(macOS)
 extension YouTubePlayerView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
-    func updateNSView(_ view: WKWebView, context: Context) {}
+    func updateNSView(_ view: WKWebView, context: Context) { refresh(view, context: context) }
 }
 #else
 extension YouTubePlayerView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
-    func updateUIView(_ view: WKWebView, context: Context) {}
+    func updateUIView(_ view: WKWebView, context: Context) { refresh(view, context: context) }
 }
 #endif
 #endif
