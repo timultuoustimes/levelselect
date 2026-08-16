@@ -462,7 +462,7 @@ enum PlatformIcon {
         if p.contains("steam deck")                            { return "platform-steamdeck" }
         if p.contains("playstation 5") || p == "ps5"           { return "platform-ps5" }
         if p.contains("playstation 4") || p == "ps4"           { return "platform-ps4" }
-        if p.contains("playstation 3") || p == "ps3"           { return "platform-ps4" }
+        if p.contains("playstation 3") || p == "ps3"           { return "platform-ps3" }
         if p == "playstation" || p.contains("playstation 1")
             || p == "ps1" || p == "psx"                        { return "platform-ps1" }
         if p.contains("3ds")                                   { return "platform-3ds" }
@@ -477,6 +477,7 @@ enum PlatformIcon {
         if p.contains("game boy")                              { return "platform-gameboy" }
         if p == "ios" || p.contains("iphone")                  { return "platform-iphone" }
         if p.contains("ipad")                                  { return "platform-ipad" }
+        if p == "android"                                      { return "platform-android" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
         return nil
     }
