@@ -136,6 +136,11 @@ targets:
     sources:
       - path: LevelSelect/Persistence/Models
       - path: LevelSelect/Persistence/Schema.swift
+      # LevelSelectStore.shared resolves through this (Foundation+SwiftData
+      # only, no UI). The watch never switches libraries — the demo flag is
+      # device-local and gated to Debug — so it always comes up on the real
+      # store, which is the only behaviour that makes sense there.
+      - path: LevelSelect/Persistence/LibrarySwitcher.swift
       - path: LevelSelect/Persistence/Repository.swift
       - path: LevelSelect/Persistence/Syncable.swift
       # Repository persists through the monitor (Foundation+SwiftData only,

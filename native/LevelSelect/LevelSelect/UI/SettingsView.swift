@@ -24,6 +24,7 @@ struct SettingsView: View {
     /// Result text from the CloudKit schema seeder/purge and demo library.
     @State private var seedResult: String?
     @State private var seedingDemo = false
+    @State private var library = LibrarySwitcher.shared
     #endif
 
     var body: some View {
@@ -115,29 +116,54 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Button {
-                        seedingDemo = true
-                        Task {
-                            seedResult = await DemoLibrarySeeder.seed(context: context)
-                            seedingDemo = false
-                        }
-                    } label: {
-                        if seedingDemo {
-                            HStack { ProgressView(); Text("Building demo library…") }
-                        } else {
-                            Label("Load demo library", systemImage: "sparkles")
-                        }
+                    Toggle(isOn: Binding(
+                        get: { library.isDemo },
+                        set: { library.setDemo($0) }
+                    )) {
+                        Label("Use demo library", systemImage: "theatermasks")
                     }
-                    .disabled(seedingDemo)
-                    Button(role: .destructive) {
-                        seedResult = DemoLibrarySeeder.purge(context: context)
-                    } label: {
-                        Label("Remove demo library", systemImage: "trash")
+
+                    if library.isDemo {
+                        Button {
+                            seedingDemo = true
+                            Task {
+                                seedResult = await DemoLibrarySeeder.seed(context: context)
+                                seedingDemo = false
+                                // Push the demo library out to the widgets so
+                                // Home Screen shots match what's on screen.
+                                WidgetBridge.refresh()
+                            }
+                        } label: {
+                            if seedingDemo {
+                                HStack { ProgressView(); Text("Building demo library…") }
+                            } else {
+                                Label("Load demo games", systemImage: "sparkles")
+                            }
+                        }
+                        .disabled(seedingDemo)
+                        Button(role: .destructive) {
+                            seedResult = DemoLibrarySeeder.purge(context: context)
+                            // Widgets read a snapshot, not the store, so they
+                            // need telling — otherwise the Home Screen keeps
+                            // showing games the library no longer has.
+                            WidgetBridge.refresh()
+                        } label: {
+                            Label("Empty demo library", systemImage: "trash")
+                        }
+                    } else {
+                        Button(role: .destructive) {
+                            library.destroyDemoStore()
+                            seedResult = "Demo library file deleted."
+                        } label: {
+                            Label("Delete demo library file", systemImage: "trash.slash")
+                        }
                     }
                 } header: {
                     Text("Developer — screenshots")
                 } footer: {
-                    Text("14 well-known games with real IGDB art, play history, a populated tracker, a run record, and a collection — so marketing shots contain no personal data. Deterministic, so retakes look identical.")
+                    Text(library.isDemo
+                         ? "You're in the demo library. Your real library is untouched in its own file — switch back any time. Demo data is local only and never syncs to iCloud."
+                         : "Switches to a separate, disposable library for screenshots and video. Your real library isn't hidden or filtered — it's a different file, left exactly as it is. 14 well-known games with real IGDB art, play history, a populated tracker, a run record, and a collection. Deterministic, so retakes look identical.")
                 }
                 #endif
 

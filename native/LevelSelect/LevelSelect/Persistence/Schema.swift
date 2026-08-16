@@ -42,10 +42,14 @@ enum LevelSelectMigrationPlan: SchemaMigrationPlan {
 /// - App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
 /// - Tests/previews: in-memory, non-CloudKit, so they run headless without iCloud.
 enum LevelSelectStore {
-    /// Single shared container for the app process (app UI, notification
-    /// actions, and Live Activity intents all use the same store).
+    /// The container everything in the app process uses — app UI, notification
+    /// actions, Live Activity intents.
+    ///
+    /// Computed rather than stored because the demo library swaps it wholesale
+    /// (see `LibrarySwitcher`). Call sites don't need to care which library is
+    /// open; they just want the current one.
     @MainActor
-    static let shared: ModelContainer = makeContainer()
+    static var shared: ModelContainer { LibrarySwitcher.shared.container }
 
     /// True when the container fell back to a LOCAL (non-CloudKit) store
     /// because CloudKit failed to initialize. The sync status UI surfaces
@@ -53,8 +57,20 @@ enum LevelSelectStore {
     @MainActor
     static private(set) var usingLocalFallback = false
 
+    /// Where the demo library lives — a *separate file* from the real one.
+    ///
+    /// The point of a second store rather than a hidden-flag on each record:
+    /// the real library isn't filtered or marked, it simply isn't open, so no
+    /// filtering bug can show or delete the wrong rows. And demo records never
+    /// exist in the CloudKit store at all, so they can't sync to other devices
+    /// or need purging afterwards.
     @MainActor
-    static func makeContainer(inMemory: Bool = false) -> ModelContainer {
+    static var demoStoreURL: URL {
+        URL.applicationSupportDirectory.appending(path: "demo.store")
+    }
+
+    @MainActor
+    static func makeContainer(inMemory: Bool = false, demo: Bool = false) -> ModelContainer {
         let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
         // Never use CloudKit under XCTest (the app is the test host) or in-memory.
         let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -63,6 +79,34 @@ enum LevelSelectStore {
         if memory {
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             return try! ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [config])
+        }
+
+        if demo {
+            // Application Support isn't guaranteed to exist on iOS until
+            // something creates it, and a store URL inside a missing directory
+            // just fails — which would silently drop the demo library to the
+            // in-memory fallback below and lose it on every relaunch.
+            try? FileManager.default.createDirectory(
+                at: URL.applicationSupportDirectory, withIntermediateDirectories: true)
+
+            // Deliberately CloudKit-free. Screenshot fodder has no business in
+            // anyone's iCloud, and keeping it local means switching back leaves
+            // nothing behind to clean up.
+            let config = ModelConfiguration(schema: schema, url: demoStoreURL,
+                                            cloudKitDatabase: .none)
+            if let container = try? ModelContainer(for: schema,
+                                                   migrationPlan: LevelSelectMigrationPlan.self,
+                                                   configurations: [config]) {
+                return container
+            }
+            // Falling back to the real library would be the one genuinely
+            // dangerous outcome here — seeding demo data into it is exactly
+            // what this feature exists to prevent. In-memory instead: the demo
+            // is disposable by nature.
+            let memoryOnly = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return try! ModelContainer(for: schema,
+                                       migrationPlan: LevelSelectMigrationPlan.self,
+                                       configurations: [memoryOnly])
         }
 
         // App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
