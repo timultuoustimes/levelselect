@@ -391,14 +391,20 @@ struct GameDetailView: View {
                     .font(.subheadline.weight(.semibold))
                 Text("tracker").font(.caption).foregroundStyle(.secondary)
                 Spacer()
-                Button {
-                    stage = 3
-                } label: {
-                    Label("Videos", systemImage: "play.rectangle.fill")
-                        .font(.caption.weight(.semibold))
+                if stage == 3 {
+                    stageTimerControl
+                } else {
+                    // At stage 3 this button is a no-op (videos are already
+                    // open beside us), and the timer needs the room.
+                    Button {
+                        stage = 3
+                    } label: {
+                        Label("Videos", systemImage: "play.rectangle.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(LSTheme.accent)
                 }
-                .buttonStyle(.bordered)
-                .tint(LSTheme.accent)
                 Button {
                     stage = 1
                 } label: {
@@ -431,6 +437,61 @@ struct GameDetailView: View {
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) {
             Rectangle().fill(LSTheme.accent.opacity(0.25)).frame(width: 1)
+        }
+    }
+
+    /// Compact timer for the tracker panel, shown only at stage 3.
+    ///
+    /// Stage 3 is the one arrangement where the game page — and with it the
+    /// Sessions section — has slid off screen, yet it's also the arrangement
+    /// you're in while actually playing: a guide video on one side, the
+    /// checklist on the other. Without this you'd have to collapse the whole
+    /// stage back to 1 just to stop the clock. Deliberately absent at stages 1
+    /// and 2, where the full controls are already on screen beside this panel
+    /// and a second set would just be two timers arguing.
+    @ViewBuilder
+    private var stageTimerControl: some View {
+        if let active = game.activePlaythrough?.activeSession {
+            TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                Text(Format.clock(active.elapsed(asOf: ctx.date)))
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .contentTransition(.numericText())
+                    .foregroundStyle(active.state == .running
+                                     ? AnyShapeStyle(LSTheme.accent)
+                                     : AnyShapeStyle(.secondary))
+            }
+            Button {
+                if active.state == .running {
+                    repo.pauseSession(active)
+                } else {
+                    repo.resumeSession(active)
+                }
+            } label: {
+                Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
+                    .font(.caption.weight(.bold))
+                    .padding(6)
+                    .background(.white.opacity(0.08), in: .circle)
+            }
+            .buttonStyle(.plain)
+            Button {
+                repo.stopSession(active)
+            } label: {
+                Image(systemName: "stop.fill")
+                    .font(.caption.weight(.bold))
+                    .padding(6)
+                    .background(.white.opacity(0.08), in: .circle)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.startSession(on: pt)
+            } label: {
+                Label("Start", systemImage: "play.fill")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(LSTheme.accent)
         }
     }
 
