@@ -5,6 +5,16 @@ Native conversion of the LevelSelect web app. See `../DOMAIN-MODEL.md` for the
 data model and `../../dev` Obsidian notes (LevelSelect native conversion roadmap)
 for the plan.
 
+## How this was built
+
+This app is built with AI assistance — mainly Claude Code, used as a pair-
+programming tool throughout, hence the `Co-Authored-By: Claude` on most
+commits in this history. The author isn't a professional Swift developer;
+the code here reflects generated output that was read, tested, and corrected,
+not accepted unreviewed. More on what that meant in practice, and why it's
+disclosed openly rather than left for a reader to notice, at
+[levelselect.app/about](https://levelselect.app/about/).
+
 ## Layout
 ```
 LevelSelect/

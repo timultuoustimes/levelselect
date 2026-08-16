@@ -433,6 +433,37 @@ struct Repository {
         persist()
     }
 
+    /// Swap the current schema for the game's curated built-in one, if it
+    /// ships one. `installMissing` only fills a gap and never overwrites an
+    /// existing schema, so once someone generates an AI tracker over a game
+    /// that actually has real built-in content, there was previously no way
+    /// back — this is that deliberate, user-initiated undo. Personal Goals
+    /// carry over the same way regeneration preserves them. Returns whether
+    /// a built-in schema existed for this game.
+    @discardableResult
+    func useBuiltinSchema(for game: Game) -> Bool {
+        guard let builtin = BuiltinTrackers.match(for: game) else { return false }
+        let schema: TrackerSchemaRecord
+        if let existing = game.trackerSchema {
+            schema = existing
+            schema.jsonData = TrackerSchemaJSON.mergingPersonalGoals(
+                from: existing.jsonData, into: builtin.schemaData)
+        } else {
+            schema = TrackerSchemaRecord(source: .builtIn, engine: builtin.engine, jsonData: builtin.schemaData)
+            context.insert(schema)
+            schema.game = game
+        }
+        schema.source = .builtIn
+        schema.engine = builtin.engine
+        schema.generatedAt = nil
+        schema.generatedBy = nil
+        touch(schema)
+        touch(game)
+        recomputeProgress(game)
+        persist()
+        return true
+    }
+
     /// Turn per-game run logging on or off.
     ///
     /// Runs are a capability of a tracker, not a property of a genre — Dead

@@ -14,11 +14,17 @@ struct TrackerSectionView: View {
     @State private var generating = false
     @State private var generateError: String?
     @State private var confirmingRegenerate = false
+    @State private var builtinAvailable = false
+    @State private var confirmingUseBuiltin = false
 
     private var repo: Repository { Repository(context) }
 
     private var playthrough: Playthrough? {
         game.activePlaythrough
+    }
+
+    private var usingBuiltin: Bool {
+        game.trackerSchema?.source == .builtIn
     }
 
     private var categories: [TrackerCategoryDTO] {
@@ -86,9 +92,22 @@ struct TrackerSectionView: View {
                         .font(.subheadline)
                 }
                 .disabled(generating)
+
+                if builtinAvailable && !usingBuiltin {
+                    Button {
+                        confirmingUseBuiltin = true
+                    } label: {
+                        Label("Use Built-in Tracker", systemImage: "checkmark.seal")
+                            .font(.subheadline)
+                    }
+                    .disabled(generating)
+                }
             }
             .buttonStyle(.borderless)
             .tint(LSTheme.accent)
+        }
+        .task(id: game.id) {
+            builtinAvailable = BuiltinTrackers.match(for: game) != nil
         }
         .confirmationDialog(
             "Regenerate this tracker?",
@@ -99,6 +118,16 @@ struct TrackerSectionView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Replaces the current tracker content. Personal Goals are kept, but checked items may not match the new tracker.")
+        }
+        .confirmationDialog(
+            "Switch to the built-in tracker?",
+            isPresented: $confirmingUseBuiltin,
+            titleVisibility: .visible
+        ) {
+            Button("Use Built-in Tracker") { repo.useBuiltinSchema(for: game) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Replaces the current tracker with LevelSelect's curated tracker for this game. Personal Goals are kept, but checked items may not match.")
         }
         .alert("New Personal Goal", isPresented: $addingGoal) {
             TextField("Goal", text: $goalName)
@@ -121,9 +150,10 @@ struct TrackerSectionView: View {
         generating = true
         generateError = nil
         let name = game.name
+        let igdbID = game.igdbID
         Task {
             do {
-                let jsonData = try await AITrackerService.generate(gameName: name)
+                let jsonData = try await AITrackerService.generate(gameName: name, igdbID: igdbID)
                 // Progress rows need a playthrough; make sure one exists before
                 // the schema lands, so a never-played game can still be set up.
                 repo.ensureDefaultPlaythrough(for: game)

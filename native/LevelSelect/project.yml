@@ -149,6 +149,11 @@ targets:
       # without LSAppKey, so appKey is nil here — harmless, since the watch
       # makes no edge-function calls of its own.
       - path: LevelSelect/Services/EdgeFunctions.swift
+      # Repository.useBuiltinSchema references this (Foundation+SwiftData
+      # only, no UI). The watch app doesn't bundle builtin-trackers.json, so
+      # lookups just come back empty there — harmless, same fallback path as
+      # a corrupt/missing bundle resource on the phone.
+      - path: LevelSelect/Services/BuiltinTrackers.swift
       - path: Watch
     settings:
       base:

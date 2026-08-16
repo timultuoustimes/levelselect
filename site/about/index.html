@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How this was made — LevelSelect</title>
+<meta name="description" content="LevelSelect is built with AI assistance, openly. Here's what that means in practice and why the app is built the way it is.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="stylesheet" href="/assets/style.css">
+<meta name="theme-color" content="#0D0A17">
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/assets/icon.png" alt="">
+      <span class="pixel wordmark">LevelSelect</span>
+    </a>
+    <nav class="navlinks">
+      <a href="/#features">Features</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <article class="doc">
+    <h1>How this was made</h1>
+    <p class="stamp">Last updated 15 August 2026</p>
+
+    <div class="callout">
+      <p>LevelSelect is built with AI assistance — mainly Claude, from Anthropic, used as a pair-programming tool throughout. That's true of the code, and it's true of this sentence.</p>
+    </div>
+
+    <h2>Why say so</h2>
+    <p>Because every commit in the public repo is already tagged with it, so this was never really a choice between disclosing and not — only between saying it myself or letting someone else notice first. I'd rather say it myself, plainly, and let the app speak for whether it was worth doing this way.</p>
+
+    <h2>What "AI-assisted" actually means here</h2>
+    <p>I'm not a professional developer. I don't write Swift by hand. What I bring is a few years of wanting exactly this tool badly enough to spend a summer on it, and the judgment to know when something generated for me is wrong. In practice that's meant catching things the AI got wrong before they shipped: an email typo that would have sent tester feedback to a stranger's inbox, a demo screen that quietly stopped showing real tracker progress, a sync bug that would have silently dropped data between devices. None of that is a story about AI writing perfect code. It's a story about someone reviewing it like the mistakes were going to be theirs to live with — because they were.</p>
+    <p>Every product decision — what LevelSelect tracks, what it refuses to collect, what a run is versus a session, which games get a bespoke tracker — is mine. The privacy stance on the <a href="/privacy/">Privacy</a> page isn't boilerplate; it's the same standard applied to how the app itself got built.</p>
+
+    <h2>If you want to look</h2>
+    <p>The repository is public, and it stays that way: <a href="https://github.com/timultuoustimes/levelselect">github.com/timultuoustimes/levelselect</a>. Every commit's history, including the AI co-authorship tags, is right there.</p>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>&copy; 2026 LevelSelect</span>
+    <span>
+      <a href="/">Home</a> &middot;
+      <a href="/privacy/">Privacy</a> &middot;
+      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
+      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -14,8 +14,12 @@ enum AITrackerService {
 
     /// Generate a tracker schema. `referenceText` switches to paste mode
     /// (faster, grounded in a guide the user supplies); nil = auto mode
-    /// (server web-searches for the best guide).
-    static func generate(gameName: String, referenceText: String? = nil) async throws -> Data {
+    /// (server web-searches for the best guide). `igdbID`, when known, rides
+    /// along unused today — the edge function ignores it — but gives a
+    /// future shared tracker cache a stable key from day one, since
+    /// `gameName` alone collides across remasters, regional titles, and
+    /// Deluxe/Definitive editions.
+    static func generate(gameName: String, igdbID: Int? = nil, referenceText: String? = nil) async throws -> Data {
         var request = URLRequest(url: functionURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -24,6 +28,7 @@ enum AITrackerService {
         request.timeoutInterval = 145
 
         var body: [String: Any] = ["gameName": gameName]
+        if let igdbID { body["igdbID"] = igdbID }
         if let referenceText, !referenceText.isEmpty {
             body["mode"] = "paste"
             body["payload"] = referenceText

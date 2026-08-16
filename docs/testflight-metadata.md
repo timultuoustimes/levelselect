@@ -29,6 +29,9 @@ These must match `PrivacyInfo.xcprivacy` (they do, as written):
 > collections, follow your Deku Deals wishlist, and see your play stats. Your
 > library syncs privately through your own iCloud. No accounts, no ads, no
 > tracking.
+>
+> Built solo with AI assistance (Claude) — the code, and the review of it,
+> are both real; more at levelselect.app/about.
 
 ## What to Test
 
@@ -68,3 +71,11 @@ Already answered in the build: `ITSAppUsesNonExemptEncryption = false`
       Changes) before any external tester launches the app
 - [ ] Fresh-Apple-ID test per the beta test script in the roadmap note
 - [ ] After the next build ships: set `LS_APP_SECRET` (see roadmap)
+
+## Build 21 follow-up
+
+- [ ] TestFlight → Test Information → **Beta App Description** was already
+      saved for build 19/20 without the AI-disclosure line above — re-paste
+      the updated version (added 2026-08-15) so the External group and public
+      link see it, since that's the review-facing moment where candor matters
+      most.
