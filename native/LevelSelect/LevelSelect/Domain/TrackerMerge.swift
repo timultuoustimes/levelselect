@@ -30,10 +30,15 @@ struct TrackerCategoryDiff: Identifiable, Hashable, Sendable {
 
 struct TrackerDiff: Hashable, Sendable {
     let categories: [TrackerCategoryDiff]
-    /// Items you have progress on today whose progress would NOT survive a
-    /// Replace — either the item is gone, or it came back under a new id.
-    /// This is the number worth putting in front of the user before they
-    /// overwrite a tracker they've been filling in for weeks.
+    /// Items carrying progress today that a Replace would orphan *if nothing
+    /// intervened* — either the item is gone, or it came back under a new id.
+    ///
+    /// The two halves have very different fates once the store gets involved:
+    /// the renamed half is **recoverable**, because `Repository` rewrites the
+    /// state record's `itemID` to follow the rename, and only the genuinely
+    /// removed half is really lost. This engine deliberately doesn't know
+    /// about that — it reports the raw exposure, and the caller that performs
+    /// the migration is the one that can say what actually went.
     let strandedByReplace: [TrackerItemDTO]
 
     var added: [TrackerItemDTO] { categories.flatMap(\.added) }

@@ -433,6 +433,124 @@ struct Repository {
         persist()
     }
 
+    /// What actually happened when a generated schema was folded in — the
+    /// material for the summary the user sees afterwards.
+    struct TrackerMergeOutcome: Sendable {
+        var added: Int = 0
+        var removed: Int = 0
+        var renamed: Int = 0
+        /// Progress records whose item id was rewritten to follow a rename, so
+        /// the tick survived. The whole point of the exercise.
+        var migrated: Int = 0
+        /// Items the user had progress on that the new tracker no longer
+        /// contains at all. These can't be re-ticked — there's nothing left to
+        /// tick — so they're what `rescueAsPersonalGoals` exists for.
+        var lostProgress: [TrackerItemDTO] = []
+
+        var isNoOp: Bool { added == 0 && removed == 0 && renamed == 0 }
+    }
+
+    /// Fold a generated schema into the game's existing one on the user's
+    /// terms, carrying progress across items that came back under a new id.
+    ///
+    /// Replaces the all-or-nothing `setGeneratedSchema` path for anything
+    /// user-initiated. The migration step is the reason this exists: progress
+    /// is keyed by item id, generation is nondeterministic about ids, so a
+    /// regeneration that returns the same content re-slugged used to silently
+    /// zero the user's ticks. Renames are followed; only genuine removals
+    /// lose anything.
+    @discardableResult
+    func applyGeneratedSchema(for game: Game, jsonData: Data,
+                              mode: TrackerMergeMode) -> TrackerMergeOutcome {
+        guard let existing = game.trackerSchema else {
+            // Nothing to merge into — first generation is just an install.
+            setGeneratedSchema(for: game, jsonData: jsonData)
+            let cats = TrackerSchemaJSON.categories(from: jsonData)
+            return TrackerMergeOutcome(added: cats.flatMap(\.items).count)
+        }
+
+        let states = (game.activePlaythrough?.trackerStates ?? [])
+            .filter { $0.deletedAt == nil }
+        // "Has progress" is broader than completed — a part-filled rank or
+        // count is just as much the user's work.
+        let progressIDs = Set(states
+            .filter { $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0 }
+            .map(\.itemID))
+
+        let diff = TrackerMerge.diff(current: existing.jsonData,
+                                     incoming: jsonData, progressIDs: progressIDs)
+        let merged = TrackerMerge.merged(current: existing.jsonData,
+                                         incoming: jsonData, mode: mode)
+
+        var outcome = TrackerMergeOutcome(
+            added: diff.added.count, removed: diff.removed.count, renamed: diff.renamed.count)
+
+        // Only Replace adopts the incoming ids, so only Replace needs the
+        // migration — the additive modes leave existing items exactly where
+        // they are, which is why they can't lose progress at all.
+        if mode == .replace {
+            let byID = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+            for match in diff.renamed where match.current.id != match.incoming.id {
+                guard let record = byID[match.current.id] else { continue }
+                record.itemID = match.incoming.id
+                touch(record)
+                outcome.migrated += 1
+            }
+            outcome.lostProgress = diff.removed.filter { progressIDs.contains($0.id) }
+        }
+
+        existing.jsonData = merged
+        existing.source = .aiGenerated
+        existing.generatedAt = .now
+        existing.generatedBy = "claude"
+        touch(existing)
+        touch(game)
+        recomputeProgress(game)
+        persist()
+        return outcome
+    }
+
+    /// Keep items a regenerated tracker dropped, as Personal Goals.
+    ///
+    /// A removed item can't be re-ticked because it no longer exists in the
+    /// schema, so the only way not to silently lose someone's completed work
+    /// is to move it somewhere every merge mode preserves. Completion moves
+    /// with it — the goal arrives already ticked if the item was.
+    @discardableResult
+    func rescueAsPersonalGoals(_ items: [TrackerItemDTO], for game: Game) -> Int {
+        guard let schema = game.trackerSchema, !items.isEmpty else { return 0 }
+        let states = (game.activePlaythrough?.trackerStates ?? [])
+            .filter { $0.deletedAt == nil }
+        let byID = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+
+        var data = schema.jsonData
+        var rescued = 0
+        // Id is derived from the original rather than random, so a second
+        // rescue of the same item is recognisable — but `addingGoal` appends
+        // unconditionally, so the skip has to happen here.
+        var present = Set(TrackerSchemaJSON.categories(from: data).flatMap(\.items).map(\.id))
+        for item in items {
+            let goalID = "goal-rescued-\(item.id)"
+            guard !present.contains(goalID) else { continue }
+            guard let next = TrackerSchemaJSON.addingGoal(named: item.name, id: goalID, to: data)
+            else { continue }
+            present.insert(goalID)
+            data = next
+            if let record = byID[item.id] {
+                record.itemID = goalID
+                touch(record)
+            }
+            rescued += 1
+        }
+        guard rescued > 0 else { return 0 }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        recomputeProgress(game)
+        persist()
+        return rescued
+    }
+
     /// Swap the current schema for the game's curated built-in one, if it
     /// ships one. `installMissing` only fills a gap and never overwrites an
     /// existing schema, so once someone generates an AI tracker over a game

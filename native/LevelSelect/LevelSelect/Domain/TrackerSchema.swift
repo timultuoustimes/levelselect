@@ -142,10 +142,19 @@ enum TrackerSchemaJSON {
     /// Append a Personal Goals item, preserving all unknown fields in the JSON.
     /// Creates the Personal Goals category if missing. Returns updated data.
     static func addingGoal(named goalName: String, to data: Data) -> Data? {
+        addingGoal(named: goalName, id: "goal-\(UUID().uuidString.prefix(8))", to: data)
+    }
+
+    /// As above, with the id supplied by the caller.
+    ///
+    /// Rescuing a completed item that a regenerated tracker dropped needs to
+    /// know the goal's id up front, so the progress record can be pointed at
+    /// it and the tick survives the move.
+    static func addingGoal(named goalName: String, id: String, to data: Data) -> Data? {
         var root = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
         if root["schemaVersion"] == nil { root["schemaVersion"] = 1 }
         var cats = (root["categories"] as? [[String: Any]]) ?? []
-        let newItem: [String: Any] = ["id": "goal-\(UUID().uuidString.prefix(8))", "name": goalName]
+        let newItem: [String: Any] = ["id": id, "name": goalName]
 
         if let idx = cats.firstIndex(where: { ($0["id"] as? String) == personalGoalsID }) {
             var cat = cats[idx]
