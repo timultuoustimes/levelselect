@@ -79,6 +79,53 @@ struct RunTrackingTests {
         #expect(template.outcomes.first?.label == "Escaped")
     }
 
+    /// The AI generator's JSON schema declares `outcomes` as an array of
+    /// plain strings, while built-ins use objects. Only accepting objects
+    /// meant every AI-generated roguelike tracker parsed to *no* run template
+    /// — which is what made "Log Runs for This Game" look broken on
+    /// Splintered Fate.
+    @Test func parsesStringOutcomesFromTheAIGenerator() throws {
+        let generated: [String: Any] = [
+            "schemaVersion": 1,
+            "categories": [],
+            "runTemplate": [
+                "fields": [["id": "weapon", "label": "Weapon", "type": "text"]],
+                "outcomes": ["Escaped", "Died", "Abandoned"],
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: generated)
+        let template = try #require(TrackerSchemaJSON.runTemplate(from: data))
+
+        #expect(template.outcomes.count == 3)
+        #expect(template.outcomes.map(\.label) == ["Escaped", "Died", "Abandoned"])
+        // Win/lose inferred from the wording so run stats aren't all neutral.
+        #expect(template.outcomes[0].result == .success)
+        #expect(template.outcomes[1].result == .failure)
+        #expect(template.outcomes[2].result == .neutral)
+    }
+
+    /// A schema carrying a `runTemplate` that parses to nothing used to make
+    /// the toggle a permanent no-op: `addingDefaultRunTemplate` saw the key
+    /// and returned early, while the renderer saw nothing to draw.
+    @Test func enablingRepairsAnUnusableRunTemplate() throws {
+        let (repo, game) = self.game(named: "Splintered Fate")
+        let broken: [String: Any] = [
+            "schemaVersion": 1,
+            "categories": [],
+            "runTemplate": ["fields": [], "outcomes": []],   // parses to nil
+        ]
+        repo.setGeneratedSchema(
+            for: game, jsonData: try JSONSerialization.data(withJSONObject: broken))
+        #expect(repo.runTrackingEnabled(for: game) == false)
+
+        repo.setRunTracking(true, for: game)
+
+        #expect(repo.runTrackingEnabled(for: game) == true)
+        let template = try #require(
+            TrackerSchemaJSON.runTemplate(from: game.trackerSchema!.jsonData))
+        #expect(template.outcomes.isEmpty == false)
+    }
+
     /// Runs and sessions are separate records: logging one must not create
     /// or disturb the other.
     @Test func runsAndSessionsAreIndependent() throws {

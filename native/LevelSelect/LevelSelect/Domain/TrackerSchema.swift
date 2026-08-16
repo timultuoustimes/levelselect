@@ -49,6 +49,21 @@ enum TrackerSchemaJSON {
     static let personalGoalsID = "personal-goals"
 
     /// Parse the run template out of stored schema JSON, if present.
+    /// Best-guess win/lose classification for an outcome that only gave us a
+    /// label. Roguelike vocabulary varies a lot ("Escaped", "Cleared", "Died",
+    /// "Wiped"), so this errs toward `.neutral` rather than guessing wrong —
+    /// a mislabeled outcome would quietly skew win rates.
+    private static func inferredResult(from label: String) -> RunOutcome {
+        let l = label.lowercased()
+        let wins = ["win", "won", "victory", "success", "escaped", "escape",
+                    "cleared", "clear", "beat", "complete"]
+        let losses = ["loss", "lost", "died", "die", "death", "defeat",
+                      "failed", "fail", "wiped", "killed"]
+        if wins.contains(where: l.contains) { return .success }
+        if losses.contains(where: l.contains) { return .failure }
+        return .neutral
+    }
+
     static func runTemplate(from data: Data) -> RunTemplateDTO? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let raw = root["runTemplate"] as? [String: Any] else { return nil }
@@ -60,13 +75,34 @@ enum TrackerSchemaJSON {
                 options: (f["options"] as? [Any])?.compactMap { $0 as? String } ?? []
             )
         }
-        let outcomes: [RunOutcomeDTO] = ((raw["outcomes"] as? [[String: Any]]) ?? []).compactMap { o in
-            guard let id = o["id"] as? String else { return nil }
-            return RunOutcomeDTO(
-                id: id,
-                label: (o["label"] as? String) ?? id.capitalized,
-                result: RunOutcome(rawValue: (o["result"] as? String) ?? "") ?? .neutral
-            )
+        // Outcomes arrive in two shapes and both have to work.
+        //
+        // The AI generator's JSON schema declares `outcomes` as an array of
+        // plain STRINGS (`["Won", "Died"]`), while built-in and hand-written
+        // schemas use objects (`{id, label, result}`). Accepting only objects
+        // meant every AI-generated roguelike tracker silently produced no run
+        // template at all — and because `addingDefaultRunTemplate` only
+        // checked whether the *key* existed, "Log Runs for This Game" then
+        // became a permanent no-op on exactly those games.
+        let rawOutcomes = raw["outcomes"] as? [Any] ?? []
+        let outcomes: [RunOutcomeDTO] = rawOutcomes.compactMap { entry in
+            if let o = entry as? [String: Any] {
+                guard let id = o["id"] as? String else { return nil }
+                return RunOutcomeDTO(
+                    id: id,
+                    label: (o["label"] as? String) ?? id.capitalized,
+                    result: RunOutcome(rawValue: (o["result"] as? String) ?? "")
+                        ?? inferredResult(from: (o["label"] as? String) ?? id)
+                )
+            }
+            if let label = entry as? String, !label.isEmpty {
+                return RunOutcomeDTO(
+                    id: label.lowercased().replacingOccurrences(of: " ", with: "-"),
+                    label: label,
+                    result: inferredResult(from: label)
+                )
+            }
+            return nil
         }
         guard !outcomes.isEmpty else { return nil }
         return RunTemplateDTO(fields: fields, outcomes: outcomes)
@@ -136,7 +172,12 @@ enum TrackerSchemaJSON {
     static func addingDefaultRunTemplate(to data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return nil }
-        guard root["runTemplate"] == nil else { return data }   // already on
+        // Check for a *usable* template, not merely the key's presence. A
+        // schema can carry a `runTemplate` that parses to nothing (JSON null,
+        // or outcomes in a shape we can't read) — treating that as "already
+        // on" made this a silent no-op forever on exactly the games that
+        // needed it. A valid custom template (Hades') still short-circuits.
+        guard runTemplate(from: data) == nil else { return data }   // already on
         root["runTemplate"] = [
             "fields": [
                 ["id": "loadout", "label": "Loadout", "type": "text"],
