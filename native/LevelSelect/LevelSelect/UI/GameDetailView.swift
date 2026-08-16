@@ -413,14 +413,15 @@ struct GameDetailView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let template = game.trackerSchema.flatMap({
-                        TrackerSchemaJSON.runTemplate(from: $0.jsonData)
-                    }) {
-                        CollapsibleSection("Runs", icon: "flag.checkered") {
-                            RunSectionView(game: game, template: template)
-                        }
-                        Divider()
-                    }
+                    // Runs deliberately do NOT render here. They used to, back
+                    // when the compact branch of the game page had no Runs
+                    // section at all and this panel was the only place to reach
+                    // them. Now that Runs render in both display modes, the game
+                    // page sitting beside this panel already shows them — and at
+                    // stage 2 both are on screen at once, so repeating them here
+                    // drew the section twice. This panel owns the tracker
+                    // checklist alone, which is the split compact mode exists to
+                    // express.
                     TrackerSectionView(game: game)
                 }
                 .padding()
