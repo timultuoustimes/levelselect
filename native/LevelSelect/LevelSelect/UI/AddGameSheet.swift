@@ -75,6 +75,25 @@ struct AddGameSheet: View {
             .padding()
 
             List {
+                // Failure/empty states live INSIDE the list, above the manual
+                // fallback — as a full-list overlay they visually covered the
+                // one path that still works with no network and no IGDB match,
+                // which is a dead end at the exact moment a new user's game
+                // isn't found.
+                if searchFailed {
+                    Section {
+                        ContentUnavailableView(
+                            "Search failed",
+                            systemImage: "wifi.exclamationmark",
+                            description: Text("Check your connection and try again — or add the game manually below."))
+                        .listRowBackground(Color.clear)
+                    }
+                } else if noResults {
+                    Section {
+                        ContentUnavailableView.search(text: searchText)
+                            .listRowBackground(Color.clear)
+                    }
+                }
                 if let idMatch {
                     Section("ID match") {
                         resultRow(idMatch, badge: "#\(idMatch.id)")
@@ -100,23 +119,17 @@ struct AddGameSheet: View {
             #else
             .listStyle(.insetGrouped)
             #endif
-            .overlay {
-                if searchFailed {
-                    ContentUnavailableView(
-                        "Search failed",
-                        systemImage: "wifi.exclamationmark",
-                        description: Text("Check your connection and try again."))
-                } else if !isSearching && results.isEmpty && idMatch == nil
-                            && searchText.trimmingCharacters(in: .whitespaces).count >= 2 {
-                    ContentUnavailableView.search(text: searchText)
-                }
-            }
         }
         .task(id: searchText) {
             // Debounce; .task(id:) cancels the previous search automatically.
             try? await Task.sleep(for: .milliseconds(350))
             await runSearch()
         }
+    }
+
+    private var noResults: Bool {
+        !isSearching && results.isEmpty && idMatch == nil
+            && searchText.trimmingCharacters(in: .whitespaces).count >= 2
     }
 
     private func resultRow(_ game: IGDBGame, badge: String?) -> some View {
