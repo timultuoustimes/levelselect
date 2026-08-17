@@ -487,6 +487,10 @@ struct Repository {
     /// Apply an AI-generated schema to a game (create or replace), keeping
     /// the user's Personal Goals across regeneration.
     func setGeneratedSchema(for game: Game, jsonData: Data) {
+        // Generated ids are untrusted input, not a valid key set — duplicate
+        // item ids share one state record (ticking either row ticks both).
+        // Sanitize at the boundary so no install path accepts them raw.
+        let jsonData = TrackerMerge.deduplicated(jsonData)
         let schema: TrackerSchemaRecord
         if let existing = game.trackerSchema {
             schema = existing
@@ -583,6 +587,9 @@ struct Repository {
     /// What a generated schema *would* do, without touching anything. Feeds the
     /// review screen so the choice is made against real numbers.
     func previewGeneratedSchema(for game: Game, jsonData: Data) -> TrackerDiff {
+        // Same sanitation as the apply path, so the preview describes exactly
+        // what an apply would install.
+        let jsonData = TrackerMerge.deduplicated(jsonData)
         guard let existing = game.trackerSchema else {
             return TrackerMerge.diff(current: TrackerSchemaJSON.emptySchema(), incoming: jsonData)
         }
@@ -602,6 +609,12 @@ struct Repository {
     @discardableResult
     func applyGeneratedSchema(for game: Game, jsonData: Data,
                               mode: TrackerMergeMode) -> TrackerMergeOutcome {
+        // The ONE ingest boundary: first generation, Replace, Add-to-existing
+        // and Add-new-category all pass through here, so sanitizing the
+        // payload once covers every mode — the previous seen-set fix deduped
+        // only the append-into-matched-category branch and left the other
+        // three accepting duplicate ids/names raw.
+        let jsonData = TrackerMerge.deduplicated(jsonData)
         // Migration rewrites state-record ids; running it over sync-duplicated
         // rows would migrate one twin and strand the other under the old id.
         reconcile(game)

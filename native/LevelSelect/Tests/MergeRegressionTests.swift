@@ -239,3 +239,133 @@ struct MergeRegressionTests {
         #expect(TrackerSchemaJSON.categories(from: out).flatMap(\.items).count == 1)
     }
 }
+
+/// Round 2, finding 3: the seen-set dedup covered only ONE of the four ingest
+/// paths — appending into an already-matched category. First generation,
+/// Replace, and a wholly new Add category all still accepted duplicate
+/// ids/names raw, and duplicate category ids were accepted everywhere. These
+/// exercise each path with the duplicate payload the generator is allowed to
+/// return.
+@MainActor
+struct IngestBoundaryTests {
+
+    private func game(named name: String) -> (Repository, Game) {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        return (repo, repo.addGame(name: name, status: .playing))
+    }
+
+    private func schema(_ categories: [[String: Any]]) -> Data {
+        try! JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": categories])
+    }
+
+    private func category(id: String, name: String, items: [(String, String)],
+                          locked: Bool = false) -> [String: Any] {
+        var cat: [String: Any] = ["id": id, "name": name, "type": "checklist",
+                                  "items": items.map { ["id": $0.0, "name": $0.1] }]
+        if locked { cat["locked"] = true }
+        return cat
+    }
+
+    private func installedItemIDs(_ game: Game) -> [String] {
+        TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+            .flatMap(\.items).map(\.id)
+    }
+
+    /// FIRST generation: no existing schema, payload installed directly.
+    @Test func firstGenerationRejectsDuplicateIDs() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses",
+                     items: [("hornet", "Hornet"), ("hornet", "Hornet (Kingdom's Edge)")]),
+        ]), mode: .addAll)
+
+        let ids = installedItemIDs(game)
+        #expect(ids.filter { $0 == "hornet" }.count == 1)
+    }
+
+    /// REPLACE adopts incoming content — it must not adopt duplicate identities.
+    @Test func replaceRejectsDuplicateIDsAndNames() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses", items: [("hornet", "Hornet")]),
+        ]), mode: .addAll)
+
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses",
+                     items: [("h1", "Hornet"), ("h2", "hornet"), ("h1", "Hornet Again")]),
+        ]), mode: .replace)
+
+        let ids = installedItemIDs(game)
+        #expect(ids.count == Set(ids).count)
+        let names = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+            .flatMap(\.items).map { TrackerMerge.matchKey($0.name) }
+        #expect(names.count == Set(names).count)
+    }
+
+    /// A wholly NEW category in Add mode was copied wholesale.
+    @Test func addNewCategoryRejectsDuplicateIDs() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses", items: [("hornet", "Hornet")]),
+        ]), mode: .addAll)
+
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "charms", name: "Charms",
+                     items: [("wayward", "Wayward Compass"), ("wayward", "Wayward Compass")]),
+        ]), mode: .addAll)
+
+        let ids = installedItemIDs(game)
+        #expect(ids.filter { $0 == "wayward" }.count == 1)
+    }
+
+    /// Duplicate CATEGORY ids poison diff matching and state keying; the two
+    /// occurrences fold into one category, their items deduped.
+    @Test func duplicateCategoryIDsFoldIntoOne() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses", items: [("hornet", "Hornet")]),
+            category(id: "bosses", name: "Bosses (again)",
+                     items: [("hornet", "Hornet"), ("grimm", "Grimm")]),
+        ]), mode: .addAll)
+
+        let cats = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+        #expect(cats.count == 1)
+        #expect(cats.first?.items.map(\.id).sorted() == ["grimm", "hornet"])
+    }
+
+    /// Round 1 finding 4's unfinished half: an incoming payload carrying the
+    /// locked category's id TWICE used to bring the "replaced" generated
+    /// category straight back as a duplicate.
+    @Test func lockedCategorySurvivesDoubledIncomingCollision() {
+        let old = schema([
+            category(id: "achievements", name: "My Pasted List",
+                     items: [("mine", "My item")], locked: true),
+        ])
+        let incoming = schema([
+            category(id: "achievements", name: "Generated A", items: [("a", "A")]),
+            category(id: "achievements", name: "Generated B", items: [("b", "B")]),
+        ])
+        let merged = TrackerSchemaJSON.mergingPersonalGoals(from: old, into: incoming)
+        let cats = TrackerSchemaJSON.categories(from: merged)
+        let matching = cats.filter { $0.id == "achievements" }
+        #expect(matching.count == 1)
+        #expect(matching.first?.name == "My Pasted List")
+        #expect(matching.first?.items.map(\.id) == ["mine"])
+    }
+
+    /// Two incoming categories with the same normalized name must not both
+    /// claim one current category in the diff.
+    @Test func diffNeverMatchesOneCurrentCategoryTwice() {
+        let current = schema([category(id: "bosses", name: "Bosses",
+                                       items: [("hornet", "Hornet")])])
+        let incoming = schema([
+            category(id: "b1", name: "Bosses", items: [("hornet", "Hornet")]),
+            category(id: "b2", name: "bosses!", items: [("grimm", "Grimm")]),
+        ])
+        // Bypass sanitation deliberately — the diff engine itself must hold.
+        let diff = TrackerMerge.diff(current: current, incoming: incoming)
+        let matchedToCurrent = diff.categories.filter { $0.id == "bosses" }
+        #expect(matchedToCurrent.count == 1)
+    }
+}

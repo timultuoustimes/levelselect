@@ -362,12 +362,35 @@ enum TrackerSchemaJSON {
         // The diff also filters locked ids out of the incoming side, so the
         // review screen never warned about it: a pasted checklist could vanish
         // during a Replace with no mention anywhere. Preserved means preserved.
+        //
+        // Every collision, not just the first: an unsanitized payload can
+        // carry the same id twice, and replacing one occurrence brought the
+        // "replaced" generated category straight back as a duplicate. And if
+        // two PRESERVED categories somehow share an id (corrupt synced data),
+        // the second folds its items into the first instead of silently
+        // overwriting it — both are the user's own content.
+        var placedByID: [String: Int] = [:]
         for category in preserved {
             let id = (category["id"] as? String) ?? ""
+            if let prior = placedByID[id] {
+                var target = newCats[prior]
+                var items = (target["items"] as? [[String: Any]]) ?? []
+                items += (category["items"] as? [[String: Any]]) ?? []
+                target["items"] = items
+                newCats[prior] = target
+                continue
+            }
             if let idx = newCats.firstIndex(where: { ($0["id"] as? String) == id }) {
                 newCats[idx] = category
+                var i = newCats.count - 1
+                while i > idx {
+                    if (newCats[i]["id"] as? String) == id { newCats.remove(at: i) }
+                    i -= 1
+                }
+                placedByID[id] = idx
             } else {
                 newCats.append(category)
+                placedByID[id] = newCats.count - 1
             }
         }
         new["categories"] = newCats

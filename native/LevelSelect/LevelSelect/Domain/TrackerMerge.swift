@@ -94,6 +94,74 @@ enum TrackerMerge {
             .joined(separator: " ")
     }
 
+    // MARK: Ingest sanitation
+
+    /// Normalize an untrusted incoming schema ONCE, before any diff, merge or
+    /// install sees it.
+    ///
+    /// The AI generator's contract requires ids to be strings — not to be
+    /// unique — and the lenient parser doesn't check either. Duplicate item
+    /// ids share one state record (ticking either row ticks both) and
+    /// duplicate category ids poison diff matching. The previous fix deduped
+    /// only while appending into an already-matched category, so first
+    /// generation, Replace, and a wholly new Add category all still accepted
+    /// duplicates raw. Sanitizing the payload here covers every path with one
+    /// rule instead of four copies of it.
+    ///
+    /// Categories sharing an id or a normalized name are folded into the
+    /// first occurrence (their items concatenated, then deduped); items
+    /// repeating an id or normalized name within a category keep the first
+    /// occurrence. Operates on raw dictionaries so unknown fields survive,
+    /// like every other transform here. Idempotent; non-schema data passes
+    /// through untouched.
+    static func deduplicated(_ data: Data) -> Data {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let rawCats = root["categories"] as? [[String: Any]]
+        else { return data }
+
+        var cats: [[String: Any]] = []
+        var indexByKey: [String: Int] = [:]
+        for cat in rawCats {
+            var keys: [String] = []
+            if let id = cat["id"] as? String, !id.isEmpty { keys.append("id:\(id)") }
+            if let name = cat["name"] as? String, !matchKey(name).isEmpty {
+                keys.append("name:\(matchKey(name))")
+            }
+            if let hit = keys.compactMap({ indexByKey[$0] }).first {
+                var target = cats[hit]
+                var items = (target["items"] as? [[String: Any]]) ?? []
+                items += (cat["items"] as? [[String: Any]]) ?? []
+                target["items"] = items
+                cats[hit] = target
+                for key in keys where indexByKey[key] == nil { indexByKey[key] = hit }
+            } else {
+                cats.append(cat)
+                for key in keys where indexByKey[key] == nil { indexByKey[key] = cats.count - 1 }
+            }
+        }
+
+        for (idx, cat) in cats.enumerated() {
+            var seenIDs = Set<String>()
+            var seenNames = Set<String>()
+            var kept: [[String: Any]] = []
+            for item in (cat["items"] as? [[String: Any]]) ?? [] {
+                let id = (item["id"] as? String) ?? ""
+                let nameKey = matchKey((item["name"] as? String) ?? "")
+                if !id.isEmpty, seenIDs.contains(id) { continue }
+                if !nameKey.isEmpty, seenNames.contains(nameKey) { continue }
+                if !id.isEmpty { seenIDs.insert(id) }
+                if !nameKey.isEmpty { seenNames.insert(nameKey) }
+                kept.append(item)
+            }
+            var next = cat
+            next["items"] = kept
+            cats[idx] = next
+        }
+
+        root["categories"] = cats
+        return (try? JSONSerialization.data(withJSONObject: root)) ?? data
+    }
+
     // MARK: Diff
 
     static func diff(current: Data, incoming: Data,
@@ -114,11 +182,19 @@ enum TrackerMerge {
             // Id, then the displayed name, then the name it *arrived* with —
             // the last one is what stops a user-renamed category ("Stages" →
             // "Achievements") being imported all over again as a duplicate the
-            // next time the generator returns the original name.
+            // next time the generator returns the original name. A current
+            // category can be matched at most ONCE: without the consumed
+            // check, two incoming categories could both claim the same
+            // current one, and the diff would double-count its items or
+            // report the wrong category as removed.
             let match = cur.first { $0.id == incCat.id }
-                ?? cur.first { matchKey($0.name) == matchKey(incCat.name) }
+                ?? cur.first {
+                    !matchedCurrent.contains($0.id)
+                        && matchKey($0.name) == matchKey(incCat.name)
+                }
                 ?? cur.first { source in
-                    guard let original = source.sourceName else { return false }
+                    guard !matchedCurrent.contains(source.id),
+                          let original = source.sourceName else { return false }
                     return matchKey(original) == matchKey(incCat.name)
                 }
             guard let curCat = match else {
@@ -227,28 +303,50 @@ enum TrackerMerge {
         // silently reappearing under a different one. Scoping the lookup to the
         // category makes a collision only possible between items that really
         // are in the same list.
+        //
+        // Ambiguity is inert, not arbitrary: when two DIFFERENT categories
+        // (or two different items within one) collapse to the same normalized
+        // name, that name key is removed rather than left pointing at
+        // whichever registered first. A note carried to the wrong similarly-
+        // named place is worse than a note that stays put; id matches still
+        // work, and only the genuinely ambiguous name is refused.
         var byCategory: [String: [String: [String: Any]]] = [:]
+        var ambiguousCategoryKeys = Set<String>()
         for category in curCats {
             let catID = (category["id"] as? String) ?? ""
             var byKey: [String: [String: Any]] = [:]
+            var ambiguousItemKeys = Set<String>()
             for item in (category["items"] as? [[String: Any]]) ?? [] {
-                if let id = item["id"] as? String { byKey["id:\(id)"] = item }
-                if let name = item["name"] as? String {
-                    byKey["name:\(matchKey(name))"] = byKey["name:\(matchKey(name))"] ?? item
+                if let id = item["id"] as? String {
+                    byKey["id:\(id)"] = byKey["id:\(id)"] ?? item
                 }
-                if let source = item["sourceName"] as? String {
-                    byKey["name:\(matchKey(source))"] = byKey["name:\(matchKey(source))"] ?? item
+                let nameKeys = [item["name"], item["sourceName"]]
+                    .compactMap { ($0 as? String).map { "name:\(matchKey($0))" } }
+                for key in Set(nameKeys) {
+                    if let existing = byKey[key],
+                       (existing["id"] as? String) != (item["id"] as? String) {
+                        ambiguousItemKeys.insert(key)
+                    } else {
+                        byKey[key] = item
+                    }
                 }
             }
+            for key in ambiguousItemKeys { byKey.removeValue(forKey: key) }
+
             byCategory[catID] = byKey
-            // A renamed category still has to find its old self.
-            if let source = category["sourceName"] as? String {
-                byCategory["name:\(matchKey(source))"] = byKey
-            }
-            if let name = category["name"] as? String {
-                byCategory["name:\(matchKey(name))"] = byCategory["name:\(matchKey(name))"] ?? byKey
+            // A renamed category still has to find its old self — but only if
+            // exactly one category answers to that name.
+            let catNameKeys = [category["sourceName"], category["name"]]
+                .compactMap { ($0 as? String).map { "name:\(matchKey($0))" } }
+            for key in Set(catNameKeys) {
+                if byCategory[key] != nil {
+                    ambiguousCategoryKeys.insert(key)
+                } else {
+                    byCategory[key] = byKey
+                }
             }
         }
+        for key in ambiguousCategoryKeys { byCategory.removeValue(forKey: key) }
 
         for (cIdx, category) in cats.enumerated() {
             let catID = (category["id"] as? String) ?? ""
