@@ -170,23 +170,29 @@ enum TrackerMerge {
 
         var diffs: [TrackerCategoryDiff] = []
         var matchedCurrent = Set<String>()
+        // Current ids that some incoming category claims EXACTLY. A name
+        // match may not steal one of these: with current "bosses" and
+        // incoming [b1 named "Bosses", "bosses" renamed], the name matcher
+        // running first used to consume the current category the id matcher
+        // was about to claim, and the result depended on incoming order.
+        let reservedIDs = Set(inc.map(\.id)).intersection(cur.map(\.id))
 
         for incCat in inc {
             // Id, then the displayed name, then the name it *arrived* with —
             // the last one is what stops a user-renamed category ("Stages" →
             // "Achievements") being imported all over again as a duplicate the
             // next time the generator returns the original name. A current
-            // category can be matched at most ONCE: without the consumed
-            // check, two incoming categories could both claim the same
-            // current one, and the diff would double-count its items or
-            // report the wrong category as removed.
-            let match = cur.first { $0.id == incCat.id }
+            // category can be matched at most ONCE — on the id branch too:
+            // round 3 showed duplicate incoming ids both taking the
+            // unguarded id branch and double-claiming one current category.
+            let match = cur.first { !matchedCurrent.contains($0.id) && $0.id == incCat.id }
                 ?? cur.first {
-                    !matchedCurrent.contains($0.id)
+                    !matchedCurrent.contains($0.id) && !reservedIDs.contains($0.id)
                         && matchKey($0.name) == matchKey(incCat.name)
                 }
                 ?? cur.first { source in
                     guard !matchedCurrent.contains(source.id),
+                          !reservedIDs.contains(source.id),
                           let original = source.sourceName else { return false }
                     return matchKey(original) == matchKey(incCat.name)
                 }

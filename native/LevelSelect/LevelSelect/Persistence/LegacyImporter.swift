@@ -148,7 +148,11 @@ struct LegacyImporter {
                 schemaVersion: int(sd, "schemaVersion") ?? 1,
                 source: parseSource(str(sd, "generatedBy")),
                 engine: engine(forTrackerType: str(g, "trackerType") ?? "None"),
-                jsonData: (try? JSONSerialization.data(withJSONObject: sd)) ?? Data()
+                // Legacy web-app data is as untrusted as generated data —
+                // duplicate ids in an old structuredData blob would enter
+                // the store raw without the shared sanitizer.
+                jsonData: TrackerMerge.deduplicated(
+                    (try? JSONSerialization.data(withJSONObject: sd)) ?? Data())
             )
             rec.generatedAt = date(sd["generatedAt"])
             rec.generatedBy = str(sd, "generatedBy")

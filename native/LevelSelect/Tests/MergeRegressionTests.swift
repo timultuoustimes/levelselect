@@ -429,4 +429,54 @@ struct IngestBoundaryTests {
         let matchedToCurrent = diff.categories.filter { $0.id == "bosses" }
         #expect(matchedToCurrent.count == 1)
     }
+
+    /// Round 3, finding 6: the id branch had no consumed check, so duplicate
+    /// incoming IDs (unsanitized input — the engine itself must hold) both
+    /// claimed the same current category.
+    @Test func diffNeverMatchesOneCurrentCategoryTwiceByID() {
+        let current = schema([category(id: "bosses", name: "Bosses",
+                                       items: [("hornet", "Hornet")])])
+        let incoming = schema([
+            category(id: "bosses", name: "Bosses A", items: [("hornet", "Hornet")]),
+            category(id: "bosses", name: "Bosses B", items: [("grimm", "Grimm")]),
+        ])
+        let diff = TrackerMerge.diff(current: current, incoming: incoming)
+        #expect(diff.categories.filter { !$0.isNewCategory }.count == 1)
+    }
+
+    /// And an exact id claim must not be stolen by a name match that happens
+    /// to run first — the result must not depend on incoming order.
+    @Test func nameMatchCannotStealACategoryAnIDMatchWillClaim() {
+        let current = schema([category(id: "bosses", name: "Bosses",
+                                       items: [("hornet", "Hornet")])])
+        // The name-matcher ("Bosses", id b1) comes FIRST; the true id owner
+        // ("bosses", renamed) comes second.
+        let incoming = schema([
+            category(id: "b1", name: "Bosses", items: [("x", "X")]),
+            category(id: "bosses", name: "Renamed", items: [("hornet", "Hornet")]),
+        ])
+        let diff = TrackerMerge.diff(current: current, incoming: incoming)
+        let matched = diff.categories.filter { !$0.isNewCategory }
+        #expect(matched.count == 1)
+        // The current category went to its id owner: "hornet" is unchanged
+        // there, not reported as removed.
+        #expect(matched.first?.unchangedCount == 1)
+        #expect(matched.first?.removed.isEmpty == true)
+    }
+
+    /// Round 3, finding 6: folding two preserved same-id categories
+    /// concatenated their item arrays raw, reintroducing duplicate item ids
+    /// after the incoming payload had been sanitized.
+    @Test func preservedCategoryFoldDedupsItemIDs() {
+        let old = schema([
+            category(id: "achievements", name: "Mine", items: [("mine", "My item")], locked: true),
+            category(id: "achievements", name: "Mine too",
+                     items: [("mine", "My item again"), ("extra", "Extra")], locked: true),
+        ])
+        let merged = TrackerSchemaJSON.mergingPersonalGoals(
+            from: old, into: TrackerSchemaJSON.emptySchema())
+        let cats = TrackerSchemaJSON.categories(from: merged)
+        #expect(cats.count == 1)
+        #expect(cats.first?.items.map(\.id) == ["mine", "extra"])
+    }
 }

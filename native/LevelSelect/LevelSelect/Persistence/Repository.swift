@@ -737,13 +737,15 @@ struct Repository {
     @discardableResult
     func useBuiltinSchema(for game: Game) -> Bool {
         guard let builtin = BuiltinTrackers.match(for: game) else { return false }
+        // Same sanitizer as every other schema ingress.
+        let schemaData = TrackerMerge.deduplicated(builtin.schemaData)
         let schema: TrackerSchemaRecord
         if let existing = game.trackerSchema {
             schema = existing
             schema.jsonData = TrackerSchemaJSON.mergingPersonalGoals(
-                from: existing.jsonData, into: builtin.schemaData)
+                from: existing.jsonData, into: schemaData)
         } else {
-            schema = TrackerSchemaRecord(source: .builtIn, engine: builtin.engine, jsonData: builtin.schemaData)
+            schema = TrackerSchemaRecord(source: .builtIn, engine: builtin.engine, jsonData: schemaData)
             context.insert(schema)
             schema.game = game
         }

@@ -376,7 +376,14 @@ enum TrackerSchemaJSON {
                 var target = newCats[prior]
                 var items = (target["items"] as? [[String: Any]]) ?? []
                 items += (category["items"] as? [[String: Any]]) ?? []
-                target["items"] = items
+                // Fold, then dedup by id — concatenating without it could
+                // reintroduce duplicate item ids after the incoming payload
+                // had already been sanitized.
+                var seenIDs = Set<String>()
+                target["items"] = items.filter { item in
+                    guard let itemID = item["id"] as? String, !itemID.isEmpty else { return true }
+                    return seenIDs.insert(itemID).inserted
+                }
                 newCats[prior] = target
                 continue
             }

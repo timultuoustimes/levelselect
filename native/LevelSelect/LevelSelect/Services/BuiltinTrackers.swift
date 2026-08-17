@@ -69,8 +69,12 @@ enum BuiltinTrackers {
                 return !entry.name.isEmpty && game.name.caseInsensitiveCompare(entry.name) == .orderedSame
             }
             for game in matches where game.trackerSchema == nil {
+                // Through the same sanitizer as every other schema ingress —
+                // curated data should already be clean, but "the boundary
+                // every path shares" is only true if this path shares it.
                 let record = TrackerSchemaRecord(
-                    source: .builtIn, engine: entry.engine, jsonData: entry.schemaData)
+                    source: .builtIn, engine: entry.engine,
+                    jsonData: TrackerMerge.deduplicated(entry.schemaData))
                 context.insert(record)
                 record.game = game
                 repo.recomputeProgress(game)
