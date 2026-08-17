@@ -168,6 +168,47 @@ struct MergeRegressionTests {
         #expect(cats.first { $0.id == "extras" }?.items.first?.note == nil)
     }
 
+    // MARK: 5 — a resumed stale session must not bank its paused time
+
+    /// Start at 1pm, play an hour, pause for four, resume, forget to stop.
+    /// Ending it at 6pm used to write `stop - start` = five hours, silently
+    /// banking the four paused hours as playtime — which then synced, showed
+    /// up in Stats and went into exports with nothing to suggest it was wrong.
+    @Test func endingAResumedStaleSessionExcludesPausedTime() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let onePM = Date(timeIntervalSince1970: 1_700_000_000)
+        let session = repo.startSession(on: pt, at: onePM)
+        repo.pauseSession(session, at: onePM.addingTimeInterval(3600))        // 1h played
+        repo.resumeSession(session, at: onePM.addingTimeInterval(3600 * 5))   // 4h paused
+
+        // Forgot to stop; ends it at 6pm — one more hour of actual play.
+        repo.endStaleSession(session, stoppedAt: onePM.addingTimeInterval(3600 * 6))
+
+        #expect(session.elapsed() == 3600 * 2)   // two hours, not five
+        #expect(pt.totalPlaytime() == 3600 * 2)
+    }
+
+    /// A paused session has no running segment, so ending it late must not add
+    /// anything at all.
+    @Test func endingAPausedStaleSessionAddsNothing() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let session = repo.startSession(on: pt, at: start)
+        repo.pauseSession(session, at: start.addingTimeInterval(1800))   // 30 min
+
+        repo.endStaleSession(session, stoppedAt: start.addingTimeInterval(3600 * 8))
+
+        #expect(session.elapsed() == 1800)
+    }
+
     // MARK: 4 — duplicate ids in one payload must not both land
 
     /// AI output is untrusted input, not a valid primary-key set. The

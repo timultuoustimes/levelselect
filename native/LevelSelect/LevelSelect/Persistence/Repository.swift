@@ -274,8 +274,23 @@ struct Repository {
     /// was left running, so the user tells us when they actually stopped).
     func endStaleSession(_ session: Session, stoppedAt stop: Date) {
         guard session.state != .stopped else { return }
-        let clamped = max(session.startDate, stop)
-        session.accumulatedDuration = clamped.timeIntervalSince(session.startDate)
+        // Reuse Session.elapsed rather than restating the arithmetic.
+        //
+        // This used to write `stop - startDate`, throwing away both
+        // accumulatedDuration and the resume anchor — so every pause between
+        // the original start and the chosen stop was recorded as PLAYTIME.
+        // Start at 1pm, play an hour, pause for four, resume, forget to stop:
+        // the app banked five hours. The inflated figure then synced, appeared
+        // in Stats and went into exports, and nothing on screen suggested it
+        // was wrong.
+        //
+        // A paused session has no running segment, so elapsed() correctly
+        // returns its accumulated total unchanged.
+        let anchor = session.state == .running
+            ? (session.resumedAt ?? session.startDate)
+            : session.startDate
+        let clamped = max(anchor, stop)
+        session.accumulatedDuration = session.elapsed(asOf: clamped)
         session.endDate = clamped
         session.pausedAt = nil
         session.resumedAt = nil
@@ -364,11 +379,23 @@ struct Repository {
         return record
     }
 
+    /// Tick or untick an item, and keep the cached percentage true.
+    ///
+    /// `recomputeProgress` used to be the CALLER's job, which held only for as
+    /// long as every caller remembered. The widget/Live Activity toggle didn't,
+    /// so checking something off there saved the tick and left the progress
+    /// ring showing the old number until an in-app action happened to fix it.
+    /// A second caller forgetting is evidence the invariant belongs here.
+    ///
+    /// It costs a schema parse per tap. Taps are user-paced and the parse is
+    /// sub-millisecond even on a 180-item tracker; a stale percentage is a
+    /// correctness bug, and that trade is not close.
     func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.completed = done
         touch(record)
         touch(pt)
+        if let game = pt.game { recomputeProgress(game) }
         persist()
     }
 
@@ -379,6 +406,7 @@ struct Repository {
         if let maxRank { record.completed = rank >= maxRank }
         touch(record)
         touch(pt)
+        if let game = pt.game { recomputeProgress(game) }
         persist()
     }
 

@@ -153,6 +153,7 @@ struct HomeTab: View {
 
     @State private var showingAdd = false
     @State private var showingSettings = false
+    @State private var showingCSVImport = false
     @State private var path = NavigationPath()
     @State private var nav = AppNavigator.shared
     /// Home categories the user has collapsed (comma-joined status raw values).
@@ -208,6 +209,7 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(isPresented: $showingCSVImport) { CSVImportView() }
         // Consume navigation requested by widgets / App Intents.
         .onAppear { consumePendingNavigation() }
         .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
@@ -298,9 +300,11 @@ struct HomeTab: View {
             VStack(spacing: 10) {
                 Button("Add a Game") { showingAdd = true }
                     .buttonStyle(.borderedProminent)
-                // A spreadsheet is how most people arrive with a backlog, and
-                // it was previously mentioned only in passing as "Settings".
-                Button("Import a CSV") { showingSettings = true }
+                // A spreadsheet is how most people arrive with a backlog. This
+                // opened the whole Settings form and left them to find the
+                // importer — a dead end at the exact moment someone is deciding
+                // whether the app is worth the effort.
+                Button("Import a CSV") { showingCSVImport = true }
                     .buttonStyle(.borderless)
             }
         }

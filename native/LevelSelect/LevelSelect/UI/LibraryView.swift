@@ -73,7 +73,17 @@ struct LibraryTab: View {
         .overlay {
             if visible.isEmpty {
                 if searchText.isEmpty {
-                    ContentUnavailableView("No games", systemImage: "gamecontroller")
+                    // "No games" with no action is a dead end for anyone who
+                    // opens this tab first — it names the problem and offers
+                    // nothing to do about it.
+                    ContentUnavailableView {
+                        Label("No games yet", systemImage: "gamecontroller")
+                    } description: {
+                        Text("Add the games you're playing and they'll be grouped by system here.")
+                    } actions: {
+                        Button("Add a Game") { showingAdd = true }
+                            .buttonStyle(.borderedProminent)
+                    }
                 } else {
                     ContentUnavailableView.search(text: searchText)
                 }

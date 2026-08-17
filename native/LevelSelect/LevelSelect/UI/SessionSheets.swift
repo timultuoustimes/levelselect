@@ -10,8 +10,12 @@ struct EndSessionSheet: View {
 
     init(session: Session) {
         self.session = session
-        // Sensible default: threshold after start, but never in the future.
-        let suggested = min(.now, session.startDate.addingTimeInterval(StaleSessionGuard.threshold))
+        // Default from the point the current segment actually started, not
+        // from the original start — with a pause in between, start + threshold
+        // could land BEFORE the last resume and suggest a stop time that
+        // predates the play it's meant to be recording.
+        let anchor = session.resumedAt ?? session.startDate
+        let suggested = min(.now, anchor.addingTimeInterval(StaleSessionGuard.threshold))
         _stopTime = State(initialValue: suggested)
     }
 
@@ -26,9 +30,11 @@ struct EndSessionSheet: View {
                 }
                 Section("When did you stop?") {
                     DatePicker("Stopped at", selection: $stopTime,
-                               in: session.startDate ... .now)
+                               in: (session.resumedAt ?? session.startDate) ... .now)
                     LabeledContent("Records") {
-                        Text(Format.duration(stopTime.timeIntervalSince(session.startDate)))
+                        // The same calculation the save performs, so the
+                        // preview can't promise a number the write won't honour.
+                        Text(Format.duration(session.elapsed(asOf: stopTime)))
                             .foregroundStyle(LSTheme.accent)
                     }
                 }
