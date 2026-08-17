@@ -280,14 +280,29 @@ struct HomeTab: View {
         .scrollIndicators(.hidden)
     }
 
+    /// First thing a new person sees, and the app's only onboarding — there is
+    /// no tour, deliberately.
+    ///
+    /// This used to read "Add a game or import your library from Settings",
+    /// which names the two most ordinary things the app does and says nothing
+    /// about why anyone would keep using it. Someone adds a game, lands on a
+    /// page of sections, and never learns that the tracker is the point or
+    /// that they can paste a checklist into it in seconds. The copy now names
+    /// the actual first move and what comes after it.
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("Your library is empty", systemImage: "gamecontroller")
+            Label("Start your shelf", systemImage: "gamecontroller")
         } description: {
-            Text("Add a game or import your library from Settings.")
+            Text("Add a game you're playing — then give it a tracker: paste a checklist you already have, or let LevelSelect draft one.")
         } actions: {
-            Button("Add Game") { showingAdd = true }
-                .buttonStyle(.borderedProminent)
+            VStack(spacing: 10) {
+                Button("Add a Game") { showingAdd = true }
+                    .buttonStyle(.borderedProminent)
+                // A spreadsheet is how most people arrive with a backlog, and
+                // it was previously mentioned only in passing as "Settings".
+                Button("Import a CSV") { showingSettings = true }
+                    .buttonStyle(.borderless)
+            }
         }
     }
 

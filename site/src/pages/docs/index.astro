@@ -1,9 +1,32 @@
 ---
 import Base from '../../layouts/Base.astro';
+
+/* Direction A: a short path for someone who just installed the app, then
+   reference sections for everyone coming back with a specific question. The
+   path stays three steps forever; the reference underneath can grow without
+   pushing the beginning of the page further down. */
+const steps = [
+  {
+    t: 'Add your first game',
+    d: 'Search for it and the cover, platform and details come with it. Got a library elsewhere? Settings → Your data → Import from CSV brings the lot in at once.',
+    time: '1 min',
+  },
+  {
+    t: 'Start a session',
+    d: "Time what you play. It keeps counting on the Lock Screen, in a widget, and on your watch — and nudges you if you forget to stop it.",
+    time: '10 sec',
+  },
+  {
+    t: 'Give it a tracker',
+    d: 'This is the part people stay for. Paste a checklist you already trust from a wiki or guide, or let LevelSelect draft one for the game.',
+    time: '2 min',
+    link: { href: '#paste', label: 'How pasting works' },
+  },
+];
 ---
 <Base
   title="Help — LevelSelect"
-  description="How to use LevelSelect: pasting a checklist into a tracker, regenerating safely, sessions and runs, and getting your data out."
+  description="How to use LevelSelect: where to begin, pasting a checklist into a tracker, regenerating safely, and getting your data out."
   current="docs"
 >
 <main class="wrap">
@@ -11,9 +34,25 @@ import Base from '../../layouts/Base.astro';
     <h1>Help</h1>
     <p class="stamp">Last updated 17 August 2026</p>
 
-    <p class="lede">Most of LevelSelect explains itself. These are the parts that don't — mainly because they depend on what <em>you</em> bring.</p>
+    <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
-    <h2 id="paste">Pasting a checklist into a tracker</h2>
+    <ol class="steps">
+      {steps.map((s) => (
+        <li class="step">
+          <span class="step__n" aria-hidden="true"></span>
+          <div class="step__body">
+            <b class="step__t">{s.t}</b>
+            <span class="step__d">{s.d}</span>
+            {s.link && <a class="step__link" href={s.link.href}>{s.link.label} &rarr;</a>}
+          </div>
+          <span class="step__time">{s.time}</span>
+        </li>
+      ))}
+    </ol>
+
+    <p class="divider"><span>Then, when you need it</span></p>
+
+<h2 id="paste">Pasting a checklist into a tracker</h2>
     <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: it reads exactly what you paste.</p>
 
     <h3>Two formats work</h3>
@@ -63,30 +102,57 @@ import Base from '../../layouts/Base.astro';
     <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and you can take it out whenever you want.</p>
 
     <p class="callout" style="margin-top:2.5rem">Something missing or wrong here? <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or send feedback through TestFlight.</p>
-  </article>
+    </article>
 </main>
 
 <style>
+  .lede { font-size: 1.05rem; color: var(--ink); }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 1.6rem 0 0; display: flex; flex-direction: column; gap: .6rem; }
+  .step {
+    display: flex; gap: .8rem; align-items: flex-start;
+    border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(255, 255, 255, .045);
+    padding: .85rem .95rem;
+  }
+  .step__n {
+    counter-increment: step;
+    width: 1.7rem; height: 1.7rem; flex: none;
+    display: grid; place-items: center; border-radius: 50%;
+    background: rgba(148, 92, 250, .18);
+    border: 1px solid rgba(148, 92, 250, .5);
+    color: var(--accent);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .78rem; font-weight: 700;
+  }
+  .step__n::before { content: counter(step); }
+  .step__body { min-width: 0; }
+  .step__t { display: block; font-weight: 650; }
+  .step__d { display: block; color: var(--muted); font-size: .93rem; margin-top: .15rem; }
+  .step__link { display: inline-block; font-size: .88rem; margin-top: .35rem; }
+  .step__time {
+    margin-left: auto; flex: none; white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .72rem; color: var(--muted);
+  }
+  @media (max-width: 520px) { .step__time { display: none; } }
+
+  .divider { display: flex; align-items: center; gap: .8rem; margin: 2.4rem 0 .4rem; }
+  .divider span {
+    font-size: .72rem; text-transform: uppercase; letter-spacing: .1em;
+    color: var(--muted); flex: none;
+  }
+  .divider::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+
   .doc pre {
     background: rgba(255, 255, 255, .045);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: .85rem 1rem;
-    overflow-x: auto;
-    font-size: .82rem;
-    line-height: 1.5;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: .85rem 1rem; overflow-x: auto;
+    font-size: .82rem; line-height: 1.5;
   }
-  .doc code {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-    font-size: .88em;
-  }
+  .doc code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: .88em; }
   .doc pre code { font-size: 1em; }
-  .doc :not(pre) > code {
-    background: rgba(255, 255, 255, .07);
-    padding: .1em .35em;
-    border-radius: 4px;
-  }
+  .doc :not(pre) > code { background: rgba(255, 255, 255, .07); padding: .1em .35em; border-radius: 4px; }
   .doc h3 { font-size: 1rem; margin-top: 1.6rem; }
-  .lede { font-size: 1.05rem; color: var(--ink); }
 </style>
 </Base>

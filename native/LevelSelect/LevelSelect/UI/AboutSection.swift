@@ -6,6 +6,9 @@ import SwiftUI
 struct AboutSection: View {
     private static let repoURL = URL(string: "https://github.com/timultuoustimes/levelselect")!
     private static let issuesURL = URL(string: "https://github.com/timultuoustimes/levelselect/issues")!
+    private static let helpURL = URL(string: "https://levelselect.app/docs/")!
+    private static let changelogURL = URL(string: "https://levelselect.app/changelog/")!
+    private static let roadmapURL = URL(string: "https://levelselect.app/roadmap/")!
 
     private var versionString: String {
         let info = Bundle.main.infoDictionary
@@ -15,6 +18,27 @@ struct AboutSection: View {
     }
 
     var body: some View {
+        // Two sections rather than one: what the app *is* (version, policy,
+        // feedback) is a different question from where to read more about it.
+        Section {
+            Link(destination: Self.helpURL) {
+                Label("How to use LevelSelect", systemImage: "questionmark.circle")
+            }
+            Link(destination: Self.changelogURL) {
+                Label("What's New", systemImage: "sparkles")
+            }
+            Link(destination: Self.roadmapURL) {
+                Label("Roadmap", systemImage: "map")
+            }
+        } header: {
+            Text("Learn More")
+        } footer: {
+            // Said plainly because the app's whole pitch is that it doesn't
+            // talk to anything — a link that opens a browser deserves a note
+            // that it's a link, not a feature quietly phoning home.
+            Text("Opens levelselect.app in your browser.")
+        }
+
         Section {
             LabeledContent("Version", value: versionString)
             NavigationLink("Privacy Policy") { PrivacyPolicyView() }
