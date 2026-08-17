@@ -527,4 +527,35 @@ struct ExportCompletenessTests {
             ((exported["playthroughs"] as? [[String: Any]])?.first?["sessions"]) as? [[String: Any]])
         #expect(sessions.first?["pausedAt"] != nil)
     }
+
+    /// Round 2, finding 6: the file promised "stable UUIDs for round-trip"
+    /// while tracker states, completion events and videos omitted theirs — so
+    /// a future importer could not preserve identity for those records.
+    @Test func exportCarriesStableIDsForEveryRecordType() throws {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(pt, itemID: "hornet", done: true)
+        let event = repo.addCompletion(to: game, label: .completed)
+        let video = GameVideo(kind: .video, urlString: "https://youtu.be/x",
+                              youtubeID: "x", title: "Guide")
+        context.insert(video)
+        video.game = game
+
+        let data = try LibraryExport.makeJSON(context: context)
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let exported = try #require((root["games"] as? [[String: Any]])?.first)
+
+        let states = try #require(
+            ((exported["playthroughs"] as? [[String: Any]])?.first?["trackerProgress"]) as? [[String: Any]])
+        let stateID = try #require(states.first?["id"] as? String)
+        #expect(UUID(uuidString: stateID) != nil)
+
+        let completions = try #require(exported["completions"] as? [[String: Any]])
+        #expect(completions.first?["id"] as? String == event.id.uuidString)
+
+        let videos = try #require(exported["videos"] as? [[String: Any]])
+        #expect(videos.first?["id"] as? String == video.id.uuidString)
+    }
 }

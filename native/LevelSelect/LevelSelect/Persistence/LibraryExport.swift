@@ -1,7 +1,7 @@
 import Foundation
 import SwiftData
 
-/// Versioned JSON export of everything the user has created.
+/// Versioned JSON export of the user's library content.
 ///
 /// Beta P0: soft-delete plus iCloud is not a backup. Asking testers to invest
 /// hours of tracking with no way to get their data out is how a beta loses
@@ -9,10 +9,15 @@ import SwiftData
 /// tester, not after.
 ///
 /// The format is deliberately plain and self-describing: a `manifest` with
-/// counts and a checksum so an import can prove it read everything, then the
-/// records themselves with stable UUIDs so a future importer can round-trip
-/// without duplicating. Tombstoned (deleted) records are excluded — this is a
-/// copy of the library as the user sees it.
+/// counts, then the records themselves. Every record type carries its stable
+/// UUID so a future importer can round-trip without duplicating. Honest
+/// scope, kept in sync with the in-app footer and site copy: this is the
+/// library's CONTENT as the user sees it, not a byte-for-byte store clone —
+/// tombstoned records, internal sync metadata (revisions, timestamps on
+/// nested records, legacy ids), profile/migration bookkeeping, and map image
+/// bytes (referenced by their remote path, not embedded) are not included.
+/// The manifest counts only what the exporter visited; it cannot prove
+/// nothing was omitted.
 @MainActor
 enum LibraryExport {
     /// Bump when the shape changes; importers should refuse unknown majors.
@@ -151,6 +156,10 @@ enum LibraryExport {
                     .sorted { $0.itemID < $1.itemID }
                     .map { state -> [String: Any] in
                         var t: [String: Any] = [
+                            // The record's own UUID, not just the schema item
+                            // it points at — without it an importer can't
+                            // round-trip without duplicating rows.
+                            "id": state.id.uuidString,
                             "itemID": state.itemID,
                             "completed": state.completed,
                             "revealed": state.revealed,
@@ -181,7 +190,8 @@ enum LibraryExport {
             let completions = (game.completionEvents ?? []).filter { $0.deletedAt == nil }
             counts.completions += completions.count
             dict["completions"] = completions.map { event -> [String: Any] in
-                var c: [String: Any] = ["date": iso(event.date), "label": event.label.rawValue]
+                var c: [String: Any] = ["id": event.id.uuidString,
+                                        "date": iso(event.date), "label": event.label.rawValue]
                 c["customLabel"] = event.customLabel
                 c["platform"] = event.platform
                 c["notes"] = event.notes
@@ -192,6 +202,7 @@ enum LibraryExport {
             counts.videos += videos.count
             dict["videos"] = videos.sorted { $0.orderIndex < $1.orderIndex }.map { video -> [String: Any] in
                 var v: [String: Any] = [
+                    "id": video.id.uuidString,
                     "url": video.urlString,
                     "kind": video.kindRaw,
                     "title": video.title,
