@@ -53,7 +53,7 @@ const steps = [
     <p class="divider"><span>Then, when you need it</span></p>
 
 <h2 id="paste">Pasting a checklist into a tracker</h2>
-    <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: it reads exactly what you paste.</p>
+    <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: every item comes from your text. It does interpret as it reads — stripping list syntax, working out which part of a line is the name and which is the location — and the rest of this section explains exactly how, so you can predict what it will do.</p>
 
     <h3>Two formats work</h3>
     <p><strong>A table</strong>, with a header row. Column names are matched loosely, so most wiki tables work as-is:</p>
@@ -86,12 +86,12 @@ const steps = [
     <h2 id="regenerating">Regenerating a tracker safely</h2>
     <p>The generate button tells you what it's going to do, and you can change it for a single run by long-pressing.</p>
     <ul>
-      <li><strong>Add New Only</strong> (the default) — keeps everything you have and adds what's missing. It cannot remove anything.</li>
+      <li><strong>Add New Only</strong> (the default) — keeps everything you have and adds what's missing. It never removes or overwrites anything already in your tracker.</li>
       <li><strong>Review Changes</strong> — generates, then shows you what would be added, removed and renamed, grouped by category. Nothing is written until you choose.</li>
       <li><strong>Replace Everything</strong> — swaps the generated content out. It asks first.</li>
     </ul>
-    <p>Generation doesn't name things identically each time, so an item can come back with a different internal id. LevelSelect follows those renames and carries your progress across, and tells you how many it moved. If something you'd completed genuinely isn't in the new tracker, you're offered the chance to keep it as a personal goal rather than losing it.</p>
-    <p>Your own notes are never touched by any of this.</p>
+    <p>Generation doesn't name things identically each time, so an item can come back with a different internal id. LevelSelect follows those renames by matching names and carries your progress across, telling you how many it moved — matching is careful but not psychic, so the review screen is there to check before a Replace. If something you'd worked on genuinely isn't in the new tracker, you're offered the chance to keep it as a personal goal rather than losing it.</p>
+    <p>Your own notes stay yours: no merge mode rewrites them, and a Replace carries each note across wherever its item can still be matched.</p>
 
     <h2 id="sessions">Sessions and runs are different things</h2>
     <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
@@ -99,8 +99,8 @@ const steps = [
 
     <h2 id="data">Getting your data out</h2>
     <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
-    <p>It covers the lot: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, collections, and your appearance settings.</p>
-    <p><strong>The one honest caveat:</strong> there's no importer for this file yet, so it's a readable, complete record of your library rather than a one-tap restore point. That gap is being worked on.</p>
+    <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, collections, and your appearance settings — each record with its stable id.</p>
+    <p><strong>The honest caveats:</strong> it's a record of your library's content, not a byte-for-byte clone of the database — map images are saved as links rather than embedded, and internal sync bookkeeping isn't included. And there's no importer for the file yet, so treat it as a readable record rather than a one-tap restore point. That gap is being worked on.</p>
     <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and what's in the export is genuinely yours to take.</p>
 
     <p class="callout" style="margin-top:2.5rem">Something missing or wrong here? <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or send feedback through TestFlight.</p>
