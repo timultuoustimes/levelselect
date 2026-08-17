@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Changelog — LevelSelect</title>
+<meta name="description" content="What's actually shipped in the LevelSelect beta, build by build.">
+<link rel="icon" href="/assets/favicon.png">
+<link rel="stylesheet" href="/assets/style.css">
+<meta name="theme-color" content="#0D0A17">
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/assets/icon.png" alt="">
+      <span class="pixel wordmark">LevelSelect</span>
+    </a>
+    <nav class="navlinks">
+      <a href="/#features">Features</a>
+      <a href="/roadmap/">Roadmap</a>
+      <a href="/privacy/">Privacy</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <article class="doc">
+    <h1>Changelog</h1>
+    <p class="stamp">What's actually shipped, newest first. LevelSelect is in beta, so this moves quickly.</p>
+
+    <div class="callout">
+      <p>Everything here is in the TestFlight beta — <a href="https://testflight.apple.com/join/7pwdQEMq">join it here</a>. Builds go out when they're ready rather than on a schedule.</p>
+    </div>
+
+    <h2>0.1.0 (22) &mdash; 17 August 2026</h2>
+    <p><strong>Regenerating a tracker can't quietly cost you progress any more.</strong></p>
+
+    <h3>New</h3>
+    <ul>
+      <li><strong>Choose what a regeneration does.</strong> The button now says what it will do — add only what's new, review the changes first, or replace everything — and you can pick a different one for a single run without changing your default. Add-only is the default, because it's the one option that can't cost you anything.</li>
+      <li><strong>Review changes before they happen.</strong> See what a generation would add, remove and rename, grouped by category, and tick exactly what you want. Nothing is written until you say so.</li>
+      <li><strong>Paste a list.</strong> Drop in a community checklist — a markdown table, or sections of numbered items — and it becomes real tracker categories. No AI, no waiting, and nothing invented: it reads what you paste, exactly as written. Imported lists are locked, so a later regeneration can't replace them.</li>
+      <li><strong>Your own notes on any item.</strong> Write whatever you want to remember. Your note is yours — regenerating the tracker never touches it.</li>
+      <li><strong>Rename anything.</strong> Categories and items, including generated ones. A generator's naming is a suggestion; if the game calls them Achievements, call them Achievements.</li>
+    </ul>
+
+    <h3>Improved</h3>
+    <ul>
+      <li><strong>Progress follows renamed items.</strong> Generation doesn't name things the same way twice. Previously that could silently reset your checkmarks; now progress moves with the item, and anything genuinely dropped can be kept as a personal goal instead.</li>
+      <li><strong>Long checklists are far shorter.</strong> Items sharing a location group under it once instead of repeating it on every row, and short items lay out in columns — one on a phone, more when there's room.</li>
+      <li><strong>Checkboxes are easier to hit.</strong> Tap targets were smaller than they should have been.</li>
+      <li>Timer controls are available with the tracker and a guide open side by side on iPad and Mac.</li>
+    </ul>
+
+    <h3>Fixed</h3>
+    <ul>
+      <li>Tapping a second video in the list now actually changes the player — and each video keeps its own resume position instead of inheriting another's.</li>
+      <li>Every part of a playlist remembers where you got to, rather than the playlist remembering only one position across all of them.</li>
+      <li>Run logging works on AI-generated trackers. "Log Runs for This Game" was a no-op on exactly the games most likely to want it.</li>
+      <li>The Runs section no longer appears twice on iPad and Mac in compact tracker display.</li>
+      <li>Generation keeps running when you move around the app, with elapsed time and a clearer sense of how long it takes.</li>
+    </ul>
+
+    <h2>0.1.0 (21) &mdash; 16 August 2026</h2>
+    <p><strong>First build available to beta testers outside my own devices.</strong></p>
+    <ul>
+      <li><strong>Use the built-in tracker.</strong> Some games ship with a hand-built tracker. If you'd generated over one, you can now switch back.</li>
+      <li>Console art for PS3, Android, iPhone and iPad on the systems shelf.</li>
+      <li>An <a href="/about/">honest note</a> about how this app is made.</li>
+    </ul>
+
+    <h2>0.1.0 &mdash; the beta so far</h2>
+    <p>Rather than reconstruct every build, here's what LevelSelect already was when the beta opened:</p>
+    <ul>
+      <li><strong>A private library.</strong> Your games, sessions and progress, synced through your own iCloud. No account, no ads, no analytics, no tracking.</li>
+      <li><strong>Session tracking</strong> with Live Activities, Home Screen widgets and an Apple Watch app.</li>
+      <li><strong>Objective trackers</strong> — checklists, collectibles and ranked upgrades — generated for a game or hand-built, with multiple playthroughs tracked separately.</li>
+      <li><strong>Run logging</strong> for roguelikes, kept separate from play time.</li>
+      <li><strong>Guides and videos</strong> attached to a game, with playback position remembered.</li>
+      <li><strong>Systems shelves</strong> with original console artwork.</li>
+      <li><strong>Import and export.</strong> Bring a library in from a CSV, and take everything out again as readable JSON whenever you like.</li>
+    </ul>
+  </article>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>&copy; 2026 LevelSelect</span>
+    <span>
+      <a href="/">Home</a> &middot;
+      <a href="/roadmap/">Roadmap</a> &middot;
+      <a href="/privacy/">Privacy</a> &middot;
+      <a href="/about/">How this was made</a> &middot;
+      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
