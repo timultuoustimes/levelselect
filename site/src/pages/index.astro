@@ -2,7 +2,6 @@
 import Base from '../layouts/Base.astro';
 import Shine from '../components/Shine.astro';
 import Reveal from '../components/Reveal.astro';
-import RatingStars from '../components/RatingStars.astro';
 import StageDemo from '../components/StageDemo.astro';
 
 const features = [
@@ -104,16 +103,6 @@ const systems = [
 
   <section class="wrap">
     <Reveal>
-      <h2>Rate it like you'd say it</h2>
-      <p class="lede">Five stars, but with words attached — because "an all-timer" means something a number doesn't. Try it:</p>
-    </Reveal>
-    <Reveal class="card-hero rating-demo">
-      <RatingStars />
-    </Reveal>
-  </section>
-
-  <section class="wrap">
-    <Reveal>
       <h2>Sorted by system</h2>
       <p class="lede">Your library grouped by the hardware it lives on — original console first, emulators last.</p>
     </Reveal>
@@ -145,6 +134,5 @@ const systems = [
   .beta-card h2 { margin-bottom: .4rem; }
   .beta-card .lede { margin: 0 auto 1.2rem; }
   .beta-note { margin: 1rem 0 0; font-size: .9rem; }
-  .rating-demo { display: flex; justify-content: center; padding: 1.6rem; }
 </style>
 </Base>

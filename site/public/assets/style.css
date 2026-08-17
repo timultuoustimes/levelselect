@@ -65,8 +65,10 @@ a:hover { color: #B78DFF; }
 }
 .bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; }
 .brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
-.brand img { width: 28px; height: 28px; border-radius: 7px; }
-.brand span { font-size: 11px; }
+/* flex: none — without it the icon shrinks horizontally in a cramped header
+   and a square image renders squished. */
+.brand img { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+.brand span { font-size: 11px; white-space: nowrap; }
 .navlinks { display: flex; gap: 1.25rem; font-size: .9rem; }
 .navlinks a { color: var(--muted); text-decoration: none; }
 .navlinks a:hover, .navlinks a[aria-current="page"] { color: var(--ink); }

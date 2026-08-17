@@ -48,8 +48,97 @@ const nav = [
         <a href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
       ))}
     </nav>
+
+    {/* Below the breakpoint the four links collided with the wordmark and ran
+        off the edge. <details> gives a real disclosure menu with no JavaScript
+        and correct keyboard/screen-reader behaviour for free. */}
+    <details class="navmenu">
+      <summary aria-label="Menu">
+        <span class="navmenu__bars" aria-hidden="true"></span>
+      </summary>
+      <div class="navmenu__panel">
+        {nav.map((item) => (
+          <a href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
+        ))}
+        <a href="/about/">How this was made</a>
+      </div>
+    </details>
   </div>
 </header>
+
+<style>
+  /* One breakpoint, one rule each way — the inline links and the menu are
+     never both present. */
+  .navmenu { display: none; position: relative; }
+
+  @media (max-width: 720px) {
+    :global(.bar .navlinks) { display: none; }
+    .navmenu { display: block; }
+  }
+
+  .navmenu > summary {
+    list-style: none;
+    cursor: pointer;
+    padding: .45rem .3rem;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+  }
+  .navmenu > summary::-webkit-details-marker { display: none; }
+  .navmenu > summary:focus-visible { outline: 2px solid var(--accent, #F5A34D); outline-offset: 2px; }
+
+  /* Three bars from one element: the middle is the box, the others are
+     pseudo-elements. */
+  .navmenu__bars,
+  .navmenu__bars::before,
+  .navmenu__bars::after {
+    display: block;
+    width: 20px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--ink, #EDE8FA);
+    transition: transform 220ms ease, opacity 160ms ease;
+  }
+  .navmenu__bars { position: relative; }
+  .navmenu__bars::before,
+  .navmenu__bars::after { content: ''; position: absolute; left: 0; }
+  .navmenu__bars::before { top: -6px; }
+  .navmenu__bars::after { top: 6px; }
+
+  .navmenu[open] .navmenu__bars { background: transparent; }
+  .navmenu[open] .navmenu__bars::before { transform: translateY(6px) rotate(45deg); }
+  .navmenu[open] .navmenu__bars::after { transform: translateY(-6px) rotate(-45deg); }
+
+  .navmenu__panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + .5rem);
+    min-width: 12.5rem;
+    display: flex;
+    flex-direction: column;
+    padding: .35rem;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #140F26;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
+    z-index: 40;
+  }
+  .navmenu__panel a {
+    padding: .6rem .7rem;
+    border-radius: 8px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: .95rem;
+  }
+  .navmenu__panel a:hover,
+  .navmenu__panel a[aria-current='page'] { color: var(--ink); background: rgba(255, 255, 255, .05); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .navmenu__bars,
+    .navmenu__bars::before,
+    .navmenu__bars::after { transition: none; }
+  }
+</style>
 
 <slot />
 
