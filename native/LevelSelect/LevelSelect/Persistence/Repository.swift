@@ -797,7 +797,12 @@ struct Repository {
 
     /// Cache a playlist's parts (id + title, playlist order) on the record.
     func cachePlaylistParts(_ video: GameVideo, ids: [String], titles: [String: String]) {
-        let payload = ids.map { [$0, titles[$0] ?? "Part"] }
+        // Carry existing per-part positions across a re-cache — the parts list
+        // is refetched whenever the player reports it, and dropping the
+        // positions here would quietly reset the playlist every time.
+        let existing = Dictionary(video.parts.map { ($0.id, $0.seconds) },
+                                  uniquingKeysWith: { a, _ in a })
+        let payload: [[Any]] = ids.map { [$0, titles[$0] ?? "Part", existing[$0] ?? 0] }
         video.partsData = try? JSONSerialization.data(withJSONObject: payload)
         touch(video)
         persist()
@@ -807,10 +812,42 @@ struct Repository {
     /// debounced upstream).
     func updateVideoProgress(_ video: GameVideo, seconds: Double, partIndex: Int?) {
         video.watchedSeconds = max(0, seconds)
-        if let partIndex, partIndex >= 0 { video.watchedPartIndex = partIndex }
+        if let partIndex, partIndex >= 0 {
+            video.watchedPartIndex = partIndex
+            // Each part keeps its own position, so moving between parts doesn't
+            // overwrite where you were in the last one.
+            setPartSeconds(video, index: partIndex, seconds: max(0, seconds))
+        }
         video.lastWatchedAt = .now
         touch(video)
         persist()
+    }
+
+    /// Select a playlist part WITHOUT disturbing its saved position.
+    ///
+    /// Jumping to a part used to write `seconds: 0`, which wiped that part's
+    /// resume point at the exact moment you asked to go there — so a playlist
+    /// could never resume a part you returned to.
+    func setVideoPart(_ video: GameVideo, index: Int) {
+        guard index >= 0 else { return }
+        video.watchedPartIndex = index
+        if video.parts.indices.contains(index) {
+            video.watchedSeconds = video.parts[index].seconds
+        }
+        video.lastWatchedAt = .now
+        touch(video)
+        persist()
+    }
+
+    private func setPartSeconds(_ video: GameVideo, index: Int, seconds: Double) {
+        guard let data = video.partsData,
+              var raw = (try? JSONSerialization.jsonObject(with: data)) as? [[Any]],
+              raw.indices.contains(index)
+        else { return }
+        var row = raw[index]
+        if row.count >= 3 { row[2] = seconds } else { row.append(seconds) }
+        raw[index] = row
+        video.partsData = try? JSONSerialization.data(withJSONObject: raw)
     }
 
     // MARK: Bulk clears (Settings → Your data)

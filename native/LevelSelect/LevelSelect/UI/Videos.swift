@@ -4,6 +4,17 @@ import SwiftData
 import WebKit
 #endif
 
+/// JS to jump a live player to a playlist part, landing where you left it.
+///
+/// The seek is deferred because `playVideoAt` loads the new part
+/// asynchronously — seeking immediately would move the part you're leaving.
+private func playlistJump(to index: Int, in video: GameVideo) -> String {
+    let seconds = video.parts.indices.contains(index) ? video.parts[index].seconds : 0
+    let start = max(0, Int(seconds.rounded(.down)) - 2)
+    guard start > 0 else { return "player.playVideoAt(\(index))" }
+    return "player.playVideoAt(\(index));setTimeout(function(){try{player.seekTo(\(start),true)}catch(e){}},700);"
+}
+
 // MARK: - Player dock (16:9, IFrame API bridge for synced resume)
 
 /// Top-docked YouTube player. Uses the IFrame Player API so the app can
@@ -102,11 +113,17 @@ struct PlaylistPartsSheet: View {
                                         .lineLimit(2)
                                         .multilineTextAlignment(.leading)
                                     Spacer()
-                                    if index == video.watchedPartIndex {
-                                        Label(Format.timestamp(video.watchedSeconds),
-                                              systemImage: "play.fill")
+                                    // Each part carries its own position now, so
+                                    // the whole playlist shows how far you got
+                                    // in every part rather than only the last
+                                    // one you touched.
+                                    if part.seconds > 1 {
+                                        Label(Format.timestamp(part.seconds),
+                                              systemImage: index == video.watchedPartIndex
+                                                  ? "play.fill" : "clock")
                                             .font(.caption.monospacedDigit())
-                                            .foregroundStyle(.green)
+                                            .foregroundStyle(index == video.watchedPartIndex
+                                                             ? .green : .secondary)
                                     }
                                 }
                                 .contentShape(.rect)
@@ -267,7 +284,10 @@ struct YouTubePlayerView {
 
     /// Host page for the IFrame API player, seeded with the stored position.
     static func html(for video: GameVideo) -> String {
-        let start = max(0, Int(video.watchedSeconds.rounded(.down)) - 2)
+        // A playlist resumes at the position of the PART it's opening, not at
+        // the single scalar shared across every part.
+        let resumeAt = video.kind == .playlist ? video.currentPartSeconds : video.watchedSeconds
+        let start = max(0, Int(resumeAt.rounded(.down)) - 2)
         let setup: String
         switch video.kind {
         case .video:
@@ -379,11 +399,12 @@ struct VideoListView: View {
         }
         .sheet(item: $partsVideo) { plVideo in
             PlaylistPartsSheet(video: plVideo) { index in
-                Repository(context).updateVideoProgress(plVideo, seconds: 0, partIndex: index)
+                Repository(context).setVideoPart(plVideo, index: index)
                 PersistenceMonitor.shared.commit(context)
                 if playing?.id == plVideo.id {
                     YouTubePlayerView.command(
-                        videoID: plVideo.id, js: "player.playVideoAt(\(index))")
+                        videoID: plVideo.id,
+                        js: playlistJump(to: index, in: plVideo))
                 } else {
                     playing = plVideo
                 }
