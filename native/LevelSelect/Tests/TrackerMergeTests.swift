@@ -384,6 +384,99 @@ struct TrackerMergeTests {
                                            to: "   ", in: data) == nil)
     }
 
+    // MARK: User notes
+
+    /// ⭐ The guarantee the whole hint-vs-note split rests on. A note the user
+    /// wrote must survive the most destructive merge there is — otherwise
+    /// writing one is a trap.
+    @Test func userNotesSurviveAReplace() throws {
+        var current = schema([bosses])
+        current = try #require(TrackerSchemaJSON.editingItem(
+            categoryID: "bosses", itemID: "hornet",
+            note: "PIA. Get the Mothwing Cloak first.", in: current))
+
+        // Regeneration returns the same boss under a fresh id.
+        let incoming = schema([category(id: "bosses", name: "Bosses",
+                                        items: [("boss-hornet", "Hornet")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        let item = TrackerSchemaJSON.categories(from: out).first?.items.first
+
+        #expect(item?.note == "PIA. Get the Mothwing Cloak first.")
+    }
+
+    /// The generator's own description is NOT sacred — that's the difference,
+    /// and it's what lets regeneration stay useful.
+    @Test func theGeneratorsDescriptionIsStillReplaceable() throws {
+        var current = try #require(JSONSerialization.data(withJSONObject: [
+            "schemaVersion": 1,
+            "categories": [["id": "bosses", "name": "Bosses",
+                            "items": [["id": "hornet", "name": "Hornet",
+                                       "description": "Old blurb"]]]],
+        ]) as Data?)
+        current = try #require(TrackerSchemaJSON.editingItem(
+            categoryID: "bosses", itemID: "hornet", note: "Mine", in: current))
+
+        let incoming = try #require(JSONSerialization.data(withJSONObject: [
+            "schemaVersion": 1,
+            "categories": [["id": "bosses", "name": "Bosses",
+                            "items": [["id": "hornet", "name": "Hornet",
+                                       "description": "New blurb"]]]],
+        ]) as Data?)
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        let item = TrackerSchemaJSON.categories(from: out).first?.items.first
+
+        #expect(item?.itemDescription == "New blurb")
+        #expect(item?.note == "Mine")
+    }
+
+    @Test func editingLocationAndClearingItBothWork() throws {
+        var data = schema([bosses])
+        data = try #require(TrackerSchemaJSON.editingItem(
+            categoryID: "bosses", itemID: "hornet", location: "Greenpath", in: data))
+        #expect(TrackerSchemaJSON.categories(from: data).first?.items
+            .first { $0.id == "hornet" }?.location == "Greenpath")
+
+        data = try #require(TrackerSchemaJSON.editingItem(
+            categoryID: "bosses", itemID: "hornet", location: "", in: data))
+        #expect(TrackerSchemaJSON.categories(from: data).first?.items
+            .first { $0.id == "hornet" }?.location == nil)
+    }
+
+    // MARK: Sub-headings in pasted lists
+
+    /// Tim's format: `## Heart Coins` / `### Koala Village` / `- [ ] item`.
+    /// The `###` becomes the items' LOCATION rather than a nested category —
+    /// the schema is two levels deep and progress is keyed per item, so real
+    /// nesting would ripple through the renderer, merge and progress maths for
+    /// what is really a display problem.
+    @Test func markdownSubHeadingsBecomeLocations() throws {
+        let result = TrackerListParser.parse("""
+        ## Heart Coins
+        ### Koala Village
+        - [ ] Nia's Bedroom
+        - [ ] Cave behind M. Uscle's house.
+        ### Kantar Lake
+        - [ ] Chest
+        """)
+        let category = try #require(result.categories.first)
+
+        #expect(result.categories.count == 1)
+        #expect(category.name == "Heart Coins")
+        #expect(category.items.map(\.name)
+                == ["Nia's Bedroom", "Cave behind M. Uscle's house.", "Chest"])
+        #expect(category.items.map(\.location)
+                == ["Koala Village", "Koala Village", "Kantar Lake"])
+    }
+
+    @Test func taskCheckboxesAreStrippedFromNames() throws {
+        let result = TrackerListParser.parse("""
+        ## Bosses
+        - [ ] False Knight
+        - [x] Hornet
+        """)
+        #expect(result.categories.first?.items.map(\.name) == ["False Knight", "Hornet"])
+    }
+
     // MARK: Locks
 
     private func lockedCategory(id: String, name: String,

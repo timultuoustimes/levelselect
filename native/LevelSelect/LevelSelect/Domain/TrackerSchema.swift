@@ -18,6 +18,10 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// The name this arrived with, kept when the user renames it so the merge
     /// engine can still match it against a future generation.
     var sourceName: String? = nil
+    /// The user's own note. Distinct from `itemDescription`, which belongs to
+    /// whatever generated or supplied the item and may be replaced freely —
+    /// this one is theirs and survives every merge.
+    var note: String? = nil
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -132,7 +136,8 @@ enum TrackerSchemaJSON {
                     maxRank: (item["maxRank"] as? NSNumber)?.intValue,
                     rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String },
                     display: item["display"] as? String,
-                    sourceName: item["sourceName"] as? String
+                    sourceName: item["sourceName"] as? String,
+                    note: item["note"] as? String
                 )
             }
             return TrackerCategoryDTO(
@@ -259,6 +264,53 @@ enum TrackerSchemaJSON {
             }
             category["name"] = trimmed
         }
+        cats[cIdx] = category
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Edit an item's user-facing fields. `nil` leaves a field alone; an empty
+    /// string clears it.
+    ///
+    /// `note` is the user's own and is deliberately separate from
+    /// `description`, which belongs to whatever generated or supplied the item.
+    /// Sharing one field would mean the first regeneration ate everything the
+    /// user had written.
+    static func editingItem(categoryID: String, itemID: String,
+                            name: String? = nil, location: String? = nil,
+                            note: String? = nil, in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let cIdx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+        var category = cats[cIdx]
+        var items = (category["items"] as? [[String: Any]]) ?? []
+        guard let iIdx = items.firstIndex(where: { ($0["id"] as? String) == itemID })
+        else { return nil }
+        var item = items[iIdx]
+
+        if let name {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty, trimmed != (item["name"] as? String) {
+                if item["sourceName"] == nil, let original = item["name"] as? String {
+                    item["sourceName"] = original
+                }
+                item["name"] = trimmed
+            }
+        }
+        if let location {
+            let trimmed = location.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { item.removeValue(forKey: "location") }
+            else { item["location"] = trimmed }
+        }
+        if let note {
+            let trimmed = note.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { item.removeValue(forKey: "note") }
+            else { item["note"] = trimmed }
+        }
+
+        items[iIdx] = item
+        category["items"] = items
         cats[cIdx] = category
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)

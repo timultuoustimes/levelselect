@@ -469,6 +469,22 @@ struct Repository {
         return true
     }
 
+    /// Edit an item's name, location and the user's own note.
+    @discardableResult
+    func editTrackerItem(_ game: Game, categoryID: String, itemID: String,
+                         name: String?, location: String?, note: String?) -> Bool {
+        guard let schema = game.trackerSchema,
+              let data = TrackerSchemaJSON.editingItem(
+                categoryID: categoryID, itemID: itemID,
+                name: name, location: location, note: note, in: schema.jsonData)
+        else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
     /// Items in the active playthrough the user has put work into.
     ///
     /// Deliberately broader than "completed" — a part-filled rank or count is

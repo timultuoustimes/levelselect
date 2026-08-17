@@ -193,14 +193,68 @@ enum TrackerMerge {
     static func merged(current: Data, incoming: Data, mode: TrackerMergeMode) -> Data {
         switch mode {
         case .replace:
-            // Unchanged from what regeneration has always done.
-            return TrackerSchemaJSON.mergingPersonalGoals(from: current, into: incoming)
+            let replaced = TrackerSchemaJSON.mergingPersonalGoals(from: current, into: incoming)
+            // Replace throws away the generator's content, not the user's.
+            return carryingUserEdits(from: current, into: replaced)
         case .addAll:
             return additive(current: current, incoming: incoming, accepting: nil)
         case .add(let ids):
             guard !ids.isEmpty else { return current }
             return additive(current: current, incoming: incoming, accepting: ids)
         }
+    }
+
+    /// Re-apply the user's own edits on top of a replaced schema.
+    ///
+    /// Replace is meant to discard the *generator's* content, not the user's.
+    /// Two things carry across for anything that still matches: a note they
+    /// wrote, and a name they chose (with its `sourceName` anchor, so matching
+    /// keeps working next time). Without this, writing a note on a generated
+    /// item and then regenerating would silently lose it — which is precisely
+    /// the failure mode the merge work exists to end.
+    private static func carryingUserEdits(from current: Data, into replaced: Data) -> Data {
+        guard let cur = (try? JSONSerialization.jsonObject(with: current)) as? [String: Any],
+              let curCats = cur["categories"] as? [[String: Any]],
+              var root = (try? JSONSerialization.jsonObject(with: replaced)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]]
+        else { return replaced }
+
+        // Every current item, reachable by id and by either of its names.
+        var byKey: [String: [String: Any]] = [:]
+        for category in curCats {
+            for item in (category["items"] as? [[String: Any]]) ?? [] {
+                if let id = item["id"] as? String { byKey["id:\(id)"] = item }
+                if let name = item["name"] as? String {
+                    byKey["name:\(matchKey(name))"] = byKey["name:\(matchKey(name))"] ?? item
+                }
+                if let source = item["sourceName"] as? String {
+                    byKey["name:\(matchKey(source))"] = byKey["name:\(matchKey(source))"] ?? item
+                }
+            }
+        }
+
+        for (cIdx, category) in cats.enumerated() {
+            var items = (category["items"] as? [[String: Any]]) ?? []
+            for (iIdx, item) in items.enumerated() {
+                let id = (item["id"] as? String).map { "id:\($0)" } ?? ""
+                let name = (item["name"] as? String).map { "name:\(matchKey($0))" } ?? ""
+                guard let previous = byKey[id] ?? byKey[name] else { continue }
+                var updated = item
+                if let note = previous["note"] { updated["note"] = note }
+                // A user-chosen name wins over the generator's, and keeps the
+                // anchor that let it be matched at all.
+                if let source = previous["sourceName"], let chosen = previous["name"] {
+                    updated["name"] = chosen
+                    updated["sourceName"] = source
+                }
+                items[iIdx] = updated
+            }
+            var next = category
+            next["items"] = items
+            cats[cIdx] = next
+        }
+        root["categories"] = cats
+        return (try? JSONSerialization.data(withJSONObject: root)) ?? replaced
     }
 
     /// Append-only merge. Operates on the raw dictionaries rather than the DTOs

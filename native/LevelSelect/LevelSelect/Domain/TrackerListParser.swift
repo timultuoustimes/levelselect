@@ -184,18 +184,26 @@ enum TrackerListParser {
 
     private static func parseSectioned(_ lines: [String], defaultCategoryName: String) -> Result {
         var result = Result(format: .sectionedList)
-        var categories: [(name: String, raw: [String])] = []
-        var current: (name: String, raw: [String])?
+        // Each raw entry carries the `###` heading in force when it was read,
+        // if any — that becomes the item's location.
+        var categories: [(name: String, raw: [(body: String, heading: String?)])] = []
+        var current: (name: String, raw: [(body: String, heading: String?)])?
+        var heading: String?
 
         for line in lines where !line.isEmpty {
+            if let sub = locationHeading(line) {
+                heading = sub
+                continue
+            }
             if let header = sectionHeader(line) {
                 if let open = current, !open.raw.isEmpty { categories.append(open) }
                 current = (header, [])
+                heading = nil
                 continue
             }
             guard let body = itemBody(line) else { continue }
             if current == nil { current = (defaultCategoryName, []) }
-            current?.raw.append(body)
+            current?.raw.append((body, heading))
         }
         if let open = current, !open.raw.isEmpty { categories.append(open) }
 
@@ -206,15 +214,22 @@ enum TrackerListParser {
 
         var seen = Set<String>()
         result.categories = categories.map { category in
-            let split = category.raw.map { splitLeading($0) }
+            // An explicit `###` heading beats the guess every time.
+            let explicit = category.raw.contains { $0.heading != nil }
+            let split = category.raw.map { splitLeading($0.body) }
             // If the leading segment repeats across the section it's a place,
             // not a name — "Koala Village" nine times is a location; "Wallet 1,
             // Wallet 2, Wallet 3" are items. Cheap signal, and right on both of
             // the real lists this was built against.
             let leads = split.compactMap(\.lead)
-            let isLocation = !leads.isEmpty && Set(leads).count < leads.count
+            let isLocation = !explicit && !leads.isEmpty && Set(leads).count < leads.count
 
-            let items = split.map { piece -> ParsedItem in
+            let items = split.enumerated().map { offset, piece -> ParsedItem in
+                let heading = category.raw[offset].heading
+                if let heading {
+                    return ParsedItem(id: uniqueID(from: piece.whole, seen: &seen),
+                                      name: piece.whole, location: heading, raw: piece.whole)
+                }
                 if let lead = piece.lead, let rest = piece.rest {
                     let name = isLocation ? rest : lead
                     return ParsedItem(id: uniqueID(from: name, seen: &seen),
@@ -232,10 +247,30 @@ enum TrackerListParser {
         return result
     }
 
-    /// `Heart Coins (44 Required):` → a category. Deliberately strict: the line
-    /// must end in a colon and not itself be a list item, so a numbered line
-    /// containing a colon isn't mistaken for a header.
+    /// A markdown sub-heading — `### Koala Village` — used as the *location*
+    /// for the items beneath it, rather than as a nested category.
+    ///
+    /// The schema is two levels deep (category → items) and progress is keyed
+    /// per item, so genuine nesting would ripple through the renderer, the
+    /// merge engine and the progress maths. Hoisting a repeated location out
+    /// of every row into a heading is a *display* problem, and the data
+    /// already carries `location` — so `###` fills that field and the renderer
+    /// groups by it, which gets the same result with no structural change.
+    private static func locationHeading(_ line: String) -> String? {
+        guard line.hasPrefix("###") else { return nil }
+        let name = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
+        return name.isEmpty || name.count > 80 ? nil : name
+    }
+
+    /// `## Heart Coins` or `Heart Coins (44 Required):` → a category.
+    /// Deliberately strict on the colon form: the line must end in a colon and
+    /// not itself be a list item, so a numbered line containing a colon isn't
+    /// mistaken for a header.
     private static func sectionHeader(_ line: String) -> String? {
+        if line.hasPrefix("#"), !line.hasPrefix("###") {
+            let name = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
+            return name.isEmpty || name.count > 80 ? nil : name
+        }
         guard line.hasSuffix(":"), !line.hasPrefix("-"), !line.hasPrefix("*") else { return nil }
         if line.range(of: #"^\d+[\.\)]"#, options: .regularExpression) != nil { return nil }
         let name = String(line.dropLast()).trimmingCharacters(in: .whitespaces)
@@ -255,6 +290,10 @@ enum TrackerListParser {
             body.removeSubrange(match)
         } else if body.hasPrefix("- ") || body.hasPrefix("* ") {
             body.removeFirst(2)
+            // Markdown task syntax: "- [ ] Nia's Bedroom".
+            if let box = body.range(of: #"^\[[ xX]?\]\s*"#, options: .regularExpression) {
+                body.removeSubrange(box)
+            }
         } else if body.lowercased().hasPrefix("http") || body.hasPrefix("[") && body.contains("](http") {
             return nil
         }

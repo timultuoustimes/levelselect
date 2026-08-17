@@ -19,6 +19,7 @@ struct TrackerSectionView: View {
     /// Rename target: category id, plus an item id when renaming an item.
     @State private var renaming: (category: String, item: String?)?
     @State private var renameText = ""
+    @State private var editing: EditTarget?
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
 
@@ -150,6 +151,9 @@ struct TrackerSectionView: View {
         }
         .sheet(isPresented: $importingList) {
             TrackerListImportView(game: game)
+        }
+        .sheet(item: $editing) { target in
+            TrackerItemEditView(game: game, target: target)
         }
         .sheet(isPresented: Binding(
             get: { generation.pendingMerge(for: game.id) != nil },
@@ -327,7 +331,23 @@ struct TrackerSectionView: View {
             let done = category.items.filter { stateByItem[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
                 Group {
-                    if isDense(visibleItems) {
+                    if let groups = locationGroups(visibleItems) {
+                        // "Koala Village" under all nine of its Heart Coins is
+                        // the same word nine times. Hoisting it into a
+                        // subheading says it once, and leaves the items as bare
+                        // names — which then qualify for the column grid, so a
+                        // long checklist collapses twice over.
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(groups, id: \.name) { group in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(group.name)
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(LSTheme.accent.opacity(0.9))
+                                    itemsBody(group.items, category: category)
+                                }
+                            }
+                        }
+                    } else if isDense(visibleItems) {
                         // Short, detail-free items waste most of a row each.
                         // An adaptive grid self-tunes by available width rather
                         // than by item count: one column on a narrow phone with
@@ -375,15 +395,53 @@ struct TrackerSectionView: View {
         }
     }
 
+    /// Items grouped under their shared location, or nil when grouping wouldn't
+    /// earn its keep.
+    ///
+    /// Only when every item has a location and the locations genuinely repeat —
+    /// one heading per item would be worse than the repetition it replaces.
+    /// Order follows first appearance, so an imported checklist stays in the
+    /// order it was written rather than being alphabetised out of walkthrough
+    /// order.
+    private func locationGroups(_ items: [TrackerItemDTO])
+        -> [(name: String, items: [TrackerItemDTO])]? {
+        guard items.count >= 6,
+              items.allSatisfy({ !($0.location ?? "").isEmpty }) else { return nil }
+        var order: [String] = []
+        var grouped: [String: [TrackerItemDTO]] = [:]
+        for item in items {
+            let key = item.location ?? ""
+            if grouped[key] == nil { order.append(key) }
+            grouped[key, default: []].append(item)
+        }
+        guard order.count >= 2, order.count <= items.count / 2 else { return nil }
+        return order.map { ($0, grouped[$0] ?? []) }
+    }
+
+    /// Rows for a set of items, in columns when they're simple enough.
+    @ViewBuilder
+    private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO) -> some View {
+        if isDense(items, ignoringLocation: true) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)],
+                      alignment: .leading, spacing: 2) {
+                ForEach(items) { itemRow($0, category: category, hideLocation: true) }
+            }
+        } else {
+            VStack(spacing: 2) {
+                ForEach(items) { itemRow($0, category: category, hideLocation: true) }
+            }
+        }
+    }
+
     /// Whether a category's items are simple enough to sit side by side.
     ///
     /// Only when every visible item is a bare short name — no location, no
     /// description, no rank control. A single item with a two-line description
     /// would leave a ragged column beside a wall of text, which is worse than
     /// the scrolling it saves.
-    private func isDense(_ items: [TrackerItemDTO]) -> Bool {
+    private func isDense(_ items: [TrackerItemDTO], ignoringLocation: Bool = false) -> Bool {
         items.count >= 6 && items.allSatisfy { item in
-            item.location == nil
+            (ignoringLocation || item.location == nil)
                 && (item.itemDescription?.isEmpty ?? true)
                 && item.maxRank == nil
                 && item.name.count <= 28
@@ -402,7 +460,8 @@ struct TrackerSectionView: View {
     // MARK: Item row
 
     @ViewBuilder
-    private func itemRow(_ item: TrackerItemDTO, category: TrackerCategoryDTO) -> some View {
+    private func itemRow(_ item: TrackerItemDTO, category: TrackerCategoryDTO,
+                         hideLocation: Bool = false) -> some View {
         let state = stateByItem[item.id]
         let done = state?.completed == true
         let hidden = item.hideUntilDiscovered && state?.revealed != true && !done
@@ -441,7 +500,7 @@ struct TrackerSectionView: View {
                             .help("Missable")
                     }
                 }
-                if !hidden, let location = item.location {
+                if !hidden, !hideLocation, let location = item.location {
                     Text(location)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -451,6 +510,13 @@ struct TrackerSectionView: View {
                 // running both variants together in one sentence.
                 if !hidden, let description = item.itemDescription, !description.isEmpty {
                     AltDescription(text: description, tint: LSTheme.accent)
+                }
+                // The user's own note, marked so it reads as theirs rather
+                // than as more of whatever supplied the item.
+                if !hidden, let note = item.note, !note.isEmpty {
+                    Label(note, systemImage: "pencil.line")
+                        .font(.caption)
+                        .foregroundStyle(LSTheme.accent.opacity(0.85))
                 }
                 if !hidden, let maxRank = item.maxRank {
                     rankControl(item, category: category, maxRank: maxRank,
@@ -463,9 +529,10 @@ struct TrackerSectionView: View {
         .padding(.vertical, 3)
         .contextMenu {
             Button {
-                renameText = item.name
-                renaming = (category.id, item.id)
-            } label: { Label("Rename Item", systemImage: "pencil") }
+                editing = EditTarget(categoryID: category.id, itemID: item.id,
+                                     name: item.name, location: item.location ?? "",
+                                     note: item.note ?? "")
+            } label: { Label("Edit Item", systemImage: "pencil") }
         }
     }
 
