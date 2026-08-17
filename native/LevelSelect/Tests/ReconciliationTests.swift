@@ -310,6 +310,27 @@ struct ReconciliationTests {
         #expect(game.livePlaythroughs.count == 3)
     }
 
+    /// The bounded foreground sweep must still find doubled clocks — it works
+    /// from a direct fetch of unstopped sessions, not a whole-library walk.
+    @Test func boundedLibrarySweepClosesDoubledSessions() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        _ = repo.startSession(on: pt, at: t0)
+        let synced = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        context.insert(synced)
+        synced.playthrough = pt
+
+        repo.reconcileLibrary(at: t0.addingTimeInterval(1200))
+
+        let open = (pt.sessions ?? []).filter { $0.state != .stopped && $0.deletedAt == nil }
+        #expect(open.count == 1)
+        #expect(pt.totalPlaytime(asOf: t0.addingTimeInterval(1200)) == 1200)
+    }
+
     // MARK: Idempotence and interplay
 
     @Test func reconcileTwiceIsANoOpTheSecondTime() {

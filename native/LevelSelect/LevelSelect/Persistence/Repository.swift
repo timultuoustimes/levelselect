@@ -1051,13 +1051,29 @@ struct Repository {
         return outcome
     }
 
-    /// Sweep every live game. Cheap when there is nothing to do — grouping is
-    /// linear in each game's records and nothing is written for a clean game.
-    func reconcileLibrary() {
-        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil })
-        for game in (try? context.fetch(descriptor)) ?? [] {
-            reconcile(game)
+    /// Foreground sweep, bounded. The previous version walked every live
+    /// game's playthrough/state/session relationships on the main actor at
+    /// every activation — O(whole library) faulting at the worst possible
+    /// moment, flagged by the round-2 review. The only duplicate that does
+    /// cross-game damage while merely sitting there is two clocks running at
+    /// once (playtime double-counts in Stats and totals), and unstopped
+    /// sessions are a tiny, directly fetchable set — so foregrounding now
+    /// repairs exactly that and nothing else. Duplicate state rows are
+    /// benign at rest (reads are deterministic and pick the same row
+    /// everywhere); the full per-game reconcile handles them when a game's
+    /// page opens and before every schema merge, where ids get rewritten.
+    func reconcileLibrary(at date: Date = .now) {
+        let descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate { $0.endDate == nil && $0.deletedAt == nil })
+        let open = ((try? context.fetch(descriptor)) ?? []).filter { $0.state != .stopped }
+        var closed = 0
+        for (_, sessions) in Dictionary(grouping: open, by: { $0.playthrough?.id }) {
+            guard sessions.count > 1, let pt = sessions.first?.playthrough,
+                  pt.deletedAt == nil, pt.game?.deletedAt == nil
+            else { continue }
+            closed += closeDuplicateSessions(in: pt, at: date)
         }
+        if closed > 0 { persist() }
     }
 
     private func liveUnstoppedSessions(of pt: Playthrough) -> [Session] {

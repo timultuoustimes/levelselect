@@ -63,11 +63,14 @@ struct RootView: View {
                 PersistenceMonitor.shared.commit(context)
             }
             // Foregrounding is when CloudKit changes that arrived while
-            // backgrounded have just landed — the moment sync races surface as
-            // duplicate rows. The sweep folds duplicate tracker states and
-            // closes doubled sessions; it writes nothing when there's nothing
-            // to repair. It never deletes playthroughs — emptiness can be
-            // another device's record mid-sync, not a race artifact.
+            // backgrounded have just landed — the moment sync races surface
+            // as duplicate rows. This sweep is deliberately BOUNDED: it only
+            // closes doubled sessions (one small fetch — the sole duplicate
+            // that corrupts library-wide numbers while just sitting there).
+            // Full per-game repair runs when a game's page opens and before
+            // schema merges, so foregrounding never walks the whole library
+            // on the main actor. Nothing is ever deleted by inference —
+            // emptiness can be another device's record mid-sync.
             if phase == .active {
                 Repository(context).reconcileLibrary()
             }

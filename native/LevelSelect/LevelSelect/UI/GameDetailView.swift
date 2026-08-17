@@ -65,6 +65,12 @@ struct GameDetailView: View {
                 await repo.refreshFromIGDB(game)
             }
         }
+        .onAppear {
+            // Fold any sync-duplicated rows for THIS game before its page
+            // shows them. Bounded to one game, unlike the old whole-library
+            // foreground sweep; a clean game writes nothing.
+            repo.reconcile(game)
+        }
         .onDisappear {
             // The metadata, review and notes editors write through bindings on
             // every keystroke; this stamps sync metadata and commits once at
