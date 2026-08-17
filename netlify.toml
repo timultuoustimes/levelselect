@@ -9,10 +9,14 @@
 # app's package.json (which builds with vite), and without a base Netlify
 # would install and run THAT instead of the Astro site. Pointing the base at
 # site/ means npm install and npm run build both happen there.
+# NOTE: with `base` set, every other path here is resolved RELATIVE TO IT.
+# `publish = "site/dist"` therefore became `site/site/dist` and the first
+# deploy failed with "Deploy directory does not exist" — the build itself was
+# fine. It is "dist", not "site/dist".
 [build]
   base = "site"
   command = "npm run build"
-  publish = "site/dist"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
