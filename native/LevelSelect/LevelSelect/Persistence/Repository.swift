@@ -324,10 +324,14 @@ struct Repository {
         // was wrong.
         //
         // A paused session has no running segment, so elapsed() correctly
-        // returns its accumulated total unchanged.
+        // returns its accumulated total unchanged — and its anchor is the
+        // PAUSE, not the original start: the pause proves activity until that
+        // moment, so the recorded stop (and "last played") may never predate
+        // it. Anchoring a paused session at startDate let the sheet's default
+        // write a stop timestamp hours before the user actually stopped.
         let anchor = session.state == .running
             ? (session.resumedAt ?? session.startDate)
-            : session.startDate
+            : (session.pausedAt ?? session.startDate)
         let clamped = max(anchor, stop)
         session.accumulatedDuration = session.elapsed(asOf: clamped)
         session.endDate = clamped

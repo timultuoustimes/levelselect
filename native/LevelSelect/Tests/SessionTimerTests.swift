@@ -70,4 +70,28 @@ struct SessionTimerTests {
         #expect(s.state == .stopped)
         #expect(abs(s.accumulatedDuration - 3600) < 0.001)
     }
+
+    /// Round 2, finding 9: a PAUSED stale session's real boundary is its
+    /// pause, not its start. The old anchor let the sheet's suggested time
+    /// record a stop hours before — or after — the user actually stopped;
+    /// the pause proves activity up to exactly that moment, so the recorded
+    /// end and "last played" clamp to it. Duration is untouched either way.
+    @Test func endingAPausedStaleSessionAnchorsToItsPause() {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let game = repo.addGame(name: "E", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let s = repo.startSession(on: pt, at: t0)
+        repo.pauseSession(s, at: t0.addingTimeInterval(300))   // 5 min banked
+
+        // The user (or the old sheet default) picks a stop BEFORE the pause.
+        repo.endStaleSession(s, stoppedAt: t0.addingTimeInterval(60))
+
+        #expect(s.state == .stopped)
+        #expect(abs(s.accumulatedDuration - 300) < 0.001)      // duration honest
+        #expect(s.endDate == t0.addingTimeInterval(300))       // clamped to pause
+        #expect(pt.lastPlayedAt == t0.addingTimeInterval(300))
+    }
 }

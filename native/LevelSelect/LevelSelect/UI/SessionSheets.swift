@@ -10,12 +10,17 @@ struct EndSessionSheet: View {
 
     init(session: Session) {
         self.session = session
-        // Default from the point the current segment actually started, not
-        // from the original start — with a pause in between, start + threshold
-        // could land BEFORE the last resume and suggest a stop time that
-        // predates the play it's meant to be recording.
-        let anchor = session.resumedAt ?? session.startDate
-        let suggested = min(.now, anchor.addingTimeInterval(StaleSessionGuard.threshold))
+        // The current segment's real boundary: the last resume for a running
+        // session, the pause itself for a paused one — never the original
+        // start, which with pauses in between could suggest (and allow) a
+        // stop time that predates play this session actually recorded.
+        let anchor = session.resumedAt ?? session.pausedAt ?? session.startDate
+        // A paused session already stopped accruing AT its pause — that IS
+        // when the user stopped, so suggest it exactly; anchor + threshold
+        // would invent a stop hours after they put the game down.
+        let suggested = session.state == .paused
+            ? anchor
+            : min(.now, anchor.addingTimeInterval(StaleSessionGuard.threshold))
         _stopTime = State(initialValue: suggested)
     }
 
@@ -30,7 +35,7 @@ struct EndSessionSheet: View {
                 }
                 Section("When did you stop?") {
                     DatePicker("Stopped at", selection: $stopTime,
-                               in: (session.resumedAt ?? session.startDate) ... .now)
+                               in: (session.resumedAt ?? session.pausedAt ?? session.startDate) ... .now)
                     LabeledContent("Records") {
                         // The same calculation the save performs, so the
                         // preview can't promise a number the write won't honour.
