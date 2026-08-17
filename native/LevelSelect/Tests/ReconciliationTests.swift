@@ -35,32 +35,98 @@ struct ReconciliationTests {
         let (repo, game) = self.game(named: "Hollow Knight")
         let pt = repo.ensureDefaultPlaythrough(for: game)
 
-        // This device ranked it 2; the other device ticked it complete.
+        // This device ranked it 2; the other device LATER ticked it complete.
         repo.setTrackerRank(pt, itemID: "charm", rank: 2, maxRank: 5)
-        _ = syncedState(repo, pt: pt, itemID: "charm", completed: true)
+        _ = syncedState(repo, pt: pt, itemID: "charm", completed: true,
+                        updatedAt: .now.addingTimeInterval(60))
 
         let outcome = repo.reconcile(game)
 
         #expect(outcome.mergedStates == 1)
         let live = (pt.trackerStates ?? []).filter { $0.itemID == "charm" && $0.deletedAt == nil }
         #expect(live.count == 1)
-        // Folded, not dropped: the tick AND the rank both survive in one row.
+        // The later action (the tick) wins; the rank fills in from the twin
+        // because the winner never made any claim about rank.
         #expect(live.first?.completed == true)
         #expect(live.first?.rank == 2)
     }
 
-    /// Before the sweep has run, the read itself must already prefer the twin
-    /// carrying the user's work — a tick made on the other device must never
-    /// show as unticked because of relationship ordering.
-    @Test func readPrefersTheTickedTwinEvenBeforeReconcile() {
+    /// Round 2: "newest wins" folding via OR resurrected deliberate
+    /// reductions. An untick that is the user's LATEST action must survive a
+    /// stale completed twin — reconcile must not re-tick it.
+    @Test func deliberateUncheckIsNotResurrectedByAStaleTwin() {
         let (repo, game) = self.game(named: "Hollow Knight")
         let pt = repo.ensureDefaultPlaythrough(for: game)
 
         let old = Date(timeIntervalSince1970: 1_700_000_000)
         _ = syncedState(repo, pt: pt, itemID: "boss", completed: true, updatedAt: old)
-        _ = syncedState(repo, pt: pt, itemID: "boss", completed: false, updatedAt: old.addingTimeInterval(9999))
+        _ = syncedState(repo, pt: pt, itemID: "boss", completed: false,
+                        updatedAt: old.addingTimeInterval(9999))
 
-        #expect(repo.trackerState(pt, itemID: "boss")?.completed == true)
+        // The read already reflects the latest action…
+        #expect(repo.trackerState(pt, itemID: "boss")?.completed == false)
+
+        // …and the fold preserves it rather than OR-ing the stale tick back.
+        repo.reconcile(game)
+        let live = (pt.trackerStates ?? []).filter { $0.itemID == "boss" && $0.deletedAt == nil }
+        #expect(live.count == 1)
+        #expect(live.first?.completed == false)
+    }
+
+    /// Round 2: equal timestamps had no total tie-break, so each device could
+    /// pick a different winner from its own relationship order — and after
+    /// both devices' tombstones synced, both copies could be gone. The winner
+    /// must be the same regardless of insertion order.
+    @Test func equalTimestampsResolveTheSameWinnerRegardlessOfOrder() {
+        let stamp = Date(timeIntervalSince1970: 1_700_000_000)
+        let idA = UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000000")!
+        let idB = UUID(uuidString: "BBBBBBBB-0000-0000-0000-000000000000")!
+
+        var winners: [UUID] = []
+        for order in [[idA, idB], [idB, idA]] {
+            let (repo, game) = self.game(named: "Hollow Knight")
+            let pt = repo.ensureDefaultPlaythrough(for: game)
+            for id in order {
+                let record = syncedState(repo, pt: pt, itemID: "tie",
+                                         completed: id == idA, updatedAt: stamp)
+                record.id = id
+            }
+            repo.reconcile(game)
+            let live = (pt.trackerStates ?? []).filter { $0.itemID == "tie" && $0.deletedAt == nil }
+            #expect(live.count == 1)
+            winners.append(live.first!.id)
+        }
+        #expect(winners[0] == winners[1])
+    }
+
+    /// Round 2: the fold was lossy for notes — one of two distinct notes
+    /// silently vanished, and an empty-string "note" on the winner blocked a
+    /// real one on the loser. Authored text is never dropped.
+    @Test func conflictingNotesBothSurviveTheFold() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let old = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let loser = syncedState(repo, pt: pt, itemID: "grub", updatedAt: old)
+        loser.notes = "behind the breakable wall"
+        let winner = syncedState(repo, pt: pt, itemID: "grub",
+                                 updatedAt: old.addingTimeInterval(100))
+        winner.notes = "use the lantern"
+
+        // Empty string must not beat a real note either.
+        let loser2 = syncedState(repo, pt: pt, itemID: "charm", updatedAt: old)
+        loser2.notes = "bought in Dirtmouth"
+        let winner2 = syncedState(repo, pt: pt, itemID: "charm",
+                                  updatedAt: old.addingTimeInterval(100))
+        winner2.notes = ""
+
+        repo.reconcile(game)
+
+        let grubNote = repo.trackerState(pt, itemID: "grub")?.notes ?? ""
+        #expect(grubNote.contains("use the lantern"))
+        #expect(grubNote.contains("behind the breakable wall"))
+        #expect(repo.trackerState(pt, itemID: "charm")?.notes?
+            .contains("bought in Dirtmouth") == true)
     }
 
     // MARK: Doubled sessions
@@ -105,6 +171,70 @@ struct ReconciliationTests {
 
         #expect(paused.state == .stopped)
         #expect(paused.elapsed() == 300)
+    }
+
+    /// Round 2's session-intent failure: an old session RESUMED at 17:00 is a
+    /// later user action than a fresh one started at 16:00. Keying the winner
+    /// on original startDate stopped the session the user was actually
+    /// running. The resumed session must survive.
+    @Test func resumedOldSessionBeatsNewerStartedSession() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t15 = Date(timeIntervalSince1970: 1_700_000_000)          // 15:00
+        let t16 = t15.addingTimeInterval(3600)                        // 16:00
+        let t17 = t15.addingTimeInterval(7200)                        // 17:00
+
+        // Other device: started 15:00, played 30 min, paused, resumed 17:00.
+        let resumed = Session(startDate: t15, state: .running)
+        resumed.accumulatedDuration = 1800
+        resumed.resumedAt = t17
+        repo.context.insert(resumed)
+        resumed.playthrough = pt
+
+        // This device: a fresh session started 16:00, currently running.
+        let fresh = Session(startDate: t16, state: .running)
+        repo.context.insert(fresh)
+        fresh.playthrough = pt
+
+        repo.reconcile(game)
+
+        // The genuinely active resumed session keeps running…
+        #expect(resumed.state == .running)
+        #expect(fresh.state == .stopped)
+        // …and the loser is credited only up to the survivor's resume, so the
+        // overlapping hour isn't double-counted.
+        #expect(fresh.accumulatedDuration == 3600)
+        // 30 min banked + 30 min live at 17:30 + the loser's hour.
+        #expect(pt.totalPlaytime(asOf: t17.addingTimeInterval(1800)) == 1800 + 1800 + 3600)
+    }
+
+    /// Clock skew: a synced session anchored in this device's future must
+    /// never read or record negative time.
+    @Test func futureDatedSessionNeverGoesNegative() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let skewed = Session(startDate: now.addingTimeInterval(3600), state: .running)
+        skewed.accumulatedDuration = 120
+        repo.context.insert(skewed)
+        skewed.playthrough = pt
+
+        #expect(skewed.elapsed(asOf: now) == 120)   // clamped, not 120 - 3600
+
+        // With a local session also open, reconcile must not write a negative
+        // duration into whichever side it closes.
+        let local = Session(startDate: now, state: .running)
+        repo.context.insert(local)
+        local.playthrough = pt
+        repo.reconcile(game, at: now)
+        for s in (pt.sessions ?? []) {
+            #expect(s.accumulatedDuration >= 0)
+            #expect(s.elapsed(asOf: now) >= 0)
+        }
+        // The future-dated winner must not have credited the local session
+        // for time that hasn't happened yet.
+        #expect(local.accumulatedDuration == 0)
     }
 
     /// Starting a session must close EVERY unstopped one, not one arbitrary

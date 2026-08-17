@@ -402,18 +402,17 @@ struct Repository {
     ///
     /// Deterministic when duplicates exist: two devices can each create a row
     /// for the same item before sync, and both survive it (ids are random
-    /// UUIDs; logical identity is only a convention). `.first` made the answer
-    /// depend on relationship order — a tick made on the other device could
-    /// show as unticked here. Prefer the row with the user's work on it
-    /// (completed), then the most recently touched. `reconcile` merges the
-    /// duplicates away; this keeps reads stable until it has.
+    /// UUIDs; logical identity is only a convention). The winner is the row
+    /// most recently touched, under a TOTAL order — (updatedAt, id) — so
+    /// equal timestamps still resolve to the same row on every device. A
+    /// "prefer the ticked twin" rule looks kinder but reads the wrong state
+    /// when the user's LATEST action was an untick; latest action is the only
+    /// rule that never overrides the user. `reconcile` merges the duplicates
+    /// away with the same order; this keeps reads stable until it has.
     func trackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord? {
         (pt.trackerStates ?? [])
             .filter { $0.itemID == itemID && $0.deletedAt == nil }
-            .max { a, b in
-                if a.completed != b.completed { return b.completed }
-                return a.updatedAt < b.updatedAt
-            }
+            .max { ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString) }
     }
 
     @discardableResult
@@ -1041,11 +1040,11 @@ struct Repository {
     /// Duplicates stay visible for the user to resolve; deletion requires
     /// their hand.
     @discardableResult
-    func reconcile(_ game: Game) -> ReconcileOutcome {
+    func reconcile(_ game: Game, at date: Date = .now) -> ReconcileOutcome {
         var outcome = ReconcileOutcome()
         for pt in game.livePlaythroughs {
-            outcome.mergedStates += mergeDuplicateStates(in: pt)
-            outcome.closedSessions += closeDuplicateSessions(in: pt)
+            outcome.mergedStates += mergeDuplicateStates(in: pt, at: date)
+            outcome.closedSessions += closeDuplicateSessions(in: pt, at: date)
         }
         if outcome.mergedStates > 0 { recomputeProgress(game) }
         if !outcome.isNoOp { persist() }
@@ -1067,29 +1066,46 @@ struct Repository {
 
     /// Fold duplicate state rows for the same item into one and tombstone the
     /// rest, so the removal itself syncs.
-    private func mergeDuplicateStates(in pt: Playthrough) -> Int {
+    ///
+    /// The winner is the row the user touched last, under the same total
+    /// order as the `trackerState` read — (updatedAt, id) — so the surviving
+    /// row is the row the UI was already showing, and every device picks the
+    /// SAME survivor. (Without the id tie-break, equal timestamps let each
+    /// device tombstone the row the other kept; after those tombstones
+    /// synced, both copies of the user's progress could be gone.)
+    ///
+    /// The winner's checked/rank/count stand exactly as last set: no OR, no
+    /// max. Folding "the strongest claim from each side" resurrected
+    /// deliberate reductions — untick an item on one device and a stale twin
+    /// re-ticked it — and could manufacture rank/completion combinations no
+    /// one ever set. A loser's value fills in only where the winner has no
+    /// claim at all (a never-set rank or count), a reveal survives from
+    /// either side (revealing has no undo, so it can't contradict anything),
+    /// and a note is never dropped: when both rows carry different notes the
+    /// loser's is appended, so the user resolves the conflict instead of the
+    /// code silently picking one.
+    private func mergeDuplicateStates(in pt: Playthrough, at date: Date = .now) -> Int {
         let live = (pt.trackerStates ?? []).filter { $0.deletedAt == nil }
         let groups = Dictionary(grouping: live, by: \.itemID).filter { $0.value.count > 1 }
         guard !groups.isEmpty else { return 0 }
         var merged = 0
         for (_, records) in groups {
-            // Same winner rule as the trackerState read, so the surviving row
-            // is the row the UI was already showing.
-            let winner = records.max { a, b in
-                if a.completed != b.completed { return b.completed }
-                return a.updatedAt < b.updatedAt
+            let winner = records.max {
+                ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString)
             }!
             for loser in records where loser !== winner {
-                // Fold, never drop: a tick, a rank, a reveal made on either
-                // device is the user's work regardless of which row it landed
-                // in. Max/OR keeps the strongest claim from each side.
-                winner.completed = winner.completed || loser.completed
-                if let r = loser.rank { winner.rank = max(winner.rank ?? 0, r) }
-                if let c = loser.count { winner.count = max(winner.count ?? 0, c) }
+                if winner.rank == nil { winner.rank = loser.rank }
+                if winner.count == nil { winner.count = loser.count }
                 winner.revealed = winner.revealed || loser.revealed
-                if winner.notes == nil { winner.notes = loser.notes }
-                loser.deletedAt = .now
-                touch(loser)
+                let winnerNote = winner.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let loserNote = loser.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !loserNote.isEmpty, winnerNote.isEmpty {
+                    winner.notes = loser.notes
+                } else if !loserNote.isEmpty, winnerNote != loserNote {
+                    winner.notes = winnerNote + "\n" + loserNote
+                }
+                loser.deletedAt = date
+                touch(loser, at: date)
                 merged += 1
             }
             touch(winner)
@@ -1099,25 +1115,45 @@ struct Repository {
     }
 
     /// More than one unstopped session means two devices were both timing.
-    /// The newest is the user's most recent intent and survives; each older
-    /// one is credited only up to the moment the newer began — past that point
-    /// the same wall-clock minutes are already being counted by the survivor,
-    /// and summing both is exactly the double-counted playtime this exists to
-    /// prevent.
-    private func closeDuplicateSessions(in pt: Playthrough) -> Int {
-        let open = liveUnstoppedSessions(of: pt).sorted { $0.startDate < $1.startDate }
-        guard open.count > 1, let newest = open.last else { return 0 }
+    /// The survivor is the session the user ACTED on last — started, paused,
+    /// or resumed, with the id as a total tie-break — not the one with the
+    /// newest original start date. Keying on `startDate` stopped the wrong
+    /// session for exactly the case that matters: an old session deliberately
+    /// resumed at 17:00 is a later user action than a fresh one started at
+    /// 16:00, yet lost to it and was silently stopped while the user watched
+    /// its timer run.
+    ///
+    /// Losers are closed, never deleted — their recorded time is user data.
+    /// A running loser is credited only up to the moment the survivor's
+    /// current segment began; past that point the same wall-clock minutes are
+    /// already being counted by the survivor, and summing both is exactly the
+    /// double-counted playtime this exists to prevent. A paused loser keeps
+    /// its banked time unchanged and closes at its own pause time, not an
+    /// invented one.
+    private func closeDuplicateSessions(in pt: Playthrough, at date: Date = .now) -> Int {
+        let open = liveUnstoppedSessions(of: pt)
+        guard open.count > 1 else { return 0 }
+        let winner = open.max {
+            ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString)
+        }!
+        // When the survivor's current segment started counting (or, if it is
+        // paused, the last moment it was known to be counting) — clamped to
+        // now, so a survivor whose anchor sits in this device's future (clock
+        // skew) can't credit a loser for time that hasn't happened yet.
+        let winnerAnchor = min(date, winner.state == .running
+            ? (winner.resumedAt ?? winner.startDate)
+            : (winner.pausedAt ?? winner.startDate))
         var closed = 0
-        for older in open.dropLast() {
-            // Clamp to the running anchor so a paused session — or a newer
-            // session that started before this one's last resume — can never
-            // produce a negative segment.
-            let anchor = older.state == .running
-                ? (older.resumedAt ?? older.startDate)
-                : older.startDate
-            let cut = max(anchor, newest.startDate)
-            older.accumulatedDuration = older.elapsed(asOf: cut)
-            older.endDate = cut
+        for older in open where older !== winner {
+            if older.state == .running {
+                // Clamp to the loser's own running anchor so a survivor whose
+                // segment began earlier can never produce a negative segment.
+                let cut = max(older.resumedAt ?? older.startDate, winnerAnchor)
+                older.accumulatedDuration = older.elapsed(asOf: cut)
+                older.endDate = cut
+            } else {
+                older.endDate = older.pausedAt ?? older.startDate
+            }
             older.pausedAt = nil
             older.resumedAt = nil
             older.state = .stopped

@@ -25,13 +25,28 @@ final class Session {
     var playthrough: Playthrough?
 
     /// Elapsed time up to `asOf` (default now). Stopped/paused sessions use accumulated only.
+    ///
+    /// The running segment is clamped at zero: another device's clock can put
+    /// a synced session's start/resume anchor in THIS device's future, and an
+    /// unclamped interval would then subtract time — a timer counting below
+    /// zero, or reconciliation writing negative playtime into history.
     func elapsed(asOf now: Date = .now) -> TimeInterval {
         switch state {
         case .running:
-            return accumulatedDuration + now.timeIntervalSince(resumedAt ?? startDate)
+            return accumulatedDuration + max(0, now.timeIntervalSince(resumedAt ?? startDate))
         case .paused, .stopped:
             return accumulatedDuration
         }
+    }
+
+    /// The last moment the user demonstrably acted on this session — started,
+    /// paused, or resumed it. This, not `startDate`, is what "most recent
+    /// intent" means: an old session RESUMED at 17:00 is a later user action
+    /// than a fresh one started at 16:00, and any duplicate-session winner
+    /// picked from original start dates can stop the timer the user is
+    /// actually running.
+    var lastUserAction: Date {
+        max(startDate, max(resumedAt ?? .distantPast, pausedAt ?? .distantPast))
     }
 
     init(
