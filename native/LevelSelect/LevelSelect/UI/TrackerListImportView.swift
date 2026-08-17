@@ -65,7 +65,7 @@ struct TrackerListImportView: View {
 
     private var entry: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Paste a checklist — a markdown table, or sections with numbered items. Nothing is sent anywhere and nothing is generated; it's read exactly as written.")
+            Text("Paste a checklist — a markdown table, or sections with numbered items. Nothing is sent anywhere and nothing is invented: every item comes from your text, with list syntax stripped and names and locations read out of it. The preview shows exactly how it was read.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
