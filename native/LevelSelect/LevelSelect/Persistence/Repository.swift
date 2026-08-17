@@ -1319,11 +1319,14 @@ extension Game {
     }
     #endif
 
-    /// Live (non-deleted) playthroughs, oldest first (stable ordering).
+    /// Live (non-deleted) playthroughs, oldest first — with the id as a
+    /// total tie-break, because `activePlaythrough` falls back to `.first`:
+    /// equal creation timestamps otherwise let two devices resolve different
+    /// fallback playthroughs and write sessions into different histories.
     var livePlaythroughs: [Playthrough] {
         (playthroughs ?? [])
             .filter { $0.deletedAt == nil }
-            .sorted { $0.createdAt < $1.createdAt }
+            .sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
     }
 
     /// The playthrough all per-playthrough UI reads: the current selection,
@@ -1355,11 +1358,13 @@ extension Run {
 }
 
 extension Playthrough {
-    /// Live runs, newest first.
+    /// Live runs, newest first — id as a total tie-break so `activeRun`
+    /// (which takes the first in-progress row) resolves the same run on
+    /// every device even at equal start timestamps.
     var liveRuns: [Run] {
         (runs ?? [])
             .filter { $0.deletedAt == nil }
-            .sorted { $0.startedAt > $1.startedAt }
+            .sorted { ($0.startedAt, $0.id.uuidString) > ($1.startedAt, $1.id.uuidString) }
     }
 
     var activeRun: Run? {
