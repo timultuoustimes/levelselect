@@ -15,6 +15,7 @@ struct TrackerSectionView: View {
     /// dies when you navigate away, and generation takes a minute or two.
     @State private var generation = TrackerGenerationStore.shared
     @State private var confirmingRegenerate = false
+    @State private var importingList = false
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
 
@@ -109,6 +110,13 @@ struct TrackerSectionView: View {
                 }
                 .disabled(isGenerating)
 
+                Button {
+                    importingList = true
+                } label: {
+                    Label("Paste a List", systemImage: "doc.on.clipboard")
+                        .font(.subheadline)
+                }
+
                 if builtinAvailable && !usingBuiltin {
                     Button {
                         confirmingUseBuiltin = true
@@ -136,6 +144,9 @@ struct TrackerSectionView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Replaces the current tracker content. Personal Goals are kept, and progress follows any item that comes back under a new name — but anything the new tracker drops loses its progress.")
+        }
+        .sheet(isPresented: $importingList) {
+            TrackerListImportView(game: game)
         }
         .sheet(isPresented: Binding(
             get: { generation.pendingMerge(for: game.id) != nil },
