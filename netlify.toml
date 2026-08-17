@@ -29,7 +29,21 @@
     X-Frame-Options = "DENY"
 
 # Fonts and images are stable; the HTML is not.
+#
+# ⚠️ This rule used to cover style.css too, because the stylesheet lived in
+# /assets/ alongside the fonts. "immutable" for a year is a promise the file
+# will never change, which was false for the one file in there that changes
+# every time the design does — CSS edits were invisible to anyone who had
+# visited before. The stylesheet now goes through Astro's build and lands in
+# /_astro/ under a content hash, so this folder is genuinely only stable files.
 [[headers]]
   for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Astro's hashed output. The filename changes whenever the content does, so
+# immutable is exactly right here — a new build produces a new URL.
+[[headers]]
+  for = "/_astro/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

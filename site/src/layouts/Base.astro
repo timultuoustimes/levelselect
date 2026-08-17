@@ -5,6 +5,8 @@
  * different structure, so the edit silently missed it. That's the entire
  * reason this layout exists.
  */
+import '../styles/style.css';
+
 interface Props {
   title: string;
   description: string;
@@ -12,6 +14,12 @@ interface Props {
   current?: 'features' | 'changelog' | 'roadmap' | 'privacy' | 'about';
 }
 const { title, description, current } = Astro.props;
+
+// Imported, not <link>ed to /assets/. The stylesheet lived in /assets/, which
+// netlify.toml caches for a YEAR as `immutable` — correct for the fonts and
+// images it was written for, badly wrong for a file that changes every time
+// the design does. Importing it means Astro emits a content-hashed filename,
+// so the immutable header becomes true rather than a trap.
 
 const nav = [
   { href: '/#features', label: 'Features', key: 'features' },
@@ -28,7 +36,6 @@ const nav = [
 <title>{title}</title>
 <meta name="description" content={description} />
 <link rel="icon" href="/assets/favicon.png" />
-<link rel="stylesheet" href="/assets/style.css" />
 <link rel="alternate" type="application/rss+xml" title="LevelSelect changelog" href="/changelog/rss.xml" />
 <meta name="theme-color" content="#0D0A17" />
 <meta property="og:title" content={title} />
