@@ -11,6 +11,7 @@ struct GameDetailView: View {
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
     @State private var didAutoRefresh = false
+    @State private var entryFingerprint: Int?
 
     @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.name)
     private var collections: [GameCollection]
@@ -70,13 +71,20 @@ struct GameDetailView: View {
             // shows them. Bounded to one game, unlike the old whole-library
             // foreground sweep; a clean game writes nothing.
             repo.reconcile(game)
+            // Snapshot the binding-edited fields so leaving the page can tell
+            // whether THIS game changed — not whether the context has any
+            // pending change, which stamped the wrong game (or missed an
+            // autosaved one).
+            entryFingerprint = game.bindingEditFingerprint
         }
         .onDisappear {
             // The metadata, review and notes editors write through bindings on
             // every keystroke; this stamps sync metadata and commits once at
             // the natural boundary instead of per keystroke. No-op when the
-            // visit changed nothing.
-            repo.finalizeEdits(game)
+            // visit changed nothing on this game.
+            if let entryFingerprint {
+                repo.finalizeEdits(game, ifChangedFrom: entryFingerprint)
+            }
         }
         .dekuBrowser(target: $browserTarget)
         .alert("New Collection", isPresented: $newCollection) {

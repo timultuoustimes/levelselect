@@ -38,17 +38,23 @@ struct Repository {
         persist()
     }
 
-    /// Stamp-and-commit for screens that edit through SwiftUI bindings.
+    /// Stamp-and-commit for the screen that edits through SwiftUI bindings
+    /// (Game Detail's rating, ownership, notes, metadata and review editors).
     ///
-    /// Text fields (review, notes, metadata) write straight into the model on
-    /// every keystroke; wrapping each keystroke in an explicit commit would
-    /// trade one bug for a worse one. Instead the natural boundary — leaving
-    /// the page — stamps the sync metadata once and commits, with the
-    /// scene-phase background save as the backstop. No-op when nothing
-    /// actually changed, so ordinary navigation writes nothing.
-    func finalizeEdits<T: Syncable>(_ model: T) {
-        guard context.hasChanges else { return }
-        touch(model)
+    /// Text fields write straight into the model on every keystroke; wrapping
+    /// each keystroke in an explicit commit would trade one bug for a worse
+    /// one, so the natural boundary — leaving the page — stamps sync metadata
+    /// once. The change test is EDIT-SCOPED: the view captures the game's
+    /// `bindingEditFingerprint` when the page appears and this compares
+    /// against it on the way out. The old gate asked `context.hasChanges` — a
+    /// question about the whole context, not this game — so any unrelated
+    /// pending model made leaving an untouched page bump this game's
+    /// revision, and an autosave that committed the keystrokes first left a
+    /// real edit persisted with NO stamp at all. Either way, CloudKit's
+    /// conflict ordering then judged the wrong side newer.
+    func finalizeEdits(_ game: Game, ifChangedFrom fingerprint: Int) {
+        guard game.bindingEditFingerprint != fingerprint else { return }
+        touch(game)
         persist()
     }
 
@@ -1222,6 +1228,31 @@ struct Repository {
 // MARK: - Derived helpers
 
 extension Game {
+    /// Digest of every field Game Detail edits through SwiftUI bindings —
+    /// rating, ownership, notes, review, and the metadata edit form. Captured
+    /// when the page appears and compared when it leaves, so the stamp
+    /// decision is about THIS game's edited fields — not about whatever else
+    /// the context has pending, and not about whether autosave already
+    /// committed the keystrokes. (Fields edited through `repo.edit`, like
+    /// tags and status, stamp themselves and are deliberately absent.)
+    var bindingEditFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(rating)
+        hasher.combine(ownership)
+        hasher.combine(notes)
+        hasher.combine(review)
+        hasher.combine(firstReleaseDate)
+        hasher.combine(franchise)
+        hasher.combine(developers)
+        hasher.combine(publishers)
+        hasher.combine(platforms)
+        hasher.combine(genres)
+        hasher.combine(themes)
+        hasher.combine(gameModes)
+        hasher.combine(playerPerspectives)
+        return hasher.finalize()
+    }
+
     #if os(iOS) || os(macOS)
     /// Effective tracker display: explicit per-game choice wins; otherwise
     /// the library default (which can never override an explicit choice).

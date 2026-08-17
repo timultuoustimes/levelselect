@@ -404,8 +404,9 @@ struct RepositoryEditTests {
         let repo = Repository(context)
         let game = repo.addGame(name: "Celeste", status: .backlog)
         let revBefore = game.revision
+        let entry = game.bindingEditFingerprint
 
-        repo.finalizeEdits(game)
+        repo.finalizeEdits(game, ifChangedFrom: entry)
 
         #expect(game.revision == revBefore)
     }
@@ -417,9 +418,51 @@ struct RepositoryEditTests {
         let repo = Repository(context)
         let game = repo.addGame(name: "Celeste", status: .backlog)
         let revBefore = game.revision
+        let entry = game.bindingEditFingerprint
 
         game.review = "wrote this through a TextField binding"
-        repo.finalizeEdits(game)
+        repo.finalizeEdits(game, ifChangedFrom: entry)
+
+        #expect(game.revision == revBefore + 1)
+    }
+
+    /// Round 2's first failure shape: some UNRELATED model is dirty when the
+    /// user leaves an untouched game page. The old `context.hasChanges` gate
+    /// stamped the untouched game — cross-device ordering then treated it as
+    /// freshly edited. The edit-scoped gate must not.
+    @Test func finalizeEditsIgnoresAnUnrelatedDirtyModel() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let visited = repo.addGame(name: "Celeste", status: .backlog)
+        let other = repo.addGame(name: "Hades", status: .playing)
+        let revBefore = visited.revision
+        let entry = visited.bindingEditFingerprint
+
+        other.review = "pending, unsaved edit on a DIFFERENT game"
+        #expect(context.hasChanges)   // the old gate would have fired
+
+        repo.finalizeEdits(visited, ifChangedFrom: entry)
+
+        #expect(visited.revision == revBefore)
+    }
+
+    /// Round 2's second failure shape: SwiftData autosave (or the scene
+    /// background commit) saves the binding edit BEFORE onDisappear runs. The
+    /// context is then clean, so the old gate skipped the stamp and the edit
+    /// persisted without its sync metadata. A binding edit must not be able
+    /// to persist unstamped.
+    @Test func finalizeEditsStampsEvenAfterAutosaveAlreadyCommitted() throws {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .backlog)
+        let revBefore = game.revision
+        let entry = game.bindingEditFingerprint
+
+        game.review = "typed, then autosaved"
+        try context.save()            // what autosave / scene background do
+        #expect(!context.hasChanges)  // the old gate would now skip the stamp
+
+        repo.finalizeEdits(game, ifChangedFrom: entry)
 
         #expect(game.revision == revBefore + 1)
     }
