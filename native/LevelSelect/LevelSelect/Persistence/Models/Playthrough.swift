@@ -28,8 +28,18 @@ final class Playthrough {
     var runs: [Run]?
 
     /// Active session = the one not yet stopped (no separate stored flag).
+    ///
+    /// Newest by start date, deterministically — not `.first`. Two devices can
+    /// each start a session before either sees the other's, and after sync both
+    /// rows are live; `.first` then returned whichever the relationship
+    /// happened to order first, so Stop could stop a different session than the
+    /// timer was showing. The newest is the one the user most recently meant.
+    /// `Repository.reconcile` closes out the older duplicates; this keeps the
+    /// read stable in the window before it runs.
     var activeSession: Session? {
-        (sessions ?? []).first { $0.state != .stopped && $0.deletedAt == nil }
+        (sessions ?? [])
+            .filter { $0.state != .stopped && $0.deletedAt == nil }
+            .max { $0.startDate < $1.startDate }
     }
 
     init(

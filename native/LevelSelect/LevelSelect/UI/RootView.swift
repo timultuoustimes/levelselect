@@ -62,6 +62,14 @@ struct RootView: View {
             if phase == .background || phase == .inactive {
                 PersistenceMonitor.shared.commit(context)
             }
+            // Foregrounding is when CloudKit changes that arrived while
+            // backgrounded have just landed — the moment sync races surface as
+            // duplicate rows. The sweep folds duplicate tracker states, closes
+            // doubled sessions, and drops empty duplicate default playthroughs;
+            // it writes nothing when there's nothing to repair.
+            if phase == .active {
+                Repository(context).reconcileLibrary()
+            }
             // Keep the widget snapshot current whenever the app surfaces or
             // backs out — catches edits made anywhere in the app.
             if phase == .active || phase == .background {

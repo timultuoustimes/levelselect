@@ -204,7 +204,10 @@ struct Repository {
 
     @discardableResult
     func startSession(on pt: Playthrough, at date: Date = .now) -> Session {
-        if let active = pt.activeSession { stopSession(active, at: date) }
+        // ALL of them, not `pt.activeSession` — after a sync race there can be
+        // more than one unstopped session, and stopping only the arbitrary
+        // first left another timer silently accruing forever.
+        for active in liveUnstoppedSessions(of: pt) { stopSession(active, at: date) }
         let session = Session(startDate: date, state: .running)
         context.insert(session)
         session.playthrough = pt
@@ -366,8 +369,21 @@ struct Repository {
     // MARK: Tracker
 
     /// Existing state row for one schema item, if any.
+    ///
+    /// Deterministic when duplicates exist: two devices can each create a row
+    /// for the same item before sync, and both survive it (ids are random
+    /// UUIDs; logical identity is only a convention). `.first` made the answer
+    /// depend on relationship order — a tick made on the other device could
+    /// show as unticked here. Prefer the row with the user's work on it
+    /// (completed), then the most recently touched. `reconcile` merges the
+    /// duplicates away; this keeps reads stable until it has.
     func trackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord? {
-        (pt.trackerStates ?? []).first { $0.itemID == itemID && $0.deletedAt == nil }
+        (pt.trackerStates ?? [])
+            .filter { $0.itemID == itemID && $0.deletedAt == nil }
+            .max { a, b in
+                if a.completed != b.completed { return b.completed }
+                return a.updatedAt < b.updatedAt
+            }
     }
 
     @discardableResult
@@ -557,6 +573,9 @@ struct Repository {
     @discardableResult
     func applyGeneratedSchema(for game: Game, jsonData: Data,
                               mode: TrackerMergeMode) -> TrackerMergeOutcome {
+        // Migration rewrites state-record ids; running it over sync-duplicated
+        // rows would migrate one twin and strand the other under the old id.
+        reconcile(game)
         guard let existing = game.trackerSchema else {
             // Nothing to merge into — first generation is just an install.
             setGeneratedSchema(for: game, jsonData: jsonData)
@@ -960,6 +979,142 @@ struct Repository {
         touch(game, at: date)
         persist()
         return event
+    }
+
+    // MARK: CloudKit reconciliation
+
+    /// CloudKit syncs records; it does not enforce this app's logical
+    /// invariants. Ids are random UUIDs and logical identity — one state row
+    /// per (playthrough, item), one unstopped session per playthrough, one
+    /// default playthrough per game — is only a convention each device upholds
+    /// locally. Two devices editing before sync can therefore both be right,
+    /// and after sync the store holds both versions of the truth.
+    ///
+    /// This is the repair pass: deterministic, idempotent, and biased so that
+    /// no user work is ever discarded — duplicates are FOLDED, not dropped,
+    /// and only provably empty records are removed. It runs on foregrounding
+    /// (when pushes received while backgrounded have just landed) and before a
+    /// schema merge, whose migration must not operate on duplicated rows.
+    struct ReconcileOutcome {
+        var mergedStates = 0
+        var closedSessions = 0
+        var removedPlaythroughs = 0
+        var isNoOp: Bool { mergedStates == 0 && closedSessions == 0 && removedPlaythroughs == 0 }
+    }
+
+    @discardableResult
+    func reconcile(_ game: Game) -> ReconcileOutcome {
+        var outcome = ReconcileOutcome()
+        for pt in game.livePlaythroughs {
+            outcome.mergedStates += mergeDuplicateStates(in: pt)
+            outcome.closedSessions += closeDuplicateSessions(in: pt)
+        }
+        outcome.removedPlaythroughs = removeEmptyDuplicateDefaults(in: game)
+        if outcome.mergedStates > 0 { recomputeProgress(game) }
+        if !outcome.isNoOp { persist() }
+        return outcome
+    }
+
+    /// Sweep every live game. Cheap when there is nothing to do — grouping is
+    /// linear in each game's records and nothing is written for a clean game.
+    func reconcileLibrary() {
+        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil })
+        for game in (try? context.fetch(descriptor)) ?? [] {
+            reconcile(game)
+        }
+    }
+
+    private func liveUnstoppedSessions(of pt: Playthrough) -> [Session] {
+        (pt.sessions ?? []).filter { $0.state != .stopped && $0.deletedAt == nil }
+    }
+
+    /// Fold duplicate state rows for the same item into one and tombstone the
+    /// rest, so the removal itself syncs.
+    private func mergeDuplicateStates(in pt: Playthrough) -> Int {
+        let live = (pt.trackerStates ?? []).filter { $0.deletedAt == nil }
+        let groups = Dictionary(grouping: live, by: \.itemID).filter { $0.value.count > 1 }
+        guard !groups.isEmpty else { return 0 }
+        var merged = 0
+        for (_, records) in groups {
+            // Same winner rule as the trackerState read, so the surviving row
+            // is the row the UI was already showing.
+            let winner = records.max { a, b in
+                if a.completed != b.completed { return b.completed }
+                return a.updatedAt < b.updatedAt
+            }!
+            for loser in records where loser !== winner {
+                // Fold, never drop: a tick, a rank, a reveal made on either
+                // device is the user's work regardless of which row it landed
+                // in. Max/OR keeps the strongest claim from each side.
+                winner.completed = winner.completed || loser.completed
+                if let r = loser.rank { winner.rank = max(winner.rank ?? 0, r) }
+                if let c = loser.count { winner.count = max(winner.count ?? 0, c) }
+                winner.revealed = winner.revealed || loser.revealed
+                if winner.notes == nil { winner.notes = loser.notes }
+                loser.deletedAt = .now
+                touch(loser)
+                merged += 1
+            }
+            touch(winner)
+            touch(pt)
+        }
+        return merged
+    }
+
+    /// More than one unstopped session means two devices were both timing.
+    /// The newest is the user's most recent intent and survives; each older
+    /// one is credited only up to the moment the newer began — past that point
+    /// the same wall-clock minutes are already being counted by the survivor,
+    /// and summing both is exactly the double-counted playtime this exists to
+    /// prevent.
+    private func closeDuplicateSessions(in pt: Playthrough) -> Int {
+        let open = liveUnstoppedSessions(of: pt).sorted { $0.startDate < $1.startDate }
+        guard open.count > 1, let newest = open.last else { return 0 }
+        var closed = 0
+        for older in open.dropLast() {
+            // Clamp to the running anchor so a paused session — or a newer
+            // session that started before this one's last resume — can never
+            // produce a negative segment.
+            let anchor = older.state == .running
+                ? (older.resumedAt ?? older.startDate)
+                : older.startDate
+            let cut = max(anchor, newest.startDate)
+            older.accumulatedDuration = older.elapsed(asOf: cut)
+            older.endDate = cut
+            older.pausedAt = nil
+            older.resumedAt = nil
+            older.state = .stopped
+            touch(older)
+            NotificationManager.cancelStaleReminder(sessionID: older.id)
+            closed += 1
+        }
+        touch(pt)
+        return closed
+    }
+
+    /// Two devices racing `ensureDefaultPlaythrough` each mint a default; after
+    /// sync the game has two. Only the exact artifact of that race is removed:
+    /// still carrying the default name, never annotated, holding no live
+    /// sessions, state or runs, and not the playthrough the game points at.
+    /// Anything showing any sign of the user's hand is out of bounds, and at
+    /// least one live playthrough always survives.
+    private func removeEmptyDuplicateDefaults(in game: Game) -> Int {
+        var removed = 0
+        for pt in game.livePlaythroughs {
+            guard game.livePlaythroughs.count > 1,
+                  pt.id != game.currentPlaythroughID,
+                  pt.name == "Playthrough",
+                  pt.notes == nil,
+                  (pt.sessions ?? []).allSatisfy({ $0.deletedAt != nil }),
+                  (pt.trackerStates ?? []).allSatisfy({ $0.deletedAt != nil }),
+                  (pt.runs ?? []).allSatisfy({ $0.deletedAt != nil })
+            else { continue }
+            pt.deletedAt = .now
+            touch(pt)
+            removed += 1
+        }
+        if removed > 0 { touch(game) }
+        return removed
     }
 }
 
