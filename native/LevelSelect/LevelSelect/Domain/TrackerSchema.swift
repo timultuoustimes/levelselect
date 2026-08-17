@@ -215,9 +215,65 @@ enum TrackerSchemaJSON {
         (try? JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": []])) ?? Data()
     }
 
-    /// Carry the user's Personal Goals category from an old schema into a
-    /// newly generated one (regeneration must never eat user-created goals).
+    /// Categories the user has locked — imported checklists, hand-curated
+    /// content, anything they've said a regeneration may not touch.
+    ///
+    /// Locking is the general mechanism; Personal Goals is simply the category
+    /// that is always locked. It lives in the schema JSON, so none of this is
+    /// blocked by frozen Schema V1.
+    static func lockedCategoryIDs(in data: Data) -> Set<String> {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let cats = root["categories"] as? [[String: Any]] else { return [] }
+        return Set(cats.compactMap { cat in
+            (cat["locked"] as? Bool) == true ? cat["id"] as? String : nil
+        })
+    }
+
+    /// Lock or unlock a category in place.
+    static func settingLock(_ locked: Bool, categoryID: String, in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let idx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+        var cat = cats[idx]
+        if locked { cat["locked"] = true } else { cat.removeValue(forKey: "locked") }
+        cats[idx] = cat
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Carry the user's own content — Personal Goals, and any locked category —
+    /// from an old schema into a newly generated one. Regeneration must never
+    /// eat something the user wrote or deliberately imported.
     static func mergingPersonalGoals(from oldData: Data, into newData: Data) -> Data {
+        let preserved = preservedCategories(from: oldData)
+        guard !preserved.isEmpty,
+              var new = (try? JSONSerialization.jsonObject(with: newData)) as? [String: Any]
+        else { return mergingGoalsOnly(from: oldData, into: newData) }
+
+        var newCats = (new["categories"] as? [[String: Any]]) ?? []
+        let existing = Set(newCats.compactMap { $0["id"] as? String })
+        for category in preserved where !existing.contains((category["id"] as? String) ?? "") {
+            newCats.append(category)
+        }
+        new["categories"] = newCats
+        return (try? JSONSerialization.data(withJSONObject: new)) ?? newData
+    }
+
+    /// Every category the merge must carry across untouched: Personal Goals
+    /// (if it has anything in it) plus everything locked.
+    private static func preservedCategories(from oldData: Data) -> [[String: Any]] {
+        guard let old = (try? JSONSerialization.jsonObject(with: oldData)) as? [String: Any],
+              let oldCats = old["categories"] as? [[String: Any]] else { return [] }
+        return oldCats.filter { cat in
+            let id = cat["id"] as? String
+            if (cat["locked"] as? Bool) == true { return true }
+            guard id == personalGoalsID else { return false }
+            return !((cat["items"] as? [[String: Any]]) ?? []).isEmpty
+        }
+    }
+
+    private static func mergingGoalsOnly(from oldData: Data, into newData: Data) -> Data {
         guard let old = (try? JSONSerialization.jsonObject(with: oldData)) as? [String: Any],
               let oldCats = old["categories"] as? [[String: Any]],
               let goals = oldCats.first(where: { ($0["id"] as? String) == personalGoalsID }),

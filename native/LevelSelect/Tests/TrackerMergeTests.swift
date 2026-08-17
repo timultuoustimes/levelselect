@@ -320,6 +320,103 @@ struct TrackerMergeTests {
         #expect(TrackerSchemaJSON.categories(from: out).flatMap(\.items).count == 3)
     }
 
+    // MARK: Locks
+
+    private func lockedCategory(id: String, name: String,
+                                items: [(String, String)]) -> [String: Any] {
+        var cat = category(id: id, name: name, items: items)
+        cat["locked"] = true
+        return cat
+    }
+
+    /// The whole point of importing a checklist rather than flattening it into
+    /// Personal Goals: it keeps its own structure AND survives a regeneration.
+    @Test func lockedCategoriesSurviveAReplace() {
+        let current = schema([bosses,
+                              lockedCategory(id: "trinkets", name: "Trinkets",
+                                             items: [("lace-glove", "Lace Glove"),
+                                                     ("twill-weave", "Twill Weave")])])
+        let incoming = schema([category(id: "charms", name: "Charms",
+                                        items: [("wayward-compass", "Wayward Compass")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        let cats = TrackerSchemaJSON.categories(from: out)
+
+        // Generated content is gone, as Replace means — the import isn't.
+        #expect(!cats.contains { $0.id == "bosses" })
+        let trinkets = cats.first { $0.id == "trinkets" }
+        #expect(trinkets?.items.count == 2)
+    }
+
+    /// A locked category isn't part of the comparison at all, so it must never
+    /// show up in the review screen as about to be lost.
+    @Test func lockedCategoriesAreNeverReportedAsRemoved() {
+        let current = schema([bosses,
+                              lockedCategory(id: "trinkets", name: "Trinkets",
+                                             items: [("lace-glove", "Lace Glove")])])
+        let incoming = schema([bosses])
+        let diff = TrackerMerge.diff(current: current, incoming: incoming)
+
+        #expect(diff.isEmpty)
+        #expect(!diff.removed.contains { $0.name == "Lace Glove" })
+    }
+
+    /// An incoming schema can't smuggle content into a locked category either —
+    /// locking means "leave this alone", in both directions.
+    @Test func lockedCategoriesAreNotAddedTo() {
+        let current = schema([lockedCategory(id: "trinkets", name: "Trinkets",
+                                             items: [("lace-glove", "Lace Glove")])])
+        let incoming = schema([category(id: "trinkets", name: "Trinkets",
+                                        items: [("bogus", "Invented Trinket")])])
+        let diff = TrackerMerge.diff(current: current, incoming: incoming)
+
+        #expect(diff.added.isEmpty)
+    }
+
+    @Test func lockCanBeSetAndCleared() throws {
+        let data = schema([bosses])
+        let locked = try #require(TrackerSchemaJSON.settingLock(true, categoryID: "bosses", in: data))
+        #expect(TrackerSchemaJSON.lockedCategoryIDs(in: locked) == ["bosses"])
+
+        let unlocked = try #require(TrackerSchemaJSON.settingLock(false, categoryID: "bosses", in: locked))
+        #expect(TrackerSchemaJSON.lockedCategoryIDs(in: unlocked).isEmpty)
+    }
+
+    /// Imported checklists arrive locked by default — that's what makes the
+    /// import safe without flattening it into Personal Goals.
+    @Test func importedSchemaArrivesLocked() {
+        let parsed = TrackerListParser.parse("""
+        Heart Coins:
+        1. Koala Village - Nia's Bedroom
+        2. Kantar Lake - Chest
+        """)
+        let data = TrackerListParser.schemaData(from: parsed)
+
+        #expect(TrackerSchemaJSON.lockedCategoryIDs(in: data) == ["heart-coins"])
+        #expect(TrackerSchemaJSON.categories(from: data).first?.items.count == 2)
+    }
+
+    /// The parser's location/name guess is a heuristic, so the correction has
+    /// to be lossless — flipping twice returns exactly what you started with.
+    @Test func flippingTheLeadingSegmentRoundTrips() throws {
+        let parsed = TrackerListParser.parse("""
+        Heart Coins:
+        1. Koala Village - Nia's Bedroom
+        2. Koala Village - Trophus' 2nd Floor
+        """)
+        let original = try #require(parsed.categories.first)
+        #expect(original.leadingSegmentIsLocation)
+
+        let flipped = TrackerListParser.flippingLeadingSegment(original)
+        #expect(!flipped.leadingSegmentIsLocation)
+        #expect(flipped.items.first?.name == "Koala Village")
+        #expect(flipped.items.first?.detail == "Nia's Bedroom")
+        #expect(flipped.items.first?.location == nil)
+
+        let back = TrackerListParser.flippingLeadingSegment(flipped)
+        #expect(back.items.map(\.name) == original.items.map(\.name))
+        #expect(back.items.map(\.location) == original.items.map(\.location))
+    }
+
     @Test func matchKeyCollapsesSlugsPunctuationAndCase() {
         #expect(TrackerMerge.matchKey("Boss: False Knight!") == TrackerMerge.matchKey("boss-false-knight"))
         #expect(TrackerMerge.matchKey("Pokémon") == TrackerMerge.matchKey("pokemon"))

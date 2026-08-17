@@ -27,6 +27,10 @@ enum TrackerListParser {
         var location: String?
         var detail: String?
         var source: String?
+        /// The original line this came from. Kept so re-interpreting a
+        /// category is derived from the source rather than unpicked from
+        /// already-split fields — which can't round-trip losslessly.
+        var raw: String = ""
     }
 
     struct ParsedCategory: Identifiable, Hashable, Sendable {
@@ -211,22 +215,16 @@ enum TrackerListParser {
             let isLocation = !leads.isEmpty && Set(leads).count < leads.count
 
             let items = split.map { piece -> ParsedItem in
-                let name: String
-                let location: String?
-                if isLocation, let lead = piece.lead, let rest = piece.rest {
-                    name = rest
-                    location = lead
-                } else if let lead = piece.lead, let rest = piece.rest {
-                    name = lead
-                    location = nil
-                    return ParsedItem(id: uniqueID(from: lead, seen: &seen),
-                                      name: name, location: location, detail: rest)
-                } else {
-                    name = piece.whole
-                    location = nil
+                if let lead = piece.lead, let rest = piece.rest {
+                    let name = isLocation ? rest : lead
+                    return ParsedItem(id: uniqueID(from: name, seen: &seen),
+                                      name: name,
+                                      location: isLocation ? lead : nil,
+                                      detail: isLocation ? nil : rest,
+                                      raw: piece.whole)
                 }
-                return ParsedItem(id: uniqueID(from: name, seen: &seen),
-                                  name: name, location: location)
+                return ParsedItem(id: uniqueID(from: piece.whole, seen: &seen),
+                                  name: piece.whole, raw: piece.whole)
             }
             return ParsedCategory(id: slug(category.name), name: category.name,
                                   items: items, leadingSegmentIsLocation: isLocation)
@@ -274,6 +272,60 @@ enum TrackerListParser {
         let rest = String(body[range.upperBound...]).trimmingCharacters(in: .whitespaces)
         guard !lead.isEmpty, !rest.isEmpty else { return (body, nil, nil) }
         return (body, lead, rest)
+    }
+
+    // MARK: Conversion to schema JSON
+
+    /// Turn a parse result into an incoming schema the merge engine can take.
+    ///
+    /// Imported categories are marked `locked` so a later regeneration can't
+    /// quietly replace a checklist the user deliberately pasted in — the same
+    /// protection Personal Goals has always had, generalised. That's what makes
+    /// importing safe *without* flattening everything into Personal Goals and
+    /// losing the section structure.
+    static func schemaData(from result: Result, locked: Bool = true) -> Data {
+        let categories: [[String: Any]] = result.categories.map { category in
+            var dict: [String: Any] = [
+                "id": category.id,
+                "name": category.name,
+                "type": "collectibles",
+                "items": category.items.map { item -> [String: Any] in
+                    var out: [String: Any] = ["id": item.id, "name": item.name]
+                    if let location = item.location { out["location"] = location }
+                    if let detail = item.detail { out["description"] = detail }
+                    if let source = item.source { out["source"] = source }
+                    return out
+                },
+            ]
+            if locked { dict["locked"] = true }
+            return dict
+        }
+        let root: [String: Any] = ["schemaVersion": 1, "categories": categories]
+        return (try? JSONSerialization.data(withJSONObject: root)) ?? TrackerSchemaJSON.emptySchema()
+    }
+
+    /// Re-read a category with the opposite interpretation of its leading
+    /// segment, for when the heuristic guessed wrong.
+    ///
+    /// Re-derived from each item's original line rather than by rearranging
+    /// the already-split fields: unpicking them can't round-trip, because
+    /// "name + detail" and "location + name" don't carry the same information
+    /// once they've been separated.
+    static func flippingLeadingSegment(_ category: ParsedCategory) -> ParsedCategory {
+        var flipped = category
+        flipped.leadingSegmentIsLocation.toggle()
+        let asLocation = flipped.leadingSegmentIsLocation
+        flipped.items = category.items.map { item in
+            guard !item.raw.isEmpty else { return item }
+            let piece = splitLeading(item.raw)
+            guard let lead = piece.lead, let rest = piece.rest else { return item }
+            var next = item
+            next.name = asLocation ? rest : lead
+            next.location = asLocation ? lead : nil
+            next.detail = asLocation ? nil : rest
+            return next
+        }
+        return flipped
     }
 
     // MARK: Shared helpers
