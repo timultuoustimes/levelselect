@@ -232,19 +232,24 @@ struct CollectionMembersPicker: View {
     }
 
     var body: some View {
+        // One Set, once per render. Membership is stored as an id array, and
+        // three linear `contains` per row made a big library × big collection
+        // picker roughly O(games × members).
+        let members = Set(collection.gameIDs)
         NavigationStack {
             List {
                 ForEach(visible) { game in
+                    let isMember = members.contains(game.id.uuidString)
                     Button {
-                        repo.setMembership(collection, game: game, member: !collection.contains(game))
+                        repo.setMembership(collection, game: game, member: !isMember)
                     } label: {
                         HStack(spacing: 12) {
                             CoverThumb(urlString: game.coverURLString)
                                 .frame(width: 40, height: 53)
                             Text(game.name).font(.subheadline)
                             Spacer()
-                            Image(systemName: collection.contains(game) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(collection.contains(game) ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                            Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
+                                .foregroundStyle(isMember ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
                         }
                         .contentShape(.rect)
                     }

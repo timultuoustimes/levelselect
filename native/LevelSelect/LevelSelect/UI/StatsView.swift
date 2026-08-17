@@ -11,10 +11,16 @@ struct StatsTab: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
-                    overviewCard
-                    recentCard
+                    // Each computed once per body pass. As properties they
+                    // were re-derived on every reference — allSessions
+                    // re-flattened the whole library three times and topPlayed
+                    // re-sorted it three times per render.
+                    let sessions = allSessions
+                    let top = topPlayed
+                    overviewCard(sessions: sessions)
+                    recentCard(sessions: sessions)
                     statusBreakdownCard
-                    if !topPlayed.isEmpty { topPlayedCard }
+                    if !top.isEmpty { topPlayedCard(top) }
                     if !completionsByYear.isEmpty { completionsCard }
                 }
                 .padding()
@@ -29,26 +35,26 @@ struct StatsTab: View {
 
     // MARK: Cards
 
-    private var overviewCard: some View {
+    private func overviewCard(sessions: [Session]) -> some View {
         HStack(spacing: 0) {
             stat(number: "\(games.count)", label: "Games")
             divider
-            stat(number: Format.duration(totalPlaytime), label: "Played")
+            stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
             divider
-            stat(number: "\(allSessions.count)", label: "Sessions")
+            stat(number: "\(sessions.count)", label: "Sessions")
         }
         .frame(maxWidth: .infinity)
         .lsCard()
     }
 
-    private var recentCard: some View {
+    private func recentCard(sessions: [Session]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Recent Play", systemImage: "clock.fill")
                 .font(.headline)
             HStack(spacing: 0) {
-                stat(number: Format.duration(playtime(since: startOfWeek)), label: "This week")
+                stat(number: Format.duration(playtime(in: sessions, since: startOfWeek)), label: "This week")
                 divider
-                stat(number: Format.duration(playtime(since: startOfMonth)), label: "This month")
+                stat(number: Format.duration(playtime(in: sessions, since: startOfMonth)), label: "This month")
             }
             .frame(maxWidth: .infinity)
         }
@@ -82,12 +88,12 @@ struct StatsTab: View {
         .lsCard()
     }
 
-    private var topPlayedCard: some View {
+    private func topPlayedCard(_ top: [(Game, TimeInterval)]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Most Played", systemImage: "trophy.fill")
                 .font(.headline)
-            let maxTime = topPlayed.first?.1 ?? 1
-            ForEach(topPlayed, id: \.0.id) { game, time in
+            let maxTime = top.first?.1 ?? 1
+            ForEach(top, id: \.0.id) { game, time in
                 NavigationLink(value: game) {
                     HStack(spacing: 10) {
                         CoverThumb(urlString: game.coverURLString)
@@ -166,12 +172,8 @@ struct StatsTab: View {
             .filter { $0.deletedAt == nil }
     }
 
-    private var totalPlaytime: TimeInterval {
-        allSessions.reduce(0) { $0 + $1.elapsed() }
-    }
-
-    private func playtime(since date: Date) -> TimeInterval {
-        allSessions.filter { $0.startDate >= date }.reduce(0) { $0 + $1.elapsed() }
+    private func playtime(in sessions: [Session], since date: Date) -> TimeInterval {
+        sessions.filter { $0.startDate >= date }.reduce(0) { $0 + $1.elapsed() }
     }
 
     private var startOfWeek: Date {

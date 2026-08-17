@@ -241,7 +241,14 @@ enum LibraryExport {
     /// to a share sheet. Named with the date so a user's Files folder stays
     /// legible when they export more than once.
     static func writeToTemporaryFile(context: ModelContext) throws -> URL {
-        let data = try makeJSON(context: context)
+        try writeToTemporaryFile(data: makeJSON(context: context))
+    }
+
+    /// Write already-built export bytes. The settings screen builds the JSON
+    /// once for its summary; serialising the whole graph a second time on the
+    /// main actor just to write the same bytes doubled the freeze on a big
+    /// library.
+    static func writeToTemporaryFile(data: Data) throws -> URL {
         let stamp = ExportFormatters.dateOnly.string(from: .now)
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("LevelSelect-\(stamp).json")

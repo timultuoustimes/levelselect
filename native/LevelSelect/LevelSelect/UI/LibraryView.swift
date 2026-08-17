@@ -401,9 +401,16 @@ struct LibraryTab: View {
         case .recentlyAdded:
             return visible.sorted { $0.addedAt > $1.addedAt }
         case .recentlyPlayed:
-            return visible.sorted { lastPlayed($0) > lastPlayed($1) }
+            // Key computed once per game, not once per COMPARISON — the
+            // comparator form rescanned every playthrough and session for both
+            // operands on each of the O(n log n) comparisons.
+            return visible.map { ($0, lastPlayed($0)) }
+                .sorted { $0.1 > $1.1 }
+                .map(\.0)
         case .mostPlayed:
-            return visible.sorted { playtime($0) > playtime($1) }
+            return visible.map { ($0, playtime($0)) }
+                .sorted { $0.1 > $1.1 }
+                .map(\.0)
         case .rating:
             return visible.sorted { ($0.rating ?? -1, $0.name) > ($1.rating ?? -1, $1.name) }
         }

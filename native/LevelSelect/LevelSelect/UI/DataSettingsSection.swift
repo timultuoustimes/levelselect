@@ -122,7 +122,7 @@ struct DataSettingsSection: View {
             do {
                 let data = try LibraryExport.makeJSON(context: context)
                 exportSummary = LibraryExport.summary(for: data)
-                let url = try LibraryExport.writeToTemporaryFile(context: context)
+                let url = try LibraryExport.writeToTemporaryFile(data: data)
                 exportURL = url
             } catch {
                 exportError = "Couldn't build the export. \(error.localizedDescription)"

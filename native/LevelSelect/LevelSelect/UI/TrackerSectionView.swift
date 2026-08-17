@@ -38,6 +38,13 @@ struct TrackerSectionView: View {
         return TrackerSchemaJSON.categories(from: schema.jsonData)
     }
 
+    /// Built ONCE per render in `body` and threaded down as a parameter.
+    ///
+    /// As a computed property referenced from the header, every category and
+    /// every row, it was rebuilt — a full scan of every state record — on each
+    /// reference, making one render of a large tracker roughly
+    /// O(items × states). At 180 items that's ~180 rebuilds of a 180-entry
+    /// dictionary per frame. Same data, built once, passed down.
     private var stateByItem: [String: TrackerStateRecord] {
         Dictionary(
             (playthrough?.trackerStates ?? [])
@@ -49,8 +56,9 @@ struct TrackerSectionView: View {
 
     var body: some View {
         let cats = categories
+        let states = stateByItem
         VStack(alignment: .leading, spacing: 12) {
-            header(cats)
+            header(cats, states: states)
 
             if let started = generation.startDate(for: game.id) {
                 GeneratingTrackerView(startedAt: started) {
@@ -66,7 +74,7 @@ struct TrackerSectionView: View {
             // Existing content stays visible while regenerating — hiding it
             // made a regenerate look like the tracker had been wiped.
             ForEach(cats) { category in
-                categoryView(category)
+                categoryView(category, states: states)
             }
 
             if let outcome = generation.outcome(for: game.id), !outcome.isNoOp {
@@ -293,9 +301,9 @@ struct TrackerSectionView: View {
 
     // MARK: Header
 
-    private func header(_ cats: [TrackerCategoryDTO]) -> some View {
+    private func header(_ cats: [TrackerCategoryDTO], states: [String: TrackerStateRecord]) -> some View {
         let allItems = cats.flatMap(\.items)
-        let done = allItems.filter { stateByItem[$0.id]?.completed == true }.count
+        let done = allItems.filter { states[$0.id]?.completed == true }.count
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Spacer()
@@ -323,12 +331,12 @@ struct TrackerSectionView: View {
     // MARK: Category
 
     @ViewBuilder
-    private func categoryView(_ category: TrackerCategoryDTO) -> some View {
+    private func categoryView(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord]) -> some View {
         let visibleItems = hideCompleted
-            ? category.items.filter { stateByItem[$0.id]?.completed != true }
+            ? category.items.filter { states[$0.id]?.completed != true }
             : category.items
         if !visibleItems.isEmpty {
-            let done = category.items.filter { stateByItem[$0.id]?.completed == true }.count
+            let done = category.items.filter { states[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
                 Group {
                     if let groups = locationGroups(visibleItems) {
@@ -343,7 +351,7 @@ struct TrackerSectionView: View {
                                     Text(group.name)
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(LSTheme.accent.opacity(0.9))
-                                    itemsBody(group.items, category: category)
+                                    itemsBody(group.items, category: category, states: states)
                                 }
                             }
                         }
@@ -362,13 +370,13 @@ struct TrackerSectionView: View {
                                                      alignment: .leading)],
                                   alignment: .leading, spacing: 2) {
                             ForEach(visibleItems) { item in
-                                itemRow(item, category: category)
+                                itemRow(item, category: category, states: states)
                             }
                         }
                     } else {
                         VStack(spacing: 2) {
                             ForEach(visibleItems) { item in
-                                itemRow(item, category: category)
+                                itemRow(item, category: category, states: states)
                             }
                         }
                     }
@@ -420,15 +428,15 @@ struct TrackerSectionView: View {
 
     /// Rows for a set of items, in columns when they're simple enough.
     @ViewBuilder
-    private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO) -> some View {
+    private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO, states: [String: TrackerStateRecord]) -> some View {
         if isDense(items, ignoringLocation: true) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)],
                       alignment: .leading, spacing: 2) {
-                ForEach(items) { itemRow($0, category: category, hideLocation: true) }
+                ForEach(items) { itemRow($0, category: category, states: states, hideLocation: true) }
             }
         } else {
             VStack(spacing: 2) {
-                ForEach(items) { itemRow($0, category: category, hideLocation: true) }
+                ForEach(items) { itemRow($0, category: category, states: states, hideLocation: true) }
             }
         }
     }
@@ -461,8 +469,9 @@ struct TrackerSectionView: View {
 
     @ViewBuilder
     private func itemRow(_ item: TrackerItemDTO, category: TrackerCategoryDTO,
+                         states: [String: TrackerStateRecord],
                          hideLocation: Bool = false) -> some View {
-        let state = stateByItem[item.id]
+        let state = states[item.id]
         let done = state?.completed == true
         let hidden = item.hideUntilDiscovered && state?.revealed != true && !done
 
