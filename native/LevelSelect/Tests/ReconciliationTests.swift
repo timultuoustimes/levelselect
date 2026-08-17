@@ -233,8 +233,35 @@ struct ReconciliationTests {
             #expect(s.elapsed(asOf: now) >= 0)
         }
         // The future-dated winner must not have credited the local session
-        // for time that hasn't happened yet.
+        // for time that hasn't happened yet — nor stamped a future stop.
         #expect(local.accumulatedDuration == 0)
+        #expect(local.endDate.map { $0 <= now } == true)
+    }
+
+    /// Round 3, finding 4's timestamp half: a future-dated PAUSED loser used
+    /// to write its future pausedAt straight into endDate. Every timestamp
+    /// the closer writes must be clamped to the reconcile time.
+    @Test func futureDatedPausedLoserIsNotClosedInTheFuture() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let pausedAhead = Session(startDate: now.addingTimeInterval(-600), state: .paused)
+        pausedAhead.accumulatedDuration = 300
+        pausedAhead.pausedAt = now.addingTimeInterval(100)     // clock ahead
+        repo.context.insert(pausedAhead)
+        pausedAhead.playthrough = pt
+
+        let winner = Session(startDate: now.addingTimeInterval(-300), state: .running)
+        winner.resumedAt = now.addingTimeInterval(200)          // even further ahead
+        repo.context.insert(winner)
+        winner.playthrough = pt
+
+        repo.reconcile(game, at: now)
+
+        #expect(pausedAhead.state == .stopped)
+        #expect(pausedAhead.accumulatedDuration == 300)
+        #expect(pausedAhead.endDate.map { $0 <= now } == true)
     }
 
     /// Starting a session must close EVERY unstopped one, not one arbitrary

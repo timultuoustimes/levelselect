@@ -94,4 +94,25 @@ struct SessionTimerTests {
         #expect(s.endDate == t0.addingTimeInterval(300))       // clamped to pause
         #expect(pt.lastPlayedAt == t0.addingTimeInterval(300))
     }
+
+    /// Round 3, finding 7: a synced session whose pause anchor sits in THIS
+    /// device's future must not push a future timestamp into history — the
+    /// anchor clamp has to bind in both directions.
+    @Test func endingAStaleSessionNeverRecordsAFutureStop() {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let game = repo.addGame(name: "F", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let s = repo.startSession(on: pt, at: .now.addingTimeInterval(-7 * 3600))
+        repo.pauseSession(s, at: .now.addingTimeInterval(-3600))
+        s.pausedAt = .now.addingTimeInterval(3600)              // clock-ahead sync
+
+        repo.endStaleSession(s, stoppedAt: .now.addingTimeInterval(-1800))
+
+        #expect(s.state == .stopped)
+        #expect(s.endDate.map { $0 <= .now } == true)
+        #expect(pt.lastPlayedAt.map { $0 <= .now } == true)
+        #expect(abs(s.accumulatedDuration - 6 * 3600) < 1)      // banked time untouched
+    }
 }

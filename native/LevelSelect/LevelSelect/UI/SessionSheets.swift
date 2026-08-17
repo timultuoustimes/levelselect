@@ -8,13 +8,21 @@ struct EndSessionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var stopTime: Date
 
+    /// The earliest pickable stop: the current segment's real boundary — the
+    /// last resume for a running session, the pause itself for a paused one,
+    /// never the original start (with pauses in between, start + threshold
+    /// could suggest a stop that predates play this session recorded). The
+    /// min(.now) clamp matters: a session synced from a device whose clock is
+    /// ahead can carry an anchor in this device's FUTURE, and an unclamped
+    /// anchor makes the DatePicker's range backwards — an invalid
+    /// ClosedRange — and its default stop a time that hasn't happened.
+    private static func earliestStop(for session: Session) -> Date {
+        min(.now, session.resumedAt ?? session.pausedAt ?? session.startDate)
+    }
+
     init(session: Session) {
         self.session = session
-        // The current segment's real boundary: the last resume for a running
-        // session, the pause itself for a paused one — never the original
-        // start, which with pauses in between could suggest (and allow) a
-        // stop time that predates play this session actually recorded.
-        let anchor = session.resumedAt ?? session.pausedAt ?? session.startDate
+        let anchor = Self.earliestStop(for: session)
         // A paused session already stopped accruing AT its pause — that IS
         // when the user stopped, so suggest it exactly; anchor + threshold
         // would invent a stop hours after they put the game down.
@@ -35,7 +43,7 @@ struct EndSessionSheet: View {
                 }
                 Section("When did you stop?") {
                     DatePicker("Stopped at", selection: $stopTime,
-                               in: (session.resumedAt ?? session.pausedAt ?? session.startDate) ... .now)
+                               in: Self.earliestStop(for: session) ... .now)
                     LabeledContent("Records") {
                         // The same calculation the save performs, so the
                         // preview can't promise a number the write won't honour.

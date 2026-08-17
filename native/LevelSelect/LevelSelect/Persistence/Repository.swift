@@ -332,7 +332,11 @@ struct Repository {
         let anchor = session.state == .running
             ? (session.resumedAt ?? session.startDate)
             : (session.pausedAt ?? session.startDate)
-        let clamped = max(anchor, stop)
+        // Clamp both ways: never earlier than the anchor (activity is proven
+        // until then), never in the future (a synced anchor can be ahead of
+        // this device's clock, and history must not record a stop that
+        // hasn't happened).
+        let clamped = min(.now, max(anchor, stop))
         session.accumulatedDuration = session.elapsed(asOf: clamped)
         session.endDate = clamped
         session.pausedAt = nil
@@ -1207,12 +1211,16 @@ struct Repository {
     /// its timer run.
     ///
     /// Losers are closed, never deleted — their recorded time is user data.
-    /// A running loser is credited only up to the moment the survivor's
-    /// current segment began; past that point the same wall-clock minutes are
-    /// already being counted by the survivor, and summing both is exactly the
-    /// double-counted playtime this exists to prevent. A paused loser keeps
-    /// its banked time unchanged and closes at its own pause time, not an
-    /// invented one.
+    /// A running loser's CURRENT segment is credited only up to the moment
+    /// the survivor's current segment began; past that point the same
+    /// wall-clock minutes are already being counted by the survivor. Honest
+    /// limit (round 3): `accumulatedDuration` is a scalar, so overlap already
+    /// banked inside BOTH sessions' earlier segments is invisible here and
+    /// stays double-counted — removing it would need per-segment history the
+    /// model doesn't keep. A paused loser keeps its banked time unchanged and
+    /// closes at its own pause time, not an invented one. Every written
+    /// timestamp is clamped to now: synced clocks can be ahead of this
+    /// device, and history must never record a stop in the future.
     private func closeDuplicateSessions(in pt: Playthrough, at date: Date = .now) -> Int {
         let open = liveUnstoppedSessions(of: pt)
         guard open.count > 1 else { return 0 }
@@ -1229,13 +1237,15 @@ struct Repository {
         var closed = 0
         for older in open where older !== winner {
             if older.state == .running {
-                // Clamp to the loser's own running anchor so a survivor whose
-                // segment began earlier can never produce a negative segment.
-                let cut = max(older.resumedAt ?? older.startDate, winnerAnchor)
+                // Below the loser's own running anchor elapsed() clamps to
+                // its banked time, so an early cut can't go negative; the
+                // min(date, …) keeps a future-dated loser anchor from
+                // becoming a future endDate.
+                let cut = min(date, max(older.resumedAt ?? older.startDate, winnerAnchor))
                 older.accumulatedDuration = older.elapsed(asOf: cut)
                 older.endDate = cut
             } else {
-                older.endDate = older.pausedAt ?? older.startDate
+                older.endDate = min(date, older.pausedAt ?? older.startDate)
             }
             older.pausedAt = nil
             older.resumedAt = nil
