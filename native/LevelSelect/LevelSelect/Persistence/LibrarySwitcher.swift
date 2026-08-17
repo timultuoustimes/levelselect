@@ -53,6 +53,12 @@ final class LibrarySwitcher {
     /// or read from the library being left.
     func setDemo(_ on: Bool) {
         guard on != isDemo else { return }
+        // A Live Activity belongs to the library that started it. Its session
+        // lives in the store we're about to close, so leaving it running
+        // stranded it on the Lock Screen: the controls look live, but Stop
+        // can't find the session any more and does nothing, and the only way
+        // out is to swipe it away.
+        LiveActivityManager.endCurrent()
         UserDefaults.standard.set(on, forKey: Self.defaultsKey)
         isDemo = on
         container = LevelSelectStore.makeContainer(demo: on)

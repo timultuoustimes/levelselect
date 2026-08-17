@@ -189,6 +189,11 @@ struct YouTubePlayerView {
     /// and re-attaches the coordinator so playlist-part commands address the
     /// video actually on screen rather than the first one ever loaded.
     func refresh(_ webView: WKWebView, context: Context) {
+        // Every pass, not just on a switch: these must never lag behind the
+        // video the dock is actually showing.
+        context.coordinator.onProgress = onProgress
+        context.coordinator.onPlaylist = onPlaylist
+
         guard context.coordinator.videoID != video.id.uuidString else { return }
         context.coordinator.attach(webView: webView, videoID: video.id.uuidString)
         webView.loadHTMLString(Self.html(for: video),
@@ -196,8 +201,14 @@ struct YouTubePlayerView {
     }
 
     final class Coordinator: NSObject, WKScriptMessageHandler {
-        let onProgress: @MainActor (Double, Int?) -> Void
-        let onPlaylist: (@MainActor ([String]) -> Void)?
+        // `var`, not `let`. These closures capture the video they were built
+        // for, and SwiftUI rebuilds them whenever the dock is pointed at a
+        // different one — but makeCoordinator() runs only ONCE. Holding the
+        // original meant a reloaded player reported the NEW video's position
+        // through the OLD video's closure, writing one video's playhead onto
+        // another. The update pass refreshes them.
+        var onProgress: @MainActor (Double, Int?) -> Void
+        var onPlaylist: (@MainActor ([String]) -> Void)?
         private weak var webView: WKWebView?
         /// Which video the live player is currently showing. Read by the
         /// update pass to notice when the dock has been pointed elsewhere.
@@ -284,7 +295,12 @@ struct YouTubePlayerView {
             const list = player.getPlaylist();
             if (list && list.length){
               sentList = true;
-              window.webkit.messageHandlers.progress.postMessage({pl:list, t:0, i:player.getPlaylistIndex()||0});
+              // Announce the parts only. This used to carry t:0, which the
+              // Swift side read as a progress report and wrote over the saved
+              // playhead the page had just been seeded with — invisible while
+              // playback then overwrote it seconds later, but a real loss if
+              // you switched away first. report() supplies positions.
+              window.webkit.messageHandlers.progress.postMessage({pl:list});
             }
           }catch(e){}
         }
