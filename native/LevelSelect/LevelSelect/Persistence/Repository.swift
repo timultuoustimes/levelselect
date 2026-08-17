@@ -430,17 +430,16 @@ struct Repository {
     /// long as every caller remembered. The widget/Live Activity toggle didn't,
     /// so checking something off there saved the tick and left the progress
     /// ring showing the old number until an in-app action happened to fix it.
-    /// A second caller forgetting is evidence the invariant belongs here.
-    ///
-    /// It costs a schema parse per tap. Taps are user-paced and the parse is
-    /// sub-millisecond even on a 180-item tracker; a stale percentage is a
-    /// correctness bug, and that trade is not close.
+    /// A second caller forgetting is evidence the invariant belongs here — and
+    /// callers must NOT also recompute; that doubled the parse/touch/save per
+    /// tap. It recomputes `pt`, the playthrough actually written, and commits
+    /// exactly once.
     func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.completed = done
         touch(record)
         touch(pt)
-        if let game = pt.game { recomputeProgress(game) }
+        recomputeProgress(pt)
         persist()
     }
 
@@ -451,7 +450,7 @@ struct Repository {
         if let maxRank { record.completed = rank >= maxRank }
         touch(record)
         touch(pt)
-        if let game = pt.game { recomputeProgress(game) }
+        recomputeProgress(pt)
         persist()
     }
 
@@ -577,10 +576,15 @@ struct Repository {
     /// Deliberately broader than "completed" — a part-filled rank or count is
     /// just as much their work, and rank rides on the same record, so a
     /// half-upgraded Mirror of Night talent has to count as progress worth
-    /// protecting.
+    /// protecting. A written note and a revealed secret count too: a removal
+    /// that takes a note with it used to sail through the review screen
+    /// unlisted, because "work" was defined as only the checkable kinds.
     func progressItemIDs(for game: Game) -> Set<String> {
         Set(allTrackerStates(for: game)
-            .filter { $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0 }
+            .filter {
+                $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0
+                    || $0.revealed || !($0.notes ?? "").isEmpty
+            }
             .map(\.itemID))
     }
 
@@ -774,21 +778,40 @@ struct Repository {
         return TrackerSchemaJSON.runTemplate(from: schema.jsonData) != nil
     }
 
-    /// Recompute the active playthrough's progress % from schema + state.
+    /// Recompute cached progress for EVERY live playthrough of a game.
+    ///
+    /// The schema belongs to the game, so anything that rewrites it — a
+    /// Replace, a rescue, a builtin swap — changes the denominator for all
+    /// playthroughs at once. Recomputing only the active one left every
+    /// inactive playthrough's cached percentage stale indefinitely: switching
+    /// to it later showed a ring that disagreed with its own migrated
+    /// checkmarks, and nothing ever corrected it.
     func recomputeProgress(_ game: Game) {
         guard let schema = game.trackerSchema else { return }
-        let categories = TrackerSchemaJSON.categories(from: schema.jsonData)
-        let allItems = categories.flatMap(\.items)
-        guard !allItems.isEmpty,
-              let pt = game.activePlaythrough
-        else { return }
+        let allItems = TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
+        guard !allItems.isEmpty else { return }
+        for pt in game.livePlaythroughs { recompute(pt, allItems: allItems) }
+        persist()
+    }
+
+    /// Recompute the cache of the playthrough that CHANGED — the setters take
+    /// an explicit playthrough, and recomputing `game.activePlaythrough`
+    /// instead meant a write to a non-active playthrough updated its row but
+    /// refreshed a different playthrough's percentage.
+    private func recomputeProgress(_ pt: Playthrough) {
+        guard let schema = pt.game?.trackerSchema else { return }
+        let allItems = TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
+        guard !allItems.isEmpty else { return }
+        recompute(pt, allItems: allItems)
+    }
+
+    private func recompute(_ pt: Playthrough, allItems: [TrackerItemDTO]) {
         let doneIDs = Set((pt.trackerStates ?? [])
             .filter { $0.completed && $0.deletedAt == nil }
             .map(\.itemID))
         let done = allItems.filter { doneIDs.contains($0.id) }.count
         pt.progressPercent = Double(done) / Double(allItems.count) * 100
         touch(pt)
-        persist()
     }
 
     // MARK: Runs (roguelikes / Hades)

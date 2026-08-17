@@ -481,8 +481,9 @@ struct TrackerSectionView: View {
                 if hidden {
                     repo.revealTrackerItem(pt, itemID: item.id)
                 } else {
+                    // The setter recomputes and saves internally — an extra
+                    // recompute here doubled the parse/touch/save per tap.
                     repo.setTrackerItem(pt, itemID: item.id, done: !done)
-                    repo.recomputeProgress(game)
                 }
             } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
@@ -561,7 +562,6 @@ struct TrackerSectionView: View {
             let pt = repo.ensureDefaultPlaythrough(for: game)
             repo.setTrackerRank(pt, itemID: item.id,
                                 rank: max(0, min(newRank, maxRank)), maxRank: maxRank)
-            repo.recomputeProgress(game)
         }
     }
 }

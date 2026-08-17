@@ -71,18 +71,14 @@ struct TrackerMergeApplyTests {
 
     /// Progress percentage is the visible symptom — it collapsed on
     /// regeneration because recomputeProgress intersects state ids with schema
-    /// ids. After migration it must hold.
-    ///
-    /// Note the explicit `recomputeProgress`: `setTrackerItem` doesn't do it,
-    /// the two call sites in `TrackerSectionView` do. This mirrors the real
-    /// flow rather than asserting an invariant the repository doesn't keep.
+    /// ids. After migration it must hold. The setters keep the cache true on
+    /// their own now; no caller-side recompute.
     @Test func progressPercentSurvivesARename() {
         let (repo, game) = self.game(named: "Hollow Knight")
         repo.applyGeneratedSchema(for: game, jsonData: schema(original), mode: .addAll)
         let pt = repo.ensureDefaultPlaythrough(for: game)
         repo.setTrackerItem(pt, itemID: "false-knight", done: true)
         repo.setTrackerItem(pt, itemID: "hornet", done: true)
-        repo.recomputeProgress(game)
         let before = pt.progressPercent
 
         repo.applyGeneratedSchema(for: game, jsonData: schema([
@@ -228,5 +224,66 @@ struct TrackerMergeApplyTests {
         #expect(repo.trackerState(pt, itemID: "boss-thorne-round-1")?.completed == true)
         #expect(repo.trackerState(pt, itemID: "boss-thorne-round-2") == nil)
         #expect(repo.trackerState(pt, itemID: "boss-thorne-round-3") == nil)
+    }
+
+    // MARK: Progress cache (round 2, findings 4 and 7)
+
+    /// The setters take an explicit playthrough; recomputing
+    /// `game.activePlaythrough` instead updated the row on one playthrough
+    /// and the cached percentage on another.
+    @Test func settingItemOnNonActivePlaythroughUpdatesItsOwnCache() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema(original), mode: .addAll)
+        let first = repo.ensureDefaultPlaythrough(for: game)
+        let second = repo.addPlaythrough(to: game, named: "Steel Soul")
+        // `addPlaythrough` switched to `second`; write to the NON-active one.
+        #expect(game.activePlaythrough === second)
+
+        repo.setTrackerItem(first, itemID: "hornet", done: true)
+
+        #expect(abs(first.progressPercent - 100.0 / 3.0) < 0.001)
+        #expect(second.progressPercent == 0)
+    }
+
+    /// A game-wide schema change moves the denominator for EVERY playthrough;
+    /// recomputing only the active one left inactive caches stale until some
+    /// unrelated action happened to fix them — or forever.
+    @Test func replaceRecomputesEveryLivePlaythroughsCache() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema(original), mode: .addAll)
+        let first = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(first, itemID: "hornet", done: true)
+        let second = repo.addPlaythrough(to: game, named: "Steel Soul")
+        #expect(abs(first.progressPercent - 100.0 / 3.0) < 0.001)
+
+        // Replace shrinks the tracker to one item — the one `first` ticked
+        // (renamed, so migration carries the tick).
+        repo.applyGeneratedSchema(for: game,
+                                  jsonData: schema([("boss-hornet", "Hornet")]),
+                                  mode: .replace)
+
+        // `first` is INACTIVE now; its cache must still be recomputed: 1/1.
+        #expect(first.progressPercent == 100)
+        #expect(second.progressPercent == 0)
+    }
+
+    /// A note is the user's work: an item removed by Replace that carried one
+    /// must be listed as lost (and therefore offered rescue), not silently
+    /// dropped because it was never ticked.
+    @Test func removedItemWithOnlyANoteIsReportedAsLost() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema(original), mode: .addAll)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let record = TrackerStateRecord(itemID: "soul-master")
+        repo.context.insert(record)
+        record.playthrough = pt
+        record.notes = "weak to shade soul"
+
+        let outcome = repo.applyGeneratedSchema(for: game, jsonData: schema([
+            ("false-knight", "False Knight"),
+            ("hornet", "Hornet"),
+        ]), mode: .replace)
+
+        #expect(outcome.lostProgress.map(\.id) == ["soul-master"])
     }
 }
