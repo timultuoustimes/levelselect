@@ -1020,18 +1020,26 @@ struct Repository {
     /// locally. Two devices editing before sync can therefore both be right,
     /// and after sync the store holds both versions of the truth.
     ///
-    /// This is the repair pass: deterministic, idempotent, and biased so that
-    /// no user work is ever discarded — duplicates are FOLDED, not dropped,
-    /// and only provably empty records are removed. It runs on foregrounding
-    /// (when pushes received while backgrounded have just landed) and before a
-    /// schema merge, whose migration must not operate on duplicated rows.
+    /// This is the repair pass. It resolves only what it can resolve without
+    /// guessing: duplicate rows for the same logical record. It never infers
+    /// intent from absence — a record that merely LOOKS disposable (empty,
+    /// default-named) may be mid-sync from another device, so nothing is
+    /// deleted on that basis. It runs before a schema merge, whose migration
+    /// must not operate on duplicated rows, and when a game's page opens.
     struct ReconcileOutcome {
         var mergedStates = 0
         var closedSessions = 0
-        var removedPlaythroughs = 0
-        var isNoOp: Bool { mergedStates == 0 && closedSessions == 0 && removedPlaythroughs == 0 }
+        var isNoOp: Bool { mergedStates == 0 && closedSessions == 0 }
     }
 
+    /// Duplicate playthroughs are deliberately NOT auto-deleted. An "empty
+    /// duplicate default" is indistinguishable from a playthrough another
+    /// device just created and is still filling — its tracker state and
+    /// session may simply not have synced yet. Emptiness at one instant is
+    /// not proof of duplicate intent, and a wrong guess here tombstones a
+    /// real playthrough plus everything later written into it, silently.
+    /// Duplicates stay visible for the user to resolve; deletion requires
+    /// their hand.
     @discardableResult
     func reconcile(_ game: Game) -> ReconcileOutcome {
         var outcome = ReconcileOutcome()
@@ -1039,7 +1047,6 @@ struct Repository {
             outcome.mergedStates += mergeDuplicateStates(in: pt)
             outcome.closedSessions += closeDuplicateSessions(in: pt)
         }
-        outcome.removedPlaythroughs = removeEmptyDuplicateDefaults(in: game)
         if outcome.mergedStates > 0 { recomputeProgress(game) }
         if !outcome.isNoOp { persist() }
         return outcome
@@ -1122,30 +1129,6 @@ struct Repository {
         return closed
     }
 
-    /// Two devices racing `ensureDefaultPlaythrough` each mint a default; after
-    /// sync the game has two. Only the exact artifact of that race is removed:
-    /// still carrying the default name, never annotated, holding no live
-    /// sessions, state or runs, and not the playthrough the game points at.
-    /// Anything showing any sign of the user's hand is out of bounds, and at
-    /// least one live playthrough always survives.
-    private func removeEmptyDuplicateDefaults(in game: Game) -> Int {
-        var removed = 0
-        for pt in game.livePlaythroughs {
-            guard game.livePlaythroughs.count > 1,
-                  pt.id != game.currentPlaythroughID,
-                  pt.name == "Playthrough",
-                  pt.notes == nil,
-                  (pt.sessions ?? []).allSatisfy({ $0.deletedAt != nil }),
-                  (pt.trackerStates ?? []).allSatisfy({ $0.deletedAt != nil }),
-                  (pt.runs ?? []).allSatisfy({ $0.deletedAt != nil })
-            else { continue }
-            pt.deletedAt = .now
-            touch(pt)
-            removed += 1
-        }
-        if removed > 0 { touch(game) }
-        return removed
-    }
 }
 
 // MARK: - Derived helpers

@@ -130,24 +130,38 @@ struct ReconciliationTests {
 
     // MARK: Duplicate default playthroughs
 
-    @Test func emptyDuplicateDefaultPlaythroughIsRemoved() {
+    /// The round-2 review's adversarial shape: device A creates a default
+    /// playthrough and saves it; its tracker state and session are still in
+    /// flight when device B foregrounds. At that instant A's playthrough is
+    /// non-current, default-named, and empty — indistinguishable from a race
+    /// artifact. Reconcile must NOT delete it: A is about to write children
+    /// under it, and a tombstone here silently destroys that work after sync.
+    @Test func emptyJustSyncedDefaultPlaythroughIsNeverRemoved() {
         let (repo, game) = self.game(named: "Celeste")
         let current = repo.ensureDefaultPlaythrough(for: game)
 
-        // The other device's ensureDefaultPlaythrough, arrived via sync.
-        let twin = Playthrough()
-        repo.context.insert(twin)
-        twin.game = game
+        // Device A's ensureDefaultPlaythrough arrived via sync — children
+        // (state, session) have not.
+        let inFlight = Playthrough()
+        repo.context.insert(inFlight)
+        inFlight.game = game
 
-        let outcome = repo.reconcile(game)
+        repo.reconcile(game)
 
-        #expect(outcome.removedPlaythroughs == 1)
-        #expect(game.livePlaythroughs.count == 1)
-        #expect(game.livePlaythroughs.first === current)
+        #expect(inFlight.deletedAt == nil)
+        #expect(game.livePlaythroughs.count == 2)
+        #expect(game.livePlaythroughs.contains(where: { $0 === current }))
+
+        // The children now land, exactly as device A wrote them — under a
+        // parent that must still exist.
+        repo.setTrackerItem(inFlight, itemID: "berry-1", done: true)
+        repo.reconcile(game)
+        #expect(inFlight.deletedAt == nil)
+        #expect(repo.trackerState(inFlight, itemID: "berry-1")?.completed == true)
     }
 
-    /// Anything the user touched — a rename, a note, any record — is out of
-    /// bounds, even when otherwise empty.
+    /// Anything the user touched — a rename, a note, any record — is equally
+    /// out of bounds.
     @Test func renamedOrNonEmptyPlaythroughsAreNeverRemoved() {
         let (repo, game) = self.game(named: "Celeste")
         _ = repo.ensureDefaultPlaythrough(for: game)
@@ -161,9 +175,8 @@ struct ReconciliationTests {
         withData.game = game
         repo.setTrackerItem(withData, itemID: "anything", done: true)
 
-        let outcome = repo.reconcile(game)
+        repo.reconcile(game)
 
-        #expect(outcome.removedPlaythroughs == 0)
         #expect(game.livePlaythroughs.count == 3)
     }
 

@@ -64,9 +64,10 @@ struct RootView: View {
             }
             // Foregrounding is when CloudKit changes that arrived while
             // backgrounded have just landed — the moment sync races surface as
-            // duplicate rows. The sweep folds duplicate tracker states, closes
-            // doubled sessions, and drops empty duplicate default playthroughs;
-            // it writes nothing when there's nothing to repair.
+            // duplicate rows. The sweep folds duplicate tracker states and
+            // closes doubled sessions; it writes nothing when there's nothing
+            // to repair. It never deletes playthroughs — emptiness can be
+            // another device's record mid-sync, not a race artifact.
             if phase == .active {
                 Repository(context).reconcileLibrary()
             }
