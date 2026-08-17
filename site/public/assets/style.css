@@ -12,11 +12,16 @@
 
 :root {
   --ground: #0D0A17;        /* LSTheme.background, bottom stop */
-  --ground-lift: #1A1229;   /* LSTheme.background, top stop */
+  --ground-lift: #1A122E;   /* LSTheme.background top stop — Theme.swift:18 (0.10,0.07,0.18) */
   --surface: #171029;
   --surface-hi: #1F1636;
   --line: #2C2145;
-  --purple: #945CFA;        /* LSTheme.purple */
+  --purple: #945CFA;        /* LSTheme.purple — Theme.swift:7 (0.58,0.36,0.98) */
+  /* The live accent. The app's default accent is PURPLE (ThemePalette.swift:9,
+     `accent = LSTheme.purple`), and torch is reserved for the wordmark
+     (Theme.swift:46). This was undefined, so every var(--accent) fell back to
+     torch and the whole site tinted orange where the app is purple. */
+  --accent: #945CFA;
   --purple-deep: #4D298C;   /* LSTheme.purpleDeep */
   --torch: #F5A34D;         /* LSTheme.torch */
   --torch-deep: #8A4A12;
@@ -32,7 +37,10 @@ html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {
   margin: 0;
-  background: var(--ground);
+  /* Full-bleed and viewport-anchored, like lsBackground() in the app
+     (Theme.swift:57-59) — not just behind the hero. */
+  background: linear-gradient(180deg, var(--ground-lift), var(--ground)) fixed;
+  background-color: var(--ground);
   color: var(--ink);
   font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 17px;
@@ -53,7 +61,10 @@ a:hover { color: #B78DFF; }
    glow for the torch-lit feel. */
 .wordmark {
   color: var(--torch);
-  text-shadow: 0 3px 0 var(--torch-deep), 0 0 32px rgba(245, 163, 77, 0.45);
+  /* em, not px — the app scales both shadows with the type size
+     (Wordmark.swift:35-36). Fixed pixels were far too small on the hero and
+     far too heavy in the 11px header. */
+  text-shadow: 0 0.16em 0 var(--torch-deep), 0 0 0.65em rgba(245, 163, 77, 0.3);
 }
 
 /* ── header ─────────────────────────────────────────── */
@@ -77,7 +88,8 @@ a:hover { color: #B78DFF; }
 .hero {
   position: relative; overflow: hidden;
   padding: clamp(3rem, 9vw, 6rem) 0 var(--step);
-  background: linear-gradient(180deg, var(--ground-lift), var(--ground));
+  /* No gradient of its own — body now carries the full-bleed one, and
+     re-starting it here would put a seam at the bottom of the hero. */
 }
 .torchlight {
   position: absolute; left: 50%; top: -10%; translate: -50% 0;
@@ -189,6 +201,14 @@ footer a { color: var(--muted); }
 footer a:hover { color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+  /* Stop movement without stripping atmosphere. A blanket !important also
+     killed the torch breath entirely; the app holds it at its bright end
+     instead of extinguishing it. */
+  *:not(.torchlight) {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .torchlight { animation: none; opacity: .34; }
   html { scroll-behavior: auto; }
 }

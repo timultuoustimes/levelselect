@@ -102,9 +102,9 @@
     transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
   }
   .stage__controls button[aria-pressed='true'] {
-    background: var(--accent, #F5A34D);
-    border-color: var(--accent, #F5A34D);
-    color: #201203;
+    background: var(--accent, #945CFA);
+    border-color: var(--accent, #945CFA);
+    color: #FFFFFF;
     font-weight: 600;
   }
 
@@ -126,7 +126,7 @@
     background: #120E20;
   }
   .stage__tracker, .stage__video {
-    border-left: 1px solid rgba(245, 163, 77, .25);
+    border-left: 1px solid rgba(148, 92, 250, .3);   /* accent purple, not torch */
     background: #16112a;
   }
 
@@ -145,7 +145,7 @@
 
   /* The timer only appears in the tracker header at stage 3 — exactly as in the
      app, where stages 1 and 2 still show the full Sessions controls. */
-  .stage__timerchip { opacity: 0; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent, #F5A34D); font-size: .78rem; }
+  .stage__timerchip { opacity: 0; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); font-size: .78rem; }
   .stage[data-stage='3'] .stage__timerchip { opacity: 1; }
   .stage[data-stage='3'] .stage__timer { opacity: .35; }
 
@@ -156,14 +156,14 @@
 
   .stage__row { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: #D6CFEA; padding: .42rem 0; border-bottom: 1px solid rgba(255,255,255,.045); white-space: nowrap; }
   .stage__row b { margin-left: auto; color: var(--muted); font-weight: 500; }
-  .stage__row--tap { cursor: pointer; color: var(--accent, #F5A34D); }
-  .stage__row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent, #F5A34D); }
+  .stage__row--tap { cursor: pointer; color: var(--accent, #945CFA); }
+  .stage__row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent, #945CFA); }
 
-  .stage__timer { font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--accent, #F5A34D); padding: .5rem 0; display: flex; align-items: baseline; gap: .5rem; transition: opacity 260ms ease; }
+  .stage__timer { font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .5rem 0; display: flex; align-items: baseline; gap: .5rem; transition: opacity 260ms ease; }
   .stage__timer em { font-style: normal; font-size: .7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15rem .5rem; }
 
   .stage__bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.08); margin-bottom: .6rem; }
-  .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent, #F5A34D); }
+  .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent, #945CFA); }
 
   .stage__player { aspect-ratio: 16/9; border-radius: 8px; background: linear-gradient(135deg, #1d2b4a, #10182b); display: grid; place-items: center; margin-bottom: .55rem; }
   .stage__player span { color: rgba(255,255,255,.6); font-size: 1.6rem; }
