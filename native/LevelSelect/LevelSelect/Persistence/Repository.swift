@@ -420,9 +420,8 @@ struct Repository {
     /// rule that never overrides the user. `reconcile` merges the duplicates
     /// away with the same order; this keeps reads stable until it has.
     func trackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord? {
-        (pt.trackerStates ?? [])
-            .filter { $0.itemID == itemID && $0.deletedAt == nil }
-            .max { ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString) }
+        TrackerStateRecord.winner(of: (pt.trackerStates ?? [])
+            .filter { $0.itemID == itemID && $0.deletedAt == nil })
     }
 
     @discardableResult
@@ -816,11 +815,17 @@ struct Repository {
     }
 
     private func recompute(_ pt: Playthrough, allItems: [TrackerItemDTO]) {
-        let doneIDs = Set((pt.trackerStates ?? [])
-            .filter { $0.completed && $0.deletedAt == nil }
-            .map(\.itemID))
-        let done = allItems.filter { doneIDs.contains($0.id) }.count
-        pt.progressPercent = Double(done) / Double(allItems.count) * 100
+        // Winner rule, not "any twin completed": OR-ing across duplicates let
+        // a stale completed twin keep the ring full after the user's latest
+        // action was an untick.
+        let byItem = Dictionary(grouping: (pt.trackerStates ?? [])
+            .filter { $0.deletedAt == nil }, by: \.itemID)
+        let done = allItems.filter {
+            byItem[$0.id].flatMap(TrackerStateRecord.winner)?.completed == true
+        }.count
+        let percent = Double(done) / Double(allItems.count) * 100
+        guard pt.progressPercent != percent else { return }
+        pt.progressPercent = percent
         touch(pt)
     }
 
@@ -1152,20 +1157,36 @@ struct Repository {
         guard !groups.isEmpty else { return 0 }
         var merged = 0
         for (_, records) in groups {
-            let winner = records.max {
-                ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString)
-            }!
-            for loser in records where loser !== winner {
-                if winner.rank == nil { winner.rank = loser.rank }
-                if winner.count == nil { winner.count = loser.count }
-                winner.revealed = winner.revealed || loser.revealed
-                let winnerNote = winner.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let loserNote = loser.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                if !loserNote.isEmpty, winnerNote.isEmpty {
-                    winner.notes = loser.notes
-                } else if !loserNote.isEmpty, winnerNote != loserNote {
-                    winner.notes = winnerNote + "\n" + loserNote
-                }
+            let winner = TrackerStateRecord.winner(of: records)!
+            // Losers in TOTAL order too, newest first. Round 3 showed that
+            // with three or more rows, "first loser encountered" filled the
+            // winner's missing rank/count from whichever row the relationship
+            // happened to list first — so two devices folding the same rows
+            // could write different surviving content. Every derived value
+            // below depends only on the rows, never on iteration order.
+            let losers = records.filter { $0 !== winner }
+                .sorted { $0.outranks($1) }
+
+            if winner.rank == nil { winner.rank = losers.compactMap(\.rank).first }
+            if winner.count == nil { winner.count = losers.compactMap(\.count).first }
+            winner.revealed = winner.revealed || losers.contains { $0.revealed }
+
+            // Notes: winner's first, then each loser's in the same total
+            // order, skipping any text an earlier part already contains —
+            // that containment check is what makes the fold idempotent under
+            // partial delivery (the already-merged winner note "A\nB" can
+            // arrive before loser B's tombstone; B must not be appended
+            // again).
+            var noteParts: [String] = []
+            for record in [winner] + losers {
+                let note = record.notes?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                guard !note.isEmpty, !noteParts.contains(where: { $0.contains(note) })
+                else { continue }
+                noteParts.append(note)
+            }
+            if !noteParts.isEmpty { winner.notes = noteParts.joined(separator: "\n") }
+
+            for loser in losers {
                 loser.deletedAt = date
                 touch(loser, at: date)
                 merged += 1

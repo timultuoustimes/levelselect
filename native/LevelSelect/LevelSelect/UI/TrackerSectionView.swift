@@ -50,7 +50,10 @@ struct TrackerSectionView: View {
             (playthrough?.trackerStates ?? [])
                 .filter { $0.deletedAt == nil }
                 .map { ($0.itemID, $0) },
-            uniquingKeysWith: { a, _ in a }
+            // Same winner rule as the repository read — "whichever row the
+            // relationship listed first" could show a different state than
+            // repo.trackerState until reconciliation ran.
+            uniquingKeysWith: { a, b in b.outranks(a) ? b : a }
         )
     }
 

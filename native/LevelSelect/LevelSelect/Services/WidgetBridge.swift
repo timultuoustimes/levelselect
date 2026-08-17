@@ -119,7 +119,12 @@ enum WidgetBridge {
         guard let schema = game.trackerSchema else { return ([], 0, 0) }
         let cats = TrackerSchemaJSON.categories(from: schema.jsonData)
         let states = (pt?.trackerStates ?? []).filter { $0.deletedAt == nil }
-        let byItem = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+        // Same winner rule as the repository read: the widget refreshes on
+        // foreground BEFORE any per-game reconcile has folded sync twins, so
+        // an arbitrary-first pick here could show an objective the app
+        // considers unticked as done (or hide it).
+        let byItem = Dictionary(states.map { ($0.itemID, $0) },
+                                uniquingKeysWith: { a, b in b.outranks(a) ? b : a })
 
         let allItems = cats.flatMap(\.items)
         let done = allItems.filter { byItem[$0.id]?.completed == true }.count

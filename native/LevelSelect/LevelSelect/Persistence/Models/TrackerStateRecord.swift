@@ -39,3 +39,23 @@ final class TrackerStateRecord {
         self.revealed = revealed
     }
 }
+
+extension TrackerStateRecord {
+    /// The ONE duplicate-winner rule, shared by every reader — repository
+    /// reads, the tracker view's state map, the widget bridge, progress
+    /// recomputation, and the reconciler's fold. Total order: latest
+    /// `updatedAt`, ties broken by id, so every device (and every reader on
+    /// one device) resolves the same row. Round 3 found three readers each
+    /// using a different arbitrary rule ("first in relationship order",
+    /// "any twin completed"), which let a widget or a cached percentage
+    /// contradict the repository's declared winner until reconciliation
+    /// happened to run.
+    func outranks(_ other: TrackerStateRecord) -> Bool {
+        (updatedAt, id.uuidString) > (other.updatedAt, other.id.uuidString)
+    }
+
+    /// The winning row among duplicates for one item, under that total order.
+    static func winner(of records: [TrackerStateRecord]) -> TrackerStateRecord? {
+        records.max { $1.outranks($0) }
+    }
+}

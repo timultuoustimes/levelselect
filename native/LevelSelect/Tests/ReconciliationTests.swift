@@ -310,6 +310,95 @@ struct ReconciliationTests {
         #expect(game.livePlaythroughs.count == 3)
     }
 
+    /// Round 3, finding 2: with three or more rows, the fold's derived values
+    /// (rank/count fill, note order) depended on relationship iteration
+    /// order, so two devices folding the SAME rows could write different
+    /// surviving content. Every insertion order must produce an identical
+    /// survivor.
+    @Test func threeRowFoldIsIdenticalInEveryInsertionOrder() {
+        let t = Date(timeIntervalSince1970: 1_700_000_000)
+        // W (newest) wins but has no rank/note; B (middle) rank 5, note "B";
+        // A (oldest) rank 1, note "A". Expected everywhere: rank 5 (from the
+        // newest loser that has one), notes "B" then "A" (total order).
+        let rows: [(UUID, Date, Int?, String?)] = [
+            (UUID(uuidString: "CCCCCCCC-0000-0000-0000-000000000000")!, t.addingTimeInterval(200), nil, nil),
+            (UUID(uuidString: "BBBBBBBB-0000-0000-0000-000000000000")!, t.addingTimeInterval(100), 5, "B"),
+            (UUID(uuidString: "AAAAAAAA-0000-0000-0000-000000000000")!, t, 1, "A"),
+        ]
+        let orders: [[Int]] = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]]
+        var results: [(UUID, Int?, String?)] = []
+        for order in orders {
+            let (repo, game) = self.game(named: "Hades")
+            let pt = repo.ensureDefaultPlaythrough(for: game)
+            for idx in order {
+                let (id, stamp, rank, note) = rows[idx]
+                let record = syncedState(repo, pt: pt, itemID: "mirror",
+                                         rank: rank, updatedAt: stamp)
+                record.id = id
+                record.notes = note
+            }
+            repo.reconcile(game)
+            let live = (pt.trackerStates ?? []).filter { $0.itemID == "mirror" && $0.deletedAt == nil }
+            #expect(live.count == 1)
+            results.append((live[0].id, live[0].rank, live[0].notes))
+        }
+        for result in results {
+            #expect(result.0 == results[0].0)
+            #expect(result.1 == 5)
+            #expect(result.2 == "B\nA")
+        }
+    }
+
+    /// Round 3, finding 2: partial delivery. Another device's fold can sync
+    /// the already-merged winner note back BEFORE the loser's tombstone
+    /// arrives. Reconciling again with that live loser must not append its
+    /// note a second time — the note must not grow on every arrival cycle.
+    @Test func noteFoldIsIdempotentUnderPartialTombstoneDelivery() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // The winner as another device already folded it: note "A\nB".
+        let winner = syncedState(repo, pt: pt, itemID: "grub",
+                                 updatedAt: t.addingTimeInterval(100))
+        winner.notes = "A\nB"
+        // The loser whose tombstone hasn't arrived yet.
+        let straggler = syncedState(repo, pt: pt, itemID: "grub", updatedAt: t)
+        straggler.notes = "B"
+
+        repo.reconcile(game)
+        #expect(repo.trackerState(pt, itemID: "grub")?.notes == "A\nB")
+
+        // And again — a second straggler cycle must change nothing.
+        let again = syncedState(repo, pt: pt, itemID: "grub", updatedAt: t)
+        again.notes = "B"
+        repo.reconcile(game)
+        #expect(repo.trackerState(pt, itemID: "grub")?.notes == "A\nB")
+    }
+
+    /// Round 3, finding 3: recomputation used "any live twin completed",
+    /// which kept the ring full after the user's LATEST action was an untick.
+    /// The cached percentage must follow the same winner as the read.
+    @Test func recomputeFollowsTheWinnerNotAnyCompletedTwin() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        let schema = try! JSONSerialization.data(withJSONObject: [
+            "schemaVersion": 1,
+            "categories": [["id": "bosses", "name": "Bosses", "type": "checklist",
+                            "items": [["id": "hornet", "name": "Hornet"]]]],
+        ])
+        repo.applyGeneratedSchema(for: game, jsonData: schema, mode: .addAll)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let t = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = syncedState(repo, pt: pt, itemID: "hornet", completed: true, updatedAt: t)
+        _ = syncedState(repo, pt: pt, itemID: "hornet", completed: false,
+                        updatedAt: t.addingTimeInterval(100))
+
+        repo.recomputeProgress(game)
+
+        #expect(pt.progressPercent == 0)
+    }
+
     /// The bounded foreground sweep must still find doubled clocks — it works
     /// from a direct fetch of unstopped sessions, not a whole-library walk.
     @Test func boundedLibrarySweepClosesDoubledSessions() {
