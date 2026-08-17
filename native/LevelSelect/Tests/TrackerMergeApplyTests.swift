@@ -267,6 +267,40 @@ struct TrackerMergeApplyTests {
         #expect(second.progressPercent == 0)
     }
 
+    /// Round 3, finding 5: a Personal Goal changes every playthrough's
+    /// denominator, but addPersonalGoal saved without recomputing — a 1/1
+    /// tracker stayed cached at 100% after becoming 1/2, until some
+    /// unrelated action fixed it.
+    @Test func addingAPersonalGoalRecomputesTheDenominator() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game,
+                                  jsonData: schema([("hornet", "Hornet")]), mode: .addAll)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(pt, itemID: "hornet", done: true)
+        #expect(pt.progressPercent == 100)
+
+        repo.addPersonalGoal(to: game, named: "No-hit Radiance")
+
+        #expect(pt.progressPercent == 50)
+    }
+
+    /// Round 3, finding 5: recompute skipped empty schemas entirely, so
+    /// replacing a completed tracker with a valid empty one left every
+    /// playthrough's old percentage cached forever.
+    @Test func replacingWithAnEmptySchemaZeroesTheCache() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game,
+                                  jsonData: schema([("hornet", "Hornet")]), mode: .addAll)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(pt, itemID: "hornet", done: true)
+        #expect(pt.progressPercent == 100)
+
+        repo.applyGeneratedSchema(for: game, jsonData: TrackerSchemaJSON.emptySchema(),
+                                  mode: .replace)
+
+        #expect(pt.progressPercent == 0)
+    }
+
     /// A note is the user's work: an item removed by Replace that carried one
     /// must be listed as lost (and therefore offered rescue), not silently
     /// dropped because it was never ticked.

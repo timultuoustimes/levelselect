@@ -492,6 +492,10 @@ struct Repository {
             schema.jsonData = updated
             touch(schema)
             touch(game)
+            // A new goal changes every playthrough's denominator — round 3
+            // caught this path saving without recomputing, so a 1/1 tracker
+            // stayed cached at 100% after becoming 1/2.
+            recomputeAllPlaythroughs(of: game)
             persist()
         }
     }
@@ -800,11 +804,12 @@ struct Repository {
     /// to it later showed a ring that disagreed with its own migrated
     /// checkmarks, and nothing ever corrected it.
     func recomputeProgress(_ game: Game) {
-        guard let schema = game.trackerSchema else { return }
-        let allItems = TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
-        guard !allItems.isEmpty else { return }
-        for pt in game.livePlaythroughs { recompute(pt, allItems: allItems) }
+        recomputeAllPlaythroughs(of: game)
         persist()
+    }
+
+    private func recomputeAllPlaythroughs(of game: Game) {
+        for pt in game.livePlaythroughs { recompute(pt, allItems: trackerItems(of: game)) }
     }
 
     /// Recompute the cache of the playthrough that CHANGED — the setters take
@@ -812,22 +817,35 @@ struct Repository {
     /// instead meant a write to a non-active playthrough updated its row but
     /// refreshed a different playthrough's percentage.
     private func recomputeProgress(_ pt: Playthrough) {
-        guard let schema = pt.game?.trackerSchema else { return }
-        let allItems = TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
-        guard !allItems.isEmpty else { return }
-        recompute(pt, allItems: allItems)
+        guard let game = pt.game else { return }
+        recompute(pt, allItems: trackerItems(of: game))
+    }
+
+    private func trackerItems(of game: Game) -> [TrackerItemDTO] {
+        guard let schema = game.trackerSchema else { return [] }
+        return TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
     }
 
     private func recompute(_ pt: Playthrough, allItems: [TrackerItemDTO]) {
         // Winner rule, not "any twin completed": OR-ing across duplicates let
         // a stale completed twin keep the ring full after the user's latest
         // action was an untick.
-        let byItem = Dictionary(grouping: (pt.trackerStates ?? [])
-            .filter { $0.deletedAt == nil }, by: \.itemID)
-        let done = allItems.filter {
-            byItem[$0.id].flatMap(TrackerStateRecord.winner)?.completed == true
-        }.count
-        let percent = Double(done) / Double(allItems.count) * 100
+        //
+        // An EMPTY (or removed) schema recomputes to zero rather than being
+        // skipped — the old early-return left whatever percentage was cached
+        // before, so replacing a completed tracker with an empty one kept
+        // every ring full forever.
+        let percent: Double
+        if allItems.isEmpty {
+            percent = 0
+        } else {
+            let byItem = Dictionary(grouping: (pt.trackerStates ?? [])
+                .filter { $0.deletedAt == nil }, by: \.itemID)
+            let done = allItems.filter {
+                byItem[$0.id].flatMap(TrackerStateRecord.winner)?.completed == true
+            }.count
+            percent = Double(done) / Double(allItems.count) * 100
+        }
         guard pt.progressPercent != percent else { return }
         pt.progressPercent = percent
         touch(pt)
