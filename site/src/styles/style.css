@@ -100,7 +100,12 @@ a:hover { color: #B78DFF; }
 @keyframes breathe { 0%,100% { opacity:.55; scale:1 } 50% { opacity:.85; scale:1.06 } }
 .hero .wrap { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem; }
 .door {
-  width: clamp(112px, 20vw, 164px); border-radius: 26px;
+  width: clamp(112px, 20vw, 164px);
+  /* The markup carries height="164". Without height:auto the CSS shrinks the
+     width on narrow screens while that attribute holds the height, stretching
+     a square icon vertically — worst on a phone, invisible on a desktop. */
+  height: auto;
+  aspect-ratio: 1; border-radius: 26px;
   box-shadow: 0 30px 70px -20px rgba(0,0,0,.85), 0 0 60px -18px rgba(245,163,77,.55);
 }
 h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }

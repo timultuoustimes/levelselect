@@ -62,21 +62,31 @@ const { idle = false, class: className = '' } = Astro.props;
 
   @media (hover: hover) {
     .shine:hover::after {
-      animation: sweep 900ms ease-out;
+      /* 0.85s — the app's cover shine duration. */
+      animation: sweep 850ms ease-out;
     }
   }
 
   /* Touch devices get one sweep on arrival instead of nothing at all. */
   @media (hover: none) {
     .shine::after {
-      animation: sweep 1100ms ease-out 400ms;
+      animation: sweep 850ms ease-out 400ms;
     }
   }
 
   .shine--idle::after {
-    /* 6.6s matches LivePulse in the app, so the site breathes at the same
-       cadence as the thing it's advertising. */
-    animation: sweep 6.6s ease-in-out infinite;
+    /* The sweep itself is 0.85s — the app's cover-shine duration — and then it
+       WAITS. 6.6s is the LivePulse *interval*, not the length of the sweep;
+       stretching one sweep across the whole 6.6s made it crawl. 0.85/6.6 is
+       ~13% of the cycle, so the highlight travels at the right speed and the
+       rest of the cycle is stillness.  */
+    animation: sweep-idle 6.6s ease-out infinite;
+  }
+
+  @keyframes sweep-idle {
+    0%   { left: -60%; }
+    13%  { left: 120%; }
+    100% { left: 120%; }
   }
 
   @keyframes sweep {
