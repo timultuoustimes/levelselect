@@ -30,6 +30,8 @@ enum LibraryExport {
         var trackerSchemas: Int
         var completions: Int
         var videos: Int
+        var maps: Int
+        var markers: Int
         var collections: Int
         /// Sum of every record count above — a cheap integrity check that an
         /// importer (or a person) can verify without parsing the whole file.
@@ -51,7 +53,8 @@ enum LibraryExport {
         )
 
         var counts = (playthroughs: 0, sessions: 0, runs: 0,
-                      states: 0, schemas: 0, completions: 0, videos: 0)
+                      states: 0, schemas: 0, completions: 0, videos: 0,
+                      maps: 0, markers: 0)
 
         var gameObjects: [[String: Any]] = []
         for game in games {
@@ -80,6 +83,10 @@ enum LibraryExport {
             dict["developers"] = game.developers
             dict["publishers"] = game.publishers
             dict["genres"] = game.genres
+            dict["themes"] = game.themes
+            dict["gameModes"] = game.gameModes
+            dict["playerPerspectives"] = game.playerPerspectives
+            dict["trackerDisplay"] = game.trackerDisplayRaw
 
             // Tracker schema (the structure), separate from progress.
             if let schema = game.trackerSchema, schema.deletedAt == nil {
@@ -94,6 +101,7 @@ enum LibraryExport {
                     // Embedded as parsed JSON, not an opaque blob, so the file
                     // stays readable and diffable.
                     "data": (try? JSONSerialization.jsonObject(with: schema.jsonData)) ?? [:],
+                    "sources": schema.sourcesJSON.flatMap { try? JSONSerialization.jsonObject(with: $0) } as Any,
                 ]
             }
 
@@ -115,6 +123,10 @@ enum LibraryExport {
                         ]
                         s["endDate"] = session.endDate.map(iso)
                         s["notes"] = session.notes
+                        // Anchors for a session that was live at export time —
+                        // without them "running" is unreconstructable.
+                        s["resumedAt"] = session.resumedAt.map(iso)
+                        s["pausedAt"] = session.pausedAt.map(iso)
                         return s
                     }
 
@@ -184,11 +196,57 @@ enum LibraryExport {
                     "kind": video.kindRaw,
                     "title": video.title,
                     "group": video.groupName,
+                    "orderIndex": video.orderIndex,
                     "watchedSeconds": video.watchedSeconds,
                     "watchedPartIndex": video.watchedPartIndex,
                 ]
                 v["channel"] = video.channel
+                v["youtubeID"] = video.youtubeID.isEmpty ? nil : video.youtubeID
+                v["thumbnailURL"] = video.thumbnailURL
+                v["notes"] = video.notes
+                v["lastWatchedAt"] = video.lastWatchedAt.map(iso)
+                // Each playlist part's own resume position — hours of "where
+                // was I in part 7" that used to be dropped.
+                if !video.parts.isEmpty {
+                    v["parts"] = video.parts.map {
+                        ["id": $0.id, "title": $0.title, "watchedSeconds": $0.seconds]
+                    }
+                }
                 return v
+            }
+
+            let maps = (game.maps ?? []).filter { $0.deletedAt == nil }
+            counts.maps += maps.count
+            dict["maps"] = maps.sorted { $0.addedAt < $1.addedAt }.map { map -> [String: Any] in
+                var m: [String: Any] = [
+                    "id": map.id.uuidString,
+                    "name": map.name,
+                    "kind": map.kind.rawValue,
+                    "storageType": map.storageType,
+                    // The canonical reference. The local cache URL is a path on
+                    // THIS device and meaningless anywhere else, so it is
+                    // deliberately not exported.
+                    "remoteStoragePath": map.remoteStoragePath,
+                    "addedAt": iso(map.addedAt),
+                ]
+                m["remoteURL"] = map.remoteURLString
+                m["pixelWidth"] = map.pixelWidth
+                m["pixelHeight"] = map.pixelHeight
+                let live = (map.markers ?? []).filter { $0.deletedAt == nil }
+                counts.markers += live.count
+                m["markers"] = live.map { marker -> [String: Any] in
+                    var mk: [String: Any] = [
+                        "id": marker.id.uuidString,
+                        "x": marker.normalizedX,
+                        "y": marker.normalizedY,
+                        "category": marker.category.rawValue,
+                        "label": marker.label,
+                    ]
+                    mk["notes"] = marker.notes
+                    mk["linkedTrackerItemID"] = marker.linkedTrackerItemID
+                    return mk.compactMapValues { $0 }
+                }
+                return m.compactMapValues { $0 }
             }
 
             gameObjects.append(dict.compactMapValues { $0 })
@@ -201,6 +259,7 @@ enum LibraryExport {
                     "id": collection.id.uuidString,
                     "name": collection.name,
                     "isBundle": collection.isBundle,
+                    "sortIndex": collection.sortIndex,
                     "notes": collection.notes,
                     "gameIDs": collection.gameIDs,
                 ]
@@ -208,7 +267,7 @@ enum LibraryExport {
 
         let total = games.count + counts.playthroughs + counts.sessions + counts.runs
             + counts.states + counts.schemas + counts.completions + counts.videos
-            + collectionObjects.count
+            + counts.maps + counts.markers + collectionObjects.count
 
         let manifest = Manifest(
             formatVersion: formatVersion,
@@ -222,15 +281,28 @@ enum LibraryExport {
             trackerSchemas: counts.schemas,
             completions: counts.completions,
             videos: counts.videos,
+            maps: counts.maps,
+            markers: counts.markers,
             collections: collectionObjects.count,
             totalRecords: total
         )
 
-        let root: [String: Any] = [
+        var root: [String: Any] = [
             "manifest": try manifestDictionary(manifest),
             "games": gameObjects,
             "collections": collectionObjects,
         ]
+        // Synced appearance choices are user data too — a custom accent and
+        // per-status colors are exactly the kind of thing that's annoying to
+        // rebuild by memory after a reinstall.
+        if let theme = try? context.fetch(FetchDescriptor<ThemeSettings>()).first {
+            root["appearance"] = ([
+                "accentHex": theme.accentHex as Any,
+                "statusColors": theme.statusColors,
+                "pageBackground": theme.pageBackgroundRaw,
+                "defaultTrackerDisplay": theme.defaultTrackerDisplayRaw,
+            ] as [String: Any]).compactMapValues { $0 }
+        }
         return try JSONSerialization.data(
             withJSONObject: root,
             options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]

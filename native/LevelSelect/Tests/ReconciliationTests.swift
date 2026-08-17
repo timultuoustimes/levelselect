@@ -260,3 +260,64 @@ struct RepositoryEditTests {
         #expect(game.revision == revBefore + 1)
     }
 }
+
+/// Review finding #5: the export omitted whole models (maps, markers) and
+/// user-visible fields (video notes, per-part positions, session anchors,
+/// appearance). These assert the previously-dropped data actually lands in
+/// the JSON — the manifest can only count what the exporter chose to visit,
+/// so counting is not the proof; presence is.
+@MainActor
+struct ExportCompletenessTests {
+
+    @Test func exportCarriesMapsMarkersVideoDetailAndAppearance() throws {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+
+        // A map with an annotated marker — an entire model the export dropped.
+        let map = GameMap(name: "Hallownest", kind: .other)
+        context.insert(map)
+        map.game = game
+        let marker = Marker(normalizedX: 0.25, normalizedY: 0.75, category: .note, label: "Grub here")
+        marker.notes = "behind the breakable wall"
+        marker.linkedTrackerItemID = "grub-17"
+        context.insert(marker)
+        marker.map = map
+
+        // A playlist with a note and a per-part resume position.
+        let video = GameVideo(kind: .playlist, urlString: "https://youtube.com/playlist?list=X",
+                              youtubeID: "X", title: "Walkthrough")
+        context.insert(video)
+        video.game = game
+        video.notes = "start from part 3"
+        repo.cachePlaylistParts(video, ids: ["a", "b"], titles: ["a": "Part 1", "b": "Part 2"])
+        repo.updateVideoProgress(video, seconds: 436, partIndex: 1)
+
+        // A live paused session — unreconstructable without its anchors.
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let session = repo.startSession(on: pt, at: Date(timeIntervalSince1970: 1_700_000_000))
+        repo.pauseSession(session, at: Date(timeIntervalSince1970: 1_700_000_600))
+
+        let data = try LibraryExport.makeJSON(context: context)
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let manifest = try #require(root["manifest"] as? [String: Any])
+        #expect(manifest["maps"] as? Int == 1)
+        #expect(manifest["markers"] as? Int == 1)
+
+        let exported = try #require((root["games"] as? [[String: Any]])?.first)
+        let maps = try #require(exported["maps"] as? [[String: Any]])
+        let markers = try #require(maps.first?["markers"] as? [[String: Any]])
+        #expect(markers.first?["notes"] as? String == "behind the breakable wall")
+        #expect(markers.first?["linkedTrackerItemID"] as? String == "grub-17")
+
+        let videos = try #require(exported["videos"] as? [[String: Any]])
+        #expect(videos.first?["notes"] as? String == "start from part 3")
+        let parts = try #require(videos.first?["parts"] as? [[String: Any]])
+        #expect(parts.count == 2)
+        #expect(parts[1]["watchedSeconds"] as? Double == 436)
+
+        let sessions = try #require(
+            ((exported["playthroughs"] as? [[String: Any]])?.first?["sessions"]) as? [[String: Any]])
+        #expect(sessions.first?["pausedAt"] != nil)
+    }
+}
