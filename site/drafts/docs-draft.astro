@@ -1,0 +1,92 @@
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base
+  title="Help — LevelSelect"
+  description="How to use LevelSelect: pasting a checklist into a tracker, regenerating safely, sessions and runs, and getting your data out."
+  current="docs"
+>
+<main class="wrap">
+  <article class="doc">
+    <h1>Help</h1>
+    <p class="stamp">Last updated 17 August 2026</p>
+
+    <p class="lede">Most of LevelSelect explains itself. These are the parts that don't — mainly because they depend on what <em>you</em> bring.</p>
+
+    <h2 id="paste">Pasting a checklist into a tracker</h2>
+    <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: it reads exactly what you paste.</p>
+
+    <h3>Two formats work</h3>
+    <p><strong>A table</strong>, with a header row. Column names are matched loosely, so most wiki tables work as-is:</p>
+    <pre><code>| Item      | Effect              | Location   | Notes            |
+| --------- | ------------------- | ---------- | ---------------- |
+| Lace Glove| Raises Attack by one| Ossex      | Reward from Ack  |</code></pre>
+    <p>Recognised headers include <em>Item, Name, Trinket, Title, Collectible</em> for the name; <em>Location, Area, Region, Zone</em> for where it is; <em>Effect, Description, Details</em>; and <em>Notes, How, Source, Hint</em>. Anything unrecognised is skipped and reported rather than guessed at.</p>
+
+    <p><strong>Or headed sections</strong> of numbered or bulleted lines:</p>
+    <pre><code>## Heart Coins
+### Koala Village
+- [ ] Nia's Bedroom
+- [ ] Cave behind the house
+
+## Honey Pots
+1. Alberto's Farm - Yak Cave</code></pre>
+    <p><code>##</code> becomes a category. <code>###</code> becomes the <em>location</em> for the items beneath it. Checkboxes, numbers and bullets are all stripped.</p>
+
+    <h3>The one rule worth knowing</h3>
+    <p>In a line like <code>Koala Village - Nia's Bedroom</code>, is the first part a place or the item's name? LevelSelect decides by whether it <strong>repeats</strong>: a leading phrase that appears on several lines in the same section is treated as a location, and one that's different every time is treated as the item's name.</p>
+    <p>That gets it right for most lists — "Koala Village" nine times is clearly a place; "Wallet 1, Wallet 2, Bombs 1" are clearly items. Where a section is genuinely mixed, the preview screen shows which reading it chose and lets you flip it with one tap.</p>
+    <p>If you'd rather not rely on the guess, use <code>###</code> headings for locations. An explicit heading always wins.</p>
+
+    <h3>What is deliberately not split</h3>
+    <p>Only <code> - </code> (with spaces around it) separates a line. Commas never do — otherwise "Crab, Eel, Perch, Trout" would shatter into four items. That's why a line written with commas comes through as one long name; renaming it takes a moment, and a parser that split on commas would quietly wreck other lists.</p>
+
+    <h3>Imported lists are protected</h3>
+    <p>Anything you paste in is <strong>locked</strong>: regenerating that game's tracker later won't remove or replace it. You brought that list deliberately, so nothing automatic gets to overrule it.</p>
+
+    <h2 id="regenerating">Regenerating a tracker safely</h2>
+    <p>The generate button tells you what it's going to do, and you can change it for a single run by long-pressing.</p>
+    <ul>
+      <li><strong>Add New Only</strong> (the default) — keeps everything you have and adds what's missing. It cannot remove anything.</li>
+      <li><strong>Review Changes</strong> — generates, then shows you what would be added, removed and renamed, grouped by category. Nothing is written until you choose.</li>
+      <li><strong>Replace Everything</strong> — swaps the generated content out. It asks first.</li>
+    </ul>
+    <p>Generation doesn't name things identically each time, so an item can come back with a different internal id. LevelSelect follows those renames and carries your progress across, and tells you how many it moved. If something you'd completed genuinely isn't in the new tracker, you're offered the chance to keep it as a personal goal rather than losing it.</p>
+    <p>Your own notes are never touched by any of this.</p>
+
+    <h2 id="sessions">Sessions and runs are different things</h2>
+    <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
+    <p>They're deliberately separate. A run doesn't start a timer, and a session doesn't record a run, so your playtime never gets inflated by counting attempts. Run logging is off until you turn it on for a game (⋯ &rarr; <em>Log Runs for This Game</em>), because plenty of games deserve a tracker without one.</p>
+
+    <h2 id="data">Getting your data out</h2>
+    <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file with everything: games, playthroughs, sessions, runs, tracker progress, collections. It leads with a manifest of counts so you can check nothing is missing.</p>
+    <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and you can take it out whenever you want.</p>
+
+    <p class="callout" style="margin-top:2.5rem">Something missing or wrong here? <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or send feedback through TestFlight.</p>
+  </article>
+</main>
+
+<style>
+  .doc pre {
+    background: rgba(255, 255, 255, .045);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    overflow-x: auto;
+    font-size: .82rem;
+    line-height: 1.5;
+  }
+  .doc code {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .88em;
+  }
+  .doc pre code { font-size: 1em; }
+  .doc :not(pre) > code {
+    background: rgba(255, 255, 255, .07);
+    padding: .1em .35em;
+    border-radius: 4px;
+  }
+  .doc h3 { font-size: 1rem; margin-top: 1.6rem; }
+  .lede { font-size: 1.05rem; color: var(--ink); }
+</style>
+</Base>

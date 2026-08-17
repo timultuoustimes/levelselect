@@ -1,51 +1,155 @@
 ---
 import Base from '../../layouts/Base.astro';
----
-<Base title="Roadmap — LevelSelect" description="Where LevelSelect is going: what's being worked on now, what's next, and what's being explored." current="roadmap">
-<main class="wrap">
-<article class="doc">
-    <h1>Roadmap</h1>
-    <p class="stamp">Last reviewed 17 August 2026</p>
 
-    <div class="callout">
-      <p>This is a direction, not a set of promises. Things move between sections, and some never ship at all. For what has actually shipped, see the <a href="/changelog/">changelog</a>.</p>
+const horizons = [
+  {
+    key: 'now',
+    name: 'Now',
+    note: 'being worked on',
+    colour: '#30D158',
+    items: [
+      { t: 'Settling the beta', d: 'Making the things people use every day dependable before adding more.' },
+      { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
+      { t: 'Mac polish', d: "The Mac app works, but it doesn't yet feel as considered as the iPhone one." },
+    ],
+  },
+  {
+    key: 'next',
+    name: 'Next',
+    note: 'planned',
+    colour: '#0A84FF',
+    items: [
+      { t: 'Build a tracker piece by piece', d: 'Say what you actually care about, and add categories one at a time instead of waiting on one big generation that can fail entirely.' },
+      { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
+      { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
+      { t: 'Deeper stats', d: 'More ways to see your own habits — by year, by genre, by system.' },
+      { t: 'A wider beta', d: 'Opening up beyond the current small group.' },
+    ],
+  },
+  {
+    key: 'exploring',
+    name: 'Exploring',
+    note: 'no commitment',
+    colour: '#BF5AF2',
+    items: [
+      { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
+      { t: 'Your own cover art', d: 'Swap a game\'s cover for something you prefer.' },
+      { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
+      { t: 'More ways to bring a library in', d: 'Beyond CSV.' },
+      { t: 'More of your own notebook', d: 'Themes, icons, and the sort of personality a paper journal has.' },
+    ],
+  },
+];
+
+const notPlanned = [
+  { t: 'Accounts', d: "Your library lives in your own iCloud. There's nothing to sign up for." },
+  { t: 'Ads, analytics or tracking', d: 'Not now, not later.' },
+  { t: 'A social network', d: 'Sharing something you choose to share is one thing; a feed is another.' },
+];
+---
+<Base
+  title="Roadmap — LevelSelect"
+  description="Where LevelSelect is going: what's being worked on now, what's next, and what's being explored."
+  current="roadmap"
+>
+<main class="wrap">
+  <article class="doc doc--wide">
+    <h1>Roadmap</h1>
+    <p class="stamp">Last reviewed 17 August 2026 &middot; a direction, not a set of promises</p>
+
+    <div class="board">
+      {horizons.map((h) => (
+        <section class="col">
+          <header class="col__head">
+            <span class="col__dot" style={`background:${h.colour}`}></span>
+            <h2 class="col__name">{h.name}</h2>
+            <span class="col__note">{h.note}</span>
+            <span class="col__n">{h.items.length}</span>
+          </header>
+          {h.items.map((item) => (
+            <div class="rcard" style={`--stripe:${h.colour}`}>
+              <b>{item.t}</b>
+              <span>{item.d}</span>
+            </div>
+          ))}
+        </section>
+      ))}
     </div>
 
-    <h2>Now</h2>
-    <p>Being worked on.</p>
-    <ul>
-      <li><strong>Settling the beta.</strong> Making the things people use every day dependable before adding more.</li>
-      <li><strong>Trackers you can trust.</strong> Generating a tracker should never be a gamble with progress you've already made.</li>
-      <li><strong>Mac polish.</strong> The Mac app works, but it doesn't yet feel as considered as the iPhone one.</li>
-    </ul>
+    {/* Deliberately given equal weight rather than tucked at the bottom as
+        prose: for this app the absences are a large part of the pitch. */}
+    <section class="col col--off">
+      <header class="col__head">
+        <span class="col__dot col__dot--off"></span>
+        <h2 class="col__name">Not planned</h2>
+        <span class="col__note">on purpose</span>
+      </header>
+      <div class="notgrid">
+        {notPlanned.map((item) => (
+          <div class="rcard rcard--off">
+            <b>{item.t}</b>
+            <span>{item.d}</span>
+          </div>
+        ))}
+      </div>
+    </section>
 
-    <h2>Next</h2>
-    <p>Planned, not started.</p>
-    <ul>
-      <li><strong>Build a tracker piece by piece.</strong> Say what you actually care about — trophies, bosses, collectibles — and add categories one at a time instead of waiting on one big generation that can fail entirely.</li>
-      <li><strong>Moments worth celebrating.</strong> Finishing a game, hitting a milestone, or completing a hundred small things should feel like something.</li>
-      <li><strong>Replays.</strong> A look back at what you played over a month, a quarter or a year, built entirely from your own library on your own device.</li>
-      <li><strong>Deeper stats.</strong> More ways to see your own playing habits — by year, by genre, by system.</li>
-      <li><strong>A wider beta.</strong> Opening things up beyond the current small group.</li>
-    </ul>
-
-    <h2>Exploring</h2>
-    <p>Ideas being thought about. No commitment, and some of these are genuinely hard.</p>
-    <ul>
-      <li><strong>Badges.</strong> Recognition for what you've actually done, earned once and kept.</li>
-      <li><strong>Your own cover art.</strong> Swap a game's cover for something you prefer.</li>
-      <li><strong>Scanning a written list.</strong> Point a camera at a checklist you wrote by hand and turn it into a tracker.</li>
-      <li><strong>More ways to bring a library in</strong>, beyond CSV.</li>
-      <li><strong>Making the app feel more like your own notebook</strong> — themes, icons, and the sort of personality a paper journal has.</li>
-    </ul>
-
-    <h2>Not planned</h2>
-    <p>Worth being clear about, since these are what the app is deliberately not:</p>
-    <ul>
-      <li><strong>Accounts.</strong> Your library lives in your own iCloud. There's nothing to sign up for.</li>
-      <li><strong>Ads, analytics or tracking.</strong> Not now, not later. See the <a href="/privacy/">privacy policy</a>.</li>
-      <li><strong>A social network.</strong> Sharing something you choose to share is one thing; a feed is another.</li>
-    </ul>
+    <p class="stamp" style="margin-top:2rem">
+      For what's already shipped, see the <a href="/changelog/">changelog</a>.
+    </p>
   </article>
 </main>
+
+<style>
+  /* The board wants more room than the reading measure allows. */
+  .doc--wide { max-width: 1080px; }
+
+  .board { display: grid; gap: 1.6rem; margin-top: 1.8rem; }
+  @media (min-width: 860px) {
+    .board { grid-template-columns: repeat(3, 1fr); gap: 1.4rem; align-items: start; }
+  }
+
+  .col__head {
+    display: flex; align-items: center; gap: .5rem;
+    padding-bottom: .55rem; margin-bottom: .7rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .col__dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .col__dot--off { background: var(--muted); opacity: .5; }
+  .col__name {
+    font-size: .78rem; text-transform: uppercase; letter-spacing: .09em;
+    margin: 0; font-weight: 700;
+  }
+  .col__note { font-size: .78rem; color: var(--muted); }
+  .col__n {
+    margin-left: auto; font-size: .74rem; color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rcard {
+    position: relative;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .045);
+    padding: .8rem .9rem .8rem 1.05rem;
+    margin-bottom: .6rem;
+    overflow: hidden;
+  }
+  /* A stripe rather than a full tint — the status stays legible when three
+     columns sit side by side without three coloured blocks fighting. */
+  .rcard::before {
+    content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+    width: 3px; background: var(--stripe, var(--muted));
+  }
+  .rcard b { display: block; font-size: .97rem; font-weight: 650; }
+  .rcard span { display: block; color: var(--muted); font-size: .88rem; margin-top: .2rem; }
+
+  .col--off { margin-top: 2.6rem; }
+  .notgrid { display: grid; gap: .6rem; }
+  @media (min-width: 860px) { .notgrid { grid-template-columns: repeat(3, 1fr); } }
+  .rcard--off { opacity: .62; margin-bottom: 0; }
+  .rcard--off::before { background: var(--muted); opacity: .4; }
+  .rcard--off b { text-decoration: line-through; text-decoration-color: var(--muted); }
+</style>
 </Base>

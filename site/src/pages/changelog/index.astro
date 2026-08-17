@@ -21,55 +21,176 @@ const fmt = (d: Date) =>
   <article class="doc">
     <h1>Changelog</h1>
     <p class="stamp">
-      What's actually shipped, newest first. LevelSelect is in beta, so this moves quickly.
-      <a href="/changelog/rss.xml">RSS</a>
+      What's shipped, newest first. <a href="/changelog/rss.xml">RSS</a>
     </p>
 
-    <div class="callout">
-      <p>Everything here is in the TestFlight beta — <a href="https://testflight.apple.com/join/7pwdQEMq">join it here</a>. Builds go out when they're ready rather than on a schedule.</p>
+    {/* The filter is the whole point of this layout: it lets someone decide NOT
+        to read most of the page. Progressive enhancement — the chips only
+        appear once the script that makes them work has run, so a no-JS reader
+        gets the full list rather than dead buttons. */}
+    <div class="filters" data-filters hidden>
+      <button class="fchip" aria-pressed="true" data-f="all">Everything</button>
+      <button class="fchip" aria-pressed="false" data-f="new"><i class="d d--new"></i>New</button>
+      <button class="fchip" aria-pressed="false" data-f="improved"><i class="d d--improved"></i>Improved</button>
+      <button class="fchip" aria-pressed="false" data-f="fixed"><i class="d d--fixed"></i>Fixed</button>
     </div>
 
-    {rendered.map(({ entry, Content }) => (
-      <section class="release">
-        <h2>{entry.data.title}</h2>
-        <p class="release__meta">
-          <span class="release__version">{entry.data.version}</span>
-          <time datetime={entry.data.date.toISOString()}>{fmt(entry.data.date)}</time>
-        </p>
-        <p class="release__summary">{entry.data.summary}</p>
-        <Content />
+    {rendered.map(({ entry, Content }, i) => (
+      <section class="release" data-release data-open={i === 0 ? 'true' : 'false'}>
+        <button class="release__top" data-release-toggle aria-expanded={i === 0 ? 'true' : 'false'}>
+          <span class="release__caret" aria-hidden="true">›</span>
+          <span class="release__head">
+            <span class="release__title">{entry.data.title}</span>
+            <span class="release__meta">
+              <span class="release__version">{entry.data.version}</span>
+              <time datetime={entry.data.date.toISOString()}>{fmt(entry.data.date)}</time>
+            </span>
+          </span>
+        </button>
+        <div class="release__body" data-release-body hidden={i !== 0}>
+          <p class="release__summary">{entry.data.summary}</p>
+          <div class="release__content"><Content /></div>
+        </div>
       </section>
     ))}
+
+    <p class="callout" style="margin-top:2rem">
+      Everything here is in the TestFlight beta — <a href="https://testflight.apple.com/join/7pwdQEMq">join it</a>. Builds go out when they're ready, not on a schedule.
+    </p>
   </article>
 </main>
 
+<script>
+  const bar = document.querySelector('[data-filters]') as HTMLElement | null;
+  if (bar) bar.hidden = false;
+
+  // Expand / collapse
+  document.querySelectorAll('[data-release-toggle]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const release = btn.closest('[data-release]') as HTMLElement;
+      const body = release.querySelector('[data-release-body]') as HTMLElement;
+      const open = release.dataset.open === 'true';
+      release.dataset.open = String(!open);
+      btn.setAttribute('aria-expanded', String(!open));
+      body.hidden = open;
+    });
+  });
+
+  // Filter by change kind. The markdown renders <h3>New</h3> etc. followed by a
+  // <ul>, so each list is tagged from the heading above it.
+  document.querySelectorAll('.release__content').forEach((content) => {
+    let kind = 'other';
+    [...content.children].forEach((el) => {
+      if (el.tagName === 'H3') kind = el.textContent!.trim().toLowerCase();
+      (el as HTMLElement).dataset.kind = kind;
+    });
+  });
+
+  bar?.querySelectorAll('.fchip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const f = (chip as HTMLElement).dataset.f!;
+      bar.querySelectorAll('.fchip').forEach((c) =>
+        c.setAttribute('aria-pressed', String(c === chip))
+      );
+      document.querySelectorAll('.release').forEach((release) => {
+        let shown = 0;
+        release.querySelectorAll('.release__content > *').forEach((el) => {
+          const match = f === 'all' || (el as HTMLElement).dataset.kind === f;
+          (el as HTMLElement).hidden = !match;
+          if (match && el.tagName !== 'H3') shown++;
+        });
+        // A release with nothing matching steps back rather than disappearing —
+        // "nothing here" is information too.
+        (release as HTMLElement).dataset.empty = String(shown === 0 && f !== 'all');
+        if (f !== 'all' && shown > 0) {
+          (release as HTMLElement).dataset.open = 'true';
+          (release.querySelector('[data-release-body]') as HTMLElement).hidden = false;
+          release.querySelector('[data-release-toggle]')!.setAttribute('aria-expanded', 'true');
+        }
+      });
+    });
+  });
+</script>
+
 <style>
-  .release { margin-top: 2.75rem; }
-  .release h2 { margin-bottom: .35rem; }
-  .release__meta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .6rem;
-    align-items: baseline;
-    margin: 0 0 .6rem;
-    font-size: .85rem;
-    color: var(--muted);
+  .filters { display: flex; gap: .4rem; flex-wrap: wrap; margin: 1.4rem 0 1.8rem; }
+  .fchip {
+    font: inherit; font-size: .82rem;
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .35rem .75rem; border-radius: 999px;
+    border: 1px solid var(--line); background: transparent;
+    color: var(--muted); cursor: pointer;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
   }
-  .release__version {
-    font-family: 'Press Start 2P', monospace;
-    font-size: .62rem;
-    padding: .3rem .45rem;
+  .fchip[aria-pressed='true'] {
+    background: var(--accent); border-color: var(--accent);
+    color: #12081F; font-weight: 650;
+  }
+  .fchip[aria-pressed='true'] .d { background: #12081F; }
+  .fchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .d { width: 7px; height: 7px; border-radius: 50%; display: block; flex: none; }
+  .d--new { background: #30D158; }
+  .d--improved { background: #0A84FF; }
+  .d--fixed { background: #FF9F0A; }
+
+  .release {
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .04);
+    margin-bottom: .7rem;
+    overflow: hidden;
+    transition: opacity 200ms ease;
   }
-  .release__summary { font-size: 1.02rem; }
-  .release :global(h3) {
-    font-size: .8rem;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--muted);
-    margin-top: 1.4rem;
-    margin-bottom: .4rem;
+  .release[data-empty='true'] { opacity: .35; }
+
+  .release__top {
+    display: flex; align-items: flex-start; gap: .7rem;
+    width: 100%; padding: .95rem 1.05rem;
+    background: none; border: 0; color: inherit; font: inherit;
+    text-align: left; cursor: pointer;
+  }
+  .release__top:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .release__caret {
+    color: var(--muted); flex: none; line-height: 1.4;
+    transition: transform 200ms ease;
+  }
+  .release[data-open='true'] .release__caret { transform: rotate(90deg); }
+  .release__head { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
+  .release__title { font-size: 1.05rem; font-weight: 650; }
+  .release__meta { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+  .release__version {
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-size: .72rem; padding: .16rem .42rem;
+    border: 1px solid var(--line); border-radius: 5px;
+  }
+
+  .release__body { padding: 0 1.05rem 1rem 2.4rem; }
+  .release__summary { color: var(--ink); margin: 0 0 .9rem; }
+
+  /* The markdown's own <h3>New/Improved/Fixed</h3> become coloured labels. */
+  .release__content :global(h3) {
+    font-size: .74rem; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--muted); margin: 1.3rem 0 .4rem;
+    display: flex; align-items: center; gap: .45rem;
+  }
+  .release__content :global(h3)::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+  }
+  /* Kind is tagged by the script, so a no-JS reader gets neutral dots rather
+     than none — the labels still read. */
+  .release__content :global(h3[data-kind='new'])::before { background: #30D158; }
+  .release__content :global(h3[data-kind='improved'])::before { background: #0A84FF; }
+  .release__content :global(h3[data-kind='fixed'])::before { background: #FF9F0A; }
+  .release__content :global(h3:first-child) { margin-top: 0; }
+  .release__content :global(ul) { margin: 0; padding-left: 1.15rem; }
+  .release__content :global(li) { margin: .35rem 0; }
+
+  @media (max-width: 560px) {
+    .release__body { padding-left: 1.05rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .release, .release__caret, .fchip { transition: none; }
   }
 </style>
 </Base>
