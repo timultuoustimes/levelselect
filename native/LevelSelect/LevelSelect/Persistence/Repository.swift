@@ -22,6 +22,36 @@ struct Repository {
         PersistenceMonitor.shared.commit(context)
     }
 
+    /// Route a direct model edit through the repository's invariants.
+    ///
+    /// The header above says every write goes through here; the review found
+    /// a dozen view call sites mutating models directly — pin, status,
+    /// rating, ownership, tags — leaving `updatedAt`/`revision` stale (which
+    /// corrupts cross-device ordering) and deferring the save to autosave,
+    /// where a failure surfaces nowhere and a crash can silently lose the
+    /// edit. One generic wrapper beats a bespoke method per field: the call
+    /// site keeps its one-line mutation and the invariant stops depending on
+    /// anyone remembering it.
+    func edit<T: Syncable>(_ model: T, _ mutate: (T) -> Void) {
+        mutate(model)
+        touch(model)
+        persist()
+    }
+
+    /// Stamp-and-commit for screens that edit through SwiftUI bindings.
+    ///
+    /// Text fields (review, notes, metadata) write straight into the model on
+    /// every keystroke; wrapping each keystroke in an explicit commit would
+    /// trade one bug for a worse one. Instead the natural boundary — leaving
+    /// the page — stamps the sync metadata once and commits, with the
+    /// scene-phase background save as the backstop. No-op when nothing
+    /// actually changed, so ordinary navigation writes nothing.
+    func finalizeEdits<T: Syncable>(_ model: T) {
+        guard context.hasChanges else { return }
+        touch(model)
+        persist()
+    }
+
     // MARK: Games
 
     @discardableResult

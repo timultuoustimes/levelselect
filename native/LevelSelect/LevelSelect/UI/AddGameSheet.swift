@@ -203,9 +203,10 @@ struct AddGameSheet: View {
                 Button("Add") {
                     let trimmed = manualName.trimmingCharacters(in: .whitespaces)
                     guard !trimmed.isEmpty else { return }
-                    let game = Repository(context).addGame(name: trimmed, status: manualStatus)
+                    let repo = Repository(context)
+                    let game = repo.addGame(name: trimmed, status: manualStatus)
                     let p = manualPlatform.trimmingCharacters(in: .whitespaces)
-                    if !p.isEmpty { game.platforms = [p]; lastPlatform = p }
+                    if !p.isEmpty { repo.edit(game) { $0.platforms = [p] }; lastPlatform = p }
                     lastStatusRaw = manualStatus.rawValue
                     dismiss()
                 }
@@ -223,12 +224,13 @@ struct AddGameSheet: View {
     // MARK: Add
 
     private func add(igdb: IGDBGame, platform: String?, status: GameStatus, ownership: [String]) {
-        let game = Repository(context).addGame(from: igdb, platform: platform, status: status)
+        let repo = Repository(context)
+        let game = repo.addGame(from: igdb, platform: platform, status: status)
         // Built-ins were only attached at launch, so a game added now didn't
         // get its hand-built tracker (Hades, Hollow Knight, Dead Cells, …)
         // until the next cold start. Attach immediately instead.
         BuiltinTrackers.installMissing(context: context)
-        game.ownership = ownership
+        repo.edit(game) { $0.ownership = ownership }
         if let platform, !platform.isEmpty { lastPlatform = platform }
         // Don't let a wishlist promotion hijack the everyday default status.
         if defaultStatus == nil { lastStatusRaw = status.rawValue }

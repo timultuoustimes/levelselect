@@ -65,6 +65,13 @@ struct GameDetailView: View {
                 await repo.refreshFromIGDB(game)
             }
         }
+        .onDisappear {
+            // The metadata, review and notes editors write through bindings on
+            // every keystroke; this stamps sync metadata and commits once at
+            // the natural boundary instead of per keystroke. No-op when the
+            // visit changed nothing.
+            repo.finalizeEdits(game)
+        }
         .dekuBrowser(target: $browserTarget)
         .alert("New Collection", isPresented: $newCollection) {
             TextField("Name", text: $newCollectionName)
@@ -86,14 +93,14 @@ struct GameDetailView: View {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Button {
-                        game.pinned.toggle()
+                        repo.edit(game) { $0.pinned.toggle() }
                     } label: {
                         Label(game.pinned ? "Unpin" : "Pin", systemImage: game.pinned ? "pin.slash" : "pin")
                     }
                     Menu("Status") {
                         ForEach(GameStatus.allCases, id: \.self) { s in
                             Button {
-                                game.status = s
+                                repo.edit(game) { $0.status = s }
                             } label: {
                                 Label(s.label, systemImage: game.status == s ? "checkmark" : s.systemImage)
                             }
@@ -162,14 +169,14 @@ struct GameDetailView: View {
                     }
                     Menu("Tracker Display") {
                         Button {
-                            game.trackerDisplayRaw = nil
+                            repo.edit(game) { $0.trackerDisplayRaw = nil }
                         } label: {
                             Label("Follow Default (\(ThemePalette.defaultTrackerDisplay.label))",
                                   systemImage: game.trackerDisplayRaw == nil ? "checkmark" : "circle.dashed")
                         }
                         ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
                             Button {
-                                game.trackerDisplayRaw = choice.rawValue
+                                repo.edit(game) { $0.trackerDisplayRaw = choice.rawValue }
                             } label: {
                                 Label(choice.label, systemImage:
                                       game.trackerDisplayRaw == choice.rawValue ? "checkmark" : "circle")
@@ -790,7 +797,7 @@ struct GameDetailView: View {
                 FlowLayout(spacing: 6) {
                     ForEach(game.userTags, id: \.self) { tag in
                         Chip(text: "#\(tag)", tint: LSTheme.accent) {
-                            game.userTags.removeAll { $0 == tag }
+                            repo.edit(game) { $0.userTags.removeAll { $0 == tag } }
                         }
                     }
                 }
@@ -802,7 +809,7 @@ struct GameDetailView: View {
                         .trimmingCharacters(in: .whitespaces)
                         .replacingOccurrences(of: "#", with: "")
                     if !tag.isEmpty, !game.userTags.contains(tag) {
-                        game.userTags.append(tag)
+                        repo.edit(game) { $0.userTags.append(tag) }
                     }
                     newTag = ""
                 }

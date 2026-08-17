@@ -212,3 +212,51 @@ struct ReconciliationTests {
         #expect(live.first?.completed == true)
     }
 }
+
+/// The repository's edit choke point — review finding #8. Views were mutating
+/// models directly, leaving updatedAt/revision stale (which corrupts
+/// cross-device ordering) and deferring the save to autosave, where failures
+/// surface nowhere.
+@MainActor
+struct RepositoryEditTests {
+
+    @Test func editBumpsSyncMetadata() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .backlog)
+        let revBefore = game.revision
+        let stampBefore = game.updatedAt
+
+        repo.edit(game) { $0.pinned = true }
+
+        #expect(game.pinned)
+        #expect(game.revision == revBefore + 1)
+        #expect(game.updatedAt >= stampBefore)
+    }
+
+    /// Ordinary navigation through a page that changed nothing must not write.
+    @Test func finalizeEditsIsANoOpWhenNothingChanged() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .backlog)
+        let revBefore = game.revision
+
+        repo.finalizeEdits(game)
+
+        #expect(game.revision == revBefore)
+    }
+
+    /// A binding-style direct mutation gets its metadata stamped at the
+    /// boundary.
+    @Test func finalizeEditsStampsABindingEdit() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .backlog)
+        let revBefore = game.revision
+
+        game.review = "wrote this through a TextField binding"
+        repo.finalizeEdits(game)
+
+        #expect(game.revision == revBefore + 1)
+    }
+}

@@ -37,7 +37,7 @@ struct GameContextMenuModifier: ViewModifier {
             }
 
             Button {
-                game.pinned.toggle()
+                repo.edit(game) { $0.pinned.toggle() }
             } label: {
                 Label(game.pinned ? "Unpin" : "Pin",
                       systemImage: game.pinned ? "pin.slash" : "pin")
@@ -47,7 +47,7 @@ struct GameContextMenuModifier: ViewModifier {
             Menu {
                 ForEach(GameStatus.allCases, id: \.self) { s in
                     Button {
-                        game.status = s
+                        repo.edit(game) { $0.status = s }
                     } label: {
                         Label(s.sectionTitle,
                               systemImage: game.status == s ? "checkmark" : s.systemImage)
@@ -62,8 +62,10 @@ struct GameContextMenuModifier: ViewModifier {
                 ForEach(Ownership.allCases, id: \.self) { kind in
                     let on = game.ownership.contains(kind.rawValue)
                     Button {
-                        if on { game.ownership.removeAll { $0 == kind.rawValue } }
-                        else { game.ownership.append(kind.rawValue) }
+                        repo.edit(game) {
+                            if on { $0.ownership.removeAll { $0 == kind.rawValue } }
+                            else { $0.ownership.append(kind.rawValue) }
+                        }
                     } label: {
                         Label(kind.label, systemImage: on ? "checkmark" : kind.systemImage)
                     }
@@ -76,14 +78,14 @@ struct GameContextMenuModifier: ViewModifier {
             Menu {
                 ForEach(1...5, id: \.self) { stars in
                     Button {
-                        game.rating = stars
+                        repo.edit(game) { $0.rating = stars }
                     } label: {
                         Label(String(repeating: "★", count: stars),
                               systemImage: game.rating == stars ? "checkmark" : "star")
                     }
                 }
                 if game.rating != nil {
-                    Button("Clear Rating") { game.rating = nil }
+                    Button("Clear Rating") { repo.edit(game) { $0.rating = nil } }
                 }
             } label: {
                 Label("Rate", systemImage: "star")
