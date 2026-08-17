@@ -228,15 +228,30 @@ struct MergeRegressionTests {
         #expect(ids.filter { $0 == "dupe" }.count == 1)
     }
 
-    /// Same guard for names, since matching is name-aware.
-    @Test func duplicateNamesInOnePayloadAreNotBothAdded() {
-        let current = schema([category(id: "bosses", name: "Bosses", items: [])])
-        let incoming = schema([
-            category(id: "bosses", name: "Bosses",
-                     items: [("a", "False Knight"), ("b", "false-knight")]),
+    /// Names guard against RE-IMPORT, not against each other. An incoming
+    /// item whose name matches something already stored is the same item
+    /// coming back under a fresh id and must be skipped — but two same-named
+    /// items arriving together under distinct ids are legitimate data (a
+    /// pasted list has "Chest" at three locations), and round 3 caught the
+    /// growing name set silently swallowing all but the first.
+    @Test func nameGuardBlocksReimportButNotDistinctSameNamedArrivals() {
+        // Re-import shape: "False Knight" already exists; it returns re-slugged.
+        let current = schema([category(id: "bosses", name: "Bosses",
+                                       items: [("false-knight", "False Knight")])])
+        let reimport = schema([
+            category(id: "bosses", name: "Bosses", items: [("b", "false-knight")]),
         ])
-        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .addAll)
-        #expect(TrackerSchemaJSON.categories(from: out).flatMap(\.items).count == 1)
+        let afterReimport = TrackerMerge.merged(current: current, incoming: reimport, mode: .addAll)
+        #expect(TrackerSchemaJSON.categories(from: afterReimport).flatMap(\.items).count == 1)
+
+        // Legitimate shape: three distinct chests sharing a display name.
+        let empty = schema([category(id: "chests", name: "Chests", items: [])])
+        let chests = schema([
+            category(id: "chests", name: "Chests",
+                     items: [("c1", "Chest"), ("c2", "Chest"), ("c3", "Chest")]),
+        ])
+        let afterChests = TrackerMerge.merged(current: empty, incoming: chests, mode: .addAll)
+        #expect(TrackerSchemaJSON.categories(from: afterChests).flatMap(\.items).count == 3)
     }
 }
 
@@ -284,8 +299,10 @@ struct IngestBoundaryTests {
         #expect(ids.filter { $0 == "hornet" }.count == 1)
     }
 
-    /// REPLACE adopts incoming content — it must not adopt duplicate identities.
-    @Test func replaceRejectsDuplicateIDsAndNames() {
+    /// REPLACE adopts incoming content — it must not adopt duplicate IDs,
+    /// and must NOT invent identity from display names: distinct-id items
+    /// sharing a name are real data and all survive.
+    @Test func replaceRejectsDuplicateIDsButKeepsDistinctSameNamedItems() {
         let (repo, game) = self.game(named: "Hollow Knight")
         repo.applyGeneratedSchema(for: game, jsonData: schema([
             category(id: "bosses", name: "Bosses", items: [("hornet", "Hornet")]),
@@ -293,14 +310,12 @@ struct IngestBoundaryTests {
 
         repo.applyGeneratedSchema(for: game, jsonData: schema([
             category(id: "bosses", name: "Bosses",
-                     items: [("h1", "Hornet"), ("h2", "hornet"), ("h1", "Hornet Again")]),
+                     items: [("h1", "Hornet"), ("h2", "Hornet"), ("h1", "Hornet Again")]),
         ]), mode: .replace)
 
         let ids = installedItemIDs(game)
-        #expect(ids.count == Set(ids).count)
-        let names = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
-            .flatMap(\.items).map { TrackerMerge.matchKey($0.name) }
-        #expect(names.count == Set(names).count)
+        #expect(ids.count == Set(ids).count)      // duplicate id dropped
+        #expect(ids.sorted() == ["h1", "h2"])     // both same-named items kept
     }
 
     /// A wholly NEW category in Add mode was copied wholesale.
@@ -352,6 +367,52 @@ struct IngestBoundaryTests {
         #expect(matching.count == 1)
         #expect(matching.first?.name == "My Pasted List")
         #expect(matching.first?.items.map(\.id) == ["mine"])
+    }
+
+    /// Round 3, finding 1: the paste parser's own regression fixture — three
+    /// distinct chests sharing a display name — must survive the FULL
+    /// preview-to-apply path. The sanitizer used to delete two of them after
+    /// the preview had shown all three.
+    @Test func pastedSameNamedItemsSurviveFromPreviewToInstall() throws {
+        let (repo, game) = self.game(named: "Ossex")
+        // Explicit location headings force three items literally named
+        // "Chest" — the same-name shape the parser's fixtures treat as valid.
+        let parsed = TrackerListParser.parse("""
+        ## Chests
+        ### Ossex
+        - Chest
+        ### Bone Beach
+        - Chest
+        ### Sandfalls
+        - Chest
+        """)
+        let previewed = parsed.categories.flatMap(\.items)
+        #expect(previewed.count == 3)                            // what preview shows
+        #expect(previewed.filter { $0.name == "Chest" }.count == 3)
+
+        let incoming = TrackerListParser.schemaData(from: parsed)
+        repo.applyGeneratedSchema(for: game, jsonData: incoming, mode: .addAll)
+
+        let installed = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+            .flatMap(\.items)
+        // Install keeps EXACTLY what the preview promised — same items,
+        // same ids, nothing silently dropped.
+        #expect(installed.map(\.id).sorted() == previewed.map(\.id).sorted())
+        #expect(installed.map(\.name) == previewed.map(\.name))
+    }
+
+    /// Same principle one level up: two distinct categories that happen to
+    /// share a display name are not the same category.
+    @Test func distinctSameNamedCategoriesBothSurviveIngest() {
+        let (repo, game) = self.game(named: "Hollow Knight")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses-act1", name: "Bosses", items: [("hornet", "Hornet")]),
+            category(id: "bosses-act2", name: "Bosses", items: [("grimm", "Grimm")]),
+        ]), mode: .addAll)
+
+        let cats = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+        #expect(cats.count == 2)
+        #expect(Set(cats.map(\.id)) == ["bosses-act1", "bosses-act2"])
     }
 
     /// Two incoming categories with the same normalized name must not both

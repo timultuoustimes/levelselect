@@ -102,55 +102,48 @@ enum TrackerMerge {
     /// The AI generator's contract requires ids to be strings — not to be
     /// unique — and the lenient parser doesn't check either. Duplicate item
     /// ids share one state record (ticking either row ticks both) and
-    /// duplicate category ids poison diff matching. The previous fix deduped
-    /// only while appending into an already-matched category, so first
-    /// generation, Replace, and a wholly new Add category all still accepted
-    /// duplicates raw. Sanitizing the payload here covers every path with one
-    /// rule instead of four copies of it.
+    /// duplicate category ids poison diff matching. So duplicates are folded
+    /// by ID — and by ID ONLY. Display names are deliberately NOT identity:
+    /// the paste parser mints distinct ids for repeated names ("Chest" at
+    /// three locations), and the shipped built-ins carry six distinct rows
+    /// all named "Aspect of Zagreus". Round 3 caught this sanitizer treating
+    /// name equality as identity and silently deleting exactly that data
+    /// after the preview had promised it — a duplicate the user can see and
+    /// delete beats an item the code silently decided didn't exist.
     ///
-    /// Categories sharing an id or a normalized name are folded into the
-    /// first occurrence (their items concatenated, then deduped); items
-    /// repeating an id or normalized name within a category keep the first
-    /// occurrence. Operates on raw dictionaries so unknown fields survive,
-    /// like every other transform here. Idempotent; non-schema data passes
-    /// through untouched.
+    /// Categories sharing an id are folded into the first occurrence (their
+    /// items concatenated, then id-deduped); items repeating an id within a
+    /// category keep the first occurrence. Operates on raw dictionaries so
+    /// unknown fields survive, like every other transform here. Idempotent;
+    /// non-schema data passes through untouched.
     static func deduplicated(_ data: Data) -> Data {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let rawCats = root["categories"] as? [[String: Any]]
         else { return data }
 
         var cats: [[String: Any]] = []
-        var indexByKey: [String: Int] = [:]
+        var indexByID: [String: Int] = [:]
         for cat in rawCats {
-            var keys: [String] = []
-            if let id = cat["id"] as? String, !id.isEmpty { keys.append("id:\(id)") }
-            if let name = cat["name"] as? String, !matchKey(name).isEmpty {
-                keys.append("name:\(matchKey(name))")
-            }
-            if let hit = keys.compactMap({ indexByKey[$0] }).first {
+            let id = (cat["id"] as? String) ?? ""
+            if !id.isEmpty, let hit = indexByID[id] {
                 var target = cats[hit]
                 var items = (target["items"] as? [[String: Any]]) ?? []
                 items += (cat["items"] as? [[String: Any]]) ?? []
                 target["items"] = items
                 cats[hit] = target
-                for key in keys where indexByKey[key] == nil { indexByKey[key] = hit }
             } else {
                 cats.append(cat)
-                for key in keys where indexByKey[key] == nil { indexByKey[key] = cats.count - 1 }
+                if !id.isEmpty { indexByID[id] = cats.count - 1 }
             }
         }
 
         for (idx, cat) in cats.enumerated() {
             var seenIDs = Set<String>()
-            var seenNames = Set<String>()
             var kept: [[String: Any]] = []
             for item in (cat["items"] as? [[String: Any]]) ?? [] {
                 let id = (item["id"] as? String) ?? ""
-                let nameKey = matchKey((item["name"] as? String) ?? "")
                 if !id.isEmpty, seenIDs.contains(id) { continue }
-                if !nameKey.isEmpty, seenNames.contains(nameKey) { continue }
                 if !id.isEmpty { seenIDs.insert(id) }
-                if !nameKey.isEmpty { seenNames.insert(nameKey) }
                 kept.append(item)
             }
             var next = cat
@@ -416,23 +409,23 @@ enum TrackerMerge {
 
             var existing = cats[idx]
             var items = (existing["items"] as? [[String: Any]]) ?? []
-            // `var`, and updated on every append. Computed once, a single
-            // incoming payload containing the same id twice appended BOTH —
-            // and progress is keyed by item id, so two rows would then share
-            // one checkmark. AI output is untrusted input, not a valid key set.
+            // Ids grow as appends happen — a payload repeating an id must not
+            // append both rows, since progress is keyed by item id and two
+            // rows would share one checkmark. Names are checked only against
+            // what was ALREADY in the category before this payload: that's
+            // the re-import guard (a regeneration returning "False Knight"
+            // under a fresh id must not double it), but names inside one
+            // payload are not identities — a pasted list legitimately has
+            // "Chest" at three locations under three ids, and growing the
+            // name set silently swallowed all but the first.
             var haveIDs = Set(items.compactMap { $0["id"] as? String })
-            var haveNames = Set(items.compactMap { ($0["name"] as? String).map(matchKey) })
+            let preexistingNames = Set(items.compactMap { ($0["name"] as? String).map(matchKey) })
 
             for item in wanted {
                 let id = (item["id"] as? String) ?? ""
                 let nameKey = matchKey((item["name"] as? String) ?? "")
-                // Skip anything already present under either identity —
-                // otherwise a re-run of the same generation would double every
-                // item, which is exactly the failure additive generation is
-                // meant to avoid.
-                guard !haveIDs.contains(id), !haveNames.contains(nameKey) else { continue }
+                guard !haveIDs.contains(id), !preexistingNames.contains(nameKey) else { continue }
                 haveIDs.insert(id)
-                haveNames.insert(nameKey)
                 items.append(item)
             }
             existing["items"] = items
