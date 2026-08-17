@@ -7,6 +7,10 @@ dist/
 native/fixtures/*.json
 # Third-party app announcement screenshots (design reference only) — do not redistribute
 native/design-references/
+# Image-generation working files and source art — kept in ~/Dev/archive/levelselect-art/
+public/generated/
+public/generated-art/
+public/retro-console-icons/
 
 # --- native (Xcode / xcodegen) ---
 # .xcodeproj is generated from project.yml by xcodegen — do not commit

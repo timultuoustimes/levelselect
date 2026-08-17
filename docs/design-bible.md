@@ -944,9 +944,12 @@ Platform icons are **raster PNGs**, not symbols. Resolved by substring match on 
 (`LibraryView.swift:445-484`), returning an asset name like `platform-snes`; `nil` falls back to
 `gamecontroller.fill` tinted with the accent (`PlatformViews.swift:17-20`).
 
-Asset catalog: 27 `platform-*.imageset` entries in `Assets.xcassets`. The source art lives at
-`public/retro-console-icons/` (38 PNGs, 1024 × 1024, transparent background), with descriptive names
-like `super-nintendo-entertainment-system.png`, `nintendo-switch-2.png`, `ps5-original-disc.png`.
+Asset catalog: 27 `platform-*.imageset` entries in `Assets.xcassets` — these are what the app ships
+and reads. The 1024 × 1024 transparent-background source renders they were derived from are kept
+outside this public repo, at `~/Dev/archive/levelselect-art/console-icon-sources/` (37 PNGs, named
+descriptively: `super-nintendo-entertainment-system.png`, `nintendo-switch-2.png`,
+`ps5-original-disc.png`). Reach for them when a new platform needs an icon; the app's copies are
+resized and renamed derivatives.
 
 **The style, as observed in the rendered art:**
 
@@ -1659,9 +1662,10 @@ scroll. This maps onto scroll-driven animations where supported:
   `flag.checkered`, `sparkles`, `tag`. Match the *convention* (§8.1), not the exact glyph: filled for
   status/state, outline for actions and section headers; sized by the adjacent text style; chevrons at
   `--ls-text-3`.
-- **The console icons transfer directly.** `public/retro-console-icons/*.png` are already 1024px
-  transparent PNGs in the web project. Convert to WebP/AVIF and serve at 2× the display size. They are
-  the single strongest visual asset the app has and the site should lean on them.
+- **The console icons transfer directly.** The site's copies live at `site/public/assets/sys-*.png`;
+  the 1024px transparent sources are archived outside the repo (see above). Convert to WebP/AVIF and
+  serve at 2× the display size. They are the single strongest visual asset the app has and the site
+  should lean on them.
 - **The door mark** (`Assets.xcassets/DoorMark.imageset/door-mark.png`) is the wordmark's companion; if
   the site uses a lockup, it belongs at `2.1em` height beside the type with `0.55em` of gap
   (`Wordmark.swift:24,29`) and its own `drop-shadow(0 0.12em 0.35em rgb(0 0 0 / 0.5))`.
@@ -1739,4 +1743,5 @@ If the site does only five things, do these — they carry the identity:
 | `Services/FontRegistrar.swift` | Runtime registration of Press Start 2P |
 | `Assets.xcassets/` | `DoorMark`, `LaunchLogo`, `LockupWide`, `LaunchBackground`, 27 `platform-*` |
 | `Resources/PressStart2P-Regular.ttf` | The pixel font (OFL, license alongside) |
-| `public/retro-console-icons/` | 38 source console renders, 1024px, transparent |
+| `site/public/assets/sys-*.png` | The site's console art (app-sized copies) |
+| _(archived outside repo)_ | 37 source console renders, 1024px, transparent — `~/Dev/archive/levelselect-art/` |
