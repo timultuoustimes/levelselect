@@ -50,7 +50,10 @@
     <!-- Guide video -->
     <div class="stage__panel stage__video">
       <div class="stage__head"><span class="stage__title">Guides &amp; Videos</span></div>
-      <div class="stage__player"><span>&#9654;</span></div>
+      <div class="stage__player">
+        <img src="/assets/guide-thumb.jpg" alt="" loading="lazy" />
+        <span class="stage__play" aria-hidden="true">&#9654;</span>
+      </div>
       <div class="stage__row">Part 4 &middot; Soul Sanctum<b>12:04</b></div>
       <div class="stage__row">Part 5 &middot; City of Tears<b>—</b></div>
     </div>
@@ -89,6 +92,16 @@
 <style>
   .stage { --ease: cubic-bezier(.34, 1.2, .64, 1); }
 
+  /* Everything inside the frame is sized in em off this one value, so the mock
+     scales as a unit rather than each piece having its own breakpoint. On a
+     narrow phone the two side-by-side panels were ~160px and ~190px wide and
+     rows were being clipped mid-word; now the type shrinks with the frame and
+     the geometry — which is the whole point of the demo — stays intact. */
+  .stage__frame {
+    container-type: inline-size;
+    font-size: clamp(8.5px, 3cqw, 13px);
+  }
+
   .stage__controls { display: flex; gap: .5rem; margin-bottom: .9rem; flex-wrap: wrap; }
   .stage__controls button {
     font: inherit;
@@ -111,7 +124,7 @@
   .stage__frame {
     position: relative;
     overflow: hidden;
-    height: 340px;
+    height: clamp(230px, 62cqw, 340px);
     border: 1px solid var(--line);
     border-radius: 14px;
     background: rgba(255, 255, 255, .02);
@@ -120,7 +133,7 @@
   .stage__panel {
     position: absolute;
     inset: 0 auto 0 0;
-    padding: .85rem;
+    padding: .8em;
     transition: transform 520ms var(--ease), width 520ms var(--ease);
     overflow: hidden;
     background: #120E20;
@@ -145,35 +158,48 @@
 
   /* The timer only appears in the tracker header at stage 3 — exactly as in the
      app, where stages 1 and 2 still show the full Sessions controls. */
-  .stage__timerchip { opacity: 0; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); font-size: .78rem; }
+  .stage__timerchip { opacity: 0; flex: none; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); font-size: .92em; }
   .stage[data-stage='3'] .stage__timerchip { opacity: 1; }
   .stage[data-stage='3'] .stage__timer { opacity: .35; }
 
-  .stage__head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding-bottom: .55rem; border-bottom: 1px solid var(--line); margin-bottom: .55rem; }
-  .stage__title { font-size: .85rem; font-weight: 600; display: flex; align-items: center; gap: .35rem; white-space: nowrap; }
-  .stage__title i { font-style: normal; font-weight: 400; font-size: .74rem; color: var(--muted); }
-  .live { width: 7px; height: 7px; border-radius: 50%; background: #56D364; flex: none; }
+  .stage__head { display: flex; align-items: center; justify-content: space-between; gap: .5em; padding-bottom: .5em; border-bottom: 1px solid var(--line); margin-bottom: .5em; }
+  .stage__title { font-size: 1.06em; font-weight: 600; display: flex; align-items: center; gap: .35em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .stage__title i { font-style: normal; font-weight: 400; font-size: .88em; color: var(--muted); }
+  .live { width: .58em; height: .58em; border-radius: 50%; background: #56D364; flex: none; }
 
-  .stage__row { display: flex; align-items: center; gap: .4rem; font-size: .78rem; color: #D6CFEA; padding: .42rem 0; border-bottom: 1px solid rgba(255,255,255,.045); white-space: nowrap; }
-  .stage__row b { margin-left: auto; color: var(--muted); font-weight: 500; }
+  .stage__row { display: flex; align-items: center; gap: .4em; font-size: 1em; color: #D6CFEA; padding: .34em 0; border-bottom: 1px solid rgba(255,255,255,.045); white-space: nowrap; }
+  .stage__row b { margin-left: auto; color: var(--muted); font-weight: 500; flex: none; }
+  /* The label yields before the value does — a truncated name still reads,
+     a truncated "9/14" does not. */
+  .stage__row { min-width: 0; }
+  .stage__row > :not(b):not(.dot) { overflow: hidden; text-overflow: ellipsis; }
   .stage__row--tap { cursor: pointer; color: var(--accent, #945CFA); }
-  .stage__row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent, #945CFA); }
+  .stage__row .dot { width: .5em; height: .5em; border-radius: 50%; background: var(--accent, #945CFA); }
 
-  .stage__timer { font-size: 1.5rem; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .5rem 0; display: flex; align-items: baseline; gap: .5rem; transition: opacity 260ms ease; }
-  .stage__timer em { font-style: normal; font-size: .7rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15rem .5rem; }
+  .stage__timer { font-size: 1.75em; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .5rem 0; display: flex; align-items: baseline; gap: .5rem; transition: opacity 260ms ease; }
+  .stage__timer em { font-style: normal; font-size: .8em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15rem .5rem; }
 
-  .stage__bar { height: 5px; border-radius: 999px; background: rgba(255,255,255,.08); margin-bottom: .6rem; }
+  .stage__bar { height: .42em; border-radius: 999px; background: rgba(255,255,255,.08); margin-bottom: .6em; }
   .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent, #945CFA); }
 
-  .stage__player { aspect-ratio: 16/9; border-radius: 8px; background: linear-gradient(135deg, #1d2b4a, #10182b); display: grid; place-items: center; margin-bottom: .55rem; }
-  .stage__player span { color: rgba(255,255,255,.6); font-size: 1.6rem; }
+  .stage__player {
+    position: relative; aspect-ratio: 16/9; border-radius: .6em; overflow: hidden;
+    background: #10182b; margin-bottom: .55em; display: grid; place-items: center;
+  }
+  .stage__player img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Darkened so the play glyph stays readable over any frame. */
+  .stage__player::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(to top, rgb(6 4 14 / .55), rgb(6 4 14 / .12));
+  }
+  .stage__play {
+    position: relative; z-index: 1; color: #fff; font-size: 1.9em;
+    text-shadow: 0 2px 12px rgb(0 0 0 / .7);
+  }
 
   .stage__caption { font-size: .9rem; color: var(--muted); margin: .8rem 0 0; min-height: 2.6em; }
 
-  @media (max-width: 640px) {
-    .stage__frame { height: 300px; }
-    .stage__row, .stage__title { font-size: .72rem; }
-  }
+
 
   @media (prefers-reduced-motion: reduce) {
     .stage__panel { transition: none; }
