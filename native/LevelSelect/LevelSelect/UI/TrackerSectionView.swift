@@ -329,10 +329,16 @@ struct TrackerSectionView: View {
                 Group {
                     if isDense(visibleItems) {
                         // Short, detail-free items waste most of a row each.
-                        // An adaptive grid self-tunes: still one column on a
-                        // narrow phone with long names, two or more once
-                        // there's width for them.
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150),
+                        // An adaptive grid self-tunes by available width rather
+                        // than by item count: one column on a narrow phone with
+                        // long names, two on a normal phone, three at the 640pt
+                        // reading width used on iPad and Mac.
+                        //
+                        // 180 is a floor on the COLUMN, which is what keeps the
+                        // tap target honest — packing more columns in would
+                        // shrink rows toward unhittable, which is the opposite
+                        // of the point.
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 180),
                                                      alignment: .leading)],
                                   alignment: .leading, spacing: 2) {
                             ForEach(visibleItems) { item in
@@ -401,7 +407,7 @@ struct TrackerSectionView: View {
         let done = state?.completed == true
         let hidden = item.hideUntilDiscovered && state?.revealed != true && !done
 
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: 4) {
             Button {
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 if hidden {
@@ -414,6 +420,11 @@ struct TrackerSectionView: View {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(done ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
                     .font(.body)
+                    // The glyph is ~22pt; the thing you have to hit shouldn't
+                    // be. Top-aligned so it still lines up with the first line
+                    // of a multi-line row rather than centring against it.
+                    .frame(width: 36, height: 44, alignment: .top)
+                    .contentShape(.rect)
             }
             .buttonStyle(.borderless)
 
