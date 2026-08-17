@@ -485,15 +485,24 @@ struct Repository {
         return true
     }
 
-    /// Items in the active playthrough the user has put work into.
+    /// Every tracker-state record across ALL live playthroughs of a game.
+    ///
+    /// The schema belongs to the *game*, not to one playthrough, so anything
+    /// that rewrites it affects every playthrough at once. Looking only at the
+    /// active one — which this did — meant a regeneration silently orphaned the
+    /// progress of every other playthrough, with no warning and no rescue.
+    private func allTrackerStates(for game: Game) -> [TrackerStateRecord] {
+        game.livePlaythroughs.flatMap { ($0.trackerStates ?? []).filter { $0.deletedAt == nil } }
+    }
+
+    /// Items the user has put work into, across every playthrough.
     ///
     /// Deliberately broader than "completed" — a part-filled rank or count is
     /// just as much their work, and rank rides on the same record, so a
     /// half-upgraded Mirror of Night talent has to count as progress worth
     /// protecting.
     func progressItemIDs(for game: Game) -> Set<String> {
-        Set((game.activePlaythrough?.trackerStates ?? [])
-            .filter { $0.deletedAt == nil }
+        Set(allTrackerStates(for: game)
             .filter { $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0 }
             .map(\.itemID))
     }
@@ -527,8 +536,7 @@ struct Repository {
             return TrackerMergeOutcome(added: cats.flatMap(\.items).count)
         }
 
-        let states = (game.activePlaythrough?.trackerStates ?? [])
-            .filter { $0.deletedAt == nil }
+        let states = allTrackerStates(for: game)
         let progressIDs = progressItemIDs(for: game)
 
         let diff = TrackerMerge.diff(current: existing.jsonData,
@@ -543,12 +551,16 @@ struct Repository {
         // migration — the additive modes leave existing items exactly where
         // they are, which is why they can't lose progress at all.
         if mode == .replace {
-            let byID = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+            // Grouped, not a dictionary keyed by item id: the same item has a
+            // SEPARATE state record in each playthrough, so keeping only the
+            // first would migrate one and strand the rest.
+            let byID = Dictionary(grouping: states, by: \.itemID)
             for match in diff.renamed where match.current.id != match.incoming.id {
-                guard let record = byID[match.current.id] else { continue }
-                record.itemID = match.incoming.id
-                touch(record)
-                outcome.migrated += 1
+                for record in byID[match.current.id] ?? [] {
+                    record.itemID = match.incoming.id
+                    touch(record)
+                    outcome.migrated += 1
+                }
             }
             outcome.lostProgress = diff.removed.filter { progressIDs.contains($0.id) }
         }
@@ -573,9 +585,9 @@ struct Repository {
     @discardableResult
     func rescueAsPersonalGoals(_ items: [TrackerItemDTO], for game: Game) -> Int {
         guard let schema = game.trackerSchema, !items.isEmpty else { return 0 }
-        let states = (game.activePlaythrough?.trackerStates ?? [])
-            .filter { $0.deletedAt == nil }
-        let byID = Dictionary(states.map { ($0.itemID, $0) }, uniquingKeysWith: { a, _ in a })
+        // Across every playthrough, and grouped — a rescued item can have a
+        // record in each, and all of them need pointing at the new goal.
+        let byID = Dictionary(grouping: allTrackerStates(for: game), by: \.itemID)
 
         var data = schema.jsonData
         var rescued = 0
@@ -590,7 +602,7 @@ struct Repository {
             else { continue }
             present.insert(goalID)
             data = next
-            if let record = byID[item.id] {
+            for record in byID[item.id] ?? [] {
                 record.itemID = goalID
                 touch(record)
             }

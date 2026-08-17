@@ -74,7 +74,7 @@ struct DataSettingsSection: View {
         } header: {
             Text("Your data")
         } footer: {
-            Text("Export saves everything — games, sessions, tracker progress, playthroughs, runs, and collections — as a JSON file you can keep anywhere. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet.")
+            Text("Export writes your games, sessions, tracker progress, playthroughs, runs, and collections to a JSON file you can keep anywhere. Maps, video notes and some display settings aren't included yet, and there's no importer for the file — so treat it as a readable record rather than a full backup. iCloud keeps your devices in sync, but it isn't a backup either. Import brings a library in from a CSV exported by another app or a spreadsheet.")
         }
         .sheet(item: $exportURL) { url in
             ShareSheet(url: url)

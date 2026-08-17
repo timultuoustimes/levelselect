@@ -219,9 +219,18 @@ enum TrackerMerge {
               var cats = root["categories"] as? [[String: Any]]
         else { return replaced }
 
-        // Every current item, reachable by id and by either of its names.
-        var byKey: [String: [String: Any]] = [:]
+        // Keyed PER CATEGORY, not globally.
+        //
+        // A single global map meant two categories each containing an item
+        // called "Complete" or "Boss 1" would donate one item's private note
+        // and chosen name to the other — a note written under one heading
+        // silently reappearing under a different one. Scoping the lookup to the
+        // category makes a collision only possible between items that really
+        // are in the same list.
+        var byCategory: [String: [String: [String: Any]]] = [:]
         for category in curCats {
+            let catID = (category["id"] as? String) ?? ""
+            var byKey: [String: [String: Any]] = [:]
             for item in (category["items"] as? [[String: Any]]) ?? [] {
                 if let id = item["id"] as? String { byKey["id:\(id)"] = item }
                 if let name = item["name"] as? String {
@@ -231,9 +240,20 @@ enum TrackerMerge {
                     byKey["name:\(matchKey(source))"] = byKey["name:\(matchKey(source))"] ?? item
                 }
             }
+            byCategory[catID] = byKey
+            // A renamed category still has to find its old self.
+            if let source = category["sourceName"] as? String {
+                byCategory["name:\(matchKey(source))"] = byKey
+            }
+            if let name = category["name"] as? String {
+                byCategory["name:\(matchKey(name))"] = byCategory["name:\(matchKey(name))"] ?? byKey
+            }
         }
 
         for (cIdx, category) in cats.enumerated() {
+            let catID = (category["id"] as? String) ?? ""
+            let catName = (category["name"] as? String).map { "name:\(matchKey($0))" } ?? ""
+            guard let byKey = byCategory[catID] ?? byCategory[catName] else { continue }
             var items = (category["items"] as? [[String: Any]]) ?? []
             for (iIdx, item) in items.enumerated() {
                 let id = (item["id"] as? String).map { "id:\($0)" } ?? ""
@@ -298,8 +318,12 @@ enum TrackerMerge {
 
             var existing = cats[idx]
             var items = (existing["items"] as? [[String: Any]]) ?? []
-            let haveIDs = Set(items.compactMap { $0["id"] as? String })
-            let haveNames = Set(items.compactMap { ($0["name"] as? String).map(matchKey) })
+            // `var`, and updated on every append. Computed once, a single
+            // incoming payload containing the same id twice appended BOTH —
+            // and progress is keyed by item id, so two rows would then share
+            // one checkmark. AI output is untrusted input, not a valid key set.
+            var haveIDs = Set(items.compactMap { $0["id"] as? String })
+            var haveNames = Set(items.compactMap { ($0["name"] as? String).map(matchKey) })
 
             for item in wanted {
                 let id = (item["id"] as? String) ?? ""
@@ -309,6 +333,8 @@ enum TrackerMerge {
                 // item, which is exactly the failure additive generation is
                 // meant to avoid.
                 guard !haveIDs.contains(id), !haveNames.contains(nameKey) else { continue }
+                haveIDs.insert(id)
+                haveNames.insert(nameKey)
                 items.append(item)
             }
             existing["items"] = items

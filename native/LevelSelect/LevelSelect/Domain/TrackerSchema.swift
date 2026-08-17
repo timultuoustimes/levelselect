@@ -353,9 +353,22 @@ enum TrackerSchemaJSON {
         else { return mergingGoalsOnly(from: oldData, into: newData) }
 
         var newCats = (new["categories"] as? [[String: Any]]) ?? []
-        let existing = Set(newCats.compactMap { $0["id"] as? String })
-        for category in preserved where !existing.contains((category["id"] as? String) ?? "") {
-            newCats.append(category)
+        // A preserved category REPLACES an incoming one that collides on id,
+        // rather than being skipped.
+        //
+        // The old `where !existing.contains(id)` meant a generated category
+        // reusing a common slug — "achievements", "bosses", "collectibles" —
+        // silently won over a locked, user-imported category of the same id.
+        // The diff also filters locked ids out of the incoming side, so the
+        // review screen never warned about it: a pasted checklist could vanish
+        // during a Replace with no mention anywhere. Preserved means preserved.
+        for category in preserved {
+            let id = (category["id"] as? String) ?? ""
+            if let idx = newCats.firstIndex(where: { ($0["id"] as? String) == id }) {
+                newCats[idx] = category
+            } else {
+                newCats.append(category)
+            }
         }
         new["categories"] = newCats
         return (try? JSONSerialization.data(withJSONObject: new)) ?? newData
