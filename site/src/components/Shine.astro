@@ -1,0 +1,95 @@
+---
+/**
+ * The gloss sweep the app puts on cover art (`CoverThumb`'s top-left
+ * highlight), as a wrapper you can put round any image.
+ *
+ * Pure CSS — no JavaScript ships for this. The sweep runs on hover on a
+ * pointer device, and once on entry for touch, because a hover-only effect is
+ * invisible on a phone.
+ */
+interface Props {
+  /** Adds a slow idle sweep as well as the hover one. */
+  idle?: boolean;
+  class?: string;
+}
+const { idle = false, class: className = '' } = Astro.props;
+---
+<div class:list={['shine', className, { 'shine--idle': idle }]}>
+  <slot />
+</div>
+
+<style>
+  .shine {
+    position: relative;
+    overflow: hidden;
+    border-radius: inherit;
+    isolation: isolate;
+  }
+
+  /* Static top-left gloss — the same shape the app draws on a cover. */
+  .shine::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 28%,
+      rgba(255, 255, 255, 0) 55%
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* The travelling highlight. */
+  .shine::after {
+    content: '';
+    position: absolute;
+    top: -60%;
+    bottom: -60%;
+    width: 42%;
+    left: -60%;
+    background: linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.34) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(14deg);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  @media (hover: hover) {
+    .shine:hover::after {
+      animation: sweep 900ms ease-out;
+    }
+  }
+
+  /* Touch devices get one sweep on arrival instead of nothing at all. */
+  @media (hover: none) {
+    .shine::after {
+      animation: sweep 1100ms ease-out 400ms;
+    }
+  }
+
+  .shine--idle::after {
+    /* 6.6s matches LivePulse in the app, so the site breathes at the same
+       cadence as the thing it's advertising. */
+    animation: sweep 6.6s ease-in-out infinite;
+  }
+
+  @keyframes sweep {
+    from { left: -60%; }
+    to { left: 120%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shine::after,
+    .shine:hover::after,
+    .shine--idle::after {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>

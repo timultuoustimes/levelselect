@@ -1,0 +1,55 @@
+---
+/**
+ * Scroll-driven entrance: content lifts and fades in as it comes into view.
+ *
+ * Uses native CSS scroll-driven animations (`animation-timeline: view()`),
+ * which ship no JavaScript at all. Browsers without support simply see the
+ * content in its final state — the fallback is "no animation", never
+ * "invisible content", which is the failure mode that matters.
+ */
+interface Props {
+  /** Nudge sideways instead of upward — useful for alternating rows. */
+  from?: 'below' | 'left' | 'right';
+  class?: string;
+}
+const { from = 'below', class: className = '' } = Astro.props;
+---
+<div class:list={['reveal', `reveal--${from}`, className]}>
+  <slot />
+</div>
+
+<style>
+  /* Final state is the DEFAULT. Anything that can't run the animation gets
+     fully visible content rather than a blank page. */
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .reveal {
+        animation: reveal-in linear both;
+        animation-timeline: view();
+        /* Start as it enters the viewport, finish a third of the way up. */
+        animation-range: entry 0% cover 32%;
+      }
+      .reveal--left { --reveal-x: -22px; }
+      .reveal--right { --reveal-x: 22px; }
+    }
+  }
+
+  @keyframes reveal-in {
+    from {
+      opacity: 0;
+      transform: translate3d(var(--reveal-x, 0), var(--reveal-y, 18px), 0);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  .reveal--left,
+  .reveal--right { --reveal-y: 0; }
+</style>

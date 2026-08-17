@@ -1,17 +1,21 @@
 # Netlify config for the LevelSelect marketing site.
 #
 # This file lives at the REPO ROOT deliberately: Netlify reads netlify.toml
-# from the base directory, and the base here is the repo root. Settings in
-# this file take precedence over the site's UI settings, so the deploy config
-# is versioned rather than living only in someone's dashboard.
+# from the base directory, and settings here take precedence over the site's
+# UI settings, so the deploy config is versioned rather than living only in
+# someone's dashboard.
 #
-# There is NO build step — site/ is hand-written static HTML. An empty command
-# also stops Netlify auto-detecting the retired web app's `npm run build` from
-# the package.json at the root.
-
+# `base = "site"` is load-bearing. The repo root still carries the retired web
+# app's package.json (which builds with vite), and without a base Netlify
+# would install and run THAT instead of the Astro site. Pointing the base at
+# site/ means npm install and npm run build both happen there.
 [build]
-  publish = "site"
-  command = ""
+  base = "site"
+  command = "npm run build"
+  publish = "site/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
 
 [[headers]]
   for = "/*"

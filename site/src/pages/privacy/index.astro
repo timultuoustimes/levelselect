@@ -1,31 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — LevelSelect</title>
-<meta name="description" content="LevelSelect has no accounts, no ads, no analytics, and no tracking. Your library is stored on your device and synced to your own private iCloud database.">
-<link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/style.css">
-<meta name="theme-color" content="#0D0A17">
-</head>
-<body>
-
-<header class="bar">
-  <div class="wrap">
-    <a class="brand" href="/">
-      <img src="/assets/icon.png" alt="">
-      <span class="pixel wordmark">LevelSelect</span>
-    </a>
-    <nav class="navlinks">
-      <a href="/#features">Features</a>
-      <a href="/privacy/" aria-current="page">Privacy</a>
-    </nav>
-  </div>
-</header>
-
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="Privacy — LevelSelect" description="LevelSelect keeps your library on your device and in your own iCloud. No accounts, no ads, no analytics, no tracking." current="privacy">
 <main class="wrap">
-  <article class="doc">
+<article class="doc">
     <h1>Privacy Policy</h1>
     <p class="stamp">Last updated 15 August 2026</p>
 
@@ -75,20 +53,4 @@
     <p>Questions or concerns: <a href="mailto:privacy@levelselect.app">privacy@levelselect.app</a>, or use TestFlight's built-in feedback during the beta.</p>
   </article>
 </main>
-
-<footer>
-  <div class="wrap">
-    <span>&copy; 2026 LevelSelect</span>
-    <span>
-      <a href="/">Home</a> &middot;
-      <a href="/roadmap/">Roadmap</a> &middot;
-      <a href="/changelog/">Changelog</a> &middot;
-      <a href="/about/">How this was made</a> &middot;
-      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
-      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
-    </span>
-  </div>
-</footer>
-
-</body>
-</html>
+</Base>

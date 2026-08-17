@@ -1,0 +1,150 @@
+---
+import Base from '../layouts/Base.astro';
+import Shine from '../components/Shine.astro';
+import Reveal from '../components/Reveal.astro';
+import RatingStars from '../components/RatingStars.astro';
+import StageDemo from '../components/StageDemo.astro';
+
+const features = [
+  {
+    title: 'Sessions that time themselves',
+    body: "Start a session from the app, a widget, your watch, or the Lock Screen. The Live Activity keeps counting while you play, and nudges you if you forget to stop it.",
+  },
+  {
+    title: 'Trackers per game',
+    body: 'Bosses, collectibles, upgrades, endings. Use a built-in tracker, paste a checklist you already trust, write your own goals, or let AI draft one — then check things off as you go.',
+  },
+  {
+    title: 'Playthroughs and runs',
+    body: 'Separate progress for a second run or NG+. Roguelikes get their own record: loadout, outcome, win rate over time.',
+  },
+  {
+    title: 'Collections and shelves',
+    body: 'Group a trilogy, a comfort-games list, or everything you own on Genesis. Browse by system with icons that look like the hardware.',
+  },
+  {
+    title: 'Stats worth reading',
+    body: 'Hours by game, ratings, completions by year, and what you actually finished versus what you meant to.',
+  },
+  {
+    title: 'Yours, privately',
+    body: 'Everything lives on your device and in your own iCloud. No accounts, no ads, no analytics, no tracking — and you can export the whole library whenever you want.',
+  },
+];
+
+const systems = [
+  { img: 'sys-switch.png', name: 'Switch', count: '34 games' },
+  { img: 'sys-genesis.png', name: 'Genesis', count: '21 games' },
+  { img: 'sys-ps5.png', name: 'PS5', count: '12 games' },
+  { img: 'sys-mac.png', name: 'Mac', count: '51 games' },
+  { img: 'sys-snes.png', name: 'SNES', count: '7 games' },
+  { img: 'sys-nes.png', name: 'NES', count: '7 games' },
+];
+---
+<Base
+  title="LevelSelect — every game you're playing, and exactly where you left off"
+  description="A library, session timer, and progress tracker for people with more games than time. Syncs privately through your own iCloud — no account, no ads, no tracking."
+  current="features"
+>
+<main>
+  <div class="hero">
+    <div class="torchlight"></div>
+    <div class="wrap">
+      <img class="door" src="/assets/icon.png" width="164" height="164"
+           alt="LevelSelect app icon: a torch-lit dungeon door with a checklist" />
+      <h1 class="pixel wordmark">LevelSelect</h1>
+      <p class="tagline">Every game you're playing, and exactly where you left off.</p>
+      <p class="sub">A library, session timer, and progress tracker for people with more games than time. Your shelf syncs privately through your own iCloud — no account to make, nothing to sign up for.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://testflight.apple.com/join/7pwdQEMq">Join the TestFlight beta</a>
+        <a class="btn btn-ghost" href="/privacy/">How your data works</a>
+      </div>
+      <p class="badge">iPhone &middot; iPad &middot; Mac &middot; Apple Watch</p>
+    </div>
+  </div>
+
+  <div class="wrap showcase">
+    <div class="card-hero">
+      <Shine class="cover-wrap" idle>
+        <img class="cover" src="/assets/cover-hollow-knight.jpg" width="76" height="100"
+             alt="Hollow Knight cover art" loading="lazy" />
+      </Shine>
+      <div class="meta">
+        <div class="title">Hollow Knight</div>
+        <div class="sub2">Paused &middot; 41h 12m &middot; 3 bosses left</div>
+      </div>
+      <div class="play"><b>&#9654;</b>Play</div>
+    </div>
+  </div>
+
+  <section class="wrap" id="features">
+    <Reveal>
+      <h2>Built for the way a backlog actually works</h2>
+      <p class="lede">Not a spreadsheet with a coat of paint. The things you'd otherwise keep in your head, or a notes app, or nowhere.</p>
+    </Reveal>
+    <div class="grid">
+      {features.map((f) => (
+        <Reveal class="tile">
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap" id="stage">
+    <Reveal>
+      <h2>Play, check, and follow a guide at once</h2>
+      <p class="lede">On iPad and Mac the game page slides aside to make room. This is the real layout — try it:</p>
+    </Reveal>
+    <Reveal>
+      <StageDemo />
+    </Reveal>
+  </section>
+
+  <section class="wrap">
+    <Reveal>
+      <h2>Rate it like you'd say it</h2>
+      <p class="lede">Five stars, but with words attached — because "an all-timer" means something a number doesn't. Try it:</p>
+    </Reveal>
+    <Reveal class="card-hero rating-demo">
+      <RatingStars />
+    </Reveal>
+  </section>
+
+  <section class="wrap">
+    <Reveal>
+      <h2>Sorted by system</h2>
+      <p class="lede">Your library grouped by the hardware it lives on — original console first, emulators last.</p>
+    </Reveal>
+    <div class="shelf">
+      {systems.map((s) => (
+        <Reveal class="system">
+          <img src={`/assets/${s.img}`} alt="" loading="lazy" />
+          <div class="n">{s.name}</div>
+          <div class="c">{s.count}</div>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap" id="beta">
+    <Reveal class="card-hero beta-card">
+      <h2>The beta is open</h2>
+      <p class="lede">Testing on iPhone, iPad, Mac, and Apple Watch. You'll need TestFlight — the link installs it if you don't have it. Bugs and blunt opinions equally welcome.</p>
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/7pwdQEMq">Join the TestFlight beta</a>
+      <p class="beta-note"><a href="/changelog/">See what's changed</a> &middot; <a href="/roadmap/">where it's going</a></p>
+    </Reveal>
+  </section>
+</main>
+
+<style is:global>
+  /* Layout-only additions for the new sections. Everything else still comes
+     from the hand-written stylesheet in /assets/style.css. */
+  .beta-card { display: block; text-align: center; }
+  .beta-card h2 { margin-bottom: .4rem; }
+  .beta-card .lede { margin: 0 auto 1.2rem; }
+  .beta-note { margin: 1rem 0 0; font-size: .9rem; }
+  .rating-demo { display: flex; justify-content: center; padding: 1.6rem; }
+</style>
+</Base>

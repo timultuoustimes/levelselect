@@ -1,32 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>How this was made — LevelSelect</title>
-<meta name="description" content="LevelSelect is built with AI assistance, openly. Here's what that means in practice and why the app is built the way it is.">
-<link rel="icon" href="/assets/favicon.png">
-<link rel="stylesheet" href="/assets/style.css">
-<meta name="theme-color" content="#0D0A17">
-</head>
-<body>
-
-<header class="bar">
-  <div class="wrap">
-    <a class="brand" href="/">
-      <img src="/assets/icon.png" alt="">
-      <span class="pixel wordmark">LevelSelect</span>
-    </a>
-    <nav class="navlinks">
-      <a href="/#features">Features</a>
-      <a href="/changelog/">Changelog</a>
-      <a href="/privacy/">Privacy</a>
-    </nav>
-  </div>
-</header>
-
+---
+import Base from '../../layouts/Base.astro';
+---
+<Base title="How this was made — LevelSelect" description="LevelSelect is built with AI assistance, openly. Here's what that means in practice and why the app is built the way it is." current="about">
 <main class="wrap">
-  <article class="doc">
+<article class="doc">
     <h1>How this was made</h1>
     <p class="stamp">Last updated 15 August 2026</p>
 
@@ -45,20 +22,4 @@
     <p>The repository is public, and it stays that way: <a href="https://github.com/timultuoustimes/levelselect">github.com/timultuoustimes/levelselect</a>. Every commit's history, including the AI co-authorship tags, is right there.</p>
   </article>
 </main>
-
-<footer>
-  <div class="wrap">
-    <span>&copy; 2026 LevelSelect</span>
-    <span>
-      <a href="/">Home</a> &middot;
-      <a href="/roadmap/">Roadmap</a> &middot;
-      <a href="/changelog/">Changelog</a> &middot;
-      <a href="/privacy/">Privacy</a> &middot;
-      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
-      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
-    </span>
-  </div>
-</footer>
-
-</body>
-</html>
+</Base>

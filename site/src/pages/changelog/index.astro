@@ -1,0 +1,75 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection, render } from 'astro:content';
+
+const entries = (await getCollection('changelog', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+
+const rendered = await Promise.all(
+  entries.map(async (entry) => ({ entry, Content: (await render(entry)).Content }))
+);
+
+const fmt = (d: Date) =>
+  d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+---
+<Base
+  title="Changelog — LevelSelect"
+  description="What's actually shipped in the LevelSelect beta, build by build."
+  current="changelog"
+>
+<main class="wrap">
+  <article class="doc">
+    <h1>Changelog</h1>
+    <p class="stamp">
+      What's actually shipped, newest first. LevelSelect is in beta, so this moves quickly.
+      <a href="/changelog/rss.xml">RSS</a>
+    </p>
+
+    <div class="callout">
+      <p>Everything here is in the TestFlight beta — <a href="https://testflight.apple.com/join/7pwdQEMq">join it here</a>. Builds go out when they're ready rather than on a schedule.</p>
+    </div>
+
+    {rendered.map(({ entry, Content }) => (
+      <section class="release">
+        <h2>{entry.data.title}</h2>
+        <p class="release__meta">
+          <span class="release__version">{entry.data.version}</span>
+          <time datetime={entry.data.date.toISOString()}>{fmt(entry.data.date)}</time>
+        </p>
+        <p class="release__summary">{entry.data.summary}</p>
+        <Content />
+      </section>
+    ))}
+  </article>
+</main>
+
+<style>
+  .release { margin-top: 2.75rem; }
+  .release h2 { margin-bottom: .35rem; }
+  .release__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    align-items: baseline;
+    margin: 0 0 .6rem;
+    font-size: .85rem;
+    color: var(--muted);
+  }
+  .release__version {
+    font-family: 'Press Start 2P', monospace;
+    font-size: .62rem;
+    padding: .3rem .45rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+  }
+  .release__summary { font-size: 1.02rem; }
+  .release :global(h3) {
+    font-size: .8rem;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--muted);
+    margin-top: 1.4rem;
+    margin-bottom: .4rem;
+  }
+</style>
+</Base>

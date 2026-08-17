@@ -1,0 +1,120 @@
+---
+/**
+ * The app's five-star row, made playable on the website: hover or tap a star
+ * and it fills through to that point while the label names the rating.
+ *
+ * It's a demo of a real control, not a form — nothing is submitted or stored.
+ * The names are the app's own vocabulary rather than a bare number, which is
+ * the point being shown: a rating that reads like something a person would
+ * actually say.
+ */
+const ratings = [
+  { value: 1, name: 'Not for me' },
+  { value: 2, name: 'Fine' },
+  { value: 3, name: 'Good' },
+  { value: 4, name: 'Great' },
+  { value: 5, name: 'An all-timer' },
+];
+---
+<div class="rating" data-rating>
+  <div class="rating__stars">
+    {ratings.map((r) => (
+      <button
+        type="button"
+        class="rating__star"
+        data-value={r.value}
+        data-name={r.name}
+        aria-label={`${r.value} of 5 — ${r.name}`}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 2.6l2.9 5.9 6.5.95-4.7 4.6 1.1 6.45L12 17.5l-5.8 3 1.1-6.45-4.7-4.6 6.5-.95z" />
+        </svg>
+      </button>
+    ))}
+  </div>
+  <p class="rating__label" data-rating-label aria-live="polite">Rate it</p>
+</div>
+
+<script>
+  // The only JavaScript on the site, and it's ~15 lines: hover/focus preview
+  // plus a sticky selection. Everything visual is CSS.
+  document.querySelectorAll('[data-rating]').forEach((root) => {
+    const stars = [...root.querySelectorAll('.rating__star')] as HTMLElement[];
+    const label = root.querySelector('[data-rating-label]') as HTMLElement;
+    let picked = 0;
+
+    const paint = (upto: number, name: string) => {
+      stars.forEach((s, i) => s.classList.toggle('is-on', i < upto));
+      label.textContent = name;
+    };
+    const restore = () => {
+      const chosen = stars[picked - 1];
+      paint(picked, picked ? (chosen?.dataset.name ?? '') : 'Rate it');
+    };
+
+    stars.forEach((star, i) => {
+      const show = () => paint(i + 1, star.dataset.name ?? '');
+      star.addEventListener('pointerenter', show);
+      star.addEventListener('focus', show);
+      star.addEventListener('click', () => {
+        picked = picked === i + 1 ? 0 : i + 1;   // tapping the same star clears it
+        restore();
+      });
+    });
+    root.addEventListener('pointerleave', restore);
+    root.addEventListener('focusout', (e) => {
+      if (!root.contains((e as FocusEvent).relatedTarget as Node)) restore();
+    });
+  });
+</script>
+
+<style>
+  .rating { display: flex; flex-direction: column; gap: .35rem; align-items: flex-start; }
+  .rating__stars { display: flex; gap: .15rem; }
+
+  .rating__star {
+    background: none;
+    border: 0;
+    padding: .15rem;
+    cursor: pointer;
+    line-height: 0;
+    border-radius: 6px;
+  }
+  .rating__star svg { width: 30px; height: 30px; }
+
+  .rating__star path {
+    fill: transparent;
+    stroke: #6E6690;
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+    transition: fill 180ms ease, stroke 180ms ease, transform 180ms ease;
+    transform-origin: center;
+  }
+
+  .rating__star.is-on path {
+    fill: var(--accent, #F5A34D);
+    stroke: var(--accent, #F5A34D);
+  }
+  /* A small settle, so filling a star feels like the app rather than a form. */
+  .rating__star.is-on svg { animation: pop 260ms cubic-bezier(.34, 1.56, .64, 1); }
+
+  .rating__star:focus-visible { outline: 2px solid var(--accent, #F5A34D); outline-offset: 2px; }
+
+  .rating__label {
+    margin: 0;
+    font-size: .95rem;
+    color: #D6CFEA;
+    min-height: 1.4em;
+  }
+
+  @keyframes pop {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rating__star.is-on svg { animation: none; }
+    .rating__star path { transition: none; }
+  }
+</style>

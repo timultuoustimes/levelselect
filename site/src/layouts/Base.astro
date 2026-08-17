@@ -1,0 +1,72 @@
+---
+/**
+ * The header and footer used to be copy-pasted into every page. Adding two
+ * footer links meant editing four files — and one of them had drifted to a
+ * different structure, so the edit silently missed it. That's the entire
+ * reason this layout exists.
+ */
+interface Props {
+  title: string;
+  description: string;
+  /** Which nav link to mark as current. */
+  current?: 'features' | 'changelog' | 'roadmap' | 'privacy' | 'about';
+}
+const { title, description, current } = Astro.props;
+
+const nav = [
+  { href: '/#features', label: 'Features', key: 'features' },
+  { href: '/changelog/', label: 'Changelog', key: 'changelog' },
+  { href: '/roadmap/', label: 'Roadmap', key: 'roadmap' },
+  { href: '/privacy/', label: 'Privacy', key: 'privacy' },
+];
+---
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{title}</title>
+<meta name="description" content={description} />
+<link rel="icon" href="/assets/favicon.png" />
+<link rel="stylesheet" href="/assets/style.css" />
+<link rel="alternate" type="application/rss+xml" title="LevelSelect changelog" href="/changelog/rss.xml" />
+<meta name="theme-color" content="#0D0A17" />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:type" content="website" />
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="/">
+      <img src="/assets/icon.png" alt="" />
+      <span class="pixel wordmark">LevelSelect</span>
+    </a>
+    <nav class="navlinks">
+      {nav.map((item) => (
+        <a href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
+      ))}
+    </nav>
+  </div>
+</header>
+
+<slot />
+
+<footer>
+  <div class="wrap">
+    <span>&copy; 2026 LevelSelect</span>
+    <span>
+      <a href="/">Home</a> &middot;
+      <a href="/roadmap/">Roadmap</a> &middot;
+      <a href="/changelog/">Changelog</a> &middot;
+      <a href="/privacy/">Privacy</a> &middot;
+      <a href="/about/">How this was made</a> &middot;
+      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
+      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
