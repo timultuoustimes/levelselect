@@ -15,6 +15,9 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// Optional schema hint: "pips" | "hearts" | "numbered" | "stepper".
     /// Absent in the built-ins, which infer from the data instead.
     let display: String?
+    /// The name this arrived with, kept when the user renames it so the merge
+    /// engine can still match it against a future generation.
+    var sourceName: String? = nil
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -23,6 +26,8 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     let categoryDescription: String?
     let kind: String?          // e.g. "sequence"
     let items: [TrackerItemDTO]
+    /// As `TrackerItemDTO.sourceName`.
+    var sourceName: String? = nil
 }
 
 // MARK: - Run template (roguelikes / Hades)
@@ -126,7 +131,8 @@ enum TrackerSchemaJSON {
                     hideUntilDiscovered: (item["hideUntilDiscovered"] as? Bool) ?? false,
                     maxRank: (item["maxRank"] as? NSNumber)?.intValue,
                     rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String },
-                    display: item["display"] as? String
+                    display: item["display"] as? String,
+                    sourceName: item["sourceName"] as? String
                 )
             }
             return TrackerCategoryDTO(
@@ -134,7 +140,8 @@ enum TrackerSchemaJSON {
                 name: name,
                 categoryDescription: raw["description"] as? String,
                 kind: raw["type"] as? String,
-                items: items
+                items: items,
+                sourceName: raw["sourceName"] as? String
             )
         }
     }
@@ -213,6 +220,48 @@ enum TrackerSchemaJSON {
 
     static func emptySchema() -> Data {
         (try? JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": []])) ?? Data()
+    }
+
+    /// Rename a category or an item in place.
+    ///
+    /// Two things are deliberately preserved. The **id never changes**, because
+    /// progress is keyed by item id and the merge engine matches on id first —
+    /// renaming must not orphan a checkmark or make a regeneration think the
+    /// item is new. And the **generator's original name is kept** in
+    /// `sourceName` the first time something is renamed, so name-based matching
+    /// still works if a later regeneration re-slugs the ids: without it,
+    /// renaming "Stages" to "Achievements" would make the next generation
+    /// import a second, duplicate category.
+    static func renaming(categoryID: String, itemID: String?, to newName: String,
+                         in data: Data) -> Data? {
+        let trimmed = newName.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty,
+              var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let cIdx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+
+        var category = cats[cIdx]
+        if let itemID {
+            var items = (category["items"] as? [[String: Any]]) ?? []
+            guard let iIdx = items.firstIndex(where: { ($0["id"] as? String) == itemID })
+            else { return nil }
+            var item = items[iIdx]
+            if item["sourceName"] == nil, let original = item["name"] as? String {
+                item["sourceName"] = original
+            }
+            item["name"] = trimmed
+            items[iIdx] = item
+            category["items"] = items
+        } else {
+            if category["sourceName"] == nil, let original = category["name"] as? String {
+                category["sourceName"] = original
+            }
+            category["name"] = trimmed
+        }
+        cats[cIdx] = category
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
     }
 
     /// Categories the user has locked — imported checklists, hand-curated

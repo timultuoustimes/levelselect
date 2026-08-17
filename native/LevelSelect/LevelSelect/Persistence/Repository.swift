@@ -450,6 +450,25 @@ struct Repository {
         var isNoOp: Bool { added == 0 && removed == 0 && renamed == 0 }
     }
 
+    /// Rename a tracker category, or one item inside it.
+    ///
+    /// Works on generated content as much as imported or hand-written — a
+    /// generator's naming is a suggestion, not a fact. "Stages" becoming
+    /// "Achievements" shouldn't require regenerating anything.
+    @discardableResult
+    func renameTracker(_ game: Game, categoryID: String,
+                       itemID: String? = nil, to newName: String) -> Bool {
+        guard let schema = game.trackerSchema,
+              let data = TrackerSchemaJSON.renaming(categoryID: categoryID, itemID: itemID,
+                                                   to: newName, in: schema.jsonData)
+        else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
     /// Items in the active playthrough the user has put work into.
     ///
     /// Deliberately broader than "completed" — a part-filled rank or count is

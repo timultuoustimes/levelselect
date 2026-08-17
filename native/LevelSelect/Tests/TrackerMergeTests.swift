@@ -320,6 +320,70 @@ struct TrackerMergeTests {
         #expect(TrackerSchemaJSON.categories(from: out).flatMap(\.items).count == 3)
     }
 
+    // MARK: Renaming
+
+    /// ⭐ The reason renaming keeps a `sourceName`. Tim renames "Stages" to
+    /// "Achievements" because that's what the game calls them; the generator
+    /// still returns "Stages". Without the original name to match on, the next
+    /// regeneration imports a whole second copy of the category.
+    @Test func renamingACategoryDoesNotCauseADuplicateOnRegeneration() throws {
+        let original = schema([category(id: "stages", name: "Stages",
+                                        items: [("stage-1", "Koala Village")])])
+        let renamed = try #require(TrackerSchemaJSON.renaming(
+            categoryID: "stages", itemID: nil, to: "Achievements", in: original))
+
+        // The generator hasn't changed its mind about what to call it.
+        let incoming = schema([category(id: "achievements-new", name: "Stages",
+                                        items: [("stage-1-new", "Koala Village"),
+                                                ("stage-2", "Kantar Lake")])])
+        let diff = TrackerMerge.diff(current: renamed, incoming: incoming)
+
+        #expect(diff.newCategories.isEmpty)
+        #expect(diff.added.map(\.name) == ["Kantar Lake"])
+    }
+
+    @Test func renamingKeepsTheIDSoProgressIsNeverOrphaned() throws {
+        let original = schema([bosses])
+        let renamed = try #require(TrackerSchemaJSON.renaming(
+            categoryID: "bosses", itemID: "hornet", to: "Hornet (Greenpath)", in: original))
+        let items = TrackerSchemaJSON.categories(from: renamed).first?.items ?? []
+
+        #expect(items.contains { $0.id == "hornet" && $0.name == "Hornet (Greenpath)" })
+    }
+
+    @Test func renamingAnItemDoesNotMakeARegenerationTreatItAsNew() throws {
+        let original = schema([bosses])
+        let renamed = try #require(TrackerSchemaJSON.renaming(
+            categoryID: "bosses", itemID: "hornet", to: "Hornet (Greenpath)", in: original))
+        // Generator re-slugs ids AND still calls it plain "Hornet".
+        let incoming = schema([category(id: "bosses", name: "Bosses",
+                                        items: [("boss-hornet", "Hornet")])])
+        let diff = TrackerMerge.diff(current: renamed, incoming: incoming)
+
+        #expect(diff.added.isEmpty)
+        #expect(diff.renamed.count == 1)
+    }
+
+    /// The first rename records the original; later ones must not overwrite it,
+    /// or the anchor for matching drifts away with each edit.
+    @Test func repeatedRenamesKeepTheOriginalName() throws {
+        var data = schema([bosses])
+        data = try #require(TrackerSchemaJSON.renaming(
+            categoryID: "bosses", itemID: nil, to: "Main Bosses", in: data))
+        data = try #require(TrackerSchemaJSON.renaming(
+            categoryID: "bosses", itemID: nil, to: "Story Bosses", in: data))
+
+        let category = TrackerSchemaJSON.categories(from: data).first
+        #expect(category?.name == "Story Bosses")
+        #expect(category?.sourceName == "Bosses")
+    }
+
+    @Test func renamingToBlankIsRejected() {
+        let data = schema([bosses])
+        #expect(TrackerSchemaJSON.renaming(categoryID: "bosses", itemID: nil,
+                                           to: "   ", in: data) == nil)
+    }
+
     // MARK: Locks
 
     private func lockedCategory(id: String, name: String,

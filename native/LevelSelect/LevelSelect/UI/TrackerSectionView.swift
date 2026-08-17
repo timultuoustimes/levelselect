@@ -16,6 +16,9 @@ struct TrackerSectionView: View {
     @State private var generation = TrackerGenerationStore.shared
     @State private var confirmingRegenerate = false
     @State private var importingList = false
+    /// Rename target: category id, plus an item id when renaming an item.
+    @State private var renaming: (category: String, item: String?)?
+    @State private var renameText = ""
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
 
@@ -166,6 +169,21 @@ struct TrackerSectionView: View {
         } message: {
             Text("Replaces the current tracker with LevelSelect's curated tracker for this game. Personal Goals are kept, but checked items may not match.")
         }
+        .alert("Rename", isPresented: Binding(
+            get: { renaming != nil },
+            set: { if !$0 { renaming = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Save") {
+                guard let target = renaming else { return }
+                repo.renameTracker(game, categoryID: target.category,
+                                   itemID: target.item, to: renameText)
+                renaming = nil
+            }
+            Button("Cancel", role: .cancel) { renaming = nil }
+        } message: {
+            Text("A generator's naming is a suggestion. Renaming keeps your progress and won't confuse a future regeneration.")
+        }
         .alert("New Personal Goal", isPresented: $addingGoal) {
             TextField("Goal", text: $goalName)
             Button("Add") {
@@ -308,9 +326,25 @@ struct TrackerSectionView: View {
         if !visibleItems.isEmpty {
             let done = category.items.filter { stateByItem[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
-                VStack(spacing: 2) {
-                    ForEach(visibleItems) { item in
-                        itemRow(item, category: category)
+                Group {
+                    if isDense(visibleItems) {
+                        // Short, detail-free items waste most of a row each.
+                        // An adaptive grid self-tunes: still one column on a
+                        // narrow phone with long names, two or more once
+                        // there's width for them.
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150),
+                                                     alignment: .leading)],
+                                  alignment: .leading, spacing: 2) {
+                            ForEach(visibleItems) { item in
+                                itemRow(item, category: category)
+                            }
+                        }
+                    } else {
+                        VStack(spacing: 2) {
+                            ForEach(visibleItems) { item in
+                                itemRow(item, category: category)
+                            }
+                        }
                     }
                 }
                 .padding(.top, 4)
@@ -323,8 +357,30 @@ struct TrackerSectionView: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(done == category.items.count ? .green : .secondary)
                 }
+                .contentShape(.rect)
+                .contextMenu {
+                    Button {
+                        renameText = category.name
+                        renaming = (category.id, nil)
+                    } label: { Label("Rename Category", systemImage: "pencil") }
+                }
             }
             .tint(.secondary)
+        }
+    }
+
+    /// Whether a category's items are simple enough to sit side by side.
+    ///
+    /// Only when every visible item is a bare short name — no location, no
+    /// description, no rank control. A single item with a two-line description
+    /// would leave a ragged column beside a wall of text, which is worse than
+    /// the scrolling it saves.
+    private func isDense(_ items: [TrackerItemDTO]) -> Bool {
+        items.count >= 6 && items.allSatisfy { item in
+            item.location == nil
+                && (item.itemDescription?.isEmpty ?? true)
+                && item.maxRank == nil
+                && item.name.count <= 28
         }
     }
 
@@ -394,6 +450,12 @@ struct TrackerSectionView: View {
         }
         .contentShape(.rect)
         .padding(.vertical, 3)
+        .contextMenu {
+            Button {
+                renameText = item.name
+                renaming = (category.id, item.id)
+            } label: { Label("Rename Item", systemImage: "pencil") }
+        }
     }
 
     /// Tap-to-set ranks. Replaces the old Stepper, which showed progress as a

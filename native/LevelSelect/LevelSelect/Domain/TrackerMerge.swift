@@ -111,8 +111,16 @@ enum TrackerMerge {
         var matchedCurrent = Set<String>()
 
         for incCat in inc {
+            // Id, then the displayed name, then the name it *arrived* with —
+            // the last one is what stops a user-renamed category ("Stages" →
+            // "Achievements") being imported all over again as a duplicate the
+            // next time the generator returns the original name.
             let match = cur.first { $0.id == incCat.id }
                 ?? cur.first { matchKey($0.name) == matchKey(incCat.name) }
+                ?? cur.first { source in
+                    guard let original = source.sourceName else { return false }
+                    return matchKey(original) == matchKey(incCat.name)
+                }
             guard let curCat = match else {
                 diffs.append(TrackerCategoryDiff(
                     id: incCat.id, name: incCat.name, isNewCategory: true,
@@ -145,8 +153,16 @@ enum TrackerMerge {
     private static func categoryDiff(current: TrackerCategoryDTO,
                                      incoming: TrackerCategoryDTO) -> TrackerCategoryDiff {
         let curByID = Dictionary(current.items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        let curByName = Dictionary(current.items.map { (matchKey($0.name), $0) },
-                                   uniquingKeysWith: { a, _ in a })
+        // Both the displayed name and the name it arrived with, so renaming an
+        // item doesn't make the next generation treat it as new.
+        var byName: [String: TrackerItemDTO] = [:]
+        for item in current.items {
+            byName[matchKey(item.name)] = byName[matchKey(item.name)] ?? item
+            if let original = item.sourceName {
+                byName[matchKey(original)] = byName[matchKey(original)] ?? item
+            }
+        }
+        let curByName = byName
 
         var added: [TrackerItemDTO] = []
         var renamed: [TrackerItemMatch] = []
