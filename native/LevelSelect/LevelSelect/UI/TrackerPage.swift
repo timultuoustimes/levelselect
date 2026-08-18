@@ -122,6 +122,8 @@ struct CompactTrackerCard: View {
 struct TrackerPageView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var context
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dismiss) private var dismiss
     @State private var tab: Tab = .tracker
     @State private var playing: GameVideo?
 
@@ -171,6 +173,28 @@ struct TrackerPageView: View {
             .scrollIndicators(.hidden)
         }
         .lsBackground()
+        // Rotation watcher, not layout. This single-screen tracker page only
+        // exists for compact widths; rotate the iPad to landscape and the
+        // game page UNDERNEATH it becomes the stage (main page left, tracker
+        // right) — leaving this pushed page as a stale copy sitting on top,
+        // where Back lands you next to a second tracker. Pop it on the
+        // transition so rotation flows straight into the stage. Only on a
+        // transition (never on appear, so deliberately opening this page in
+        // landscape still works), and never while a video is playing here —
+        // popping would kill the playback.
+        .background {
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.size.width > geo.size.height) { _, isLandscape in
+                        guard isLandscape,
+                              horizontalSizeClass == .regular,
+                              game.resolvedTrackerDisplay == .compact,
+                              playing == nil
+                        else { return }
+                        dismiss()
+                    }
+            }
+        }
         // A game whose timer has never run has no playthrough yet, and the
         // tracker hangs off one — without this you couldn't create or generate
         // a tracker in compact mode until you'd started a session first.
