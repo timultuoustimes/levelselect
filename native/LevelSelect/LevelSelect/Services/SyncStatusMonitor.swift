@@ -44,8 +44,20 @@ final class SyncStatusMonitor {
     private(set) var accountStatus: CKAccountStatus?
     private(set) var lastSyncedAt: Date?
     private(set) var lastSyncError: String?
+    private(set) var lastSyncErrorDomain: String?
+    private(set) var lastSyncErrorCode: Int?
     /// Count of in-flight import/export/setup events.
     private var eventsInFlight = 0
+
+    /// CloudKit is rate-limiting this device (CKError.requestRateLimited).
+    /// Two-device testing hit this for real: to the user it read as "sync
+    /// silently dead for half an hour" when the truth was "iCloud said slow
+    /// down, retrying on its own." The distinction is worth a dedicated
+    /// surface — one is a bug, the other is a wait.
+    var isThrottled: Bool {
+        lastSyncErrorDomain == CKErrorDomain
+            && lastSyncErrorCode == CKError.requestRateLimited.rawValue
+    }
 
     private var started = false
     private var observers: [NSObjectProtocol] = []
@@ -94,11 +106,14 @@ final class SyncStatusMonitor {
             let finished = event.endDate != nil
             let succeeded = event.succeeded
             let endDate = event.endDate
-            let errorText = event.error.map { ($0 as NSError).localizedDescription }
+            let nsError = event.error.map { $0 as NSError }
+            let errorText = nsError?.localizedDescription
+            let errorDomain = nsError?.domain
+            let errorCode = nsError?.code
             Task { @MainActor in
                 SyncStatusMonitor.shared.handleEvent(
-                    finished: finished, succeeded: succeeded,
-                    endDate: endDate, errorText: errorText)
+                    finished: finished, succeeded: succeeded, endDate: endDate,
+                    errorText: errorText, errorDomain: errorDomain, errorCode: errorCode)
             }
         })
     }
@@ -117,7 +132,8 @@ final class SyncStatusMonitor {
     }
 
     private func handleEvent(
-        finished: Bool, succeeded: Bool, endDate: Date?, errorText: String?
+        finished: Bool, succeeded: Bool, endDate: Date?,
+        errorText: String?, errorDomain: String?, errorCode: Int?
     ) {
         if !finished {
             eventsInFlight += 1
@@ -127,11 +143,15 @@ final class SyncStatusMonitor {
         if succeeded {
             lastSyncedAt = endDate ?? .now
             lastSyncError = nil
+            lastSyncErrorDomain = nil
+            lastSyncErrorCode = nil
         } else if let errorText {
             // Transient CK errors (network drops, throttles) are normal;
             // record for the detail row, log for diagnostics.
-            Self.log.warning("sync event failed: \(errorText)")
+            Self.log.warning("sync event failed: \(errorText) [\(errorDomain ?? "?") \(errorCode ?? 0)]")
             lastSyncError = errorText
+            lastSyncErrorDomain = errorDomain
+            lastSyncErrorCode = errorCode
         }
     }
 }

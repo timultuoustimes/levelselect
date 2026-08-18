@@ -66,7 +66,10 @@ struct SyncStatusSection: View {
         case .syncing: "Syncing…"
         case .accountUnavailable: "iCloud unavailable"
         case .localFallback: "Working locally"
-        case .error: "Sync issue"
+        // Rate limiting is a wait, not a fault — presenting it as "Sync
+        // issue" with a raw CloudKit error read as "sync is broken" during
+        // exactly the half hour it was merely queued.
+        case .error: monitor.isThrottled ? "iCloud is catching up" : "Sync issue"
         case .checking: "Checking iCloud…"
         }
     }
@@ -81,6 +84,12 @@ struct SyncStatusSection: View {
             // and healthy, sync just hasn't had a reason to run.
             return "Your library syncs automatically"
         case .error:
+            if monitor.isThrottled {
+                if let at = monitor.lastSyncedAt {
+                    return "Last synced \(at.formatted(.relative(presentation: .named))) — retrying automatically"
+                }
+                return "Retrying automatically"
+            }
             if case .error(let message) = monitor.state { return message }
             return nil
         case .accountUnavailable:
@@ -99,6 +108,9 @@ struct SyncStatusSection: View {
         case .localFallback:
             return "iCloud couldn't start, so LevelSelect is using local storage this launch. Your data is safe on this device; relaunch the app to try iCloud again."
         case .error:
+            if monitor.isThrottled {
+                return "iCloud is temporarily limiting how often this device can sync — it happens after a burst of heavy activity. Nothing is lost: your changes are safe here and will sync on their own, usually within the hour. Giving the app a rest helps."
+            }
             return "Sync will retry automatically. Your changes are safe on this device in the meantime."
         default:
             return nil
