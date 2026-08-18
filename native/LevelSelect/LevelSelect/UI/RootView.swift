@@ -72,7 +72,13 @@ struct RootView: View {
             // on the main actor. Nothing is ever deleted by inference —
             // emptiness can be another device's record mid-sync.
             if phase == .active {
-                Repository(context).reconcileLibrary()
+                let repo = Repository(context)
+                repo.reconcileLibrary()
+                // AFTER the sweep, so a timer the repair just closed — or one
+                // stopped on another device while we were backgrounded —
+                // takes its Live Activity down instead of running on the
+                // Lock Screen with dead buttons.
+                LiveActivityManager.sync(unstopped: repo.unstoppedSessions())
             }
             // Keep the widget snapshot current whenever the app surfaces or
             // backs out — catches edits made anywhere in the app.

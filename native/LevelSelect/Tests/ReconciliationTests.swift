@@ -426,6 +426,139 @@ struct ReconciliationTests {
         #expect(pt.progressPercent == 0)
     }
 
+    // MARK: Cross-playthrough timers (two-device test, scenario 3 failure)
+
+    /// The on-device run that failed: each device's session sat on a
+    /// DIFFERENT playthrough of the same game (each minted its own default in
+    /// an earlier race), and the per-playthrough sweep saw one open session
+    /// on each side and closed nothing — both timers ran for minutes, each
+    /// device showing its own. One game is one activity: repair is
+    /// game-scoped now, and only the latest-acted session survives.
+    @Test func doubledTimersOnDifferentPlaythroughsAreClosed() {
+        let (repo, game) = self.game(named: "Castlevania")
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let kaiPT = repo.ensureDefaultPlaythrough(for: game)
+        let kai = Session(startDate: t0, state: .running)
+        repo.context.insert(kai)
+        kai.playthrough = kaiPT
+
+        // The other device's default playthrough, with its own timer.
+        let piccoloPT = Playthrough()
+        repo.context.insert(piccoloPT)
+        piccoloPT.game = game
+        let piccolo = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        repo.context.insert(piccolo)
+        piccolo.playthrough = piccoloPT
+
+        let outcome = repo.reconcile(game, at: t0.addingTimeInterval(1200))
+
+        #expect(outcome.closedSessions == 1)
+        let openAcrossGame = game.livePlaythroughs
+            .flatMap { ($0.sessions ?? []) }
+            .filter { $0.state != .stopped && $0.deletedAt == nil }
+        #expect(openAcrossGame.count == 1)
+        #expect(openAcrossGame.first === piccolo)   // later action survives
+        // The loser is credited only up to the survivor's start.
+        #expect(kai.accumulatedDuration == 600)
+    }
+
+    /// Starting a session must stop timers on the game's OTHER playthroughs
+    /// too — the open twin from a sync race lives there.
+    @Test func startSessionStopsTimersOnOtherPlaythroughs() {
+        let (repo, game) = self.game(named: "Castlevania")
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = repo.ensureDefaultPlaythrough(for: game)
+
+        let otherPT = Playthrough()
+        repo.context.insert(otherPT)
+        otherPT.game = game
+        let stray = Session(startDate: t0, state: .running)
+        repo.context.insert(stray)
+        stray.playthrough = otherPT
+
+        let second = repo.addPlaythrough(to: game, named: "NG+")
+        let fresh = repo.startSession(on: second, at: t0.addingTimeInterval(600))
+
+        let open = game.livePlaythroughs
+            .flatMap { ($0.sessions ?? []) }
+            .filter { $0.state != .stopped && $0.deletedAt == nil }
+        #expect(open.count == 1)
+        #expect(open.first === fresh)
+        #expect(stray.state == .stopped)
+    }
+
+    /// CloudKit merges per FIELD: one device stops a session (endDate,
+    /// state=stopped) while another resumes it (state=running, resumedAt),
+    /// and the merged record carries BOTH a live state and an endDate — a
+    /// shape the endDate==nil foreground fetch can't even see. The later
+    /// intent wins: resume after the stop clears the stop; a stop after the
+    /// last action stands and the record closes.
+    @Test func contradictoryMergedSessionResolvesToTheLaterIntent() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // Resumed at 16:45 AFTER the other device stopped it at 16:30.
+        let resumed = Session(startDate: t0, state: .running)
+        resumed.accumulatedDuration = 1800
+        resumed.endDate = t0.addingTimeInterval(1800)          // 16:30 stop
+        resumed.resumedAt = t0.addingTimeInterval(2700)        // 16:45 resume
+        repo.context.insert(resumed)
+        resumed.playthrough = pt
+
+        repo.reconcile(game, at: t0.addingTimeInterval(3600))
+
+        #expect(resumed.state == .running)
+        #expect(resumed.endDate == nil)                        // the stop lost
+
+        // Converse: stopped at 16:30, last action was the 16:00 start.
+        let stopped = Session(startDate: t0, state: .running)
+        stopped.accumulatedDuration = 1800
+        stopped.endDate = t0.addingTimeInterval(1800)
+        repo.context.insert(stopped)
+        stopped.playthrough = pt
+
+        repo.reconcile(game, at: t0.addingTimeInterval(3600))
+
+        #expect(stopped.state == .stopped)                     // the stop stands
+        #expect(stopped.endDate == t0.addingTimeInterval(1800))
+        #expect(resumed.state == .running)                     // survivor untouched
+    }
+
+    /// The full scenario-3 shape end to end: King Kai's paused-then-resumed
+    /// session (carrying the other device's merged stop) plus Piccolo's
+    /// fresh session on a different playthrough. King Kai's resumed timer —
+    /// the latest action — must be the one left running, on both devices'
+    /// data.
+    @Test func scenarioThreeResumedTimerBeatsFreshTimerAcrossPlaythroughs() {
+        let (repo, game) = self.game(named: "Castlevania")
+        let t16 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let kaiPT = repo.ensureDefaultPlaythrough(for: game)
+        let kai = Session(startDate: t16.addingTimeInterval(-1800), state: .running)
+        kai.accumulatedDuration = 1800                          // banked before pause
+        kai.endDate = t16.addingTimeInterval(1800)              // Piccolo's merged stop, 16:30
+        kai.resumedAt = t16.addingTimeInterval(2700)            // resumed 16:45
+        repo.context.insert(kai)
+        kai.playthrough = kaiPT
+
+        let piccoloPT = Playthrough()
+        repo.context.insert(piccoloPT)
+        piccoloPT.game = game
+        let piccolo = Session(startDate: t16.addingTimeInterval(1800), state: .running)
+        repo.context.insert(piccolo)
+        piccolo.playthrough = piccoloPT
+
+        repo.reconcile(game, at: t16.addingTimeInterval(3600))  // 17:00
+
+        #expect(kai.state == .running)
+        #expect(kai.endDate == nil)
+        #expect(piccolo.state == .stopped)
+        // Piccolo credited 16:30 → 16:45 only; past that the survivor counts.
+        #expect(piccolo.accumulatedDuration == 900)
+    }
+
     /// The bounded foreground sweep must still find doubled clocks — it works
     /// from a direct fetch of unstopped sessions, not a whole-library walk.
     @Test func boundedLibrarySweepClosesDoubledSessions() {

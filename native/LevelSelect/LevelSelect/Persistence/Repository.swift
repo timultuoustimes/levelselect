@@ -240,10 +240,15 @@ struct Repository {
 
     @discardableResult
     func startSession(on pt: Playthrough, at date: Date = .now) -> Session {
-        // ALL of them, not `pt.activeSession` — after a sync race there can be
-        // more than one unstopped session, and stopping only the arbitrary
-        // first left another timer silently accruing forever.
-        for active in liveUnstoppedSessions(of: pt) { stopSession(active, at: date) }
+        // ALL unstopped sessions of the GAME, not just this playthrough's.
+        // One game is one activity — two of its playthroughs can't be played
+        // at once. The two-device test caught the per-playthrough version:
+        // after a sync race the open twin can sit on a DIFFERENT playthrough
+        // (each device minted its own default earlier), and stopping only
+        // this playthrough's left the other timer silently accruing forever.
+        let unstopped = pt.game.map { $0.livePlaythroughs.flatMap { liveUnstoppedSessions(of: $0) } }
+            ?? liveUnstoppedSessions(of: pt)
+        for active in unstopped { stopSession(active, at: date) }
         let session = Session(startDate: date, state: .running)
         context.insert(session)
         session.playthrough = pt
@@ -1119,36 +1124,43 @@ struct Repository {
         var outcome = ReconcileOutcome()
         for pt in game.livePlaythroughs {
             outcome.mergedStates += mergeDuplicateStates(in: pt, at: date)
-            outcome.closedSessions += closeDuplicateSessions(in: pt, at: date)
         }
+        outcome.closedSessions = reconcileSessions(in: game, at: date)
         if outcome.mergedStates > 0 { recomputeProgress(game) }
         if !outcome.isNoOp { persist() }
         return outcome
     }
 
-    /// Foreground sweep, bounded. The previous version walked every live
-    /// game's playthrough/state/session relationships on the main actor at
-    /// every activation — O(whole library) faulting at the worst possible
-    /// moment, flagged by the round-2 review. The only duplicate that does
-    /// cross-game damage while merely sitting there is two clocks running at
-    /// once (playtime double-counts in Stats and totals), and unstopped
-    /// sessions are a tiny, directly fetchable set — so foregrounding now
-    /// repairs exactly that and nothing else. Duplicate state rows are
-    /// benign at rest (reads are deterministic and pick the same row
-    /// everywhere); the full per-game reconcile handles them when a game's
-    /// page opens and before every schema merge, where ids get rewritten.
-    func reconcileLibrary(at date: Date = .now) {
+    /// Sessions currently unstopped anywhere in the live library. One small
+    /// indexed fetch — the set is bounded by how many timers are actually
+    /// running, not by library size.
+    func unstoppedSessions() -> [Session] {
         let descriptor = FetchDescriptor<Session>(
             predicate: #Predicate { $0.endDate == nil && $0.deletedAt == nil })
-        let open = ((try? context.fetch(descriptor)) ?? []).filter { $0.state != .stopped }
-        var closed = 0
-        for (_, sessions) in Dictionary(grouping: open, by: { $0.playthrough?.id }) {
-            guard sessions.count > 1, let pt = sessions.first?.playthrough,
-                  pt.deletedAt == nil, pt.game?.deletedAt == nil
-            else { continue }
-            closed += closeDuplicateSessions(in: pt, at: date)
+        return ((try? context.fetch(descriptor)) ?? []).filter {
+            $0.state != .stopped
+                && $0.playthrough?.deletedAt == nil
+                && $0.playthrough?.game?.deletedAt == nil
         }
-        if closed > 0 { persist() }
+    }
+
+    /// Foreground sweep, bounded. It walks only the games that currently
+    /// have an open timer (found by one small fetch, not a whole-library
+    /// relationship walk — round 2's performance flag) and runs the full
+    /// per-game reconcile on each: those are exactly the games being played
+    /// right now, where doubled clocks corrupt totals and duplicate state
+    /// rows are actively being read. Everything else waits for its page to
+    /// open or a schema merge. Known blind spot, by construction: a game
+    /// whose ONLY open sessions are contradictory merged records (state
+    /// running but endDate set — invisible to the endDate==nil fetch) isn't
+    /// found here; page-open reconcile normalizes those.
+    func reconcileLibrary(at date: Date = .now) {
+        var seen = Set<UUID>()
+        for session in unstoppedSessions() {
+            guard let game = session.playthrough?.game,
+                  seen.insert(game.id).inserted else { continue }
+            reconcile(game, at: date)
+        }
     }
 
     private func liveUnstoppedSessions(of pt: Playthrough) -> [Session] {
@@ -1221,14 +1233,23 @@ struct Repository {
         return merged
     }
 
-    /// More than one unstopped session means two devices were both timing.
+    /// Repair a game's sessions in two passes: normalize records CloudKit's
+    /// field-level merge left contradictory, then make sure the GAME has at
+    /// most one unstopped session.
+    ///
+    /// GAME-scoped, not per-playthrough — the two-device test caught the
+    /// per-playthrough version failing its own scenario: each device's
+    /// session can land on a DIFFERENT playthrough of the same game (each
+    /// device minted its own default in an earlier race), a per-playthrough
+    /// sweep then sees one open session on each side and closes nothing, and
+    /// both timers run forever while the game's playtime double-counts. One
+    /// game is one activity; two of its playthroughs cannot be played at
+    /// once.
+    ///
     /// The survivor is the session the user ACTED on last — started, paused,
     /// or resumed, with the id as a total tie-break — not the one with the
-    /// newest original start date. Keying on `startDate` stopped the wrong
-    /// session for exactly the case that matters: an old session deliberately
-    /// resumed at 17:00 is a later user action than a fresh one started at
-    /// 16:00, yet lost to it and was silently stopped while the user watched
-    /// its timer run.
+    /// newest original start date: an old session deliberately resumed at
+    /// 17:00 is a later user action than a fresh one started at 16:00.
     ///
     /// Losers are closed, never deleted — their recorded time is user data.
     /// A running loser's CURRENT segment is credited only up to the moment
@@ -1241,9 +1262,36 @@ struct Repository {
     /// closes at its own pause time, not an invented one. Every written
     /// timestamp is clamped to now: synced clocks can be ahead of this
     /// device, and history must never record a stop in the future.
-    private func closeDuplicateSessions(in pt: Playthrough, at date: Date = .now) -> Int {
-        let open = liveUnstoppedSessions(of: pt)
-        guard open.count > 1 else { return 0 }
+    private func reconcileSessions(in game: Game, at date: Date = .now) -> Int {
+        var repaired = 0
+
+        // CloudKit merges per FIELD, not per record: one device stops a
+        // session (state=stopped, endDate set) while another resumes it
+        // (state=running, resumedAt set), and the merged record can carry
+        // BOTH a live state and an endDate. That contradictory shape also
+        // hides from the foreground sweep's endDate==nil fetch while its
+        // timer keeps running. Resolve by the later intent: if the last
+        // start/pause/resume is after the recorded stop, the stop lost —
+        // clear it; otherwise the stop stands and the record closes properly.
+        for pt in game.livePlaythroughs {
+            for session in liveUnstoppedSessions(of: pt) {
+                guard let end = session.endDate else { continue }
+                if session.lastUserAction > end {
+                    session.endDate = nil
+                } else {
+                    session.pausedAt = nil
+                    session.resumedAt = nil
+                    session.state = .stopped
+                    NotificationManager.cancelStaleReminder(sessionID: session.id)
+                    LiveActivityManager.sessionResolved(session.id)
+                }
+                touch(session, at: date)
+                repaired += 1
+            }
+        }
+
+        let open = game.livePlaythroughs.flatMap { liveUnstoppedSessions(of: $0) }
+        guard open.count > 1 else { return repaired }
         let winner = open.max {
             ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString)
         }!
@@ -1254,7 +1302,6 @@ struct Repository {
         let winnerAnchor = min(date, winner.state == .running
             ? (winner.resumedAt ?? winner.startDate)
             : (winner.pausedAt ?? winner.startDate))
-        var closed = 0
         for older in open where older !== winner {
             if older.state == .running {
                 // Below the loser's own running anchor elapsed() clamps to
@@ -1271,11 +1318,15 @@ struct Repository {
             older.resumedAt = nil
             older.state = .stopped
             touch(older)
+            if let loserPT = older.playthrough { touch(loserPT, at: date) }
             NotificationManager.cancelStaleReminder(sessionID: older.id)
-            closed += 1
+            // A Live Activity may be showing this loser's timer — a session
+            // closed by repair, not by the user, still has to take its
+            // Lock Screen timer down with it.
+            LiveActivityManager.sessionResolved(older.id)
+            repaired += 1
         }
-        touch(pt)
-        return closed
+        return repaired
     }
 
 }

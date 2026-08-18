@@ -113,6 +113,48 @@ enum LiveActivityManager {
         end(sessionID: sid)
     }
 
+    /// End the activity for one specific session, whether or not it's the
+    /// tracked "current" one. Reconciliation closes sessions the user never
+    /// touched on this device — and after a relaunch, `currentSessionID` is
+    /// nil while the OS still shows the activity, so the current-only
+    /// bookkeeping can't reach it.
+    static func sessionResolved(_ sessionID: UUID) {
+        guard enabled else { return }
+        let sid = sessionID.uuidString
+        if currentSessionID == sid { currentSessionID = nil }
+        end(sessionID: sid)
+    }
+
+    /// Reconcile EVERY OS-side activity with the store's set of unstopped
+    /// sessions: end activities whose session was stopped or discarded (on
+    /// any device), and refresh the state of those still live so a remote
+    /// pause/resume is reflected. Two-device testing caught the gap this
+    /// closes: a timer stopped on the other device left this device's Live
+    /// Activity running with dead buttons until it was swiped away by hand —
+    /// the activity belongs to the OS, outlives the app process, and nothing
+    /// local ever told it the session had ended.
+    static func sync(unstopped: [Session]) {
+        guard enabled else { return }
+        let states: [String: SessionActivityAttributes.ContentState] = Dictionary(
+            uniqueKeysWithValues: unstopped.map { session in
+                (session.id.uuidString,
+                 SessionActivityAttributes.ContentState(
+                    startedAt: Date.now.addingTimeInterval(-session.elapsed()),
+                    accumulated: session.elapsed(),
+                    isRunning: session.state == .running))
+            })
+        if let sid = currentSessionID, states[sid] == nil { currentSessionID = nil }
+        Task.detached {
+            for activity in Activity<SessionActivityAttributes>.activities {
+                if let state = states[activity.attributes.sessionID] {
+                    await activity.update(ActivityContent(state: state, staleDate: nil))
+                } else {
+                    await activity.end(nil, dismissalPolicy: .immediate)
+                }
+            }
+        }
+    }
+
     private static func push(_ state: SessionActivityAttributes.ContentState, sessionID: String) {
         Task.detached {
             for activity in Activity<SessionActivityAttributes>.activities
@@ -133,5 +175,7 @@ enum LiveActivityManager {
     #else
     static func sessionChanged(_ session: Session, gameName: String) {}
     static func endCurrent() {}
+    static func sessionResolved(_ sessionID: UUID) {}
+    static func sync(unstopped: [Session]) {}
     #endif
 }
