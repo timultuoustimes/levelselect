@@ -134,6 +134,13 @@ struct TrackerPageView: View {
         game.trackerSchema.flatMap { TrackerSchemaJSON.runTemplate(from: $0.jsonData) }
     }
 
+    private var trackerTitle: String {
+        guard let pt = game.activePlaythrough?.name, pt != "Playthrough" else {
+            return game.name
+        }
+        return "\(game.name) · \(pt)"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let video = playing {
@@ -175,7 +182,11 @@ struct TrackerPageView: View {
             repo.reconcile(game)
             repo.ensureDefaultPlaythrough(for: game)
         }
-        .navigationTitle(game.activePlaythrough?.name ?? game.name)
+        // The GAME leads the title — showing only the playthrough name meant
+        // an iPhone tracker page titled "Playthrough" with no way to tell
+        // which game you were in without swiping back. The playthrough rides
+        // along only when it's been deliberately named.
+        .navigationTitle(trackerTitle)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif

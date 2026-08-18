@@ -7,6 +7,7 @@ struct RootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.modelContext) private var context
     @State private var persistence = PersistenceMonitor.shared
+    @State private var generation = TrackerGenerationStore.shared
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
     @State private var showingSplash = true
@@ -45,8 +46,36 @@ struct RootView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(2)
             }
+
+            // Generation takes a minute or two and the user has usually
+            // navigated away by the time it finishes — without an app-wide
+            // surface, a background failure was completely silent and a
+            // success went unnoticed until they wandered back.
+            if let notice = generation.notice {
+                VStack {
+                    Spacer()
+                    GenerationNoticeBanner(notice: notice) {
+                        nav.open(gameID: notice.gameID)
+                        generation.clearNotice()
+                    } dismiss: {
+                        generation.clearNotice()
+                    }
+                    .padding(.horizontal)
+                    // Stack above the save-failure banner when both are up.
+                    .padding(.bottom, persistence.lastErrorMessage != nil ? 128 : 64)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2)
+                // Successes clear themselves; failures wait to be seen.
+                .task(id: notice.id) {
+                    guard notice.success else { return }
+                    try? await Task.sleep(for: .seconds(6))
+                    if generation.notice?.id == notice.id { generation.clearNotice() }
+                }
+            }
         }
         .animation(.spring(duration: 0.35), value: persistence.lastErrorMessage == nil)
+        .animation(.spring(duration: 0.35), value: generation.notice?.id)
         .preferredColorScheme(.dark)
         .onOpenURL { route($0) }
         .onAppear {
@@ -144,6 +173,44 @@ private struct SaveFailureBanner: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(.yellow.opacity(0.35))
         )
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// "Tracker ready / generation failed" toast — the app-wide answer to a
+/// generation finishing while the user is anywhere else. Open jumps straight
+/// to the game.
+private struct GenerationNoticeBanner: View {
+    let notice: GenerationNotice
+    let open: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: notice.success
+                  ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(notice.success ? AnyShapeStyle(.green) : AnyShapeStyle(.yellow))
+            Text(notice.text)
+                .font(.footnote)
+                .lineLimit(2)
+            Spacer(minLength: 4)
+            Button("Open") { open() }
+                .font(.footnote.weight(.semibold))
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }

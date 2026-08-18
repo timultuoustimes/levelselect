@@ -86,6 +86,18 @@ struct PendingTrackerMerge: Sendable {
     let diff: TrackerDiff
 }
 
+/// A generation that finished (or failed) — surfaced app-wide, because the
+/// user has usually navigated away during the minute it takes. Without this,
+/// a background failure was completely silent and a success only showed if
+/// you happened to wander back to that game's tracker.
+struct GenerationNotice: Identifiable, Sendable {
+    let id = UUID()
+    let gameID: UUID
+    let gameName: String
+    let success: Bool
+    let text: String
+}
+
 @MainActor
 @Observable
 final class TrackerGenerationStore {
@@ -97,6 +109,9 @@ final class TrackerGenerationStore {
     private(set) var startedAt: [UUID: Date] = [:]
     /// Last failure per game, kept until dismissed or a retry begins.
     private(set) var errors: [UUID: String] = [:]
+
+    /// The most recent finished/failed generation, for the app-wide banner.
+    private(set) var notice: GenerationNotice?
 
     /// Generations that finished but haven't been applied — the Review path.
     private(set) var pending: [UUID: PendingTrackerMerge] = [:]
@@ -115,6 +130,7 @@ final class TrackerGenerationStore {
     func outcome(for gameID: UUID) -> Repository.TrackerMergeOutcome? { outcomes[gameID] }
 
     func clearError(for gameID: UUID) { errors[gameID] = nil }
+    func clearNotice() { notice = nil }
     func clearOutcome(for gameID: UUID) { outcomes[gameID] = nil }
     /// Walking away from the review screen throws the generated result away.
     func discardPending(for gameID: UUID) { pending[gameID] = nil }
@@ -158,17 +174,26 @@ final class TrackerGenerationStore {
                     self?.pending[id] = PendingTrackerMerge(
                         incoming: jsonData,
                         diff: repo.previewGeneratedSchema(for: game, jsonData: jsonData))
+                    self?.notice = GenerationNotice(
+                        gameID: id, gameName: name, success: true,
+                        text: "\(name)'s tracker is ready to review.")
                 } else {
                     // A first generation has nothing to review or merge against,
                     // so Review collapses to a plain install.
                     let mode = action.mergeMode ?? .addAll
                     self?.outcomes[id] = repo.applyGeneratedSchema(
                         for: game, jsonData: jsonData, mode: mode)
+                    self?.notice = GenerationNotice(
+                        gameID: id, gameName: name, success: true,
+                        text: "\(name)'s tracker is ready.")
                 }
             } catch is CancellationError {
                 // Cancelled deliberately — not a failure worth surfacing.
             } catch {
                 self?.errors[id] = error.localizedDescription
+                self?.notice = GenerationNotice(
+                    gameID: id, gameName: name, success: false,
+                    text: "Tracker generation failed for \(name).")
             }
             self?.finish(id)
         }

@@ -31,6 +31,18 @@ struct StaleSessionGuard: ViewModifier {
                     .flatMap { $0.livePlaythroughs.flatMap { $0.sessions ?? [] } }
                     .first { $0.id == id && $0.state != .stopped }
             }
+            // The prompt can be answered on ANOTHER device: open the app
+            // before its discard/stop has synced and this device asks about a
+            // session that is already resolved — two-device testing hit
+            // exactly that (discarded on the phone, the iPad asked again
+            // hours later). When the answer lands mid-prompt, take the
+            // prompt down instead of asking the user to answer twice.
+            .onChange(of: stale.map { $0.state == .stopped || $0.deletedAt != nil }) { _, resolved in
+                if resolved == true { stale = nil }
+            }
+            .onChange(of: ending.map { $0.state == .stopped || $0.deletedAt != nil }) { _, resolved in
+                if resolved == true { ending = nil }
+            }
             .alert("Still playing?", isPresented: isPresented) {
                 Button("Still Playing") {
                     if let s = stale { snoozed.insert(s.id) }

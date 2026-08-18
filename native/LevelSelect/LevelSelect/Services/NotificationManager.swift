@@ -75,6 +75,10 @@ enum NotificationManager {
         content.body = "Your session has been running for \(Int(threshold / 3600)) hours. Press and hold for options."
         content.sound = .default
         content.categoryIdentifier = categoryID
+        // A six-hour runaway timer is inflating real data RIGHT NOW — that's
+        // what Time Sensitive exists for. Lets the reminder break through
+        // silent mode and Focus (the user can veto per-app in Settings).
+        content.interruptionLevel = .timeSensitive
 
         let request = UNNotificationRequest(
             identifier: prefix + sessionID.uuidString,
