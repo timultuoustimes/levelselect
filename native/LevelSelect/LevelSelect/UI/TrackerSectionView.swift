@@ -539,6 +539,9 @@ struct TrackerSectionView: View {
                     rankControl(item, category: category, maxRank: maxRank,
                                 current: state?.rank ?? 0)
                 }
+                if !hidden, let target = item.countTarget, target > 0 {
+                    countControl(item, target: target, current: state?.count ?? 0)
+                }
             }
             Spacer(minLength: 0)
         }
@@ -548,9 +551,58 @@ struct TrackerSectionView: View {
             Button {
                 editing = EditTarget(categoryID: category.id, itemID: item.id,
                                      name: item.name, location: item.location ?? "",
-                                     note: item.note ?? "")
+                                     note: item.note ?? "",
+                                     countTarget: item.countTarget)
             } label: { Label("Edit Item", systemImage: "pencil") }
         }
+    }
+
+    /// Counting, for the things there are hundreds of.
+    ///
+    /// 900 koroks cannot be nine hundred rows — the tracker would be unusable
+    /// and the generator would never produce it. One row that counts is how
+    /// those games become trackable at all. Minus and plus are separated by
+    /// the number itself so a mis-tap costs one, and holding is not required
+    /// for the common case of "I found another one".
+    private func countControl(_ item: TrackerItemDTO, target: Int, current: Int) -> some View {
+        let pct = target > 0 ? Double(current) / Double(target) : 0
+        return HStack(spacing: 10) {
+            Button {
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.setTrackerCount(pt, itemID: item.id, count: current - 1, target: target)
+            } label: {
+                Image(systemName: "minus")
+                    .font(.caption.weight(.bold))
+                    .frame(width: 30, height: 30)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .disabled(current <= 0)
+
+            VStack(spacing: 3) {
+                Text("\(current)/\(target)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .contentTransition(.numericText())
+                ProgressView(value: pct)
+                    .progressViewStyle(.linear)
+                    .frame(width: 74)
+                    .tint(LSTheme.accent)
+            }
+
+            Button {
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.setTrackerCount(pt, itemID: item.id, count: current + 1, target: target)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.caption.weight(.bold))
+                    .frame(width: 30, height: 30)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.borderless)
+            .disabled(current >= target)
+        }
+        .foregroundStyle(LSTheme.accent)
+        .animation(.snappy, value: current)
     }
 
     /// Tap-to-set ranks. Replaces the old Stepper, which showed progress as a

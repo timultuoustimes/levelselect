@@ -8,6 +8,9 @@ struct EditTarget: Identifiable, Hashable {
     var name: String
     var location: String
     var note: String
+    /// Present when the item is already a counter, so the sheet opens with
+    /// its total rather than looking unset.
+    var countTarget: Int? = nil
 
     var id: String { "\(categoryID)/\(itemID)" }
 }
@@ -26,6 +29,7 @@ struct TrackerItemEditView: View {
     @State private var name = ""
     @State private var location = ""
     @State private var note = ""
+    @State private var countTarget = ""
     @State private var primed = false
 
     var body: some View {
@@ -39,6 +43,23 @@ struct TrackerItemEditView: View {
                     TextField("Where to find it", text: $location, axis: .vertical)
                         .lineLimit(1...3)
                 }
+                Section {
+                    HStack {
+                        TextField("None", text: $countTarget)
+                            #if !os(macOS)
+                            .keyboardType(.numberPad)
+                            #endif
+                        Text("to collect")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Count")
+                } footer: {
+                    // The row that makes 900 koroks a single line instead of
+                    // an unusable wall.
+                    Text("Give this a number and the row becomes a counter — tap to add one as you find them, and it ticks itself off when you reach the total. Leave it empty for a plain checkbox.")
+                }
+
                 Section {
                     TextField("Anything you want to remember", text: $note, axis: .vertical)
                         .lineLimit(3...12)
@@ -70,13 +91,22 @@ struct TrackerItemEditView: View {
             name = target.name
             location = target.location
             note = target.note
+            countTarget = target.countTarget.map(String.init) ?? ""
         }
     }
 
     private func save() {
-        Repository(context).editTrackerItem(
+        let repo = Repository(context)
+        repo.editTrackerItem(
             game, categoryID: target.categoryID, itemID: target.itemID,
             name: name, location: location, note: note)
+        // Separate from the text edits: an empty field means "not a counter",
+        // which has to clear the key rather than leave the old total behind.
+        let parsed = Int(countTarget.trimmingCharacters(in: .whitespaces))
+        if parsed != target.countTarget {
+            repo.setTrackerCountTarget(game, categoryID: target.categoryID,
+                                       itemID: target.itemID, target: parsed)
+        }
         dismiss()
     }
 }

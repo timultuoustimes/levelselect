@@ -17,6 +17,11 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// Optional schema hint: "pips" | "hearts" | "numbered" | "stepper".
     /// Absent in the built-ins, which infer from the data instead.
     let display: String?
+    /// How many of this thing there are: 900 koroks, 100 seeds, 60 shrines.
+    /// An item with a target is counted rather than ticked — one row instead
+    /// of nine hundred, which is the only way those games are trackable at
+    /// all. Lives in the schema JSON, so it needs no schema version.
+    var countTarget: Int? = nil
     /// The name this arrived with, kept when the user renames it so the merge
     /// engine can still match it against a future generation.
     var sourceName: String? = nil
@@ -139,6 +144,7 @@ enum TrackerSchemaJSON {
                     maxRank: (item["maxRank"] as? NSNumber)?.intValue,
                     rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String },
                     display: item["display"] as? String,
+                    countTarget: (item["countTarget"] as? NSNumber)?.intValue,
                     sourceName: item["sourceName"] as? String,
                     note: item["note"] as? String
                 )
@@ -281,7 +287,8 @@ enum TrackerSchemaJSON {
     /// user had written.
     static func editingItem(categoryID: String, itemID: String,
                             name: String? = nil, location: String? = nil,
-                            note: String? = nil, in data: Data) -> Data? {
+                            note: String? = nil, countTarget: Int? = nil,
+                            in data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               var cats = root["categories"] as? [[String: Any]],
               let cIdx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
@@ -310,6 +317,12 @@ enum TrackerSchemaJSON {
             let trimmed = note.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { item.removeValue(forKey: "note") }
             else { item["note"] = trimmed }
+        }
+        if let countTarget {
+            // Zero clears it: the row goes back to a plain checkbox rather
+            // than a counter that can never be finished.
+            if countTarget > 0 { item["countTarget"] = countTarget }
+            else { item.removeValue(forKey: "countTarget") }
         }
 
         items[iIdx] = item

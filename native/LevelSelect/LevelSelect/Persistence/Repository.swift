@@ -534,6 +534,39 @@ struct Repository {
         persist()
     }
 
+    /// Set how many of a counted thing you have — 37 of 900 koroks.
+    ///
+    /// Completion is derived, exactly as it is for ranks: reaching the target
+    /// ticks the item, dropping below it unticks it. That keeps one rule for
+    /// "done" across checkboxes, ranks and counts instead of three.
+    func setTrackerCount(_ pt: Playthrough, itemID: String, count: Int, target: Int?) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        let clamped = max(0, target.map { min(count, $0) } ?? count)
+        record.count = clamped
+        if let target, target > 0 { record.completed = clamped >= target }
+        touch(record)
+        touch(pt)
+        recomputeProgress(pt)
+        persist()
+    }
+
+    /// Turn an item into a counter, or back into a checkbox (`nil`/0).
+    @discardableResult
+    func setTrackerCountTarget(_ game: Game, categoryID: String, itemID: String,
+                               target: Int?) -> Bool {
+        guard let schema = game.trackerSchema,
+              let data = TrackerSchemaJSON.editingItem(
+                categoryID: categoryID, itemID: itemID,
+                countTarget: target ?? 0, in: schema.jsonData)
+        else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        recomputeProgress(game)
+        persist()
+        return true
+    }
+
     func revealTrackerItem(_ pt: Playthrough, itemID: String) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.revealed = true
