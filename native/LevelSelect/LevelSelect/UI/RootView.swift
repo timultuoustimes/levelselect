@@ -449,7 +449,7 @@ struct HomeTab: View {
     /// Platforms across the library (by leading platform) with counts, biggest
     /// first — the Home "Systems" shelf.
     private var platformGroups: [(platform: String, count: Int)] {
-        Dictionary(grouping: games) { PlatformPreference.sorted($0.platforms).first ?? "Other" }
+        Dictionary(grouping: games) { PlatformPreference.owned($0.platforms) ?? "Other" }
             .map { (platform: $0.key, count: $0.value.count) }
             .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
     }

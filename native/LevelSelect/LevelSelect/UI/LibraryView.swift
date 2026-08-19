@@ -215,7 +215,7 @@ struct LibraryTab: View {
             // Group by the game's most-preferred platform (Switch 2 → Switch →
             // PC → Mac → …), not IGDB's arbitrary first entry.
             let byPlatform = Dictionary(grouping: visible) {
-                PlatformPreference.sorted($0.platforms).first ?? "Other"
+                PlatformPreference.owned($0.platforms) ?? "Other"
             }
             return byPlatform
                 .map { LibGroup(title: PlatformShort.name($0.key), status: nil, platform: $0.key,

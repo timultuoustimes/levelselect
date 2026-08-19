@@ -623,7 +623,7 @@ struct GameDetailView: View {
                         Image(systemName: game.status.systemImage)
                             .foregroundStyle(game.status.color)
                         Text(game.status.label)
-                        if let platform = PlatformPreference.sorted(game.platforms).first {
+                        if let platform = PlatformPreference.owned(game.platforms) {
                             Text("·").foregroundStyle(.tertiary)
                             PlatformIconView(platform: platform, size: 20)
                             Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
@@ -691,7 +691,7 @@ struct GameDetailView: View {
                 }
 
                 if !game.platforms.isEmpty {
-                    chipGroup("Platforms", game.platforms, tint: .blue)
+                    platformsGroup
                 }
                 let genreTheme = game.genres + game.themes
                 if !genreTheme.isEmpty {
@@ -794,6 +794,37 @@ struct GameDetailView: View {
             Text(value?.isEmpty == false ? value! : "—").font(.subheadline)
         }
         .gridColumnAlignment(.leading)
+    }
+
+    /// Platforms, with yours marked.
+    ///
+    /// Seeing every platform a game shipped on is useful — it's how you notice
+    /// there's a Switch port. But the one you own is the one that's *yours*,
+    /// and an undifferentiated row of three said nothing about which.
+    private var platformsGroup: some View {
+        let mine = PlatformPreference.owned(game.platforms)
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Platforms").font(.caption).foregroundStyle(.secondary)
+            FlowLayout(spacing: 6) {
+                ForEach(game.platforms, id: \.self) { platform in
+                    if platform == mine {
+                        HStack(spacing: 5) {
+                            PlatformIconView(platform: platform, size: 14)
+                            Text(platform)
+                            Text("MINE")
+                                .font(.system(size: 9, weight: .heavy))
+                                .foregroundStyle(LSTheme.accent)
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(LSTheme.accent.opacity(0.18), in: .capsule)
+                        .overlay(Capsule().strokeBorder(LSTheme.accent.opacity(0.55), lineWidth: 1))
+                    } else {
+                        Chip(text: platform, tint: .blue)
+                    }
+                }
+            }
+        }
     }
 
     private func chipGroup(_ label: String, _ values: [String], tint: Color) -> some View {

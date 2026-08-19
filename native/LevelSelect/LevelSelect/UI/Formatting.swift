@@ -85,6 +85,19 @@ enum PlatformPreference {
         return 100
     }
 
+    /// The platform the user actually owns or played on — position zero.
+    ///
+    /// `addGame(from:platform:)` stores the platform picked on the confirm
+    /// screen at the FRONT of the list, so position zero is a record of an
+    /// answer the user gave, not a guess. `sorted()` is a guess: a fixed taste
+    /// ranking that put PC above Xbox 360 and so labelled a 360 copy of Skyrim
+    /// "PC" on the game page, in the library row, and in the platform grouping.
+    ///
+    /// A record beats a heuristic, always. `sorted()` stays for the places
+    /// where no choice has been made yet — ordering the picker itself, and
+    /// search results for games that aren't in the library.
+    static func owned(_ platforms: [String]) -> String? { platforms.first }
+
     /// Stable sort: preferred platforms first, original order preserved otherwise.
     static func sorted(_ platforms: [String]) -> [String] {
         platforms.enumerated()

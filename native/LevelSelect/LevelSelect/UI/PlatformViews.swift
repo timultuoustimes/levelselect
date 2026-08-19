@@ -84,7 +84,7 @@ struct PlatformGamesView: View {
     private var allGames: [Game]
 
     private var games: [Game] {
-        allGames.filter { (PlatformPreference.sorted($0.platforms).first ?? "Other") == platform }
+        allGames.filter { (PlatformPreference.owned($0.platforms) ?? "Other") == platform }
     }
 
     var body: some View {

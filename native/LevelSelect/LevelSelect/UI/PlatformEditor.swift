@@ -77,10 +77,20 @@ struct PlatformEditor: View {
         }
     }
 
+    /// The first platform in the list is the one the user owns — that is what
+    /// the confirm screen records and what every label and grouping now reads.
+    /// It therefore has to be changeable here, or a game added before that
+    /// mattered (or one where you later added the port you actually bought) is
+    /// stuck being filed under the wrong console with no way to say otherwise.
     private func chip(_ platform: String) -> some View {
-        HStack(spacing: 5) {
+        let isMine = platform == platforms.first
+        return HStack(spacing: 5) {
             PlatformIconView(platform: platform, size: 15)
             Text(PlatformShort.name(platform)).font(.caption)
+            if isMine {
+                Text("MINE").font(.system(size: 9, weight: .heavy))
+                    .foregroundStyle(LSTheme.accent)
+            }
             Button {
                 platforms.removeAll { $0 == platform }
             } label: {
@@ -89,9 +99,16 @@ struct PlatformEditor: View {
             .buttonStyle(.borderless)
         }
         .padding(.horizontal, 9).padding(.vertical, 5)
-        .background(.blue.opacity(0.18), in: .capsule)
-        .overlay(Capsule().strokeBorder(.blue.opacity(0.35), lineWidth: 1))
+        .background((isMine ? LSTheme.accent : .blue).opacity(0.18), in: .capsule)
+        .overlay(Capsule().strokeBorder((isMine ? LSTheme.accent : .blue).opacity(isMine ? 0.55 : 0.35), lineWidth: 1))
         .foregroundStyle(.primary)
+        .contentShape(.capsule)
+        .onTapGesture {
+            guard !isMine, let index = platforms.firstIndex(of: platform) else { return }
+            platforms.remove(at: index)
+            platforms.insert(platform, at: 0)
+        }
+        .accessibilityHint(isMine ? "" : "Double tap to mark as the platform you own")
     }
 
     // MARK: Options
