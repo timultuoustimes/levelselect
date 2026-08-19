@@ -110,6 +110,13 @@ final class TrackerGenerationStore {
     /// Last failure per game, kept until dismissed or a retry begins.
     private(set) var errors: [UUID: String] = [:]
 
+    /// Which category the in-flight generation is filling, when it is scoped
+    /// to one. Without this the only "is it running" signal was per-GAME, so
+    /// pressing Generate on one planned category spun the spinner on every
+    /// planned category at once — three rows all claiming to be working when
+    /// exactly one request existed.
+    private(set) var generatingCategory: [UUID: String] = [:]
+
     /// The most recent finished/failed generation, for the app-wide banner.
     private(set) var notice: GenerationNotice?
 
@@ -124,6 +131,10 @@ final class TrackerGenerationStore {
     private init() {}
 
     func isGenerating(_ gameID: UUID) -> Bool { startedAt[gameID] != nil }
+    /// True only for the one category actually being filled right now.
+    func isGenerating(_ gameID: UUID, category: String) -> Bool {
+        generatingCategory[gameID] == category
+    }
     func startDate(for gameID: UUID) -> Date? { startedAt[gameID] }
     func error(for gameID: UUID) -> String? { errors[gameID] }
     func pendingMerge(for gameID: UUID) -> PendingTrackerMerge? { pending[gameID] }
@@ -171,6 +182,7 @@ final class TrackerGenerationStore {
         outcomes[id] = nil
         pending[id] = nil
         startedAt[id] = .now
+        generatingCategory[id] = category?.id
 
         let name = game.name
         let igdbID = game.igdbID
@@ -242,5 +254,6 @@ final class TrackerGenerationStore {
     private func finish(_ id: UUID) {
         tasks[id] = nil
         startedAt[id] = nil
+        generatingCategory[id] = nil
     }
 }

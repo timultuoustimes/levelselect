@@ -71,7 +71,7 @@ struct GeneratingTrackerView: View {
                     Image(systemName: "exclamationmark.circle.fill")
                 }
                 .font(.caption)
-                .foregroundStyle(LSTheme.torch)
+                .foregroundStyle(LSTheme.working)
 
                 if let onCancel {
                     Button("Stop", role: .cancel, action: onCancel)
@@ -92,8 +92,8 @@ struct GeneratingTrackerView: View {
         let slow  = (sin(elapsed * 1.3 + 0.8) + 1) / 2
         return Image(systemName: "sparkles")
             .font(.system(size: 22))
-            .foregroundStyle(LSTheme.torch)
-            .shadow(color: LSTheme.torch.opacity(0.35 + 0.35 * pulse),
+            .foregroundStyle(LSTheme.working)
+            .shadow(color: LSTheme.working.opacity(0.35 + 0.35 * pulse),
                     radius: 8 + 6 * pulse)
             .scaleEffect(0.94 + 0.10 * slow)
             .frame(width: 34, height: 34)
@@ -112,9 +112,9 @@ struct GeneratingTrackerView: View {
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [LSTheme.torch.opacity(0),
-                                         LSTheme.torch.opacity(0.85),
-                                         LSTheme.torch.opacity(0)],
+                                colors: [LSTheme.working.opacity(0),
+                                         LSTheme.working.opacity(0.85),
+                                         LSTheme.working.opacity(0)],
                                 startPoint: .leading, endPoint: .trailing)
                         )
                         .frame(width: bandWidth)

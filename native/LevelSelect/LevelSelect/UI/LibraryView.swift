@@ -44,7 +44,19 @@ struct LibraryTab: View {
                     CollectionDetailView(collection: collection)
                 }
             }
+            // Always shown, not revealed by scrolling. The default drawer
+            // hides until you pull down, and with the tag chips sitting above
+            // the grid the gesture landed inconsistently — sometimes a scroll
+            // up worked, sometimes a pull on the header, sometimes neither.
+            // A library this size wants search at hand, not hidden behind a
+            // gesture that has to be discovered twice.
+            #if os(macOS)
             .searchable(text: $searchText, prompt: "Search games or franchises")
+            #else
+            .searchable(text: $searchText,
+                        placement: .navigationBarDrawer(displayMode: .always),
+                        prompt: "Search games or franchises")
+            #endif
             .toolbar { toolbarContent }
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }

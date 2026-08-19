@@ -46,6 +46,16 @@ enum LSTheme {
         ThemePalette.accentIsCustom ? ThemePalette.accent : torch
     }
 
+    /// Anything that reads as the app *working* — the generation card's torch,
+    /// its shimmer, its warning line. Same rule as the wordmark: brand orange
+    /// until you pick an accent, your accent afterwards. Hard-coding `torch`
+    /// here left a yellow-accented app with an orange progress card sitting in
+    /// the middle of the tracker.
+    @MainActor
+    static var working: Color {
+        ThemePalette.accentIsCustom ? ThemePalette.accent : torch
+    }
+
     /// Display face: Press Start 2P (bundled, registered at launch). Use for
     /// wordmarks and small display moments only — never body text.
     static func pixel(_ size: CGFloat) -> Font {

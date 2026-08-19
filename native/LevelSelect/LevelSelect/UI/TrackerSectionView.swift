@@ -115,12 +115,20 @@ struct TrackerSectionView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(LSTheme.working)
                     Spacer(minLength: 4)
                     Button("Dismiss") { generation.clearError(for: game.id) }
                         .font(.caption)
                         .buttonStyle(.borderless)
                 }
+                // The app-wide banner exists because a generation usually fails
+                // while you're somewhere else entirely. If you were standing
+                // right here watching it fail, you have already been told —
+                // being told again on the next screen is nagging. This row only
+                // renders when the message is genuinely on screen (the section
+                // builds no content while collapsed), so it is a real "seen".
+                .onAppear { dismissRedundantNotice() }
+                .onChange(of: generation.notice?.id) { _, _ in dismissRedundantNotice() }
             }
 
             HStack(spacing: 18) {
@@ -280,6 +288,15 @@ struct TrackerSectionView: View {
 
     private var isGenerating: Bool { generation.isGenerating(game.id) }
 
+    /// Drop the app-wide failure banner for THIS game — the inline error the
+    /// user is looking at says the same thing. Successes are left alone: those
+    /// carry a "ready" message worth seeing wherever you end up.
+    private func dismissRedundantNotice() {
+        guard let notice = generation.notice,
+              notice.gameID == game.id, !notice.success else { return }
+        generation.clearNotice()
+    }
+
     /// Any tracker content beyond user-created Personal Goals?
     private var hasNonGoalContent: Bool {
         categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
@@ -423,7 +440,10 @@ struct TrackerSectionView: View {
                 }
             }
             Spacer(minLength: 0)
-            if isGenerating {
+            // Only ONE generation can run per game, so the other planned rows
+            // are disabled rather than spinning: a spinner on a row nothing is
+            // happening to is a lie, and it was the first thing this shipped.
+            if generation.isGenerating(game.id, category: category.id) {
                 ProgressView().controlSize(.small)
             } else {
                 Button {
@@ -435,6 +455,7 @@ struct TrackerSectionView: View {
                 }
                 .buttonStyle(.borderless)
                 .tint(LSTheme.accent)
+                .disabled(isGenerating)
             }
         }
         .padding(10)
