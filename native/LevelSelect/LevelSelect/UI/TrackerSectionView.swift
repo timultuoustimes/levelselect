@@ -452,7 +452,14 @@ struct TrackerSectionView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(category.name)
                     .font(.subheadline.weight(.semibold))
-                if let count = category.plannedCount {
+                if let count = category.plannedCount, category.counted {
+                    // Too many to list, so this one fills as a single counter.
+                    // Saying "about 900 items" here and then producing one row
+                    // reads as a failure rather than as the intended answer.
+                    Text("Planned · one counter up to \(count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if let count = category.plannedCount {
                     Text("Planned · about \(count) items")
                         .font(.caption)
                         .foregroundStyle(.secondary)

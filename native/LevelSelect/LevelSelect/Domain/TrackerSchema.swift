@@ -54,6 +54,13 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     /// Roughly how many items are expected, when the plan said so. Sets
     /// expectations before anything is generated ("Bosses, about 18").
     var plannedCount: Int? = nil
+    /// The set is too large to be worth listing row by row and will arrive as
+    /// a single running total instead (900 Korok Seeds → one 0/900 counter).
+    ///
+    /// Carried from the plan purely so the placeholder can say so. Without it
+    /// the row read "about 900 items" and then produced one, which is a
+    /// promise the fill was never going to keep.
+    var counted: Bool = false
 }
 
 // MARK: - Run template (roguelikes / Hades)
@@ -173,7 +180,8 @@ enum TrackerSchemaJSON {
                 items: items,
                 sourceName: raw["sourceName"] as? String,
                 pending: (raw["pending"] as? Bool) ?? false,
-                plannedCount: (raw["plannedCount"] as? NSNumber)?.intValue
+                plannedCount: (raw["plannedCount"] as? NSNumber)?.intValue,
+                counted: (raw["counted"] as? Bool) ?? false
             )
         }
     }
@@ -216,7 +224,8 @@ enum TrackerSchemaJSON {
     /// legitimate way to START one rather than something only available after
     /// a generation.
     static func addingCategory(named name: String, id: String? = nil,
-                               plannedCount: Int? = nil, to data: Data) -> Data? {
+                               plannedCount: Int? = nil, counted: Bool = false,
+                               to data: Data) -> Data? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
         var root = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
@@ -228,6 +237,7 @@ enum TrackerSchemaJSON {
             "id": categoryID, "name": trimmed, "items": [], "pending": true,
         ]
         if let plannedCount, plannedCount > 0 { category["plannedCount"] = plannedCount }
+        if counted { category["counted"] = true }
         cats.append(category)
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)
@@ -242,6 +252,7 @@ enum TrackerSchemaJSON {
         var category = cats[idx]
         category.removeValue(forKey: "pending")
         category.removeValue(forKey: "plannedCount")
+        category.removeValue(forKey: "counted")
         cats[idx] = category
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)

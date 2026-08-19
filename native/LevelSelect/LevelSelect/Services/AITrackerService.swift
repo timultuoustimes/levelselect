@@ -34,15 +34,14 @@ enum AITrackerService {
     }
 
     /// One category proposal from the planning stage.
-    ///
-    /// No `counted` flag here on purpose, though the server returns one: the
-    /// decision to track a set as a running total instead of nine hundred rows
-    /// is made again at fill time, by the same rule, on better information.
-    /// Carrying it through the plan would mean a second copy of that judgement
-    /// that nothing reads.
     struct PlannedCategory: Sendable, Hashable {
         let name: String
         let plannedCount: Int?
+        /// Too large to be worth listing row by row; it will fill as a single
+        /// running total. The fill re-decides this by the same rule, so the
+        /// flag is not what makes it happen — it is what lets the placeholder
+        /// say what is coming, instead of promising 900 rows and yielding one.
+        let counted: Bool
     }
 
     /// Ask what a tracker for this game should be *divided into* — headings and
@@ -66,7 +65,8 @@ enum AITrackerService {
             guard let name = (entry["name"] as? String)?
                 .trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
             let count = entry["plannedCount"] as? Int
-            return PlannedCategory(name: name, plannedCount: (count ?? 0) > 0 ? count : nil)
+            return PlannedCategory(name: name, plannedCount: (count ?? 0) > 0 ? count : nil,
+                                   counted: (entry["counted"] as? Bool) ?? false)
         }
     }
 

@@ -165,6 +165,44 @@ struct PlannedCategoryTests {
         #expect(cat(repo, game, named: "Charms") == nil)
     }
 
+    /// A set too large to list arrives as one counter, so the placeholder has
+    /// to say that rather than promising nine hundred rows. Getting this wrong
+    /// made a correct fill look like a broken one.
+    @Test func aCountedPlanSurvivesTheRoundTripSoTheRowCanSayWhatsComing() {
+        let (repo, game) = self.game(named: "Breath of the Wild")
+        #expect(repo.addPlannedCategory(to: game, named: "Korok Seeds",
+                                        plannedCount: 900, counted: true))
+        #expect(repo.addPlannedCategory(to: game, named: "Shrines", plannedCount: 120))
+
+        // Re-parsed from stored JSON: the flag has to reach the other device
+        // too, or the same row reads differently there.
+        let stored = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+        let koroks = stored.first { $0.name == "Korok Seeds" }
+        let shrines = stored.first { $0.name == "Shrines" }
+        #expect(koroks?.counted == true)
+        #expect(koroks?.plannedCount == 900)
+        #expect(shrines?.counted == false)   // the default, not "everything is counted"
+    }
+
+    /// And once filled, the promise is spent — the flag goes with the rest of
+    /// the planning scaffolding.
+    @Test func fillingAcountedCategoryClearsThePlanningMarkers() {
+        let (repo, game) = self.game()
+        repo.addPlannedCategory(to: game, named: "Korok Seeds", plannedCount: 900, counted: true)
+        let planned = cat(repo, game, named: "Korok Seeds")!
+
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            ["id": "korok-seeds", "name": "Korok Seeds", "type": "collectibles",
+             "items": [["id": "koroks", "name": "Korok Seeds", "countTarget": 900]]],
+        ]), mode: .replaceCategories(ids: [planned.id]))
+
+        let filled = cat(repo, game, named: "Korok Seeds")
+        #expect(filled?.pending == false)
+        #expect(filled?.counted == false)
+        #expect(filled?.plannedCount == nil)
+        #expect(filled?.items.first?.countTarget == 900)
+    }
+
     /// A blank name is a mis-tap on the Add button, not a category.
     @Test func aBlankNameIsNotACategory() {
         let (repo, game) = self.game()

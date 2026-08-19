@@ -194,7 +194,8 @@ final class TrackerGenerationStore {
                 var added = 0
                 for category in proposed
                 where repo.addPlannedCategory(to: game, named: category.name,
-                                              plannedCount: category.plannedCount) {
+                                              plannedCount: category.plannedCount,
+                                              counted: category.counted) {
                     added += 1
                 }
                 let skipped = proposed.count - added

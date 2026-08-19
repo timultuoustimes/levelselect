@@ -622,7 +622,7 @@ struct Repository {
     /// the same structure a generated plan will write.
     @discardableResult
     func addPlannedCategory(to game: Game, named name: String,
-                            plannedCount: Int? = nil) -> Bool {
+                            plannedCount: Int? = nil, counted: Bool = false) -> Bool {
         let schema: TrackerSchemaRecord
         if let existing = game.trackerSchema {
             schema = existing
@@ -644,7 +644,7 @@ struct Repository {
             .contains(where: { TrackerMerge.matchKey($0.name) == key })
         else { return false }
         guard let updated = TrackerSchemaJSON.addingCategory(
-            named: name, plannedCount: plannedCount, to: schema.jsonData)
+            named: name, plannedCount: plannedCount, counted: counted, to: schema.jsonData)
         else { return false }
         schema.jsonData = updated
         touch(schema)
