@@ -4,10 +4,12 @@ import SwiftData
 /// Versioned from V1 (roadmap §7f.1) so the native app never repeats the web
 /// app's unversioned schema drift — even though V1 has no migration stage yet.
 ///
-/// ⚠️ V1 IS FROZEN (2026-08-13, beta P0). Do not add/remove/rename models or
-/// stored properties here — SchemaFreezeTests pins the exact shape and will
-/// fail. New fields go in a LevelSelectSchemaV2 with a migration stage in
-/// LevelSelectMigrationPlan.
+/// ⚠️ V1's SHIPPED SHAPE IS PERMANENT (frozen 2026-08-13, beta P0). The live
+/// model classes have since grown into V2 below, so this list resolves to the
+/// current shape; what is pinned — by `SchemaFreezeTests` — is that every
+/// model and property V1 shipped STILL EXISTS. Nothing here may ever be
+/// removed or renamed: a CloudKit-backed store only supports additive
+/// lightweight migration, and existing libraries must keep opening.
 enum LevelSelectSchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
 
@@ -31,11 +33,41 @@ enum LevelSelectSchemaV1: VersionedSchema {
     }
 }
 
+/// V2 (2026-08-19) — purely ADDITIVE over V1: new optional fields, two new
+/// models, nothing renamed, nothing removed. That constraint isn't stylistic;
+/// CloudKit only supports lightweight-migratable changes, so removals and
+/// renames are permanently off the table for this store.
+///
+/// Landed as ONE batch, deliberately, in the window between build 24 going up
+/// and the first tester installing: every field CloudKit has never seen must
+/// be promoted Development→Production before any build writes it (see
+/// `CloudKitSchemaSeeder`), and doing that once for eight items beats doing it
+/// eight times. Several fields therefore ship AHEAD of the features that use
+/// them — an unused optional costs nothing, and a Schema V3 costs a great deal.
+enum LevelSelectSchemaV2: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        LevelSelectSchemaV1.models + [
+            TrackerItemDetail.self,
+            EarnedBadge.self,
+        ]
+    }
+}
+
 enum LevelSelectMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [LevelSelectSchemaV1.self]
+        [LevelSelectSchemaV1.self, LevelSelectSchemaV2.self]
     }
-    static var stages: [MigrationStage] { [] }   // none yet; add on V2
+    /// Lightweight: every V2 change is an added optional or an added model, so
+    /// Core Data infers the mapping and no data is transformed. Anything that
+    /// ever needs transforming belongs in app code (an idempotent repository
+    /// pass), not here — a custom stage on a CloudKit-backed store is a much
+    /// worse place to discover a mistake.
+    static var stages: [MigrationStage] {
+        [.lightweight(fromVersion: LevelSelectSchemaV1.self,
+                      toVersion: LevelSelectSchemaV2.self)]
+    }
 }
 
 /// Shared container builder.
@@ -71,7 +103,7 @@ enum LevelSelectStore {
 
     @MainActor
     static func makeContainer(inMemory: Bool = false, demo: Bool = false) -> ModelContainer {
-        let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
+        let schema = Schema(versionedSchema: LevelSelectSchemaV2.self)
         // Never use CloudKit under XCTest (the app is the test host) or in-memory.
         let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let memory = inMemory || underTest

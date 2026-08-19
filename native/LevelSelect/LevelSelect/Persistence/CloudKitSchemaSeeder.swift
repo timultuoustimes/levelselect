@@ -51,6 +51,7 @@ enum CloudKitSchemaSeeder {
         game.franchise = marker
         game.coverURLString = marker
         game.coverImageID = marker
+        game.coverOverrideURLString = marker    // V2
         game.status = .playing
         game.pinned = true
         game.rating = 5
@@ -95,6 +96,7 @@ enum CloudKitSchemaSeeder {
         session.state = .stopped
         session.isManual = true
         session.notes = marker
+        session.originDevice = marker          // V2
         context.insert(session)
         session.playthrough = pt
 
@@ -123,6 +125,7 @@ enum CloudKitSchemaSeeder {
         state.rank = 1
         state.revealed = true
         state.notes = marker
+        state.selectedVariant = marker         // V2
         context.insert(state)
         state.playthrough = pt
 
@@ -206,6 +209,25 @@ enum CloudKitSchemaSeeder {
         context.insert(pin)
         pin.map = map
 
+        // --- TrackerItemDetail (V2: the user's own note/rename, split out of
+        //     the schema blob so per-item edits merge) ---
+        let itemDetail = TrackerItemDetail(itemID: marker, note: marker,
+                                           chosenName: marker, sourceName: marker)
+        itemDetail.userID = UUID()
+        itemDetail.deletedAt = now
+        itemDetail.legacyID = marker
+        context.insert(itemDetail)
+        itemDetail.game = game
+
+        // --- EarnedBadge (V2: ships before the feature that awards them —
+        //     the schema still has to exist in Production first) ---
+        let badge = EarnedBadge(badgeID: marker, earnedAt: now,
+                                gameID: game.id, detailJSON: stamp)
+        badge.userID = UUID()
+        badge.deletedAt = now
+        badge.legacyID = marker
+        context.insert(badge)
+
         // --- GameCollection ---
         let collection = GameCollection(name: marker, isBundle: true, sortIndex: 1)
         collection.userID = UUID()
@@ -245,15 +267,26 @@ enum CloudKitSchemaSeeder {
             // app's look permanently.
             if existingTheme.accentHex == nil { existingTheme.accentHex = seededAccent }
             if existingTheme.statusColorsData == nil { existingTheme.statusColorsData = stamp }
+            // V2 optionals. Marker values, reverted by purge() — these are
+            // real preferences, and a seeded one silently becoming the user's
+            // choice is the same trap as the accent.
+            if existingTheme.defaultMergeModeRaw == nil { existingTheme.defaultMergeModeRaw = marker }
+            if existingTheme.overlappingTimerPolicyRaw == nil { existingTheme.overlappingTimerPolicyRaw = marker }
+            if existingTheme.platformIconVariantsData == nil { existingTheme.platformIconVariantsData = stamp }
+            if existingTheme.dekuWishlistURLString == nil { existingTheme.dekuWishlistURLString = marker }
         } else {
             let theme = ThemeSettings()
             theme.accentHex = "#8A5CF6"
             theme.statusColorsData = stamp
+            theme.defaultMergeModeRaw = marker           // V2
+            theme.overlappingTimerPolicyRaw = marker     // V2
+            theme.platformIconVariantsData = stamp       // V2
+            theme.dekuWishlistURLString = marker         // V2
             context.insert(theme)
         }
 
         PersistenceMonitor.shared.commit(context)
-        return "Seeded 14 record types with all fields populated. Wait for Settings → iCloud to show Synced, verify in CloudKit Console (Development), then Deploy Schema Changes to Production. Purge afterwards."
+        return "Seeded 16 record types with all fields populated. Wait for Settings → iCloud to show Synced, verify in CloudKit Console (Development), then Deploy Schema Changes to Production. Purge afterwards."
     }
 
     /// Hard-delete every seeded row. Schema changes are permanent once created,
@@ -279,6 +312,8 @@ enum CloudKitSchemaSeeder {
         purgeAll(GameMap.self) { $0.legacyID == marker }
         purgeAll(Marker.self) { $0.legacyID == marker }
         purgeAll(GameCollection.self) { $0.legacyID == marker }
+        purgeAll(TrackerItemDetail.self) { $0.legacyID == marker }
+        purgeAll(EarnedBadge.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
 
@@ -292,6 +327,10 @@ enum CloudKitSchemaSeeder {
             if theme.statusColorsData == Data("{}".utf8) {
                 theme.statusColorsData = nil
             }
+            if theme.defaultMergeModeRaw == marker { theme.defaultMergeModeRaw = nil }
+            if theme.overlappingTimerPolicyRaw == marker { theme.overlappingTimerPolicyRaw = nil }
+            if theme.platformIconVariantsData == Data("{}".utf8) { theme.platformIconVariantsData = nil }
+            if theme.dekuWishlistURLString == marker { theme.dekuWishlistURLString = nil }
             ThemePalette.refresh(from: theme)
         }
 

@@ -25,6 +25,11 @@ final class Game {
     var franchise: String?
     var coverURLString: String?
     var coverImageID: String?
+    /// A cover the user chose in place of the fetched one (their own image, a
+    /// different official release, community art). Schema V2 — the art the
+    /// box had when THEY owned it is part of the memory. Wins over
+    /// `coverURLString` wherever a cover is drawn.
+    var coverOverrideURLString: String?
 
     // User state
     var status: GameStatus = GameStatus.backlog
@@ -59,6 +64,11 @@ final class Game {
     var trackerSchema: TrackerSchemaRecord?
     @Relationship(deleteRule: .cascade, inverse: \GameVideo.game)
     var videos: [GameVideo]?
+    /// The user's own notes and renames for this game's tracker items, kept
+    /// OUT of the schema blob so they merge per item instead of whole. See
+    /// TrackerItemDetail. Schema V2.
+    @Relationship(deleteRule: .cascade, inverse: \TrackerItemDetail.game)
+    var trackerItemDetails: [TrackerItemDetail]?
 
     init(
         id: UUID = UUID(),

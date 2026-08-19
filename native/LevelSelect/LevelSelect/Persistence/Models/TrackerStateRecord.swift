@@ -18,6 +18,12 @@ final class TrackerStateRecord {
     var rank: Int?
     var revealed: Bool = false
     var notes: String?
+    /// Which alternative of a multi-variant item the user picked (Hades' Mirror
+    /// of Night talents have an "Alt:" form). Schema V2 — the chip only
+    /// reveals the alternative today; making it a real choice needed a field,
+    /// and overloading `count`/`notes` was rejected as the kind of thing that
+    /// bites later.
+    var selectedVariant: String?
 
     var playthrough: Playthrough?
 

@@ -18,6 +18,33 @@ final class ThemeSettings {
     /// overrides (Game.trackerDisplayRaw) always win over this.
     var defaultTrackerDisplayRaw: String = TrackerDisplay.inline.rawValue
 
+    // MARK: Schema V2
+    //
+    // These live here, beside the accent and status colors, because settings
+    // that don't sync are a bug with a long fuse: the Deku wishlist URL was
+    // kept in per-device UserDefaults, so connecting it on the phone could
+    // never reach the iPad, and it looked like broken sync for weeks.
+
+    /// Remembered default for what the generate button does — add-only,
+    /// review, or replace ("addNew"/"review"/"replace"). Nil = the safe
+    /// built-in default (add-only), which can never cost progress.
+    var defaultMergeModeRaw: String?
+    /// Remembered answer for overlapping timers across devices
+    /// ("ask"/"keepNewest"/"keepBoth"). Nil = ask. This is what turns today's
+    /// automatic resolution from something the app does silently into
+    /// something the user chose.
+    var overlappingTimerPolicyRaw: String?
+    /// Whether generated item descriptions/hints show by default. Distinct
+    /// from the spoiler mechanic (`hideUntilDiscovered`/`revealed`): spoilers
+    /// are about not seeing content yet, this is about clutter.
+    var showItemHints: Bool = true
+    /// Per-platform console art choice ({platform key: variant slug}), JSON
+    /// like `statusColorsData` — the hardware you owned is part of the memory.
+    var platformIconVariantsData: Data?
+    /// The Deku Deals wishlist URL. Was device-local UserDefaults, which is
+    /// why it never synced.
+    var dekuWishlistURLString: String?
+
     init() {}
 
     var statusColors: [String: String] {

@@ -3,18 +3,41 @@ import Foundation
 import SwiftData
 @testable import LevelSelect
 
-/// Beta P0: Schema V1 is FROZEN once external users have data.
+/// Beta P0: the schema may only ever grow.
 ///
-/// This test pins V1's exact shape — every model and every stored property.
-/// If it fails, you changed V1: revert the change and add it as Schema V2
-/// with a migration stage in `LevelSelectMigrationPlan` instead.
+/// **What changed on 2026-08-19 (Schema V2), and why.** V1 was pinned by an
+/// exact fingerprint of all 14 models, so that any edit to a shipped model
+/// failed the suite. V2 adds fields to four of those models, which means the
+/// V1 entry now resolves to the grown classes — an exact V1 fingerprint can no
+/// longer be true.
+///
+/// The textbook fix is to snapshot all 14 V1 models as frozen copies nested in
+/// the V1 namespace. That is ~1,000 lines of duplicated model code whose only
+/// job is to never change — and which becomes its own drift risk the first
+/// time someone edits the wrong copy. It buys a real staged migration, which
+/// this store cannot use anyway: it is CloudKit-backed, so only additive
+/// lightweight changes are possible at all.
+///
+/// So the guarantee is expressed directly instead of by proxy:
+///
+/// 1. `schemaOnlyEverGrows` — the V1 fingerprint stays here verbatim as the
+///    historical record, and the CURRENT schema must be a strict superset of
+///    it. Every model V1 shipped still exists; every property V1 shipped still
+///    exists on it. Removing or renaming anything — the operations that
+///    actually break migration and CloudKit — fails immediately.
+/// 2. `schemaV2ShapeIsPinned` — the current shape is pinned exactly, exactly
+///    as V1 was, so the next change is as deliberate as this one.
+///
+/// If you are adding a field: add it to the model, add it to the V2 list
+/// below, and — before shipping a build that WRITES it — seed and promote the
+/// CloudKit schema (see `CloudKitSchemaSeeder`). A field CloudKit has never
+/// seen silently fails to sync.
 @MainActor
 struct SchemaFreezeTests {
 
     /// name → sorted stored-property names, as "Entity: a,b,c" lines.
-    private static func fingerprint() -> [String] {
-        let schema = Schema(versionedSchema: LevelSelectSchemaV1.self)
-        return schema.entities
+    private static func fingerprint(_ versioned: any VersionedSchema.Type) -> [String] {
+        Schema(versionedSchema: versioned).entities
             .map { entity in
                 let props = entity.properties.map(\.name).sorted().joined(separator: ",")
                 return "\(entity.name): \(props)"
@@ -22,19 +45,70 @@ struct SchemaFreezeTests {
             .sorted()
     }
 
-    @Test func schemaV1VersionIsFrozen() {
+    /// The exact shape V1 shipped through TestFlight build 18, frozen
+    /// 2026-08-13. Never edit these lines: they are the record of what is
+    /// already in people's stores, and every one of these properties must
+    /// still exist forever.
+    private static let v1Fingerprint = [
+        "CompletionEvent: createdAt,customLabel,date,deletedAt,game,id,label,legacyID,notes,platform,revision,updatedAt,userID",
+        "Game: addedAt,completionEvents,coverImageID,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,status,summary,themes,trackerDisplayRaw,trackerSchema,updatedAt,userID,userTags,videos",
+        "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
+        "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
+        "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
+        "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
+        "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
+        "Playthrough: createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
+        "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
+        "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playthrough,revision,startedAt,templateID,updatedAt,userID",
+        "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,pausedAt,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
+        "ThemeSettings: accentHex,createdAt,defaultTrackerDisplayRaw,pageBackgroundRaw,statusColorsData,updatedAt",
+        "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
+        "TrackerStateRecord: completed,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,updatedAt,userID",
+    ]
+
+    @Test func schemaVersionsAreDeclared() {
         #expect(LevelSelectSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
-        #expect(LevelSelectMigrationPlan.schemas.count == 1,
-                "Adding V2? Great — keep V1 in the plan and add a migration stage.")
+        #expect(LevelSelectSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
+        #expect(LevelSelectMigrationPlan.schemas.count == 2,
+                "Adding V3? Keep V1 and V2 in the plan and add a stage.")
+        #expect(LevelSelectMigrationPlan.stages.count == 1)
     }
 
-    @Test func schemaV1ShapeIsFrozen() {
-        // Frozen 2026-08-13 — the shape of V1 as shipped through TestFlight
-        // build 18. Do not edit this list to make the test pass; that is the
-        // exact failure it exists to catch.
+    /// Nothing V1 shipped may ever disappear or be renamed — the two things
+    /// that break a CloudKit-backed lightweight migration, and the reason
+    /// people's existing libraries keep opening.
+    @Test func schemaOnlyEverGrows() {
+        var current: [String: Set<String>] = [:]
+        for line in Self.fingerprint(LevelSelectSchemaV2.self) {
+            let parts = line.split(separator: ":", maxSplits: 1).map(String.init)
+            current[parts[0]] = Set(parts[1].split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            })
+        }
+
+        for line in Self.v1Fingerprint {
+            let parts = line.split(separator: ":", maxSplits: 1).map(String.init)
+            let entity = parts[0]
+            let properties = Set(parts[1].split(separator: ",").map {
+                $0.trimmingCharacters(in: .whitespaces)
+            })
+            guard let currentProps = current[entity] else {
+                Issue.record("Model '\(entity)' shipped in V1 and is gone. Nothing may be removed.")
+                continue
+            }
+            let missing = properties.subtracting(currentProps).sorted()
+            #expect(missing.isEmpty,
+                    "'\(entity)' lost V1 properties \(missing). Removing or renaming breaks migration for every existing library — add a new property instead.")
+        }
+    }
+
+    /// The current shape, pinned exactly. Changing it means changing this list
+    /// deliberately — and promoting the CloudKit schema before shipping.
+    @Test func schemaV2ShapeIsPinned() {
         let expected = [
             "CompletionEvent: createdAt,customLabel,date,deletedAt,game,id,label,legacyID,notes,platform,revision,updatedAt,userID",
-            "Game: addedAt,completionEvents,coverImageID,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,status,summary,themes,trackerDisplayRaw,trackerSchema,updatedAt,userID,userTags,videos",
+            "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
+            "Game: addedAt,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
@@ -43,13 +117,13 @@ struct SchemaFreezeTests {
             "Playthrough: createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playthrough,revision,startedAt,templateID,updatedAt,userID",
-            "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,pausedAt,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
-            "ThemeSettings: accentHex,createdAt,defaultTrackerDisplayRaw,pageBackgroundRaw,statusColorsData,updatedAt",
+            "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
+            "ThemeSettings: accentHex,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,statusColorsData,updatedAt",
+            "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
-            "TrackerStateRecord: completed,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,updatedAt,userID",
+            "TrackerStateRecord: completed,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,updatedAt,userID",
         ]
-        let actual = Self.fingerprint()
-        #expect(actual == expected,
-                "Schema V1 changed. V1 is frozen — move the change to Schema V2 with a migration stage.")
+        #expect(Self.fingerprint(LevelSelectSchemaV2.self) == expected,
+                "Schema V2 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
     }
 }
