@@ -760,6 +760,85 @@ struct ReconciliationTests {
         }
     }
 
+    /// Starting a timer where one is already running on THIS device just
+    /// replaces it — nobody means to run two on one device, and there is
+    /// nothing ambiguous to ask about.
+    @Test func startingReplacesThisDevicesOwnRunningTimer() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let previous = UserDefaults.standard.string(forKey: "deviceDisplayName")
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: "deviceDisplayName") }
+            else { UserDefaults.standard.removeObject(forKey: "deviceDisplayName") }
+        }
+        DeviceIdentity.name = "King Kai"
+
+        let first = repo.startSession(on: pt, at: t0)
+        let second = repo.startSession(on: pt, at: t0.addingTimeInterval(600))
+
+        #expect(first.state == .stopped)
+        #expect(second.state == .running)
+        #expect(repo.runningSessions(in: game).count == 1)
+    }
+
+    /// Starting a timer while ANOTHER device is running one is the ambiguous
+    /// case. Under the default policy the other timer is left alone, creating
+    /// a visible overlap for the prompt to resolve — rather than silently
+    /// stopping a timer someone else may be watching. This is what covers the
+    /// watch, widget and Live Activity intents, none of which can ask.
+    @Test func startingDoesNotSilentlyStopAnotherDevicesTimer() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let previous = UserDefaults.standard.string(forKey: "deviceDisplayName")
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: "deviceDisplayName") }
+            else { UserDefaults.standard.removeObject(forKey: "deviceDisplayName") }
+        }
+        DeviceIdentity.name = "King Kai"
+
+        let theirs = Session(startDate: t0, state: .running)
+        theirs.originDevice = "Piccolo"
+        repo.context.insert(theirs)
+        theirs.playthrough = pt
+
+        let ours = repo.startSession(on: pt, at: t0.addingTimeInterval(600))
+
+        #expect(theirs.state == .running)          // untouched
+        #expect(ours.originDevice == "King Kai")
+        #expect(repo.runningSessions(in: game).count == 2)   // the prompt's cue
+    }
+
+    /// …unless the user has already answered the question once, in which case
+    /// their remembered policy applies without asking again.
+    @Test func rememberedKeepNewestStopsTheOtherDeviceOnStart() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        repo.setOverlappingTimerPolicy(.keepNewest)
+
+        let previous = UserDefaults.standard.string(forKey: "deviceDisplayName")
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: "deviceDisplayName") }
+            else { UserDefaults.standard.removeObject(forKey: "deviceDisplayName") }
+        }
+        DeviceIdentity.name = "King Kai"
+
+        let theirs = Session(startDate: t0, state: .running)
+        theirs.originDevice = "Piccolo"
+        repo.context.insert(theirs)
+        theirs.playthrough = pt
+
+        _ = repo.startSession(on: pt, at: t0.addingTimeInterval(600))
+
+        #expect(theirs.state == .stopped)
+        #expect(theirs.accumulatedDuration == 600)
+        #expect(repo.runningSessions(in: game).count == 1)
+    }
+
     /// The bounded foreground sweep must still find doubled clocks — it works
     /// from a direct fetch of unstopped sessions, not a whole-library walk.
     @Test func boundedLibrarySweepClosesDoubledSessions() {

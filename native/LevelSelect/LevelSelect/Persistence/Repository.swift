@@ -256,8 +256,24 @@ struct Repository {
         // so preserving them is the safe ambiguity-preserving rule.
         let unstopped = pt.game.map { $0.livePlaythroughs.flatMap { liveUnstoppedSessions(of: $0) } }
             ?? liveUnstoppedSessions(of: pt)
+        let thisDevice = DeviceIdentity.name
+        let policy = overlappingTimerPolicy
         for active in unstopped where active.state == .running {
-            stopSession(active, at: date)
+            // THIS device's own timer is replaced without ceremony — nobody
+            // means to run two timers on one device, and there is nothing
+            // ambiguous to ask about. (A session with no recorded origin
+            // predates Schema V2; treated as ours, which keeps the old
+            // behaviour for legacy records rather than prompting about a
+            // device we can't name.)
+            let isOurs = (active.originDevice ?? thisDevice) == thisDevice
+            if isOurs || policy == .keepNewest {
+                stopSession(active, at: date)
+            }
+            // Another device's running timer under `.ask` is left alone on
+            // purpose: starting here creates a visible overlap, and
+            // OverlappingTimerGuard asks which one to keep. That covers the
+            // watch, the widget and Live Activity intents too — none of which
+            // can put a question on screen themselves.
         }
         let session = Session(startDate: date, state: .running)
         // Stamped once, here, because sessions are also started from the
