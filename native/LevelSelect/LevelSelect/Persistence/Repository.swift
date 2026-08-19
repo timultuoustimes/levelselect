@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import os
 
 /// The mutation layer over SwiftData. Every write bumps sync metadata
 /// (`updatedAt`/`revision`) for UI + ordering. Cross-device sync is handled by
@@ -7,6 +8,8 @@ import SwiftData
 /// `@Query`; all writes go through here.
 @MainActor
 struct Repository {
+    static let log = Logger(subsystem: "com.timultuoustimes.levelselect", category: "repository")
+
     let context: ModelContext
 
     init(_ context: ModelContext) { self.context = context }
@@ -293,7 +296,30 @@ struct Repository {
         )
         LiveActivityManager.sessionChanged(session, gameName: pt.game?.name ?? "A game")
         persist()
+        attachIfDetached(session, to: pt)
         return session
+    }
+
+    /// A session must never exist without its playthrough.
+    ///
+    /// Sessions have been appearing with a nil playthrough on the device that
+    /// created them — invisible in the game, absent from totals and export,
+    /// their time accruing into nothing. The mechanism is not yet understood,
+    /// so this is a guard rather than a fix: it checks the relationship
+    /// AFTER the save that should have written it, repairs it if it is
+    /// missing, and records that it had to, so the next occurrence leaves
+    /// evidence instead of just damage. If it never fires on device, the
+    /// detachment happens later than the save and the hunt moves to the
+    /// import side.
+    private func attachIfDetached(_ session: Session, to pt: Playthrough) {
+        guard session.playthrough == nil else { return }
+        session.playthrough = pt
+        persist()
+        let defaults = UserDefaults.standard
+        defaults.set(defaults.integer(forKey: "detachedSessionRepairs") + 1,
+                     forKey: "detachedSessionRepairs")
+        defaults.set(Date.now, forKey: "detachedSessionRepairAt")
+        Self.log.error("Session \(session.id.uuidString, privacy: .public) saved with no playthrough; reattached.")
     }
 
     func pauseSession(_ session: Session, at date: Date = .now) {
@@ -443,6 +469,7 @@ struct Repository {
         pt.lastPlayedAt = date
         touch(pt, at: date)
         persist()
+        attachIfDetached(session, to: pt)
         return session
     }
 
@@ -1469,6 +1496,25 @@ struct Repository {
         }
         persist()
         return others.count
+    }
+
+    /// Give a detached session back to a game, on the USER's say-so.
+    ///
+    /// The app can't infer where these belong — that was true when they were
+    /// first surfaced and it is still true. But the person who played them
+    /// usually knows exactly, and refusing to let them say so means the time
+    /// stays lost for a reason that is really just the app's ignorance.
+    /// Attaches to the game's active playthrough, since that is the one every
+    /// per-playthrough surface reads.
+    func reattachSession(_ session: Session, to game: Game) {
+        let pt = ensureDefaultPlaythrough(for: game)
+        session.playthrough = pt
+        touch(session)
+        if let end = session.endDate, pt.lastPlayedAt.map({ $0 < end }) ?? true {
+            pt.lastPlayedAt = end
+        }
+        touch(pt)
+        persist()
     }
 
     /// Two finished sessions that claim overlapping wall-clock time.

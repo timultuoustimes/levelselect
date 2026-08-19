@@ -156,3 +156,74 @@ struct FinishedOverlapTests {
         #expect(repo.overlappingFinishedSessions(asOf: t0.addingTimeInterval(20000)).count == 3)
     }
 }
+
+/// A session must never exist without its playthrough — the failure Tim's
+/// devices hit on 2026-08-19, where sessions were created detached, invisible
+/// in the game, absent from totals and export, their time accruing into
+/// nothing.
+@MainActor
+struct SessionAttachmentTests {
+
+    private func newRepo() -> (Repository, Game, Playthrough) {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+        return (repo, game, repo.ensureDefaultPlaythrough(for: game))
+    }
+
+    @Test func startedSessionsAreAttachedAndStaySaved() throws {
+        let (repo, game, pt) = newRepo()
+        let session = repo.startSession(on: pt)
+        try repo.context.save()
+
+        #expect(session.playthrough?.id == pt.id)
+        // And visible through the paths that matter: the game's own totals
+        // and the orphan list.
+        #expect(repo.orphanedSessions().isEmpty)
+        #expect(game.livePlaythroughs.flatMap { $0.sessions ?? [] }.contains { $0.id == session.id })
+    }
+
+    @Test func manuallyLoggedSessionsAreAttached() throws {
+        let (repo, _, pt) = newRepo()
+        let session = repo.logManualSession(on: pt, duration: 600)
+        try repo.context.save()
+
+        #expect(session.playthrough?.id == pt.id)
+        #expect(repo.orphanedSessions().isEmpty)
+    }
+
+    /// Starting repeatedly — the shape that produced several of the detached
+    /// records — must leave every session attached, including the ones the
+    /// new start stops.
+    @Test func repeatedStartsLeaveEverySessionAttached() throws {
+        let (repo, _, pt) = newRepo()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var sessions: [Session] = []
+        for offset in stride(from: 0.0, to: 300.0, by: 60.0) {
+            sessions.append(repo.startSession(on: pt, at: t0.addingTimeInterval(offset)))
+        }
+        try repo.context.save()
+
+        #expect(sessions.allSatisfy { $0.playthrough?.id == pt.id })
+        #expect(repo.orphanedSessions().isEmpty)
+    }
+
+    /// The user can give a detached session back to a game, since the app
+    /// cannot infer where it belongs but the person who played it can.
+    @Test func aDetachedSessionCanBeReattachedToAGame() throws {
+        let (repo, game, pt) = newRepo()
+        let orphan = Session(startDate: Date(timeIntervalSince1970: 1_700_000_000),
+                             state: .stopped)
+        orphan.accumulatedDuration = 3600
+        orphan.endDate = orphan.startDate.addingTimeInterval(3600)
+        repo.context.insert(orphan)
+        try repo.context.save()
+        #expect(repo.orphanedSessions().count == 1)
+
+        repo.reattachSession(orphan, to: game)
+
+        #expect(repo.orphanedSessions().isEmpty)
+        #expect(orphan.playthrough?.id == pt.id)
+        #expect(pt.totalPlaytime(asOf: orphan.endDate!) == 3600)
+    }
+}

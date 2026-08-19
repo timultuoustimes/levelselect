@@ -14,6 +14,7 @@ struct SyncStatusSection: View {
     /// Local echo of the device name so the field edits smoothly; committed to
     /// DeviceIdentity on every change.
     @State private var deviceName = DeviceIdentity.name
+    @State private var showingDetached = false
     @Environment(\.modelContext) private var context
 
     private var repo: Repository { Repository(context) }
@@ -41,6 +42,7 @@ struct SyncStatusSection: View {
             .accessibilityElement(children: .combine)
 
             if !orphanedSessions.isEmpty {
+                Button { showingDetached = true } label: {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(orphanedSessions.count) detached play \(orphanedSessions.count == 1 ? "session" : "sessions")")
@@ -54,6 +56,8 @@ struct SyncStatusSection: View {
                         .foregroundStyle(.yellow)
                 }
                 .accessibilityElement(children: .combine)
+                }
+                .buttonStyle(.plain)
             }
             // Sessions carry the name of the device that started them, so
             // history and the overlap prompts can say WHICH device rather
@@ -86,13 +90,16 @@ struct SyncStatusSection: View {
         } footer: {
             VStack(alignment: .leading, spacing: 8) {
                 if !orphanedSessions.isEmpty {
-                    Text("iCloud detached these records from their games. LevelSelect keeps their playtime instead of guessing where it belongs; this build cannot restore it to a game automatically.")
+                    Text("These sessions lost their link to a game. LevelSelect keeps their playtime rather than guessing where it belongs — tap to put them back under the right game.")
                 }
                 Text("New play sessions record which device they were started on, so your history and any timer conflicts can name it. \(OverlappingTimerPolicy(raw: nil).detail)")
                 if let guidance {
                     Text(guidance)
                 }
             }
+        }
+        .sheet(isPresented: $showingDetached) {
+            DetachedSessionsView()
         }
         .task {
             // Re-check the account whenever Settings opens — the cheapest
