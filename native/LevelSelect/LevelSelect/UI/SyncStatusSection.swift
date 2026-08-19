@@ -1,11 +1,15 @@
 import SwiftUI
 import CloudKit
+import SwiftData
 
 /// Settings section surfacing iCloud sync state (beta P0): Synced / Syncing /
 /// iCloud unavailable (working locally) / sync issue — with sign-in guidance.
 /// The data all comes from SyncStatusMonitor; this is presentation only.
 struct SyncStatusSection: View {
     @State private var monitor = SyncStatusMonitor.shared
+    @Query(filter: #Predicate<Session> {
+        $0.playthrough == nil && $0.deletedAt == nil
+    }) private var orphanedSessions: [Session]
 
     var body: some View {
         Section {
@@ -28,11 +32,32 @@ struct SyncStatusSection: View {
                 }
             }
             .accessibilityElement(children: .combine)
+
+            if !orphanedSessions.isEmpty {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(orphanedSessions.count) detached play \(orphanedSessions.count == 1 ? "session" : "sessions")")
+                            .font(.body.weight(.medium))
+                        Text("Preserved, but not included in game totals")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "exclamationmark.link")
+                        .foregroundStyle(.yellow)
+                }
+                .accessibilityElement(children: .combine)
+            }
         } header: {
             Text("iCloud")
         } footer: {
-            if let guidance {
-                Text(guidance)
+            VStack(alignment: .leading, spacing: 8) {
+                if !orphanedSessions.isEmpty {
+                    Text("iCloud detached these records from their games. LevelSelect keeps their playtime instead of guessing where it belongs; this build cannot restore it to a game automatically.")
+                }
+                if let guidance {
+                    Text(guidance)
+                }
             }
         }
         .task {

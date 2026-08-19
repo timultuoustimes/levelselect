@@ -27,21 +27,28 @@ final class Playthrough {
     @Relationship(deleteRule: .cascade, inverse: \Run.playthrough)
     var runs: [Run]?
 
-    /// Active session = the one not yet stopped (no separate stored flag).
+    /// Active session = the running session, or a paused one when nothing is
+    /// running (no separate stored flag).
     ///
-    /// When sync leaves more than one unstopped session, the winner is the
-    /// one the user ACTED on last (started, paused, or resumed — not the
-    /// newest original start date, which loses to a deliberately resumed old
-    /// session), with the id as a total tie-break. The total order matters:
+    /// When sync leaves more than one running session, the winner is the one
+    /// the user ACTED on last (started or resumed — not the newest original
+    /// start date, which loses to a deliberately resumed old session), with
+    /// the id as a total tie-break. The total order matters:
     /// with timestamps alone, equal stamps let each device resolve a
     /// different winner from its own relationship order, and cross-device
-    /// repair passes then need not converge. `Repository.reconcile` closes
-    /// out the duplicates with the SAME rule; this keeps the read stable —
-    /// and identical on every device — in the window before it runs.
+    /// repair passes then need not converge. Running takes priority over paused
+    /// because paused records are now deliberately preserved when a new timer
+    /// starts: they accrue nothing, while hiding the running record would keep
+    /// real time accruing behind a paused UI.
     var activeSession: Session? {
-        (sessions ?? [])
+        let live = (sessions ?? [])
             .filter { $0.state != .stopped && $0.deletedAt == nil }
-            .max { ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString) }
+        let candidates = live.contains { $0.state == .running }
+            ? live.filter { $0.state == .running }
+            : live
+        return candidates.max {
+            ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString)
+        }
     }
 
     init(

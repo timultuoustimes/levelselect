@@ -154,9 +154,10 @@ struct ReconciliationTests {
         #expect(pt.totalPlaytime(asOf: t0.addingTimeInterval(1200)) == 1200)
     }
 
-    /// A paused duplicate keeps exactly its accumulated play and gains nothing
-    /// from being closed out.
-    @Test func pausedDuplicateKeepsOnlyItsAccumulatedTime() {
+    /// A paused record keeps exactly its accumulated play and is not rewritten
+    /// merely because a running session arrived. It accrues nothing, and the
+    /// running record must drive the UI.
+    @Test func pausedSessionSurvivesBesideRunningSessionWithoutAccruing() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
@@ -169,8 +170,9 @@ struct ReconciliationTests {
 
         repo.reconcile(game)
 
-        #expect(paused.state == .stopped)
+        #expect(paused.state == .paused)
         #expect(paused.elapsed() == 300)
+        #expect(pt.activeSession === synced)
     }
 
     /// Round 2's session-intent failure: an old session RESUMED at 17:00 is a
@@ -238,10 +240,11 @@ struct ReconciliationTests {
         #expect(local.endDate.map { $0 <= now } == true)
     }
 
-    /// Round 3, finding 4's timestamp half: a future-dated PAUSED loser used
-    /// to write its future pausedAt straight into endDate. Every timestamp
-    /// the closer writes must be clamped to the reconcile time.
-    @Test func futureDatedPausedLoserIsNotClosedInTheFuture() {
+    /// The live two-device failure was caused by an automatic close of a
+    /// paused, synced record racing its origin device's offline resume. A
+    /// future clock makes a grace-period rule unreliable too. Reconciliation
+    /// must leave every paused record byte-for-byte alone.
+    @Test func futureDatedPausedSessionIsNotAutomaticallyClosed() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -259,15 +262,19 @@ struct ReconciliationTests {
 
         repo.reconcile(game, at: now)
 
-        #expect(pausedAhead.state == .stopped)
+        #expect(pausedAhead.state == .paused)
         #expect(pausedAhead.accumulatedDuration == 300)
-        #expect(pausedAhead.endDate.map { $0 <= now } == true)
+        #expect(pausedAhead.pausedAt == now.addingTimeInterval(100))
+        #expect(pausedAhead.endDate == nil)
+        // A preserved pause must not hide a live timer and let it accrue
+        // invisibly behind paused controls.
+        #expect(pt.activeSession === winner)
     }
 
-    /// Starting a session must close EVERY unstopped one, not one arbitrary
-    /// pick — otherwise a sync twin keeps accruing forever behind the new
-    /// timer.
-    @Test func startSessionStopsEveryUnstoppedSession() {
+    /// Starting a session must close EVERY running one, not one arbitrary pick
+    /// — otherwise a sync twin keeps accruing forever behind the new timer.
+    /// Paused records are covered separately and intentionally survive.
+    @Test func startSessionStopsEveryRunningSession() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
@@ -283,6 +290,63 @@ struct ReconciliationTests {
         let open = (pt.sessions ?? []).filter { $0.state != .stopped && $0.deletedAt == nil }
         #expect(open.count == 1)
         #expect(open.first === fresh)
+    }
+
+    /// Reproduce the causal sequence from the pulled device stores, not just
+    /// its final two-running-session shape: Piccolo starts a timer while King
+    /// Kai's synced session is paused, then King Kai resumes that same record
+    /// offline. The old startSession wrote a stop into the paused record before
+    /// this resume, and CloudKit later orphaned it while merging both writes.
+    @Test func scenarioThreeNeverWritesThePausedRecordBeforeOfflineResume() {
+        let (repo, game) = self.game(named: "Mina the Hollower")
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let kaiPT = repo.ensureDefaultPlaythrough(for: game)
+        let kai = repo.startSession(on: kaiPT, at: t0)
+        repo.pauseSession(kai, at: t0.addingTimeInterval(300))
+        let revisionAtSync = kai.revision
+        let bankedAtSync = kai.accumulatedDuration
+
+        // Piccolo has a different default playthrough from the creation race.
+        let piccoloPT = Playthrough()
+        repo.context.insert(piccoloPT)
+        piccoloPT.game = game
+        let piccolo = repo.startSession(on: piccoloPT, at: t0.addingTimeInterval(1_800))
+
+        // Starting Piccolo's timer must not create any divergent write to the
+        // shared paused Session record.
+        #expect(kai.state == .paused)
+        #expect(kai.endDate == nil)
+        #expect(kai.revision == revisionAtSync)
+        #expect(kai.accumulatedDuration == bankedAtSync)
+
+        // What King Kai does offline after Piccolo's start.
+        repo.resumeSession(kai, at: t0.addingTimeInterval(2_700))
+        let outcome = repo.reconcile(game, at: t0.addingTimeInterval(3_600))
+
+        #expect(kai.state == .running)
+        #expect(kai.endDate == nil)
+        #expect(piccolo.state == .stopped)
+        #expect(outcome.closedSessions == 1)
+    }
+
+    /// Once CloudKit has removed the parent relationship, the game-scoped
+    /// reconciler cannot safely infer it. The row must survive untouched and
+    /// be countable for Settings instead of silently disappearing forever.
+    @Test func orphanedRunningSessionIsPreservedAndReported() {
+        let (repo, _) = self.game(named: "Mina the Hollower")
+        let orphan = Session(startDate: Date(timeIntervalSince1970: 1_700_000_000),
+                             state: .running)
+        orphan.accumulatedDuration = 543.972555994987
+        repo.context.insert(orphan)
+
+        repo.reconcileLibrary(at: orphan.startDate.addingTimeInterval(600))
+
+        #expect(repo.orphanedSessions().map(\.id) == [orphan.id])
+        #expect(orphan.playthrough == nil)
+        #expect(orphan.state == .running)
+        #expect(orphan.deletedAt == nil)
+        #expect(orphan.accumulatedDuration == 543.972555994987)
     }
 
     // MARK: Duplicate default playthroughs

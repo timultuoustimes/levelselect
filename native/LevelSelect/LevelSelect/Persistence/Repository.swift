@@ -240,15 +240,25 @@ struct Repository {
 
     @discardableResult
     func startSession(on pt: Playthrough, at date: Date = .now) -> Session {
-        // ALL unstopped sessions of the GAME, not just this playthrough's.
+        // Stop every RUNNING session of the GAME, not just this playthrough's.
         // One game is one activity — two of its playthroughs can't be played
         // at once. The two-device test caught the per-playthrough version:
         // after a sync race the open twin can sit on a DIFFERENT playthrough
         // (each device minted its own default earlier), and stopping only
         // this playthrough's left the other timer silently accruing forever.
+        //
+        // Deliberately leave paused sessions alone. A real two-device run
+        // proved that auto-stopping a synced pause while its origin device
+        // resumes it offline makes both devices write the same Session record
+        // divergently. CloudKit then detached that record from its playthrough,
+        // hiding irreplaceable playtime from every game total. A grace period
+        // would only postpone the same race; paused sessions accrue nothing,
+        // so preserving them is the safe ambiguity-preserving rule.
         let unstopped = pt.game.map { $0.livePlaythroughs.flatMap { liveUnstoppedSessions(of: $0) } }
             ?? liveUnstoppedSessions(of: pt)
-        for active in unstopped { stopSession(active, at: date) }
+        for active in unstopped where active.state == .running {
+            stopSession(active, at: date)
+        }
         let session = Session(startDate: date, state: .running)
         context.insert(session)
         session.playthrough = pt
@@ -1144,6 +1154,16 @@ struct Repository {
         }
     }
 
+    /// Sessions whose CloudKit relationship was lost. Their playtime is real
+    /// user data, but there is no supported, trustworthy way to infer which
+    /// playthrough owned it. Preserve and surface them; never adopt, delete, or
+    /// tombstone them by guesswork.
+    func orphanedSessions() -> [Session] {
+        let descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate { $0.playthrough == nil && $0.deletedAt == nil })
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     /// Foreground sweep, bounded. It walks only the games that currently
     /// have an open timer (found by one small fetch, not a whole-library
     /// relationship walk — round 2's performance flag) and runs the full
@@ -1233,9 +1253,11 @@ struct Repository {
         return merged
     }
 
-    /// Repair a game's sessions in two passes: normalize records CloudKit's
-    /// field-level merge left contradictory, then make sure the GAME has at
-    /// most one unstopped session.
+    /// Repair a game's sessions in two passes: normalize running records
+    /// CloudKit's field-level merge left contradictory, then make sure the
+    /// GAME has at most one RUNNING session. Paused sessions are intentionally
+    /// preserved: they accrue no time, and an automatic write to one can race
+    /// the origin device resuming that same record and lose its relationship.
     ///
     /// GAME-scoped, not per-playthrough — the two-device test caught the
     /// per-playthrough version failing its own scenario: each device's
@@ -1246,10 +1268,11 @@ struct Repository {
     /// game is one activity; two of its playthroughs cannot be played at
     /// once.
     ///
-    /// The survivor is the session the user ACTED on last — started, paused,
-    /// or resumed, with the id as a total tie-break — not the one with the
-    /// newest original start date: an old session deliberately resumed at
-    /// 17:00 is a later user action than a fresh one started at 16:00.
+    /// Among RUNNING sessions, the survivor is the one the user ACTED on last
+    /// — started or resumed, with the id as a total tie-break — not the one
+    /// with the newest original start date: an old session deliberately
+    /// resumed at 17:00 is a later user action than a fresh one started at
+    /// 16:00. Paused sessions are outside this contest and remain untouched.
     ///
     /// Losers are closed, never deleted — their recorded time is user data.
     /// A running loser's CURRENT segment is credited only up to the moment
@@ -1258,10 +1281,9 @@ struct Repository {
     /// limit (round 3): `accumulatedDuration` is a scalar, so overlap already
     /// banked inside BOTH sessions' earlier segments is invisible here and
     /// stays double-counted — removing it would need per-segment history the
-    /// model doesn't keep. A paused loser keeps its banked time unchanged and
-    /// closes at its own pause time, not an invented one. Every written
-    /// timestamp is clamped to now: synced clocks can be ahead of this
-    /// device, and history must never record a stop in the future.
+    /// model doesn't keep. Every written timestamp is clamped to now: synced
+    /// clocks can be ahead of this device, and history must never record a
+    /// stop in the future.
     private func reconcileSessions(in game: Game, at date: Date = .now) -> Int {
         var repaired = 0
 
@@ -1275,6 +1297,11 @@ struct Repository {
         // clear it; otherwise the stop stands and the record closes properly.
         for pt in game.livePlaythroughs {
             for session in liveUnstoppedSessions(of: pt) {
+                // Never automatically write a paused record. Even resolving a
+                // contradictory stop here can collide with an offline resume
+                // of the same CloudKit record. It is harmless while paused and
+                // will be resolved after an explicit resume/stop.
+                guard session.state == .running else { continue }
                 guard let end = session.endDate else { continue }
                 if session.lastUserAction > end {
                     session.endDate = nil
@@ -1290,30 +1317,24 @@ struct Repository {
             }
         }
 
-        let open = game.livePlaythroughs.flatMap { liveUnstoppedSessions(of: $0) }
-        guard open.count > 1 else { return repaired }
-        let winner = open.max {
+        let running = game.livePlaythroughs
+            .flatMap { liveUnstoppedSessions(of: $0) }
+            .filter { $0.state == .running }
+        guard running.count > 1 else { return repaired }
+        let winner = running.max {
             ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString)
         }!
-        // When the survivor's current segment started counting (or, if it is
-        // paused, the last moment it was known to be counting) — clamped to
-        // now, so a survivor whose anchor sits in this device's future (clock
-        // skew) can't credit a loser for time that hasn't happened yet.
-        let winnerAnchor = min(date, winner.state == .running
-            ? (winner.resumedAt ?? winner.startDate)
-            : (winner.pausedAt ?? winner.startDate))
-        for older in open where older !== winner {
-            if older.state == .running {
-                // Below the loser's own running anchor elapsed() clamps to
-                // its banked time, so an early cut can't go negative; the
-                // min(date, …) keeps a future-dated loser anchor from
-                // becoming a future endDate.
-                let cut = min(date, max(older.resumedAt ?? older.startDate, winnerAnchor))
-                older.accumulatedDuration = older.elapsed(asOf: cut)
-                older.endDate = cut
-            } else {
-                older.endDate = min(date, older.pausedAt ?? older.startDate)
-            }
+        // When the survivor's current segment started counting — clamped to
+        // now, so a future clock can't credit a loser for time that hasn't
+        // happened yet.
+        let winnerAnchor = min(date, winner.resumedAt ?? winner.startDate)
+        for older in running where older !== winner {
+            // Below the loser's own running anchor elapsed() clamps to its
+            // banked time, so an early cut can't go negative; the min(date, …)
+            // keeps a future-dated loser anchor from becoming a future endDate.
+            let cut = min(date, max(older.resumedAt ?? older.startDate, winnerAnchor))
+            older.accumulatedDuration = older.elapsed(asOf: cut)
+            older.endDate = cut
             older.pausedAt = nil
             older.resumedAt = nil
             older.state = .stopped
