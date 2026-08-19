@@ -260,6 +260,10 @@ struct Repository {
             stopSession(active, at: date)
         }
         let session = Session(startDate: date, state: .running)
+        // Stamped once, here, because sessions are also started from the
+        // watch, the widget and Live Activity intents — a view is the wrong
+        // place for an invariant every entry point needs.
+        session.originDevice = DeviceIdentity.name
         context.insert(session)
         session.playthrough = pt
         pt.lastPlayedAt = date
@@ -414,6 +418,7 @@ struct Repository {
         notes: String? = nil
     ) -> Session {
         let session = Session(startDate: date, state: .stopped, isManual: true)
+        session.originDevice = DeviceIdentity.name
         session.accumulatedDuration = duration
         session.endDate = date.addingTimeInterval(duration)
         session.notes = notes

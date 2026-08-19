@@ -95,6 +95,35 @@ struct SessionTimerTests {
         #expect(pt.lastPlayedAt == t0.addingTimeInterval(300))
     }
 
+    /// Schema V2: every entry point that creates a session stamps the device,
+    /// because "another device" is useless in a prompt whose job is telling
+    /// two devices apart. Stamped in the repository, not a view — the watch,
+    /// the widget and Live Activity intents all start sessions too.
+    @Test func sessionsRecordTheDeviceThatStartedThem() {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let game = repo.addGame(name: "I", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let previous = UserDefaults.standard.string(forKey: "deviceDisplayName")
+        defer {
+            if let previous { UserDefaults.standard.set(previous, forKey: "deviceDisplayName") }
+            else { UserDefaults.standard.removeObject(forKey: "deviceDisplayName") }
+        }
+
+        DeviceIdentity.name = "King Kai"
+        let timed = repo.startSession(on: pt)
+        let manual = repo.logManualSession(on: pt, duration: 600)
+        #expect(timed.originDevice == "King Kai")
+        #expect(manual.originDevice == "King Kai")
+
+        // Blanking it falls back to the system name rather than storing "".
+        DeviceIdentity.name = "   "
+        #expect(!DeviceIdentity.hasCustomName)
+        #expect(DeviceIdentity.name == DeviceIdentity.systemDefaultName)
+        #expect(repo.startSession(on: pt).originDevice?.isEmpty == false)
+    }
+
     /// The game page's session list is @Query-driven so REMOTE inserts
     /// re-render it — device testing found the relationship-derived list
     /// frozen while a synced session sat in the store for a quarter hour.

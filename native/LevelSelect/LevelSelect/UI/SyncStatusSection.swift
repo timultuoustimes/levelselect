@@ -11,6 +11,10 @@ struct SyncStatusSection: View {
         $0.playthrough == nil && $0.deletedAt == nil
     }) private var orphanedSessions: [Session]
 
+    /// Local echo of the device name so the field edits smoothly; committed to
+    /// DeviceIdentity on every change.
+    @State private var deviceName = DeviceIdentity.name
+
     var body: some View {
         Section {
             HStack(spacing: 12) {
@@ -48,6 +52,20 @@ struct SyncStatusSection: View {
                 }
                 .accessibilityElement(children: .combine)
             }
+            // Sessions carry the name of the device that started them, so
+            // history and the overlap prompts can say WHICH device rather
+            // than "another device". iOS won't tell an app the name you gave
+            // this device — it reports the model — so it's set here.
+            LabeledContent("This device") {
+                TextField(DeviceIdentity.systemDefaultName, text: $deviceName)
+                    .multilineTextAlignment(.trailing)
+                    #if !os(macOS)
+                    .autocorrectionDisabled()
+                    #endif
+                    .onChange(of: deviceName) { _, newValue in
+                        DeviceIdentity.name = newValue
+                    }
+            }
         } header: {
             Text("iCloud")
         } footer: {
@@ -55,6 +73,7 @@ struct SyncStatusSection: View {
                 if !orphanedSessions.isEmpty {
                     Text("iCloud detached these records from their games. LevelSelect keeps their playtime instead of guessing where it belongs; this build cannot restore it to a game automatically.")
                 }
+                Text("New play sessions record which device they were started on, so your history and any timer conflicts can name it.")
                 if let guidance {
                     Text(guidance)
                 }

@@ -150,6 +150,7 @@ targets:
       - path: LevelSelect/Persistence/LibrarySwitcher.swift
       - path: LevelSelect/Persistence/Repository.swift
       - path: LevelSelect/Persistence/Syncable.swift
+      - path: LevelSelect/Persistence/DeviceIdentity.swift
       # Repository persists through the monitor (Foundation+SwiftData only,
       # no UI) — the watch surfaces failures via the same shared state.
       - path: LevelSelect/Persistence/PersistenceMonitor.swift
