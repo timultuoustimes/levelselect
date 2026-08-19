@@ -110,7 +110,7 @@ struct SyncStatusSection: View {
             return "Your library syncs automatically"
         case .error:
             if monitor.isThrottled {
-                if let at = monitor.lastSyncedAt {
+                if let at = monitor.lastRelevantSyncAt {
                     return "Last synced \(at.formatted(.relative(presentation: .named))) — retrying automatically"
                 }
                 return "Retrying automatically"

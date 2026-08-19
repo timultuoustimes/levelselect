@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import SwiftData
+import CloudKit
 @testable import LevelSelect
 
 /// CloudKit syncs records without knowing this app's logical invariants, so
@@ -687,6 +688,76 @@ struct ReconciliationTests {
         #expect(live.count == 1)
         #expect(live.first?.itemID == "boss-hornet")
         #expect(live.first?.completed == true)
+    }
+}
+
+/// CloudKit event notifications interleave freely. These tests pin the real
+/// failure shape from King Kai: an import direction can remain unhealthy while
+/// small exports complete successfully around it.
+@MainActor
+struct SyncStatusMonitorTests {
+    @Test func successfulExportCannotClearAFailedImport() {
+        let monitor = SyncStatusMonitor()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: true,
+            endDate: now.addingTimeInterval(-10), errorText: nil,
+            errorDomain: nil, errorCode: nil)
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: false,
+            endDate: now, errorText: "Import rejected", errorDomain: CKErrorDomain,
+            errorCode: CKError.requestRateLimited.rawValue)
+        monitor.handleEvent(
+            direction: .exportData, finished: true, succeeded: true,
+            endDate: now.addingTimeInterval(1), errorText: nil,
+            errorDomain: nil, errorCode: nil)
+
+        #expect(monitor.importFailure?.message == "Import rejected")
+        #expect(monitor.exportFailure == nil)
+        #expect(monitor.lastSyncError?.contains("Incoming changes") == true)
+        #expect(monitor.isThrottled)
+        #expect(monitor.lastRelevantSyncAt == now.addingTimeInterval(-10))
+    }
+
+    @Test func successClearsOnlyItsOwnDirection() {
+        let monitor = SyncStatusMonitor()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: false,
+            endDate: now, errorText: "Import failed", errorDomain: "import.domain",
+            errorCode: 1)
+        monitor.handleEvent(
+            direction: .exportData, finished: true, succeeded: false,
+            endDate: now, errorText: "Export failed", errorDomain: "export.domain",
+            errorCode: 2)
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: true,
+            endDate: now.addingTimeInterval(1), errorText: nil,
+            errorDomain: nil, errorCode: nil)
+
+        #expect(monitor.importFailure == nil)
+        #expect(monitor.exportFailure?.message == "Export failed")
+        #expect(monitor.lastSyncError?.contains("Outgoing changes") == true)
+        #expect(!monitor.isThrottled)
+    }
+
+    @Test func mixedDirectionFailuresDoNotMasqueradeAsThrottling() {
+        let monitor = SyncStatusMonitor()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: false,
+            endDate: now, errorText: "Rate limited", errorDomain: CKErrorDomain,
+            errorCode: CKError.requestRateLimited.rawValue)
+        monitor.handleEvent(
+            direction: .exportData, finished: true, succeeded: false,
+            endDate: now, errorText: "Permission failure", errorDomain: CKErrorDomain,
+            errorCode: CKError.permissionFailure.rawValue)
+
+        #expect(monitor.lastSyncError == "Incoming changes and Outgoing changes are failing")
+        #expect(!monitor.isThrottled)
     }
 }
 
