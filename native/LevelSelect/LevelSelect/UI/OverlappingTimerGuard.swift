@@ -20,8 +20,14 @@ struct OverlappingTimerGuard: ViewModifier {
     /// Games the user chose to leave alone this launch, so declining doesn't
     /// re-ask on every foreground.
     @State private var dismissed: Set<UUID> = []
-    @State private var resolving: OverlapTarget?
-    @State private var reviewing: Repository.SessionOverlap?
+    /// ONE presentation slot for both prompts.
+    ///
+    /// Two `.sheet` modifiers on the same view is a SwiftUI trap: only one is
+    /// honoured, so adding the retrospective prompt silently swallowed the
+    /// live one — the guard looked fine, ran its detection correctly, and
+    /// simply never appeared. A single slot with a case per prompt makes that
+    /// impossible to reintroduce.
+    @State private var prompt: ActivePrompt?
     /// Finished-session pairs the user has settled. Device-local on purpose:
     /// it records a UI decision, not data, and the worst case if another
     /// device hasn't heard is being asked once more there.
@@ -62,41 +68,69 @@ struct OverlappingTimerGuard: ViewModifier {
     /// case is settled, since a timer still running is the urgent one, and
     /// never when the user has said to keep both.
     private var finishedOverlap: Repository.SessionOverlap? {
-        guard overlap == nil, resolving == nil,
+        guard overlap == nil, prompt == nil,
               repo.overlappingTimerPolicy != .keepBoth
         else { return nil }
         let settled = Set(settledRaw.split(separator: "\n").map(String.init))
         return repo.overlappingFinishedSessions().first { !settled.contains($0.id) }
     }
 
+    enum ActivePrompt: Identifiable {
+        case live(OverlapTarget)
+        case finished(Repository.SessionOverlap)
+
+        var id: String {
+            switch self {
+            case .live(let target): "live-\(target.id.uuidString)"
+            case .finished(let pair): "finished-\(pair.id)"
+            }
+        }
+    }
+
+    /// Changes whenever the set of running timers does — including a state
+    /// flip that leaves `endDate` nil, which a plain count would miss.
+    private var runningSignature: String {
+        unstopped
+            .filter { $0.state == .running }
+            .map(\.id.uuidString)
+            .sorted()
+            .joined(separator: ",")
+    }
+
     func body(content: Content) -> some View {
         content
-            .onChange(of: overlap?.id) { _, _ in
-                if resolving == nil { resolving = overlap }
-            }
-            .onAppear { resolving = overlap }
-            .sheet(item: $resolving) { target in
-                OverlappingTimerSheet(target: target) { resolution in
-                    apply(resolution, to: target)
-                }
-            }
+            .onAppear { showLiveIfNeeded() }
+            .onChange(of: runningSignature) { _, _ in showLiveIfNeeded() }
             // Retrospective, so it waits for a quiet moment rather than
-            // interrupting a launch: only after the live prompt is gone, and
+            // interrupting a launch: only once nothing live is pending, and
             // only for pairs never settled before.
-            .task(id: unstopped.count) {
+            .task(id: runningSignature) {
                 try? await Task.sleep(for: .seconds(2))
-                guard !Task.isCancelled, resolving == nil, reviewing == nil else { return }
-                reviewing = finishedOverlap
+                guard !Task.isCancelled, prompt == nil,
+                      let pair = finishedOverlap else { return }
+                prompt = .finished(pair)
             }
-            .sheet(item: $reviewing) { pair in
-                FinishedOverlapSheet(pair: pair) { resolution in
-                    apply(resolution, to: pair)
+            .sheet(item: $prompt) { active in
+                switch active {
+                case .live(let target):
+                    OverlappingTimerSheet(target: target) { resolution in
+                        apply(resolution, to: target)
+                    }
+                case .finished(let pair):
+                    FinishedOverlapSheet(pair: pair) { resolution in
+                        applyFinished(resolution, to: pair)
+                    }
                 }
             }
     }
 
-    private func apply(_ resolution: FinishedOverlapResolution,
-                       to pair: Repository.SessionOverlap) {
+    private func showLiveIfNeeded() {
+        guard prompt == nil, let target = overlap else { return }
+        prompt = .live(target)
+    }
+
+    private func applyFinished(_ resolution: FinishedOverlapResolution,
+                               to pair: Repository.SessionOverlap) {
         switch resolution {
         case .remove(let session):
             // Tombstoned, not erased: it drops out of totals and history but
@@ -110,9 +144,11 @@ struct OverlappingTimerGuard: ViewModifier {
             break
         }
         settle(pair)
-        reviewing = nil
+        prompt = nil
     }
 
+    /// Remember that this pair has been dealt with, so it is never raised
+    /// again whichever way it was answered.
     private func settle(_ pair: Repository.SessionOverlap) {
         var ids = settledRaw.split(separator: "\n").map(String.init)
         guard !ids.contains(pair.id) else { return }
@@ -134,7 +170,7 @@ struct OverlappingTimerGuard: ViewModifier {
             dismissed.insert(target.game.id)
             if remember { repo.setOverlappingTimerPolicy(.keepBoth) }
         }
-        resolving = nil
+        prompt = nil
     }
 }
 
