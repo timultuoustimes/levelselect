@@ -21,6 +21,11 @@ struct OverlappingTimerGuard: ViewModifier {
     /// re-ask on every foreground.
     @State private var dismissed: Set<UUID> = []
     @State private var resolving: OverlapTarget?
+    @State private var reviewing: Repository.SessionOverlap?
+    /// Finished-session pairs the user has settled. Device-local on purpose:
+    /// it records a UI decision, not data, and the worst case if another
+    /// device hasn't heard is being asked once more there.
+    @AppStorage("settledSessionOverlaps") private var settledRaw = ""
 
     private var repo: Repository { Repository(context) }
 
@@ -53,6 +58,17 @@ struct OverlappingTimerGuard: ViewModifier {
         return nil
     }
 
+    /// A finished-session overlap worth asking about — only once the live
+    /// case is settled, since a timer still running is the urgent one, and
+    /// never when the user has said to keep both.
+    private var finishedOverlap: Repository.SessionOverlap? {
+        guard overlap == nil, resolving == nil,
+              repo.overlappingTimerPolicy != .keepBoth
+        else { return nil }
+        let settled = Set(settledRaw.split(separator: "\n").map(String.init))
+        return repo.overlappingFinishedSessions().first { !settled.contains($0.id) }
+    }
+
     func body(content: Content) -> some View {
         content
             .onChange(of: overlap?.id) { _, _ in
@@ -64,6 +80,45 @@ struct OverlappingTimerGuard: ViewModifier {
                     apply(resolution, to: target)
                 }
             }
+            // Retrospective, so it waits for a quiet moment rather than
+            // interrupting a launch: only after the live prompt is gone, and
+            // only for pairs never settled before.
+            .task(id: unstopped.count) {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled, resolving == nil, reviewing == nil else { return }
+                reviewing = finishedOverlap
+            }
+            .sheet(item: $reviewing) { pair in
+                FinishedOverlapSheet(pair: pair) { resolution in
+                    apply(resolution, to: pair)
+                }
+            }
+    }
+
+    private func apply(_ resolution: FinishedOverlapResolution,
+                       to pair: Repository.SessionOverlap) {
+        switch resolution {
+        case .remove(let session):
+            // Tombstoned, not erased: it drops out of totals and history but
+            // the record survives, because "this looks like a duplicate" is
+            // never certain enough to destroy someone's recorded time.
+            repo.deleteSession(session)
+        case .removeBoth:
+            repo.deleteSession(pair.first)
+            repo.deleteSession(pair.second)
+        case .keepBoth:
+            break
+        }
+        settle(pair)
+        reviewing = nil
+    }
+
+    private func settle(_ pair: Repository.SessionOverlap) {
+        var ids = settledRaw.split(separator: "\n").map(String.init)
+        guard !ids.contains(pair.id) else { return }
+        ids.append(pair.id)
+        // Bounded, so a long-lived install can't grow this without limit.
+        settledRaw = ids.suffix(200).joined(separator: "\n")
     }
 
     private func apply(_ resolution: OverlapResolution, to target: OverlapTarget) {
@@ -189,4 +244,97 @@ private struct OverlappingTimerSheet: View {
 
 extension View {
     func overlappingTimerGuard() -> some View { modifier(OverlappingTimerGuard()) }
+}
+
+enum FinishedOverlapResolution {
+    case remove(Session)
+    case removeBoth
+    case keepBoth
+}
+
+/// Two finished sessions claiming the same minutes. Retrospective, so the
+/// wording is careful: this is a question about records the user already has,
+/// and the app genuinely cannot tell whether the overlap is double-counted
+/// time or two people playing — a paused session can span another's without
+/// costing a single minute.
+private struct FinishedOverlapSheet: View {
+    let pair: Repository.SessionOverlap
+    let onResolve: (FinishedOverlapResolution) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text("Two sessions for \(pair.game.name) cover the same \(Format.duration(pair.seconds)) — recorded on different devices. If both are real, your total counts that time twice.")
+                        .font(.subheadline)
+                }
+
+                Section {
+                    ForEach([pair.first, pair.second], id: \.id) { session in
+                        sessionRow(session)
+                    }
+                } header: {
+                    Text("The two sessions")
+                }
+
+                Section {
+                    Button {
+                        onResolve(.remove(pair.second)); dismiss()
+                    } label: {
+                        Label("Keep \(name(pair.first))'s only", systemImage: "1.circle")
+                    }
+                    Button {
+                        onResolve(.remove(pair.first)); dismiss()
+                    } label: {
+                        Label("Keep \(name(pair.second))'s only", systemImage: "2.circle")
+                    }
+                    Button {
+                        onResolve(.keepBoth); dismiss()
+                    } label: {
+                        Label("Keep both", systemImage: "checkmark.circle")
+                    }
+                    Button(role: .destructive) {
+                        onResolve(.removeBoth); dismiss()
+                    } label: {
+                        Label("Remove both", systemImage: "trash")
+                    }
+                } footer: {
+                    Text("Removed sessions leave your totals and history but aren't erased. Whatever you choose, this pair won't be raised again.")
+                }
+            }
+            .navigationTitle("Overlapping sessions")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Not now") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func name(_ session: Session) -> String {
+        session.originDevice ?? "Another device"
+    }
+
+    private func sessionRow(_ session: Session) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(name(session)).font(.subheadline.weight(.semibold))
+            HStack(spacing: 4) {
+                Text(session.startDate, format: .dateTime.month().day().hour().minute())
+                if let end = session.endDate {
+                    Text("→")
+                    Text(end, format: .dateTime.hour().minute())
+                }
+                Text("·")
+                Text(Format.duration(session.elapsed()))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
 }

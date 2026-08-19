@@ -1471,6 +1471,81 @@ struct Repository {
         return others.count
     }
 
+    /// Two finished sessions that claim overlapping wall-clock time.
+    ///
+    /// Detection is deliberately narrow, because acting on it means deleting
+    /// recorded playtime and a false positive costs someone real data:
+    ///
+    /// - both must name a DIFFERENT origin device. Two overlapping sessions
+    ///   from one device are ordinary (a hand-logged block covering a period
+    ///   you also timed); two devices claiming the same minutes is the shape
+    ///   that actually double-counts a library total.
+    /// - neither may be hand-logged. `isManual` entries are typed after the
+    ///   fact and routinely span a period that a timer also covered — that is
+    ///   the user's own bookkeeping, not a conflict.
+    /// - the intersection must be more than a minute, so sessions that merely
+    ///   touch at their edges are left alone.
+    ///
+    /// Even then this only ever ASKS. A session's interval says nothing about
+    /// its pauses — `accumulatedDuration` is a scalar, so a session paused
+    /// through the middle can overlap another without a single minute being
+    /// counted twice — which is exactly why the app must not resolve this on
+    /// its own.
+    struct SessionOverlap: Identifiable {
+        let game: Game
+        let first: Session
+        let second: Session
+        /// Stable across launches and devices, so a dismissal sticks.
+        var id: String {
+            [first.id.uuidString, second.id.uuidString].sorted().joined(separator: "+")
+        }
+        var seconds: TimeInterval {
+            let start = max(first.startDate, second.startDate)
+            let end = min(first.endDate ?? first.startDate, second.endDate ?? second.startDate)
+            return max(0, end.timeIntervalSince(start))
+        }
+    }
+
+    /// Overlapping finished sessions across the live library.
+    ///
+    /// Bounded to sessions that ended in the last 90 days: the work is then
+    /// proportional to recent play rather than to a lifetime of history, and
+    /// an overlap old enough to fall outside that window is one the user has
+    /// long since lived with. Stated rather than silent — an older pair will
+    /// not be reported.
+    func overlappingFinishedSessions(asOf now: Date = .now,
+                                     within: TimeInterval = 90 * 24 * 3600) -> [SessionOverlap] {
+        let cutoff = now.addingTimeInterval(-within)
+        let descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate { $0.deletedAt == nil && $0.isManual == false })
+        let candidates = ((try? context.fetch(descriptor)) ?? []).filter {
+            $0.state == .stopped
+                && ($0.endDate ?? $0.startDate) >= cutoff
+                && $0.originDevice != nil
+                && $0.playthrough?.deletedAt == nil
+                && $0.playthrough?.game?.deletedAt == nil
+        }
+
+        var found: [SessionOverlap] = []
+        for (_, sessions) in Dictionary(grouping: candidates, by: { $0.playthrough?.game?.id }) {
+            let ordered = sessions.sorted { $0.startDate < $1.startDate }
+            for (index, earlier) in ordered.enumerated() {
+                for later in ordered.dropFirst(index + 1) {
+                    // Sorted by start, so once a later session begins after
+                    // this one ended, no further pair can intersect it.
+                    let earlierEnd = earlier.endDate ?? earlier.startDate
+                    if later.startDate >= earlierEnd { break }
+                    guard earlier.originDevice != later.originDevice,
+                          let game = earlier.playthrough?.game
+                    else { continue }
+                    let overlap = SessionOverlap(game: game, first: earlier, second: later)
+                    if overlap.seconds > 60 { found.append(overlap) }
+                }
+            }
+        }
+        return found.sorted { $0.seconds > $1.seconds }
+    }
+
     /// Repair a game's sessions in two passes: normalize running records
     /// CloudKit's field-level merge left contradictory, then make sure the
     /// GAME has at most one RUNNING session. Paused sessions are intentionally
