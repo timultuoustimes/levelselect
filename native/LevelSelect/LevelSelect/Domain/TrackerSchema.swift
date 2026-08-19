@@ -17,6 +17,13 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// Optional schema hint: "pips" | "hearts" | "numbered" | "stepper".
     /// Absent in the built-ins, which infer from the data instead.
     let display: String?
+    /// Items that must be finished before this one is reachable. Ids, in the
+    /// same space as everything else. Lives in the schema JSON — no schema
+    /// version needed.
+    var requires: [String] = []
+    /// Items that finishing THIS one closes off: the questline it ends, the
+    /// ending it forecloses, the point of no return.
+    var locksOut: [String] = []
     /// How many of this thing there are: 900 koroks, 100 seeds, 60 shrines.
     /// An item with a target is counted rather than ticked — one row instead
     /// of nine hundred, which is the only way those games are trackable at
@@ -144,6 +151,8 @@ enum TrackerSchemaJSON {
                     maxRank: (item["maxRank"] as? NSNumber)?.intValue,
                     rankNames: (item["rankNames"] as? [Any])?.compactMap { $0 as? String },
                     display: item["display"] as? String,
+                    requires: (item["requires"] as? [Any])?.compactMap { $0 as? String } ?? [],
+                    locksOut: (item["locksOut"] as? [Any])?.compactMap { $0 as? String } ?? [],
                     countTarget: (item["countTarget"] as? NSNumber)?.intValue,
                     sourceName: item["sourceName"] as? String,
                     note: item["note"] as? String

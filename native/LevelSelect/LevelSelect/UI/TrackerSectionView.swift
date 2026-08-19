@@ -20,8 +20,17 @@ struct TrackerSectionView: View {
     @State private var renaming: (category: String, item: String?)?
     @State private var renameText = ""
     @State private var editing: EditTarget?
+    /// A tick that would close other things off, held until confirmed.
+    @State private var confirmingLockout: LockoutPrompt?
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
+
+    /// An item whose completion ends other things, and what it ends.
+    struct LockoutPrompt: Identifiable {
+        let item: TrackerItemDTO
+        let losing: [String]
+        var id: String { item.id }
+    }
 
     private var repo: Repository { Repository(context) }
 
@@ -61,9 +70,20 @@ struct TrackerSectionView: View {
         )
     }
 
+    /// Built once per render beside the state map — gating is a whole-tracker
+    /// question (an item elsewhere can close this one), so per-row scanning
+    /// would be the same O(items²) mistake the state map already fixed.
+    private func resolver(_ cats: [TrackerCategoryDTO],
+                          states: [String: TrackerStateRecord]) -> TrackerGating.Resolver {
+        TrackerGating.Resolver(
+            categories: cats,
+            completed: Set(states.filter { $0.value.completed }.keys))
+    }
+
     var body: some View {
         let cats = categories
         let states = stateByItem
+        let gating = resolver(cats, states: states)
         VStack(alignment: .leading, spacing: 12) {
             header(cats, states: states)
 
@@ -81,7 +101,7 @@ struct TrackerSectionView: View {
             // Existing content stays visible while regenerating — hiding it
             // made a regenerate look like the tracker had been wiped.
             ForEach(cats) { category in
-                categoryView(category, states: states)
+                categoryView(category, states: states, gating: gating)
             }
 
             if let outcome = generation.outcome(for: game.id), !outcome.isNoOp {
@@ -169,6 +189,23 @@ struct TrackerSectionView: View {
         }
         .sheet(item: $editing) { target in
             TrackerItemEditView(game: game, target: target)
+        }
+        .confirmationDialog(
+            "Tick “\(confirmingLockout?.item.name ?? "")”?",
+            isPresented: Binding(get: { confirmingLockout != nil },
+                                 set: { if !$0 { confirmingLockout = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Tick it") {
+                if let prompt = confirmingLockout {
+                    let pt = repo.ensureDefaultPlaythrough(for: game)
+                    repo.setTrackerItem(pt, itemID: prompt.item.id, done: true)
+                }
+                confirmingLockout = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingLockout = nil }
+        } message: {
+            Text("This closes off \(confirmingLockout?.losing.joined(separator: ", ") ?? "") for this playthrough. You can untick it if you change your mind.")
         }
         .sheet(isPresented: Binding(
             get: { generation.pendingMerge(for: game.id) != nil },
@@ -338,7 +375,8 @@ struct TrackerSectionView: View {
     // MARK: Category
 
     @ViewBuilder
-    private func categoryView(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord]) -> some View {
+    private func categoryView(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord],
+                              gating: TrackerGating.Resolver) -> some View {
         let visibleItems = hideCompleted
             ? category.items.filter { states[$0.id]?.completed != true }
             : category.items
@@ -358,7 +396,7 @@ struct TrackerSectionView: View {
                                     Text(group.name)
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(LSTheme.accent.opacity(0.9))
-                                    itemsBody(group.items, category: category, states: states)
+                                    itemsBody(group.items, category: category, states: states, gating: gating)
                                 }
                             }
                         }
@@ -377,13 +415,13 @@ struct TrackerSectionView: View {
                                                      alignment: .leading)],
                                   alignment: .leading, spacing: 2) {
                             ForEach(visibleItems) { item in
-                                itemRow(item, category: category, states: states)
+                                itemRow(item, category: category, states: states, gating: gating)
                             }
                         }
                     } else {
                         VStack(spacing: 2) {
                             ForEach(visibleItems) { item in
-                                itemRow(item, category: category, states: states)
+                                itemRow(item, category: category, states: states, gating: gating)
                             }
                         }
                     }
@@ -435,15 +473,16 @@ struct TrackerSectionView: View {
 
     /// Rows for a set of items, in columns when they're simple enough.
     @ViewBuilder
-    private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO, states: [String: TrackerStateRecord]) -> some View {
+    private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO, states: [String: TrackerStateRecord],
+                           gating: TrackerGating.Resolver) -> some View {
         if isDense(items, ignoringLocation: true) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)],
                       alignment: .leading, spacing: 2) {
-                ForEach(items) { itemRow($0, category: category, states: states, hideLocation: true) }
+                ForEach(items) { itemRow($0, category: category, states: states, gating: gating, hideLocation: true) }
             }
         } else {
             VStack(spacing: 2) {
-                ForEach(items) { itemRow($0, category: category, states: states, hideLocation: true) }
+                ForEach(items) { itemRow($0, category: category, states: states, gating: gating, hideLocation: true) }
             }
         }
     }
@@ -477,6 +516,7 @@ struct TrackerSectionView: View {
     @ViewBuilder
     private func itemRow(_ item: TrackerItemDTO, category: TrackerCategoryDTO,
                          states: [String: TrackerStateRecord],
+                         gating: TrackerGating.Resolver,
                          hideLocation: Bool = false) -> some View {
         let state = states[item.id]
         let done = state?.completed == true
@@ -487,10 +527,21 @@ struct TrackerSectionView: View {
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 if hidden {
                     repo.revealTrackerItem(pt, itemID: item.id)
+                } else if !done {
+                    // Ask BEFORE, because afterwards it is advice about the
+                    // past: this is the moment a questline ends or an ending
+                    // is foreclosed, and the player is usually one tap from
+                    // not knowing it happened.
+                    let losing = gating.wouldLoseByCompleting(item)
+                    if losing.isEmpty {
+                        repo.setTrackerItem(pt, itemID: item.id, done: true)
+                    } else {
+                        confirmingLockout = LockoutPrompt(item: item, losing: losing)
+                    }
                 } else {
                     // The setter recomputes and saves internally — an extra
                     // recompute here doubled the parse/touch/save per tap.
-                    repo.setTrackerItem(pt, itemID: item.id, done: !done)
+                    repo.setTrackerItem(pt, itemID: item.id, done: false)
                 }
             } label: {
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
@@ -516,6 +567,17 @@ struct TrackerSectionView: View {
                             .foregroundStyle(.orange)
                             .help("Missable")
                     }
+                }
+                if !hidden, case .blocked(let needs) = gating.status(of: item) {
+                    Label("Needs \(needs.joined(separator: ", "))", systemImage: "lock")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                if !hidden, case .lost(let to) = gating.status(of: item) {
+                    Label("Closed off by \(to.joined(separator: ", "))",
+                          systemImage: "xmark.circle")
+                        .font(.caption2)
+                        .foregroundStyle(.orange.opacity(0.9))
                 }
                 if !hidden, !hideLocation, let location = item.location {
                     Text(location)
@@ -551,6 +613,10 @@ struct TrackerSectionView: View {
         }
         .contentShape(.rect)
         .padding(.vertical, 3)
+        // Dimmed rather than hidden: knowing a thing exists and is not yet
+        // reachable is the point — hiding it would just look like a shorter
+        // tracker.
+        .opacity({ if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 } }())
         .contextMenu {
             Button {
                 editing = EditTarget(categoryID: category.id, itemID: item.id,
