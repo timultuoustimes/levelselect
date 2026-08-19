@@ -151,6 +151,9 @@ targets:
       - path: LevelSelect/Persistence/Repository.swift
       - path: LevelSelect/Persistence/Syncable.swift
       - path: LevelSelect/Persistence/DeviceIdentity.swift
+      # Repository records every session's parent here; the watch creates
+      # sessions too, so it needs the same ledger.
+      - path: LevelSelect/Persistence/SessionParentLedger.swift
       # Repository persists through the monitor (Foundation+SwiftData only,
       # no UI) — the watch surfaces failures via the same shared state.
       - path: LevelSelect/Persistence/PersistenceMonitor.swift
