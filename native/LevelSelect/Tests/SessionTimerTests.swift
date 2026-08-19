@@ -95,6 +95,33 @@ struct SessionTimerTests {
         #expect(pt.lastPlayedAt == t0.addingTimeInterval(300))
     }
 
+    /// The game page's session list is @Query-driven so REMOTE inserts
+    /// re-render it — device testing found the relationship-derived list
+    /// frozen while a synced session sat in the store for a quarter hour.
+    /// This pins the nested-relationship predicate that query relies on:
+    /// if it stops compiling to a valid fetch, the section goes blank.
+    @Test func sessionsAreFetchableByGameThroughTheRelationshipPredicate() throws {
+        let ctx = newContext()
+        let repo = Repository(ctx)
+        let game = repo.addGame(name: "G", status: .playing)
+        let other = repo.addGame(name: "H", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let s = repo.startSession(on: pt, at: t0)
+        repo.stopSession(s, at: t0.addingTimeInterval(60))
+        _ = repo.startSession(on: repo.ensureDefaultPlaythrough(for: other), at: t0)
+
+        let ptIDs = game.livePlaythroughs.map(\.id)
+        let fetched = try ctx.fetch(FetchDescriptor<Session>(
+            predicate: #Predicate {
+                $0.deletedAt == nil && $0.playthrough.flatMap { ptIDs.contains($0.id) } == true
+            },
+            sortBy: [SortDescriptor(\Session.startDate, order: .reverse)]
+        ))
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.id == s.id)
+    }
+
     /// Round 3, finding 7: a synced session whose pause anchor sits in THIS
     /// device's future must not push a future timestamp into history — the
     /// anchor clamp has to bind in both directions.

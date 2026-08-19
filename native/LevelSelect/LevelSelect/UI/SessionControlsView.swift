@@ -10,6 +10,37 @@ struct SessionControlsView: View {
     @State private var showingLog = false
     @State private var editing: Session?
 
+    /// Store-driven, not relationship-driven. The two-device test caught the
+    /// difference: a session imported from another device is INSERTED and
+    /// points its to-one at the playthrough — the playthrough's own fields
+    /// never change, so Observation never invalidates a view that computed
+    /// its list from `pt.sessions`. With a stopped timer (no ticking
+    /// TimelineView re-rendering every second) the page sat frozen: the
+    /// synced 34s session was in the store for a quarter hour while "Recent"
+    /// and the total still showed the pre-import numbers — indistinguishable,
+    /// to the user, from data loss. A @Query observes the store itself, so
+    /// remote merges re-render this section; the relationship-derived values
+    /// (active playthrough, active session) recompute correctly once
+    /// anything triggers the render.
+    @Query private var liveSessions: [Session]
+
+    init(game: Game) {
+        self.game = game
+        // One relationship hop only — a two-level chain
+        // (`playthrough?.game?.id`) crashes SwiftData's predicate translation
+        // at fetch time (caught by the pinning test, not on a device). The
+        // id list is captured at init; the parent re-renders (and re-inits
+        // this view) whenever the game record changes, which covers
+        // playthroughs appearing or being removed.
+        let ptIDs = game.livePlaythroughs.map(\.id)
+        _liveSessions = Query(
+            filter: #Predicate<Session> {
+                $0.deletedAt == nil && $0.playthrough.flatMap { ptIDs.contains($0.id) } == true
+            },
+            sort: [SortDescriptor(\Session.startDate, order: .reverse)]
+        )
+    }
+
     private var repo: Repository { Repository(context) }
 
     /// The game's active (non-deleted) playthrough, if created yet.
@@ -18,9 +49,8 @@ struct SessionControlsView: View {
     }
 
     private var sessions: [Session] {
-        (playthrough?.sessions ?? [])
-            .filter { $0.deletedAt == nil }
-            .sorted { $0.startDate > $1.startDate }
+        guard let pt = playthrough else { return [] }
+        return liveSessions.filter { $0.playthrough?.id == pt.id }
     }
 
     var body: some View {
@@ -53,7 +83,9 @@ struct SessionControlsView: View {
     private var header: some View {
         VStack(spacing: 4) {
             HStack {
-                let total = playthrough?.totalPlaytime() ?? 0
+                // Summed from the query results, so a synced session bumps
+                // the total the moment it lands — same reason as the list.
+                let total = sessions.reduce(0) { $0 + $1.elapsed() }
                 Text(game.livePlaythroughs.count > 1 ? "This playthrough" : "Time played")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -68,7 +100,8 @@ struct SessionControlsView: View {
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                     Spacer()
-                    let all = game.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime() }
+                    // The query is already scoped to live playthroughs.
+                    let all = liveSessions.reduce(0) { $0 + $1.elapsed() }
                     Text(Format.duration(all))
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.tertiary)
