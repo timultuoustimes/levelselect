@@ -131,7 +131,18 @@ struct RankPicker: View {
 struct AltDescription: View {
     let text: String
     let tint: Color
+    /// Which form this playthrough is running. Nil (or "base") means the
+    /// item's primary form.
+    var selectedVariant: String? = nil
+    /// Present when the choice is real rather than a preview. Without it the
+    /// chip behaves as it always did — reveal only.
+    var onSelect: ((String?) -> Void)? = nil
+
     @State private var showingAlt = false
+
+    static let altVariant = "alt"
+
+    private var usingAlt: Bool { selectedVariant == Self.altVariant }
 
     /// Returns (base, alt) when the description contains an "(Alt: …)" clause.
     static func split(_ text: String) -> (base: String, alt: String)? {
@@ -147,29 +158,51 @@ struct AltDescription: View {
         if let parts = Self.split(text) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(parts.base)
+                    // The FORM YOU'RE RUNNING reads as the description, so a
+                    // glance down the list shows this run's configuration
+                    // rather than the default one with footnotes.
+                    Text(usingAlt ? parts.alt : parts.base)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(usingAlt ? AnyShapeStyle(tint.opacity(0.9))
+                                                  : AnyShapeStyle(.secondary))
                     Button {
-                        withAnimation(.snappy(duration: 0.2)) { showingAlt.toggle() }
+                        withAnimation(.snappy(duration: 0.2)) {
+                            if let onSelect {
+                                // A real choice: switching is one tap and
+                                // instantly visible in the text above, which
+                                // is why it needs no separate preview.
+                                onSelect(usingAlt ? nil : Self.altVariant)
+                            } else {
+                                showingAlt.toggle()
+                            }
+                        }
                     } label: {
-                        Text("Alt")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(
-                                Capsule().fill(showingAlt ? tint.opacity(0.25) : Color.white.opacity(0.07))
-                            )
-                            .overlay(Capsule().strokeBorder(tint.opacity(showingAlt ? 0.6 : 0.25)))
-                            .foregroundStyle(showingAlt ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
+                        HStack(spacing: 3) {
+                            if usingAlt { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                            Text("Alt")
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule().fill(usingAlt || showingAlt ? tint.opacity(0.25) : Color.white.opacity(0.07))
+                        )
+                        .overlay(Capsule().strokeBorder(tint.opacity(usingAlt || showingAlt ? 0.6 : 0.25)))
+                        .foregroundStyle(usingAlt || showingAlt ? AnyShapeStyle(tint) : AnyShapeStyle(.secondary))
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(showingAlt ? "Hide alternative" : "Show alternative")
+                    .accessibilityLabel(onSelect == nil
+                                        ? (showingAlt ? "Hide alternative" : "Show alternative")
+                                        : (usingAlt ? "Using the alternative form; switch back"
+                                                    : "Switch to the alternative form"))
                 }
-                if showingAlt {
-                    Text(parts.alt)
+                // The form you're NOT running, kept visible but quiet, so the
+                // choice can be reconsidered without hunting for it.
+                if showingAlt || usingAlt {
+                    Text(usingAlt ? parts.base : parts.alt)
                         .font(.caption)
-                        .foregroundStyle(tint.opacity(0.85))
+                        .foregroundStyle(usingAlt ? AnyShapeStyle(.tertiary)
+                                                  : AnyShapeStyle(tint.opacity(0.85)))
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }

@@ -567,6 +567,20 @@ struct Repository {
         return true
     }
 
+    /// Choose which form of a two-form item this playthrough is running —
+    /// Hades' Mirror of Night talents, a route choice, a loadout slot.
+    ///
+    /// Per playthrough rather than per game, because that is what it is: a
+    /// configuration of THIS run. Starting a new run and finding the last
+    /// one's choices already made would be wrong.
+    func setTrackerVariant(_ pt: Playthrough, itemID: String, variant: String?) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        record.selectedVariant = variant
+        touch(record)
+        touch(pt)
+        persist()
+    }
+
     func revealTrackerItem(_ pt: Playthrough, itemID: String) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.revealed = true

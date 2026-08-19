@@ -526,7 +526,11 @@ struct TrackerSectionView: View {
                 // of Night does — get the alternative behind a chip instead of
                 // running both variants together in one sentence.
                 if !hidden, let description = item.itemDescription, !description.isEmpty {
-                    AltDescription(text: description, tint: LSTheme.accent)
+                    AltDescription(text: description, tint: LSTheme.accent,
+                                   selectedVariant: state?.selectedVariant) { variant in
+                        let pt = repo.ensureDefaultPlaythrough(for: game)
+                        repo.setTrackerVariant(pt, itemID: item.id, variant: variant)
+                    }
                 }
                 // The user's own note, marked so it reads as theirs rather
                 // than as more of whatever supplied the item.
