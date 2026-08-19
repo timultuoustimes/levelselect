@@ -34,8 +34,12 @@ struct TrackerSectionView: View {
     }
 
     private var categories: [TrackerCategoryDTO] {
-        guard let schema = game.trackerSchema else { return [] }
-        return TrackerSchemaJSON.categories(from: schema.jsonData)
+        // Through the repository, not the blob directly: a note or a rename
+        // may live in a TrackerItemDetail record that the blob doesn't have
+        // yet (or has a staler copy of). One read path means the tracker page,
+        // the widget and the merge engine can't disagree about what an item
+        // is called.
+        repo.trackerCategories(for: game)
     }
 
     /// Built ONCE per render in `body` and threaded down as a parameter.

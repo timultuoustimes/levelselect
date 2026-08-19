@@ -25,3 +25,5 @@ extension GameMap: Syncable {}
 extension Marker: Syncable {}
 extension GameVideo: Syncable {}
 extension GameCollection: Syncable {}
+extension TrackerItemDetail: Syncable {}
+extension EarnedBadge: Syncable {}

@@ -586,16 +586,152 @@ struct Repository {
     @discardableResult
     func editTrackerItem(_ game: Game, categoryID: String, itemID: String,
                          name: String?, location: String?, note: String?) -> Bool {
-        guard let schema = game.trackerSchema,
-              let data = TrackerSchemaJSON.editingItem(
+        guard let schema = game.trackerSchema else { return false }
+        // Read the name it had BEFORE the blob is rewritten — editingItem
+        // renames in place, so capturing afterwards would anchor `sourceName`
+        // to the new name and break the merge engine's ability to match this
+        // item against a future generation.
+        let priorName = schemaItemName(game, itemID: itemID)
+        guard let data = TrackerSchemaJSON.editingItem(
                 categoryID: categoryID, itemID: itemID,
                 name: name, location: location, note: note, in: schema.jsonData)
         else { return false }
         schema.jsonData = data
+        // Written to BOTH the blob and the per-item record, deliberately.
+        //
+        // The record is what makes two devices' notes survive each other — it
+        // syncs on its own, so editing item A here and item B there merges
+        // instead of one whole blob winning. The blob copy stays because a
+        // build that predates Schema V2 can only read notes from there, and
+        // silently blanking a tester's notes to win an architecture argument
+        // is not a trade worth making. Reads prefer the record, so a stale
+        // blob copy is harmless; when every client is V2 this write can stop.
+        writeItemDetail(game, itemID: itemID, name: name, note: note, priorName: priorName)
         touch(schema)
         touch(game)
         persist()
         return true
+    }
+
+    // MARK: Tracker item detail (user-authored content, Schema V2)
+
+    /// The record holding this game's user-authored content for one item.
+    func trackerItemDetail(_ game: Game, itemID: String) -> TrackerItemDetail? {
+        // Newest wins under the same total order as every other duplicate
+        // read, so a sync race resolves identically everywhere.
+        (game.trackerItemDetails ?? [])
+            .filter { $0.itemID == itemID && $0.deletedAt == nil }
+            .max { ($0.updatedAt, $0.id.uuidString) < ($1.updatedAt, $1.id.uuidString) }
+    }
+
+    /// Create-or-update the record for one item. `nil` leaves a field alone;
+    /// an empty string clears it — same contract as `editingItem`.
+    private func writeItemDetail(_ game: Game, itemID: String,
+                                 name: String?, note: String?,
+                                 priorName: String? = nil) {
+        let existing = trackerItemDetail(game, itemID: itemID)
+        let detail: TrackerItemDetail
+        if let existing {
+            detail = existing
+        } else {
+            detail = TrackerItemDetail(itemID: itemID)
+            context.insert(detail)
+            detail.game = game
+        }
+        if let note {
+            let trimmed = note.trimmingCharacters(in: .whitespaces)
+            detail.note = trimmed.isEmpty ? nil : trimmed
+        }
+        if let name {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty, trimmed != detail.chosenName {
+                // Keep the name it arrived with, so the merge engine can still
+                // match this item after a rename.
+                if detail.sourceName == nil {
+                    detail.sourceName = priorName ?? schemaItemName(game, itemID: itemID)
+                }
+                detail.chosenName = trimmed
+            }
+        }
+        touch(detail)
+    }
+
+    private func schemaItemName(_ game: Game, itemID: String) -> String? {
+        guard let schema = game.trackerSchema else { return nil }
+        return TrackerSchemaJSON.categories(from: schema.jsonData)
+            .flatMap(\.items)
+            .first { $0.id == itemID }?
+            .name
+    }
+
+    /// Parsed categories with the user's own content overlaid from records.
+    ///
+    /// One read path for every surface that shows tracker content, so a note
+    /// that lives in a record and a note that still lives only in the blob
+    /// look identical to the UI. The record wins where both exist: it is the
+    /// one that merges per item, so it is the one that can be trusted after
+    /// two devices have both been edited.
+    func trackerCategories(for game: Game) -> [TrackerCategoryDTO] {
+        guard let schema = game.trackerSchema else { return [] }
+        let parsed = TrackerSchemaJSON.categories(from: schema.jsonData)
+        let details = (game.trackerItemDetails ?? []).filter { $0.deletedAt == nil }
+        guard !details.isEmpty else { return parsed }
+
+        var byItem: [String: TrackerItemDetail] = [:]
+        for detail in details {
+            if let held = byItem[detail.itemID],
+               (held.updatedAt, held.id.uuidString) >= (detail.updatedAt, detail.id.uuidString) {
+                continue
+            }
+            byItem[detail.itemID] = detail
+        }
+
+        return parsed.map { category in
+            var next = category
+            next.items = category.items.map { item in
+                guard let detail = byItem[item.id] else { return item }
+                var merged = item
+                if let note = detail.note, !note.isEmpty { merged.note = note }
+                if let chosen = detail.chosenName, !chosen.isEmpty {
+                    merged.name = chosen
+                    merged.sourceName = detail.sourceName ?? item.sourceName
+                }
+                return merged
+            }
+            return next
+        }
+    }
+
+    /// Copy user-authored content out of the schema blob into per-item
+    /// records, once, idempotently.
+    ///
+    /// Runs on game open rather than as a Core Data migration stage: a custom
+    /// stage on a CloudKit-backed store is a far worse place to discover a
+    /// mistake than a repository pass that can be re-run, skipped, and tested.
+    /// Only fills gaps — a record that already exists is left exactly as it
+    /// is, because it may hold a newer edit than the blob it came from.
+    @discardableResult
+    func liftTrackerItemDetails(for game: Game) -> Int {
+        guard let schema = game.trackerSchema else { return 0 }
+        let parsed = TrackerSchemaJSON.categories(from: schema.jsonData)
+        guard !parsed.isEmpty else { return 0 }
+        var lifted = 0
+        for item in parsed.flatMap(\.items) {
+            let hasNote = !(item.note ?? "").isEmpty
+            let hasRename = !(item.sourceName ?? "").isEmpty
+            guard hasNote || hasRename else { continue }
+            if trackerItemDetail(game, itemID: item.id) != nil { continue }
+            let detail = TrackerItemDetail(
+                itemID: item.id,
+                note: hasNote ? item.note : nil,
+                chosenName: hasRename ? item.name : nil,
+                sourceName: hasRename ? item.sourceName : nil)
+            context.insert(detail)
+            detail.game = game
+            lifted += 1
+        }
+        if lifted > 0 { persist() }
+        return lifted
     }
 
     /// Every tracker-state record across ALL live playthroughs of a game.
@@ -844,8 +980,7 @@ struct Repository {
     }
 
     private func trackerItems(of game: Game) -> [TrackerItemDTO] {
-        guard let schema = game.trackerSchema else { return [] }
-        return TrackerSchemaJSON.categories(from: schema.jsonData).flatMap(\.items)
+        trackerCategories(for: game).flatMap(\.items)
     }
 
     private func recompute(_ pt: Playthrough, allItems: [TrackerItemDTO]) {

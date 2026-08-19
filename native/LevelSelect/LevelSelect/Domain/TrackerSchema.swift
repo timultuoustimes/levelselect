@@ -5,7 +5,9 @@ import Foundation
 /// preserved in the stored JSON and simply not surfaced here.
 struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     let id: String
-    let name: String
+    /// `var` so the repository can overlay a user-chosen name from a
+    /// TrackerItemDetail record without rebuilding the whole DTO.
+    var name: String
     let itemDescription: String?
     let location: String?
     let missable: Bool
@@ -29,7 +31,8 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     let name: String
     let categoryDescription: String?
     let kind: String?          // e.g. "sequence"
-    let items: [TrackerItemDTO]
+    /// `var` for the same reason as `TrackerItemDTO.name` — the overlay.
+    var items: [TrackerItemDTO]
     /// As `TrackerItemDTO.sourceName`.
     var sourceName: String? = nil
 }

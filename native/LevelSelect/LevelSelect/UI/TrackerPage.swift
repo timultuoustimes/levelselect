@@ -204,6 +204,7 @@ struct TrackerPageView: View {
         .task {
             let repo = Repository(context)
             repo.reconcile(game)
+            repo.liftTrackerItemDetails(for: game)
             repo.ensureDefaultPlaythrough(for: game)
         }
         // The GAME leads the title — showing only the playthrough name meant

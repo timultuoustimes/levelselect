@@ -71,6 +71,10 @@ struct GameDetailView: View {
             // shows them. Bounded to one game, unlike the old whole-library
             // foreground sweep; a clean game writes nothing.
             repo.reconcile(game)
+            // Move any note or rename still living inside the schema blob into
+            // its own record, once. Idempotent, and a no-op for a game that
+            // has none.
+            repo.liftTrackerItemDetails(for: game)
             // Snapshot the binding-edited fields so leaving the page can tell
             // whether THIS game changed — not whether the context has any
             // pending change, which stamped the wrong game (or missed an
