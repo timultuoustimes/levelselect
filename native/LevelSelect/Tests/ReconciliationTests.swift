@@ -138,6 +138,11 @@ struct ReconciliationTests {
     @Test func doubledRunningSessionsDoNotDoubleCount() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
         // Phone started at t0; iPad's session arrived via sync, started t0+600.
@@ -183,6 +188,11 @@ struct ReconciliationTests {
     @Test func resumedOldSessionBeatsNewerStartedSession() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t15 = Date(timeIntervalSince1970: 1_700_000_000)          // 15:00
         let t16 = t15.addingTimeInterval(3600)                        // 16:00
         let t17 = t15.addingTimeInterval(7200)                        // 17:00
@@ -216,6 +226,11 @@ struct ReconciliationTests {
     @Test func futureDatedSessionNeverGoesNegative() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let now = Date(timeIntervalSince1970: 1_700_000_000)
 
         let skewed = Session(startDate: now.addingTimeInterval(3600), state: .running)
@@ -300,6 +315,11 @@ struct ReconciliationTests {
     /// this resume, and CloudKit later orphaned it while merging both writes.
     @Test func scenarioThreeNeverWritesThePausedRecordBeforeOfflineResume() {
         let (repo, game) = self.game(named: "Mina the Hollower")
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
         let kaiPT = repo.ensureDefaultPlaythrough(for: game)
@@ -501,6 +521,11 @@ struct ReconciliationTests {
     /// game-scoped now, and only the latest-acted session survives.
     @Test func doubledTimersOnDifferentPlaythroughsAreClosed() {
         let (repo, game) = self.game(named: "Castlevania")
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
         let kaiPT = repo.ensureDefaultPlaythrough(for: game)
@@ -598,6 +623,11 @@ struct ReconciliationTests {
     /// data.
     @Test func scenarioThreeResumedTimerBeatsFreshTimerAcrossPlaythroughs() {
         let (repo, game) = self.game(named: "Castlevania")
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t16 = Date(timeIntervalSince1970: 1_700_000_000)
 
         let kaiPT = repo.ensureDefaultPlaythrough(for: game)
@@ -624,6 +654,112 @@ struct ReconciliationTests {
         #expect(piccolo.accumulatedDuration == 900)
     }
 
+    // MARK: Overlapping timers are the USER's decision
+
+    /// The default policy. Two running timers must survive reconciliation
+    /// untouched so the prompt can show them — closing one here first is
+    /// exactly the silent decision this feature replaced.
+    @Test func askPolicyLeavesBothTimersForTheUserToResolve() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        #expect(repo.overlappingTimerPolicy == .ask)   // default, unset
+        let first = repo.startSession(on: pt, at: t0)
+        let synced = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        repo.context.insert(synced)
+        synced.playthrough = pt
+
+        repo.reconcile(game, at: t0.addingTimeInterval(1200))
+
+        #expect(first.state == .running)
+        #expect(synced.state == .running)
+        #expect(repo.runningSessions(in: game).count == 2)
+    }
+
+    /// The old automatic behaviour still exists — as something chosen.
+    @Test func keepNewestPolicyRestoresAutomaticResolution() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        repo.setOverlappingTimerPolicy(.keepNewest)
+
+        let older = repo.startSession(on: pt, at: t0)
+        let newer = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        repo.context.insert(newer)
+        newer.playthrough = pt
+
+        repo.reconcile(game, at: t0.addingTimeInterval(1200))
+
+        #expect(newer.state == .running)
+        #expect(older.state == .stopped)
+        #expect(older.accumulatedDuration == 600)      // credited to the cut, no double count
+    }
+
+    /// Resolving by hand keeps the timer the USER picked, even when it is not
+    /// the one the app would have chosen — the whole point of asking.
+    @Test func keepingTheOlderTimerIsHonoured() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let older = repo.startSession(on: pt, at: t0)
+        let newer = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        repo.context.insert(newer)
+        newer.playthrough = pt
+
+        // The app's recommendation is `newer`; the user keeps `older` anyway.
+        repo.keepOnlyRunningSession(older, in: game, at: t0.addingTimeInterval(1200))
+
+        #expect(older.state == .running)
+        #expect(newer.state == .stopped)
+        #expect(newer.accumulatedDuration >= 0)
+        #expect(newer.endDate.map { $0 <= t0.addingTimeInterval(1200) } == true)
+    }
+
+    /// Keeping both must not quietly stop one later: the policy has to hold
+    /// across subsequent repair passes, not just the moment it was chosen.
+    @Test func keepBothPolicySurvivesLaterReconciles() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        repo.setOverlappingTimerPolicy(.keepBoth)
+
+        let a = repo.startSession(on: pt, at: t0)
+        let b = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        repo.context.insert(b)
+        b.playthrough = pt
+
+        repo.reconcile(game, at: t0.addingTimeInterval(1200))
+        repo.reconcileLibrary(at: t0.addingTimeInterval(1800))
+
+        #expect(a.state == .running)
+        #expect(b.state == .running)
+    }
+
+    /// Whatever the policy, a record CloudKit's field merge left contradictory
+    /// (running with an endDate) is still normalized — that is corruption
+    /// repair, not a decision anyone should be asked to make.
+    @Test func contradictoryRecordsAreRepairedUnderEveryPolicy() {
+        for policy in OverlappingTimerPolicy.allCases {
+            let (repo, game) = self.game(named: "Hades")
+            repo.setOverlappingTimerPolicy(policy)
+            let pt = repo.ensureDefaultPlaythrough(for: game)
+            let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+            let merged = Session(startDate: t0, state: .running)
+            merged.accumulatedDuration = 1800
+            merged.endDate = t0.addingTimeInterval(1800)
+            repo.context.insert(merged)
+            merged.playthrough = pt
+
+            repo.reconcile(game, at: t0.addingTimeInterval(3600))
+
+            #expect(merged.state == .stopped, "policy \(policy.rawValue)")
+            #expect(merged.endDate == t0.addingTimeInterval(1800))
+        }
+    }
+
     /// The bounded foreground sweep must still find doubled clocks — it works
     /// from a direct fetch of unstopped sessions, not a whole-library walk.
     @Test func boundedLibrarySweepClosesDoubledSessions() {
@@ -631,6 +767,11 @@ struct ReconciliationTests {
         let repo = Repository(context)
         let game = repo.addGame(name: "Hades", status: .playing)
         let pt = repo.ensureDefaultPlaythrough(for: game)
+        // These pin the MECHANICS of automatic resolution — crediting, no
+        // double count, which session wins. Who decides is a separate
+        // question (OverlappingTimerPolicy), so the policy is stated
+        // explicitly rather than assumed; the default is now to ask.
+        repo.setOverlappingTimerPolicy(.keepNewest)
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
         _ = repo.startSession(on: pt, at: t0)

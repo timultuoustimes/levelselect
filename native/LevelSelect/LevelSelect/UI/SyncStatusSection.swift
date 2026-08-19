@@ -14,6 +14,9 @@ struct SyncStatusSection: View {
     /// Local echo of the device name so the field edits smoothly; committed to
     /// DeviceIdentity on every change.
     @State private var deviceName = DeviceIdentity.name
+    @Environment(\.modelContext) private var context
+
+    private var repo: Repository { Repository(context) }
 
     var body: some View {
         Section {
@@ -56,6 +59,18 @@ struct SyncStatusSection: View {
             // history and the overlap prompts can say WHICH device rather
             // than "another device". iOS won't tell an app the name you gave
             // this device — it reports the model — so it's set here.
+            // The app used to resolve two-device timer conflicts silently.
+            // This is that decision, handed back — with the old behaviour
+            // still available as one of the choices.
+            Picker("Timers on two devices", selection: Binding(
+                get: { repo.overlappingTimerPolicy },
+                set: { repo.setOverlappingTimerPolicy($0) }
+            )) {
+                ForEach(OverlappingTimerPolicy.allCases) { policy in
+                    Text(policy.label).tag(policy)
+                }
+            }
+
             LabeledContent("This device") {
                 TextField(DeviceIdentity.systemDefaultName, text: $deviceName)
                     .multilineTextAlignment(.trailing)
@@ -73,7 +88,7 @@ struct SyncStatusSection: View {
                 if !orphanedSessions.isEmpty {
                     Text("iCloud detached these records from their games. LevelSelect keeps their playtime instead of guessing where it belongs; this build cannot restore it to a game automatically.")
                 }
-                Text("New play sessions record which device they were started on, so your history and any timer conflicts can name it.")
+                Text("New play sessions record which device they were started on, so your history and any timer conflicts can name it. \(OverlappingTimerPolicy(raw: nil).detail)")
                 if let guidance {
                     Text(guidance)
                 }

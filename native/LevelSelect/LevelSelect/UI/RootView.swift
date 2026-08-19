@@ -27,6 +27,7 @@ struct RootView: View {
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
+            .overlappingTimerGuard()
             .id(themeVersion)
 
             if showingSplash {

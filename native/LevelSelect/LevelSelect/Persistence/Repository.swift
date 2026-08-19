@@ -1393,6 +1393,68 @@ struct Repository {
         return merged
     }
 
+    // MARK: Overlapping timers
+
+    /// The user's answer to "two devices are timing the same game". Read from
+    /// the synced settings record, so choosing on one device answers for all
+    /// of them.
+    var overlappingTimerPolicy: OverlappingTimerPolicy {
+        let settings = (try? context.fetch(FetchDescriptor<ThemeSettings>(
+            sortBy: [SortDescriptor(\.createdAt)])))?.first
+        return OverlappingTimerPolicy(raw: settings?.overlappingTimerPolicyRaw)
+    }
+
+    func setOverlappingTimerPolicy(_ policy: OverlappingTimerPolicy) {
+        let all = (try? context.fetch(FetchDescriptor<ThemeSettings>(
+            sortBy: [SortDescriptor(\.createdAt)]))) ?? []
+        let settings: ThemeSettings
+        if let first = all.first {
+            settings = first
+        } else {
+            settings = ThemeSettings()
+            context.insert(settings)
+        }
+        settings.overlappingTimerPolicyRaw = policy.rawValue
+        settings.updatedAt = .now
+        persist()
+    }
+
+    /// Every running session for a game, across all of its playthroughs —
+    /// more than one means two devices are timing at once.
+    func runningSessions(in game: Game) -> [Session] {
+        game.livePlaythroughs
+            .flatMap { liveUnstoppedSessions(of: $0) }
+            .filter { $0.state == .running }
+            .sorted { ($0.lastUserAction, $0.id.uuidString) > ($1.lastUserAction, $1.id.uuidString) }
+    }
+
+    /// Resolve an overlap the way the USER asked: keep `keeper`, close every
+    /// other running session on the game. Same crediting as the automatic
+    /// path — a loser keeps the time it genuinely earned, cut at the moment
+    /// the survivor's current segment began, so the overlap isn't counted
+    /// twice.
+    @discardableResult
+    func keepOnlyRunningSession(_ keeper: Session, in game: Game,
+                                at date: Date = .now) -> Int {
+        let others = runningSessions(in: game).filter { $0 !== keeper }
+        guard !others.isEmpty else { return 0 }
+        let anchor = min(date, keeper.resumedAt ?? keeper.startDate)
+        for loser in others {
+            let cut = min(date, max(loser.resumedAt ?? loser.startDate, anchor))
+            loser.accumulatedDuration = loser.elapsed(asOf: cut)
+            loser.endDate = cut
+            loser.pausedAt = nil
+            loser.resumedAt = nil
+            loser.state = .stopped
+            touch(loser)
+            if let pt = loser.playthrough { touch(pt, at: date) }
+            NotificationManager.cancelStaleReminder(sessionID: loser.id)
+            LiveActivityManager.sessionResolved(loser.id)
+        }
+        persist()
+        return others.count
+    }
+
     /// Repair a game's sessions in two passes: normalize running records
     /// CloudKit's field-level merge left contradictory, then make sure the
     /// GAME has at most one RUNNING session. Paused sessions are intentionally
@@ -1460,7 +1522,13 @@ struct Repository {
         let running = game.livePlaythroughs
             .flatMap { liveUnstoppedSessions(of: $0) }
             .filter { $0.state == .running }
-        guard running.count > 1 else { return repaired }
+        // Whose decision this is, is now the user's. Under `.ask` the overlap
+        // is LEFT INTACT for the prompt to surface — closing it here first is
+        // exactly the silent decision this replaced. `.keepNewest` is the old
+        // automatic behaviour, still available, now chosen. `.keepBoth` leaves
+        // them alone permanently.
+        guard running.count > 1, overlappingTimerPolicy == .keepNewest
+        else { return repaired }
         let winner = running.max {
             ($0.lastUserAction, $0.id.uuidString) < ($1.lastUserAction, $1.id.uuidString)
         }!
