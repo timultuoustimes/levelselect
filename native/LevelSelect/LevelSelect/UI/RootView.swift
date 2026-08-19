@@ -356,10 +356,24 @@ struct HomeTab: View {
                         BouncyTap {
                             path.append(cp)
                         } label: {
-                            ContinueHeroCard(game: cp) { play(cp) }
+                            ContinueHeroCard(game: cp) {
+                                play(cp)
+                            } onPauseResume: {
+                                togglePause(cp)
+                            } onStop: {
+                                stop(cp)
+                            }
                         }
                     }
                     .padding(.horizontal)
+                }
+
+                // Any OTHER live timer, with its own controls. A running
+                // session used to be unreachable from Home unless it happened
+                // to be the Continue Playing game, which is how a forgotten
+                // timer turns into hours of imaginary playtime.
+                RunningTimersStrip(excluding: continueGame) { game in
+                    path.append(game)
                 }
 
                 if platformGroups.count > 1 {
@@ -449,6 +463,18 @@ struct HomeTab: View {
     /// Pinned first, then most recent activity.
     private func sortKey(_ g: Game) -> (Bool, Date) {
         (g.pinned, g.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? g.addedAt)
+    }
+
+    private func togglePause(_ game: Game) {
+        guard let active = game.activePlaythrough?.activeSession else { return }
+        let repo = Repository(context)
+        if active.state == .running { repo.pauseSession(active) }
+        else { repo.resumeSession(active) }
+    }
+
+    private func stop(_ game: Game) {
+        guard let active = game.activePlaythrough?.activeSession else { return }
+        Repository(context).stopSession(active)
     }
 
     private func play(_ game: Game) {

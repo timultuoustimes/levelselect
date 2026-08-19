@@ -102,10 +102,16 @@ struct StatusCarousel: View {
 struct ContinueHeroCard: View {
     let game: Game
     var onPlay: () -> Void
+    /// Present when the card is allowed to control a live session. Home
+    /// passes these; other callers get the plain Play button.
+    var onPauseResume: (() -> Void)? = nil
+    var onStop: (() -> Void)? = nil
 
     private var playthrough: Playthrough? {
         game.activePlaythrough
     }
+
+    private var active: Session? { playthrough?.activeSession }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -120,11 +126,13 @@ struct ContinueHeroCard: View {
                     .font(.headline)
                     .lineLimit(2)
 
-                if let active = playthrough?.activeSession {
-                    Label(active.state == .running ? "Session in progress" : "Session paused",
-                          systemImage: active.state == .running ? "record.circle" : "pause.circle")
-                        .font(.caption)
-                        .foregroundStyle(active.state == .running ? .green : .orange)
+                if let active {
+                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                        Label(Format.clock(active.elapsed(asOf: ctx.date)),
+                              systemImage: active.state == .running ? "record.circle" : "pause.circle")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(active.state == .running ? .green : .orange)
+                    }
                 } else if let last = playthrough?.lastPlayedAt {
                     Text("Last played \(last, format: .relative(presentation: .named))")
                         .font(.caption)
@@ -145,17 +153,50 @@ struct ContinueHeroCard: View {
 
             Spacer(minLength: 0)
 
-            Button(action: onPlay) {
-                VStack(spacing: 4) {
-                    Image(systemName: "play.fill")
-                    Text("Play").font(.caption.weight(.semibold))
+            // A running timer is the thing you most want to act on, and it
+            // used to be unreachable from here: the button still said Play,
+            // and stopping meant navigating into the game. When a session is
+            // live the primary action becomes pause/resume, with stop beside
+            // it — small, because ending a session by mis-tap is worse than
+            // an extra tap.
+            if let active, let onPauseResume, let onStop {
+                HStack(spacing: 8) {
+                    Button(action: onStop) {
+                        Image(systemName: "stop.fill")
+                            .frame(width: 34, height: 56)
+                    }
+                    .buttonStyle(.plain)
+                    .background(.red.opacity(0.14), in: .rect(cornerRadius: 10))
+                    .foregroundStyle(.red.opacity(0.9))
+                    .accessibilityLabel("Stop session")
+
+                    Button(action: onPauseResume) {
+                        VStack(spacing: 4) {
+                            Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
+                            Text(active.state == .running ? "Pause" : "Resume")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .frame(width: 56, height: 56)
+                    }
+                    .buttonStyle(.plain)
+                    .background(LSTheme.accent.opacity(0.16), in: .rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(LSTheme.accent.opacity(0.6), lineWidth: 1))
+                    .foregroundStyle(LSTheme.accent)
                 }
-                .frame(width: 56, height: 56)
+            } else {
+                Button(action: onPlay) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "play.fill")
+                        Text("Play").font(.caption.weight(.semibold))
+                    }
+                    .frame(width: 56, height: 56)
+                }
+                .buttonStyle(.plain)
+                .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
+                .foregroundStyle(.green)
             }
-            .buttonStyle(.plain)
-            .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
-            .foregroundStyle(.green)
         }
         .padding(14)
         .background(LSTheme.heroGradient, in: .rect(cornerRadius: 16))
