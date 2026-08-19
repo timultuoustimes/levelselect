@@ -227,3 +227,65 @@ struct SessionAttachmentTests {
         #expect(pt.totalPlaytime(asOf: orphan.endDate!) == 3600)
     }
 }
+
+/// The ledger that makes a detached session repairable: the device that
+/// created it wrote down which playthrough it belonged to, at the moment it
+/// knew for certain. Repairing from that is acting on a record, not a guess —
+/// which is the distinction that makes it allowed at all, given this project
+/// refuses to re-parent anything by inference.
+@MainActor
+struct SessionParentLedgerTests {
+
+    private func newRepo() -> (Repository, Game, Playthrough) {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+        return (repo, game, repo.ensureDefaultPlaythrough(for: game))
+    }
+
+    @Test func aSessionDetachedAfterCreationIsRepairedFromTheLedger() throws {
+        let (repo, _, pt) = newRepo()
+        let session = repo.startSession(on: pt)
+        try repo.context.save()
+
+        // Exactly what the devices produced: attached at save, detached later.
+        session.playthrough = nil
+        try repo.context.save()
+        #expect(repo.orphanedSessions().count == 1)
+
+        #expect(repo.repairDetachedSessionsFromLedger() == 1)
+        #expect(session.playthrough?.id == pt.id)
+        #expect(repo.orphanedSessions().isEmpty)
+    }
+
+    /// A session this device never created has no recorded parent, so it stays
+    /// detached for the user to place by hand. Repair never guesses.
+    @Test func aSessionWithNoLedgerEntryIsLeftAlone() throws {
+        let (repo, _, _) = newRepo()
+        let stranger = Session(startDate: Date(timeIntervalSince1970: 1_700_000_000),
+                               state: .stopped)
+        stranger.accumulatedDuration = 600
+        stranger.endDate = stranger.startDate.addingTimeInterval(600)
+        repo.context.insert(stranger)
+        try repo.context.save()
+
+        #expect(repo.repairDetachedSessionsFromLedger() == 0)
+        #expect(repo.orphanedSessions().count == 1)
+    }
+
+    /// If the playthrough itself is gone, the recorded answer is no longer
+    /// true and must not be applied.
+    @Test func repairSkipsAPlaythroughThatNoLongerExists() throws {
+        let (repo, game, pt) = newRepo()
+        let session = repo.startSession(on: pt)
+        repo.stopSession(session)
+        try repo.context.save()
+
+        session.playthrough = nil
+        repo.deletePlaythrough(pt, from: game)
+        try repo.context.save()
+
+        #expect(repo.repairDetachedSessionsFromLedger() == 0)
+        #expect(repo.orphanedSessions().count == 1)
+    }
+}

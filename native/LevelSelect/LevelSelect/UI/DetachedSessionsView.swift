@@ -26,6 +26,8 @@ struct DetachedSessionsView: View {
     private var games: [Game]
 
     @State private var assigning: Session?
+    @State private var gameSearch = ""
+    @State private var confirmingDelete: Session?
 
     private var repo: Repository { Repository(context) }
 
@@ -44,9 +46,16 @@ struct DetachedSessionsView: View {
                                 row(session)
                             }
                             .buttonStyle(.plain)
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    confirmingDelete = session
+                                } label: {
+                                    Label("Remove", systemImage: "trash")
+                                }
+                            }
                         }
                     } footer: {
-                        Text("Tap a session to put it back under a game. Its time then counts toward that game's total again.")
+                        Text("Tap a session to put it back under a game — its time then counts toward that game's total again. Swipe to remove one that isn't worth keeping.")
                     }
                 }
             }
@@ -60,6 +69,18 @@ struct DetachedSessionsView: View {
         // only modal here, and it is the innermost one.
         .sheet(item: $assigning) { session in
             gamePicker(for: session)
+        }
+        .confirmationDialog("Remove this session?",
+                            isPresented: Binding(get: { confirmingDelete != nil },
+                                                 set: { if !$0 { confirmingDelete = nil } }),
+                            titleVisibility: .visible) {
+            Button("Remove", role: .destructive) {
+                if let session = confirmingDelete { repo.deleteSession(session) }
+                confirmingDelete = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingDelete = nil }
+        } message: {
+            Text("Its recorded time is dropped from the library. The record is tombstoned rather than erased, so it can still be recovered from a backup or export.")
         }
     }
 
@@ -100,24 +121,32 @@ struct DetachedSessionsView: View {
         .contentShape(.rect)
     }
 
+    private var searchedGames: [Game] {
+        let query = gameSearch.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return games }
+        return games.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
     private func gamePicker(for session: Session) -> some View {
         NavigationStack {
-            List(games) { game in
+            List(searchedGames) { game in
                 Button {
                     repo.reattachSession(session, to: game)
                     assigning = nil
+                    gameSearch = ""
                 } label: {
                     gameRow(game)
                 }
                 .buttonStyle(.plain)
             }
             .navigationTitle("Which game?")
+            .searchable(text: $gameSearch, prompt: "Search games")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { assigning = nil }
+                    Button("Cancel") { assigning = nil; gameSearch = "" }
                 }
             }
         }

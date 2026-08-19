@@ -312,6 +312,10 @@ struct Repository {
     /// detachment happens later than the save and the hunt moves to the
     /// import side.
     private func attachIfDetached(_ session: Session, to pt: Playthrough) {
+        // Written down at creation, while the answer is still known for
+        // certain — this is what makes a later repair a record rather than a
+        // guess.
+        SessionParentLedger.record(sessionID: session.id, playthroughID: pt.id)
         guard session.playthrough == nil else { return }
         session.playthrough = pt
         persist()
@@ -1337,6 +1341,38 @@ struct Repository {
         }
     }
 
+    /// Reattach detached sessions this device created, using the note it took
+    /// at the time.
+    ///
+    /// Runs wherever repair already runs, because that is when the damage
+    /// appears. Only ever acts on a recorded fact: a session whose parent
+    /// this device wrote down at creation, whose playthrough still exists and
+    /// is live. Anything else is left for the user to place by hand.
+    @discardableResult
+    func repairDetachedSessionsFromLedger() -> Int {
+        let orphans = orphanedSessions()
+        guard !orphans.isEmpty else { return 0 }
+        var repaired = 0
+        for session in orphans {
+            guard let ptID = SessionParentLedger.playthroughID(for: session.id) else { continue }
+            let descriptor = FetchDescriptor<Playthrough>(
+                predicate: #Predicate { $0.id == ptID && $0.deletedAt == nil })
+            guard let pt = try? context.fetch(descriptor).first else { continue }
+            session.playthrough = pt
+            touch(session)
+            repaired += 1
+            Self.log.notice("Reattached detached session \(session.id.uuidString, privacy: .public) from ledger.")
+        }
+        if repaired > 0 {
+            let defaults = UserDefaults.standard
+            defaults.set(defaults.integer(forKey: "detachedSessionRepairs") + repaired,
+                         forKey: "detachedSessionRepairs")
+            defaults.set(Date.now, forKey: "detachedSessionRepairAt")
+            persist()
+        }
+        return repaired
+    }
+
     /// Sessions whose CloudKit relationship was lost. Their playtime is real
     /// user data, but there is no supported, trustworthy way to infer which
     /// playthrough owned it. Preserve and surface them; never adopt, delete, or
@@ -1358,6 +1394,7 @@ struct Repository {
     /// running but endDate set — invisible to the endDate==nil fetch) isn't
     /// found here; page-open reconcile normalizes those.
     func reconcileLibrary(at date: Date = .now) {
+        repairDetachedSessionsFromLedger()
         var seen = Set<UUID>()
         for session in unstoppedSessions() {
             guard let game = session.playthrough?.game,
