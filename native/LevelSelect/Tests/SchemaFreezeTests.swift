@@ -70,8 +70,39 @@ struct SchemaFreezeTests {
         #expect(LevelSelectSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
         #expect(LevelSelectSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
         #expect(LevelSelectMigrationPlan.schemas.count == 2,
-                "Adding V3? Keep V1 and V2 in the plan and add a stage.")
-        #expect(LevelSelectMigrationPlan.stages.count == 1)
+                "Adding V3? Record it here too — this list is the written history of the shape.")
+    }
+
+    /// An existing store must still open after the schema grows.
+    ///
+    /// This is the shape of the bug that took King Kai down on 2026-08-19: a
+    /// staged `SchemaMigrationPlan` could not identify the model already on
+    /// disk and refused to open the store, which is fatal at launch. The
+    /// in-memory suite cannot reproduce it — every test store is born at the
+    /// current schema — so this asserts the property that made the crash
+    /// possible: the container must open a FILE-backed store with no
+    /// migration plan involved, twice, the second time against a store the
+    /// first run created.
+    @Test func aFileBackedStoreReopensWithTheCurrentSchema() throws {
+        let dir = URL.temporaryDirectory.appending(path: "ls-migration-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appending(path: "reopen.store")
+        let schema = Schema(versionedSchema: LevelSelectSchemaV2.self)
+
+        let first = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
+        let context = ModelContext(first)
+        context.insert(Game(name: "Reopen me"))
+        try context.save()
+
+        // Reopening is where a migration plan would be consulted.
+        let second = try ModelContainer(
+            for: schema,
+            configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
+        let games = try ModelContext(second).fetch(FetchDescriptor<Game>())
+        #expect(games.map(\.name) == ["Reopen me"])
     }
 
     /// Nothing V1 shipped may ever disappear or be renamed — the two things

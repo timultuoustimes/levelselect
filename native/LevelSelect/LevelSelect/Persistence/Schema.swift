@@ -55,18 +55,31 @@ enum LevelSelectSchemaV2: VersionedSchema {
     }
 }
 
-enum LevelSelectMigrationPlan: SchemaMigrationPlan {
+/// Deliberately NO `SchemaMigrationPlan`.
+///
+/// A staged plan crashed every existing library on first launch:
+/// `NSCocoaErrorDomain 134504 — "Cannot use staged migration with an unknown
+/// model version."` Staged migration identifies the on-disk store by matching
+/// it to one of the declared versions. `LevelSelectSchemaV1` resolves to the
+/// LIVE model classes, which have since grown into V2, so nothing declared
+/// matched what was actually on disk and the store refused to open — taking
+/// the app down at launch, because a library that cannot open is fatal.
+///
+/// Making staged migration work would mean snapshotting all 14 V1 models as
+/// frozen copies (~1,000 lines whose only job is never to change). It buys
+/// nothing here: every change this store can ever make is additive, since
+/// CloudKit supports nothing else, and Core Data infers additive mappings on
+/// its own. `NSMigratePersistentStoresAutomaticallyOption` and
+/// `NSInferMappingModelAutomaticallyOption` are already set on the store, so
+/// opening with the current schema migrates an older one in place.
+///
+/// The versioned schemas above stay as the written record of the shape at each
+/// version, and `SchemaFreezeTests` asserts against them. If a change ever
+/// genuinely needs transforming data, do it as an idempotent pass in app code
+/// — not a custom stage on a CloudKit-backed store.
+enum LevelSelectMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [LevelSelectSchemaV1.self, LevelSelectSchemaV2.self]
-    }
-    /// Lightweight: every V2 change is an added optional or an added model, so
-    /// Core Data infers the mapping and no data is transformed. Anything that
-    /// ever needs transforming belongs in app code (an idempotent repository
-    /// pass), not here — a custom stage on a CloudKit-backed store is a much
-    /// worse place to discover a mistake.
-    static var stages: [MigrationStage] {
-        [.lightweight(fromVersion: LevelSelectSchemaV1.self,
-                      toVersion: LevelSelectSchemaV2.self)]
     }
 }
 
@@ -110,7 +123,7 @@ enum LevelSelectStore {
 
         if memory {
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            return try! ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [config])
+            return try! ModelContainer(for: schema, configurations: [config])
         }
 
         if demo {
@@ -126,9 +139,7 @@ enum LevelSelectStore {
             // nothing behind to clean up.
             let config = ModelConfiguration(schema: schema, url: demoStoreURL,
                                             cloudKitDatabase: .none)
-            if let container = try? ModelContainer(for: schema,
-                                                   migrationPlan: LevelSelectMigrationPlan.self,
-                                                   configurations: [config]) {
+            if let container = try? ModelContainer(for: schema, configurations: [config]) {
                 return container
             }
             // Falling back to the real library would be the one genuinely
@@ -136,19 +147,17 @@ enum LevelSelectStore {
             // what this feature exists to prevent. In-memory instead: the demo
             // is disposable by nature.
             let memoryOnly = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-            return try! ModelContainer(for: schema,
-                                       migrationPlan: LevelSelectMigrationPlan.self,
-                                       configurations: [memoryOnly])
+            return try! ModelContainer(for: schema, configurations: [memoryOnly])
         }
 
         // App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
         do {
             let config = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
-            return try ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [config])
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
             // Resilience: if CloudKit is unavailable, keep working from a local store.
             let local = ModelConfiguration(schema: schema)
-            if let container = try? ModelContainer(for: schema, migrationPlan: LevelSelectMigrationPlan.self, configurations: [local]) {
+            if let container = try? ModelContainer(for: schema, configurations: [local]) {
                 usingLocalFallback = true
                 return container
             }
