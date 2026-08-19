@@ -1516,6 +1516,13 @@ struct Repository {
     @discardableResult
     func keepOnlyRunningSession(_ keeper: Session, in game: Game,
                                 at date: Date = .now) -> Int {
+        // The keeper must still be running. If the conflict was resolved
+        // elsewhere first — the other device answered, and this device is
+        // acting on a sheet describing a conflict that has already gone —
+        // then honouring the choice would stop whichever timer survived
+        // instead, leaving the game with none. Do nothing; the surviving
+        // state is already an answer.
+        guard keeper.state == .running else { return 0 }
         let others = runningSessions(in: game).filter { $0 !== keeper }
         guard !others.isEmpty else { return 0 }
         let anchor = min(date, keeper.resumedAt ?? keeper.startDate)

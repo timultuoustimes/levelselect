@@ -125,6 +125,16 @@ struct OverlappingTimerGuard: ViewModifier {
     }
 
     private func showLiveIfNeeded() {
+        // Answered on the other device? Take this copy of the question down.
+        //
+        // Both devices raise this prompt for the same conflict, so resolving
+        // on one leaves a stale sheet on the other describing a conflict that
+        // no longer exists — and acting on it would stop the very timer the
+        // user just chose to keep.
+        if case .live(let showing) = prompt,
+           repo.runningSessions(in: showing.game).count < 2 {
+            prompt = nil
+        }
         guard prompt == nil, let target = overlap else { return }
         prompt = .live(target)
     }

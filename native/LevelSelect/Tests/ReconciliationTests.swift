@@ -839,6 +839,34 @@ struct ReconciliationTests {
         #expect(repo.runningSessions(in: game).count == 1)
     }
 
+    /// Both devices raise the prompt for the same conflict, so one of them is
+    /// always acting a moment later than the other. Answering a conflict that
+    /// has already been resolved must do NOTHING — honouring it would stop
+    /// whichever timer survived and leave the game with none.
+    @Test func resolvingAnAlreadyResolvedOverlapIsANoOp() {
+        let (repo, game) = self.game(named: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+
+        let mine = repo.startSession(on: pt, at: t0)
+        let theirs = Session(startDate: t0.addingTimeInterval(600), state: .running)
+        theirs.originDevice = "Piccolo"
+        repo.context.insert(theirs)
+        theirs.playthrough = pt
+
+        // The other device answered first: keep `theirs`, stop `mine`.
+        repo.keepOnlyRunningSession(theirs, in: game, at: t0.addingTimeInterval(900))
+        #expect(mine.state == .stopped)
+        #expect(theirs.state == .running)
+
+        // This device's stale sheet now says "keep mine". It must not fire.
+        repo.keepOnlyRunningSession(mine, in: game, at: t0.addingTimeInterval(1000))
+
+        #expect(theirs.state == .running, "the surviving timer must not be stopped")
+        #expect(mine.state == .stopped)
+        #expect(repo.runningSessions(in: game).count == 1)
+    }
+
     /// The bounded foreground sweep must still find doubled clocks — it works
     /// from a direct fetch of unstopped sessions, not a whole-library walk.
     @Test func boundedLibrarySweepClosesDoubledSessions() {
