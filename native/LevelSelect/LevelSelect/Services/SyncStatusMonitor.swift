@@ -74,6 +74,11 @@ final class SyncStatusMonitor {
     private(set) var lastSetupAt: Date?
     private(set) var lastImportedAt: Date?
     private(set) var lastExportedAt: Date?
+    /// Monotonic signal consumed by RootView. A successful import can finish
+    /// while the app remains foregrounded, so scenePhase alone is not a repair
+    /// trigger. The value carries no data; changing it restarts Root's
+    /// debounced repair task.
+    private(set) var successfulImportSequence = 0
     private(set) var setupFailure: DirectionFailure?
     private(set) var importFailure: DirectionFailure?
     private(set) var exportFailure: DirectionFailure?
@@ -218,6 +223,9 @@ final class SyncStatusMonitor {
             lastSyncedAt = completedAt
             setLastSuccess(completedAt, for: direction)
             setFailure(nil, for: direction)
+            if direction == .importData {
+                successfulImportSequence &+= 1
+            }
         } else if let errorText {
             // Transient CK errors (network drops, throttles) are normal;
             // record for the detail row, log for diagnostics.

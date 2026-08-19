@@ -696,6 +696,33 @@ struct ReconciliationTests {
 /// small exports complete successfully around it.
 @MainActor
 struct SyncStatusMonitorTests {
+    /// A successful import that lands while foregrounded must emit a new repair
+    /// signal on its own. No scene-phase transition participates in this test;
+    /// RootView observes this sequence and debounces the actual bounded sweep.
+    @Test func successfulImportCompletionEmitsForegroundRepairSignal() {
+        let monitor = SyncStatusMonitor()
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // Start notification, failed import, and successful export are all
+        // non-triggers. Only a completed successful import advances the signal.
+        monitor.handleEvent(
+            direction: .importData, finished: false, succeeded: false,
+            endDate: nil, errorText: nil, errorDomain: nil, errorCode: nil)
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: false,
+            endDate: now, errorText: "Import failed", errorDomain: "test", errorCode: 1)
+        monitor.handleEvent(
+            direction: .exportData, finished: true, succeeded: true,
+            endDate: now, errorText: nil, errorDomain: nil, errorCode: nil)
+        #expect(monitor.successfulImportSequence == 0)
+
+        monitor.handleEvent(
+            direction: .importData, finished: true, succeeded: true,
+            endDate: now.addingTimeInterval(1), errorText: nil,
+            errorDomain: nil, errorCode: nil)
+        #expect(monitor.successfulImportSequence == 1)
+    }
+
     @Test func successfulExportCannotClearAFailedImport() {
         let monitor = SyncStatusMonitor()
         let now = Date(timeIntervalSince1970: 1_700_000_000)

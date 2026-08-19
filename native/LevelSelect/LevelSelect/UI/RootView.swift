@@ -8,6 +8,7 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @State private var persistence = PersistenceMonitor.shared
     @State private var generation = TrackerGenerationStore.shared
+    @State private var syncStatus = SyncStatusMonitor.shared
     // Palette version bump forces dependent views to re-read theme colors.
     @State private var themeVersion = 0
     @State private var showingSplash = true
@@ -101,24 +102,41 @@ struct RootView: View {
             // on the main actor. Nothing is ever deleted by inference —
             // emptiness can be another device's record mid-sync.
             if phase == .active {
-                let repo = Repository(context)
-                repo.reconcileLibrary()
-                // AFTER the sweep, so a timer the repair just closed — or one
-                // stopped on another device while we were backgrounded —
-                // takes its Live Activity down instead of running on the
-                // Lock Screen with dead buttons.
-                LiveActivityManager.sync(unstopped: repo.unstoppedSessions())
+                repairSyncedData()
             }
-            // Keep the widget snapshot current whenever the app surfaces or
-            // backs out — catches edits made anywhere in the app.
-            if phase == .active || phase == .background {
+            // Active repair refreshes the widget after reconciliation. Keep
+            // the separate background write as the last snapshot of edits
+            // made anywhere in the app.
+            if phase == .background {
                 WidgetBridge.refresh()
             }
+        }
+        // CloudKit imports routinely finish seconds AFTER foregrounding. The
+        // old scenePhase-only hook had already run by then, so two synced
+        // timers could remain live until the user switched apps or opened the
+        // affected game. Every successful import emits this sequence. task(id:)
+        // cancels and restarts the sleep when imports arrive in a burst, then
+        // repairs once after the batch settles.
+        .task(id: syncStatus.successfulImportSequence) {
+            guard syncStatus.successfulImportSequence > 0 else { return }
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled, scenePhase == .active else { return }
+            repairSyncedData()
         }
         .task {
             try? await Task.sleep(for: .seconds(1.0))
             withAnimation(.easeOut(duration: 0.5)) { showingSplash = false }
         }
+    }
+
+    /// Keep every import/foreground repair side effect in one ordered unit.
+    /// Live Activities read the post-reconcile set, and the widget snapshot is
+    /// written last from that same repaired context.
+    private func repairSyncedData() {
+        let repo = Repository(context)
+        repo.reconcileLibrary()
+        LiveActivityManager.sync(unstopped: repo.unstoppedSessions())
+        WidgetBridge.refresh()
     }
 
     /// Route a `levelselect://` deep link (widgets + App Intents) through the
