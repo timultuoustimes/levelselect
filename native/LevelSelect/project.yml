@@ -39,6 +39,13 @@ targets:
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: $(LS_APS_ENV)
         com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
+        # A six-hour runaway timer is inflating real data while it rings, so
+        # the stale-session reminder is sent Time Sensitive (see
+        # NotificationManager) and needs the matching entitlement to break
+        # through silent mode/Focus. MUST live here: the .entitlements file
+        # is GENERATED from this block and gitignored, so hand-edits to it
+        # survive only until the next `xcodegen generate`.
+        com.apple.developer.usernotifications.time-sensitive: true
         # Which CloudKit environment a DEVELOPMENT-signed build talks to.
         # Base is Development (see LS_CK_ENV below); the Release config forces
         # Production, so archives/TestFlight/App Store always ship Production.
