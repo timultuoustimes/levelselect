@@ -63,6 +63,14 @@ enum TrackerMergeMode: Hashable, Sendable {
     /// Append only the incoming items the user ticked. Ids are incoming item
     /// ids, as reported by `TrackerDiff.added`.
     case add(itemIDs: Set<String>)
+    /// Replace the contents of specific categories and leave every other
+    /// category exactly as it is. Ids are CURRENT category ids.
+    ///
+    /// "This category is wrong, do it again" is a much smaller ask than
+    /// regenerating a whole tracker, and it is what per-category generation
+    /// needs: a stepped run fills one category at a time, and each step must
+    /// not disturb the ones already accepted.
+    case replaceCategories(ids: Set<String>)
 }
 
 // MARK: - Engine
@@ -276,7 +284,50 @@ enum TrackerMerge {
         case .add(let ids):
             guard !ids.isEmpty else { return current }
             return additive(current: current, incoming: incoming, accepting: ids)
+        case .replaceCategories(let ids):
+            guard !ids.isEmpty else { return current }
+            return replacingCategories(ids: ids, current: current, incoming: incoming)
         }
+    }
+
+    /// Swap the items of named categories for the incoming ones, then carry
+    /// the user's own edits back over exactly as a full Replace does.
+    ///
+    /// Built as "swap, then reuse the existing carry" rather than a second
+    /// carry implementation: the untouched categories are identical on both
+    /// sides, so carrying across them is a no-op, and the note/rename rules
+    /// that took three review rounds to get right stay in one place.
+    private static func replacingCategories(ids: Set<String>, current: Data,
+                                            incoming: Data) -> Data {
+        guard var root = (try? JSONSerialization.jsonObject(with: current)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let incRoot = (try? JSONSerialization.jsonObject(with: incoming)) as? [String: Any]
+        else { return current }
+        let incCats = (incRoot["categories"] as? [[String: Any]]) ?? []
+        // A locked category, and Personal Goals, are the user's own content;
+        // regenerating "everything in this category" must still not mean them.
+        let locked = TrackerSchemaJSON.lockedCategoryIDs(in: current)
+
+        for (index, category) in cats.enumerated() {
+            guard let id = category["id"] as? String, ids.contains(id),
+                  !locked.contains(id), id != TrackerSchemaJSON.personalGoalsID
+            else { continue }
+            let name = (category["name"] as? String) ?? ""
+            let source = category["sourceName"] as? String
+            let match = incCats.first { ($0["id"] as? String) == id }
+                ?? incCats.first { matchKey(($0["name"] as? String) ?? "") == matchKey(name) }
+                ?? incCats.first { inc in
+                    guard let source else { return false }
+                    return matchKey((inc["name"] as? String) ?? "") == matchKey(source)
+                }
+            guard let match, let items = match["items"] as? [[String: Any]] else { continue }
+            var next = category
+            next["items"] = items
+            cats[index] = next
+        }
+        root["categories"] = cats
+        let swapped = (try? JSONSerialization.data(withJSONObject: root)) ?? current
+        return carryingUserEdits(from: current, into: swapped)
     }
 
     /// Re-apply the user's own edits on top of a replaced schema.

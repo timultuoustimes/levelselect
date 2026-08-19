@@ -904,25 +904,53 @@ struct Repository {
         let merged = TrackerMerge.merged(current: existing.jsonData,
                                          incoming: jsonData, mode: mode)
 
-        var outcome = TrackerMergeOutcome(
-            added: diff.added.count, removed: diff.removed.count, renamed: diff.renamed.count)
+        var outcome: TrackerMergeOutcome
+        if case .replaceCategories(let ids) = mode {
+            // Summarise only what this step changed — a stepped run does one
+            // category at a time, and "removed 240 items" about categories it
+            // never looked at would be alarming and false.
+            let scoped = diff.categories.filter { ids.contains($0.id) }
+            outcome = TrackerMergeOutcome(
+                added: scoped.flatMap(\.added).count,
+                removed: scoped.flatMap(\.removed).count,
+                renamed: scoped.flatMap(\.renamed).count)
+        } else {
+            outcome = TrackerMergeOutcome(
+                added: diff.added.count, removed: diff.removed.count, renamed: diff.renamed.count)
+        }
 
-        // Only Replace adopts the incoming ids, so only Replace needs the
+        // Only the replacing modes adopt incoming ids, so only they need the
         // migration — the additive modes leave existing items exactly where
         // they are, which is why they can't lose progress at all.
-        if mode == .replace {
+        //
+        // A CATEGORY-scoped replace migrates and reports only within the
+        // categories it actually touched. Counting a rename in an untouched
+        // category would claim work that never happened, and listing its
+        // items as lost would offer to rescue things that are still sitting
+        // there.
+        let replacingScope: Set<String>?
+        switch mode {
+        case .replace: replacingScope = nil                       // everything
+        case .replaceCategories(let ids): replacingScope = ids
+        case .addAll, .add: replacingScope = Set()                 // nothing
+        }
+        if replacingScope == nil || !(replacingScope?.isEmpty ?? true) {
+            let scoped = diff.categories.filter { category in
+                guard let replacingScope else { return true }
+                return replacingScope.contains(category.id)
+            }
             // Grouped, not a dictionary keyed by item id: the same item has a
             // SEPARATE state record in each playthrough, so keeping only the
             // first would migrate one and strand the rest.
             let byID = Dictionary(grouping: states, by: \.itemID)
-            for match in diff.renamed where match.current.id != match.incoming.id {
+            for match in scoped.flatMap(\.renamed) where match.current.id != match.incoming.id {
                 for record in byID[match.current.id] ?? [] {
                     record.itemID = match.incoming.id
                     touch(record)
                     outcome.migrated += 1
                 }
             }
-            outcome.lostProgress = diff.removed.filter { progressIDs.contains($0.id) }
+            outcome.lostProgress = scoped.flatMap(\.removed).filter { progressIDs.contains($0.id) }
         }
 
         existing.jsonData = merged
