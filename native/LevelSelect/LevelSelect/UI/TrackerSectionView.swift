@@ -91,14 +91,29 @@ struct TrackerSectionView: View {
             header(cats, states: states)
 
             if let started = generation.startDate(for: game.id) {
-                GeneratingTrackerView(startedAt: started) {
+                GeneratingTrackerView(startedAt: started,
+                                      kind: generation.kind(for: game.id)) {
                     generation.cancel(for: game.id)
                 }
                 .padding(.vertical, 2)
             } else if cats.isEmpty {
-                Text("No tracker yet — generate one with AI or add a personal goal.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("No tracker yet. Generate the whole thing, or plan it out first and fill it in a piece at a time.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    // Offered here because "what should I even be tracking?" is
+                    // the question people actually have on an empty tracker,
+                    // and it is answerable in a few seconds rather than the two
+                    // minutes a full generation costs.
+                    Button {
+                        generation.suggestCategories(for: game, context: context)
+                    } label: {
+                        Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .tint(LSTheme.accent)
+                }
             }
 
             // Existing content stays visible while regenerating — hiding it
@@ -175,6 +190,14 @@ struct TrackerSectionView: View {
                     Label("Plan a Category", systemImage: "square.dashed")
                         .font(.subheadline)
                 }
+
+                Button {
+                    generation.suggestCategories(for: game, context: context)
+                } label: {
+                    Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
+                        .font(.subheadline)
+                }
+                .disabled(isGenerating)
 
                 if builtinAvailable && !usingBuiltin {
                     Button {
@@ -448,6 +471,7 @@ struct TrackerSectionView: View {
             } else {
                 Button {
                     generation.generateCategory(category.id, named: category.name,
+                                                expectedCount: category.plannedCount,
                                                 for: game, context: context)
                 } label: {
                     Label("Generate", systemImage: "sparkles")

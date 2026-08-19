@@ -21,18 +21,49 @@ import SwiftUI
 /// lose the work. Better to say so plainly than to let it fail silently.
 struct GeneratingTrackerView: View {
     let startedAt: Date
+    var kind: GenerationKind = .full
     var onCancel: (() -> Void)?
 
     /// Roughly tracks what the backend does: search for a guide, read it,
     /// then structure the result. Stretched to match real timings (some games
     /// take 2+ minutes) so it doesn't sit on a stale caption for a full minute.
-    private static let stages: [(after: TimeInterval, label: String)] = [
+    private static let fullStages: [(after: TimeInterval, label: String)] = [
         (0,   "Looking for a good guide…"),
         (20,  "Reading the guide…"),
         (45,  "Finding bosses and collectibles…"),
         (80,  "Sorting them into categories…"),
         (110, "Big game — this one takes a while…"),
     ]
+
+    /// A plan searches nothing and generates nothing, so it must not claim to.
+    /// It is one short question with a short answer, and it usually beats the
+    /// first caption change of a full run.
+    private static let planStages: [(after: TimeInterval, label: String)] = [
+        (0,  "Working out the shape of this game…"),
+        (12, "Naming the categories…"),
+        (30, "Nearly there…"),
+    ]
+
+    private var stages: [(after: TimeInterval, label: String)] {
+        switch kind {
+        case .full:     Self.fullStages
+        case .plan:     Self.planStages
+        case .category(_, let name): [
+            (0,  "Looking for a guide to \(name)…"),
+            (20, "Reading up on \(name)…"),
+            (50, "Listing them out…"),
+            (90, "Long list — still going…"),
+        ]
+        }
+    }
+
+    private var subtitle: String {
+        switch kind {
+        case .full:     "Usually 1–2 minutes. Big games can take longer."
+        case .plan:     "Just the categories — this part is quick."
+        case .category: "One category only, so this is quicker than a full tracker."
+        }
+    }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.5)) { context in
@@ -46,7 +77,7 @@ struct GeneratingTrackerView: View {
                             .font(.subheadline.weight(.medium))
                             .contentTransition(.opacity)
                             .animation(.easeInOut(duration: 0.35), value: stage(at: elapsed))
-                        Text("Usually 1–2 minutes. Big games can take longer.")
+                        Text(subtitle)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -126,7 +157,7 @@ struct GeneratingTrackerView: View {
     }
 
     private func stage(at elapsed: TimeInterval) -> String {
-        Self.stages.last { elapsed >= $0.after }?.label ?? Self.stages[0].label
+        stages.last { elapsed >= $0.after }?.label ?? stages[0].label
     }
 
     private func elapsedText(_ elapsed: TimeInterval) -> String {
@@ -138,7 +169,9 @@ struct GeneratingTrackerView: View {
 #Preview {
     VStack(spacing: 16) {
         GeneratingTrackerView(startedAt: .now) {}
-        GeneratingTrackerView(startedAt: .now.addingTimeInterval(-38)) {}
+        GeneratingTrackerView(startedAt: .now.addingTimeInterval(-14), kind: .plan) {}
+        GeneratingTrackerView(startedAt: .now.addingTimeInterval(-38),
+                              kind: .category(id: "shrines", name: "Shrines")) {}
         GeneratingTrackerView(startedAt: .now.addingTimeInterval(-92)) {}
     }
     .padding()

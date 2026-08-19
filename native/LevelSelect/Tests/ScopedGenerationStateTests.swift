@@ -70,6 +70,50 @@ struct ScopedGenerationStateTests {
         #expect(store.isGenerating(game.id, category: shrines.id) == false)
     }
 
+    /// Planning is not filling. It must claim no category at all, or every
+    /// placeholder on screen would spin while the shape was being worked out.
+    @Test func planningClaimsNoCategoryAndSaysSoInTheKind() {
+        let (repo, game, context) = newGame()
+        repo.addPlannedCategory(to: game, named: "Shrines")
+        let shrines = repo.trackerCategories(for: game).first!
+
+        let store = TrackerGenerationStore.shared
+        store.suggestCategories(for: game, context: context)
+        defer { store.cancel(for: game.id) }
+
+        #expect(store.isGenerating(game.id))
+        #expect(store.kind(for: game.id) == .plan)
+        #expect(store.isGenerating(game.id, category: shrines.id) == false)
+    }
+
+    /// The waiting card reads the kind to decide what it is allowed to claim
+    /// is happening — "reading the guide" is false during a plan.
+    @Test func theKindNamesTheCategoryBeingFilled() {
+        let (repo, game, context) = newGame()
+        repo.addPlannedCategory(to: game, named: "Memories", plannedCount: 18)
+        let memories = repo.trackerCategories(for: game).first!
+
+        let store = TrackerGenerationStore.shared
+        store.generateCategory(memories.id, named: memories.name,
+                               expectedCount: memories.plannedCount,
+                               for: game, context: context)
+        defer { store.cancel(for: game.id) }
+
+        #expect(store.kind(for: game.id) == .category(id: memories.id, name: "Memories"))
+    }
+
+    /// A finished or cancelled run leaves no kind behind, so the next card
+    /// can't inherit the last one's captions.
+    @Test func theKindIsClearedWhenTheRunEnds() {
+        let (_, game, context) = newGame()
+        let store = TrackerGenerationStore.shared
+        store.suggestCategories(for: game, context: context)
+        store.cancel(for: game.id)
+
+        #expect(store.kind(for: game.id) == .full)   // the default, not .plan
+        #expect(store.isGenerating(game.id) == false)
+    }
+
     /// Two games generating at once must not read each other's category —
     /// the state is keyed per game and has to stay that way.
     @Test func oneGamesCategoryIsNotAnothersSpinner() {

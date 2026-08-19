@@ -80,6 +80,17 @@ enum TrackerGenerationAction: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
+/// What an in-flight run is doing — which decides both what spins and what the
+/// waiting card is allowed to claim is happening.
+enum GenerationKind: Equatable, Sendable {
+    /// The whole tracker.
+    case full
+    /// The shape only: category names and rough sizes, no items.
+    case plan
+    /// One named category.
+    case category(id: String, name: String)
+}
+
 /// A finished generation waiting on the user's decision.
 struct PendingTrackerMerge: Sendable {
     let incoming: Data
@@ -110,12 +121,14 @@ final class TrackerGenerationStore {
     /// Last failure per game, kept until dismissed or a retry begins.
     private(set) var errors: [UUID: String] = [:]
 
-    /// Which category the in-flight generation is filling, when it is scoped
-    /// to one. Without this the only "is it running" signal was per-GAME, so
-    /// pressing Generate on one planned category spun the spinner on every
-    /// planned category at once — three rows all claiming to be working when
-    /// exactly one request existed.
-    private(set) var generatingCategory: [UUID: String] = [:]
+    /// What the in-flight run is actually doing, per game.
+    ///
+    /// Started as "which category is being filled" — without it, the only
+    /// "is it running" signal was per-GAME, so pressing Generate on one planned
+    /// category spun the spinner on every planned category at once. It also
+    /// decides what the waiting card says: a plan is not "reading the guide",
+    /// and neither is filling one category of a game.
+    private(set) var kinds: [UUID: GenerationKind] = [:]
 
     /// The most recent finished/failed generation, for the app-wide banner.
     private(set) var notice: GenerationNotice?
@@ -133,8 +146,10 @@ final class TrackerGenerationStore {
     func isGenerating(_ gameID: UUID) -> Bool { startedAt[gameID] != nil }
     /// True only for the one category actually being filled right now.
     func isGenerating(_ gameID: UUID, category: String) -> Bool {
-        generatingCategory[gameID] == category
+        if case .category(let id, _) = kinds[gameID] { return id == category }
+        return false
     }
+    func kind(for gameID: UUID) -> GenerationKind { kinds[gameID] ?? .full }
     func startDate(for gameID: UUID) -> Date? { startedAt[gameID] }
     func error(for gameID: UUID) -> String? { errors[gameID] }
     func pendingMerge(for gameID: UUID) -> PendingTrackerMerge? { pending[gameID] }
@@ -156,33 +171,105 @@ final class TrackerGenerationStore {
             for: game, jsonData: merge.incoming, mode: mode)
     }
 
-    /// Kick off generation for a game. No-op if one is already running for it,
-    /// so double-tapping can't start two.
-    /// Generate for one category only — the stepped unit.
+    /// Ask what this game's tracker should be divided into, and write the
+    /// answer down as empty planned categories.
     ///
-    /// Works today against the existing whole-tracker generator: the payload
-    /// comes back complete and only the named category is taken from it. That
-    /// is wasteful of tokens and will be replaced by a per-category mode on
-    /// the edge function, but it means filling a planned category is real now
-    /// rather than after a backend deploy, and the app side can be shaped
-    /// against something that actually runs.
-    func generateCategory(_ categoryID: String, named categoryName: String,
-                          for game: Game, context: ModelContext) {
-        generate(for: game, context: context, action: .addNew,
-                 scopedTo: (id: categoryID, name: categoryName))
-    }
-
-    func generate(for game: Game, context: ModelContext,
-                  action: TrackerGenerationAction = .fallbackDefault,
-                  scopedTo category: (id: String, name: String)? = nil) {
+    /// Nothing is generated here — that's the point. The reply is a handful of
+    /// headings and rough sizes, so it arrives in seconds and can be corrected
+    /// (renamed, deleted, added to) before a minute of generation is spent on
+    /// any of it. Categories that clash with ones already there are refused by
+    /// the repository and reported as skipped rather than silently dropped.
+    func suggestCategories(for game: Game, context: ModelContext) {
         let id = game.id
         guard tasks[id] == nil else { return }
+        begin(id, kind: .plan)
 
-        errors[id] = nil
-        outcomes[id] = nil
-        pending[id] = nil
-        startedAt[id] = .now
-        generatingCategory[id] = category?.id
+        let name = game.name
+        let igdbID = game.igdbID
+
+        tasks[id] = Task { [weak self] in
+            do {
+                let proposed = try await AITrackerService.plan(gameName: name, igdbID: igdbID)
+                let repo = Repository(context)
+                var added = 0
+                for category in proposed
+                where repo.addPlannedCategory(to: game, named: category.name,
+                                              plannedCount: category.plannedCount) {
+                    added += 1
+                }
+                let skipped = proposed.count - added
+                self?.notice = GenerationNotice(
+                    gameID: id, gameName: name, success: added > 0,
+                    text: added > 0
+                        ? "Planned \(added) categor\(added == 1 ? "y" : "ies") for \(name)\(skipped > 0 ? " (\(skipped) already there)" : ""). Fill them in one at a time."
+                        : "\(name) already has every category the planner suggested.")
+            } catch is CancellationError {
+            } catch {
+                self?.errors[id] = error.localizedDescription
+                self?.notice = GenerationNotice(
+                    gameID: id, gameName: name, success: false,
+                    text: "Couldn't plan a tracker for \(name).")
+            }
+            self?.finish(id)
+        }
+    }
+
+    /// Generate one category — the stepped unit.
+    ///
+    /// This used to call the whole-tracker generator and throw away everything
+    /// except the named category: correct, absurdly wasteful, and on a big game
+    /// it simply timed out before returning. It now asks the backend for that
+    /// category alone.
+    func generateCategory(_ categoryID: String, named categoryName: String,
+                          expectedCount: Int? = nil,
+                          for game: Game, context: ModelContext) {
+        let id = game.id
+        guard tasks[id] == nil else { return }
+        begin(id, kind: .category(id: categoryID, name: categoryName))
+
+        let name = game.name
+        let igdbID = game.igdbID
+
+        tasks[id] = Task { [weak self] in
+            do {
+                let jsonData = try await AITrackerService.generateCategory(
+                    gameName: name, categoryName: categoryName,
+                    expectedCount: expectedCount, igdbID: igdbID)
+                let repo = Repository(context)
+                repo.ensureDefaultPlaythrough(for: game)
+                self?.outcomes[id] = repo.applyGeneratedSchema(
+                    for: game, jsonData: jsonData,
+                    mode: .replaceCategories(ids: [categoryID]))
+                // The scoped merge matches the incoming payload by id and then
+                // by name; an answer with a different heading matches neither
+                // and leaves the category exactly as it was. Saying "ready"
+                // then would be a plain lie about a still-empty category, so
+                // check what actually landed before claiming anything.
+                let filled = repo.trackerCategories(for: game)
+                    .first { $0.id == categoryID }?.items.isEmpty == false
+                self?.notice = GenerationNotice(
+                    gameID: id, gameName: name, success: filled,
+                    text: filled
+                        ? "\(categoryName) is ready in \(name)."
+                        : "Nothing came back for \(categoryName) in \(name). Try again, or rename it to match what the game calls it.")
+            } catch is CancellationError {
+            } catch {
+                self?.errors[id] = error.localizedDescription
+                self?.notice = GenerationNotice(
+                    gameID: id, gameName: name, success: false,
+                    text: "Couldn't fill \(categoryName) in \(name).")
+            }
+            self?.finish(id)
+        }
+    }
+
+    /// Kick off generation for a game. No-op if one is already running for it,
+    /// so double-tapping can't start two.
+    func generate(for game: Game, context: ModelContext,
+                  action: TrackerGenerationAction = .fallbackDefault) {
+        let id = game.id
+        guard tasks[id] == nil else { return }
+        begin(id, kind: .full)
 
         let name = game.name
         let igdbID = game.igdbID
@@ -195,26 +282,7 @@ final class TrackerGenerationStore {
                 let repo = Repository(context)
                 repo.ensureDefaultPlaythrough(for: game)
 
-                if let category {
-                    // One category, replaced in place; everything else in the
-                    // tracker is left exactly as it is.
-                    self?.outcomes[id] = repo.applyGeneratedSchema(
-                        for: game, jsonData: jsonData,
-                        mode: .replaceCategories(ids: [category.id]))
-                    // The scoped merge matches the incoming payload by id and
-                    // then by name; a generator that answered with different
-                    // headings entirely matches neither and leaves the
-                    // category exactly as it was. Saying "ready" then would be
-                    // a plain lie about an unchanged, still-empty category, so
-                    // check what actually landed before claiming anything.
-                    let filled = repo.trackerCategories(for: game)
-                        .first { $0.id == category.id }?.items.isEmpty == false
-                    self?.notice = GenerationNotice(
-                        gameID: id, gameName: name, success: filled,
-                        text: filled
-                            ? "\(category.name) is ready in \(name)."
-                            : "Nothing came back for \(category.name) in \(name). Try again, or rename it to match what the game calls it.")
-                } else if action == .review, game.trackerSchema != nil {
+                if action == .review, game.trackerSchema != nil {
                     // Hold the result and let the user decide. Nothing is
                     // written until they do.
                     self?.pending[id] = PendingTrackerMerge(
@@ -251,9 +319,18 @@ final class TrackerGenerationStore {
         finish(gameID)
     }
 
+    /// Clear the last run's leftovers and mark this one as started.
+    private func begin(_ id: UUID, kind: GenerationKind) {
+        errors[id] = nil
+        outcomes[id] = nil
+        pending[id] = nil
+        startedAt[id] = .now
+        kinds[id] = kind
+    }
+
     private func finish(_ id: UUID) {
         tasks[id] = nil
         startedAt[id] = nil
-        generatingCategory[id] = nil
+        kinds[id] = nil
     }
 }
