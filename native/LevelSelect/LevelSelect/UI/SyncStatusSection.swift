@@ -14,7 +14,6 @@ struct SyncStatusSection: View {
     /// Local echo of the device name so the field edits smoothly; committed to
     /// DeviceIdentity on every change.
     @State private var deviceName = DeviceIdentity.name
-    @State private var showingDetached = false
     @Environment(\.modelContext) private var context
 
     private var repo: Repository { Repository(context) }
@@ -42,7 +41,9 @@ struct SyncStatusSection: View {
             .accessibilityElement(children: .combine)
 
             if !orphanedSessions.isEmpty {
-                Button { showingDetached = true } label: {
+                NavigationLink {
+                    DetachedSessionsView()
+                } label: {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(orphanedSessions.count) detached play \(orphanedSessions.count == 1 ? "session" : "sessions")")
@@ -57,7 +58,6 @@ struct SyncStatusSection: View {
                 }
                 .accessibilityElement(children: .combine)
                 }
-                .buttonStyle(.plain)
             }
             // Sessions carry the name of the device that started them, so
             // history and the overlap prompts can say WHICH device rather
@@ -97,9 +97,6 @@ struct SyncStatusSection: View {
                     Text(guidance)
                 }
             }
-        }
-        .sheet(isPresented: $showingDetached) {
-            DetachedSessionsView()
         }
         .task {
             // Re-check the account whenever Settings opens — the cheapest

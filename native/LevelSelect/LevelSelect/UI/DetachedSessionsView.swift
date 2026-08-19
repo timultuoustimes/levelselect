@@ -11,7 +11,6 @@ import SwiftData
 /// Surfacing them was step one; this is the part that gets them back.
 struct DetachedSessionsView: View {
     @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
 
     // Sorted below rather than in the query: the compound predicate plus a
     // sort descriptor pushes the type-checker past its limit here.
@@ -31,8 +30,7 @@ struct DetachedSessionsView: View {
     private var repo: Repository { Repository(context) }
 
     var body: some View {
-        NavigationStack {
-            List {
+        List {
                 if detached.isEmpty {
                     ContentUnavailableView("Nothing detached",
                                            systemImage: "checkmark.circle",
@@ -52,18 +50,16 @@ struct DetachedSessionsView: View {
                     }
                 }
             }
-            .navigationTitle("Detached sessions")
-            #if !os(macOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .sheet(item: $assigning) { session in
-                gamePicker(for: session)
-            }
+        .navigationTitle("Detached sessions")
+        #if !os(macOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        // Pushed, not presented: this view lives inside the Settings sheet,
+        // and a sheet inside a sheet was being torn down the instant a
+        // root-level prompt tried to present. The game picker below is the
+        // only modal here, and it is the innermost one.
+        .sheet(item: $assigning) { session in
+            gamePicker(for: session)
         }
     }
 
