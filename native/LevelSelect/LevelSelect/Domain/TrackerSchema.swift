@@ -47,6 +47,13 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     var items: [TrackerItemDTO]
     /// As `TrackerItemDTO.sourceName`.
     var sourceName: String? = nil
+    /// Planned but not filled in yet — the skeleton a stepped generation
+    /// produces before any content exists. Renders as a placeholder with its
+    /// own Generate button instead of an empty heading.
+    var pending: Bool = false
+    /// Roughly how many items are expected, when the plan said so. Sets
+    /// expectations before anything is generated ("Bosses, about 18").
+    var plannedCount: Int? = nil
 }
 
 // MARK: - Run template (roguelikes / Hades)
@@ -164,7 +171,9 @@ enum TrackerSchemaJSON {
                 categoryDescription: raw["description"] as? String,
                 kind: raw["type"] as? String,
                 items: items,
-                sourceName: raw["sourceName"] as? String
+                sourceName: raw["sourceName"] as? String,
+                pending: (raw["pending"] as? Bool) ?? false,
+                plannedCount: (raw["plannedCount"] as? NSNumber)?.intValue
             )
         }
     }
@@ -195,6 +204,45 @@ enum TrackerSchemaJSON {
         } else {
             cats.append(["id": personalGoalsID, "name": "Personal Goals", "items": [newItem]])
         }
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Add an empty, planned category — the unit a stepped generation works
+    /// in. Marked `pending` so the tracker shows it as a placeholder to fill
+    /// rather than an empty heading, and carries the expected size when known.
+    ///
+    /// Creates the schema if the game has none, so planning a tracker is a
+    /// legitimate way to START one rather than something only available after
+    /// a generation.
+    static func addingCategory(named name: String, id: String? = nil,
+                               plannedCount: Int? = nil, to data: Data) -> Data? {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        var root = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        if root["schemaVersion"] == nil { root["schemaVersion"] = 1 }
+        var cats = (root["categories"] as? [[String: Any]]) ?? []
+        let categoryID = id ?? "cat-\(UUID().uuidString.prefix(8))"
+        guard !cats.contains(where: { ($0["id"] as? String) == categoryID }) else { return nil }
+        var category: [String: Any] = [
+            "id": categoryID, "name": trimmed, "items": [], "pending": true,
+        ]
+        if let plannedCount, plannedCount > 0 { category["plannedCount"] = plannedCount }
+        cats.append(category)
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Clear the planned flag once a category has real content.
+    static func markingFilled(categoryID: String, in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let idx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+        var category = cats[idx]
+        category.removeValue(forKey: "pending")
+        category.removeValue(forKey: "plannedCount")
+        cats[idx] = category
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)
     }

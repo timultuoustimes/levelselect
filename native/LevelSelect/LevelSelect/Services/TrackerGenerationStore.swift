@@ -147,8 +147,23 @@ final class TrackerGenerationStore {
 
     /// Kick off generation for a game. No-op if one is already running for it,
     /// so double-tapping can't start two.
+    /// Generate for one category only — the stepped unit.
+    ///
+    /// Works today against the existing whole-tracker generator: the payload
+    /// comes back complete and only the named category is taken from it. That
+    /// is wasteful of tokens and will be replaced by a per-category mode on
+    /// the edge function, but it means filling a planned category is real now
+    /// rather than after a backend deploy, and the app side can be shaped
+    /// against something that actually runs.
+    func generateCategory(_ categoryID: String, named categoryName: String,
+                          for game: Game, context: ModelContext) {
+        generate(for: game, context: context, action: .addNew,
+                 scopedTo: (id: categoryID, name: categoryName))
+    }
+
     func generate(for game: Game, context: ModelContext,
-                  action: TrackerGenerationAction = .fallbackDefault) {
+                  action: TrackerGenerationAction = .fallbackDefault,
+                  scopedTo category: (id: String, name: String)? = nil) {
         let id = game.id
         guard tasks[id] == nil else { return }
 
@@ -168,7 +183,26 @@ final class TrackerGenerationStore {
                 let repo = Repository(context)
                 repo.ensureDefaultPlaythrough(for: game)
 
-                if action == .review, game.trackerSchema != nil {
+                if let category {
+                    // One category, replaced in place; everything else in the
+                    // tracker is left exactly as it is.
+                    self?.outcomes[id] = repo.applyGeneratedSchema(
+                        for: game, jsonData: jsonData,
+                        mode: .replaceCategories(ids: [category.id]))
+                    // The scoped merge matches the incoming payload by id and
+                    // then by name; a generator that answered with different
+                    // headings entirely matches neither and leaves the
+                    // category exactly as it was. Saying "ready" then would be
+                    // a plain lie about an unchanged, still-empty category, so
+                    // check what actually landed before claiming anything.
+                    let filled = repo.trackerCategories(for: game)
+                        .first { $0.id == category.id }?.items.isEmpty == false
+                    self?.notice = GenerationNotice(
+                        gameID: id, gameName: name, success: filled,
+                        text: filled
+                            ? "\(category.name) is ready in \(name)."
+                            : "Nothing came back for \(category.name) in \(name). Try again, or rename it to match what the game calls it.")
+                } else if action == .review, game.trackerSchema != nil {
                     // Hold the result and let the user decide. Nothing is
                     // written until they do.
                     self?.pending[id] = PendingTrackerMerge(

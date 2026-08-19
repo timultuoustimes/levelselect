@@ -614,6 +614,70 @@ struct Repository {
         }
     }
 
+    /// Add a planned, empty category — the unit stepped generation works in.
+    ///
+    /// Useful on its own before any of that exists: sketching "Bosses,
+    /// Charms, Grubs" by hand and filling them one at a time is a better way
+    /// to build a tracker than asking for everything and pruning, and it is
+    /// the same structure a generated plan will write.
+    @discardableResult
+    func addPlannedCategory(to game: Game, named name: String,
+                            plannedCount: Int? = nil) -> Bool {
+        let schema: TrackerSchemaRecord
+        if let existing = game.trackerSchema {
+            schema = existing
+        } else {
+            schema = TrackerSchemaRecord(
+                source: .builtIn, engine: .objective,
+                jsonData: TrackerSchemaJSON.emptySchema())
+            context.insert(schema)
+            schema.game = game
+        }
+        // Two categories called "Bosses" is never what anyone meant, and the
+        // pair is genuinely hard to untangle afterwards — both look identical
+        // in the list and only one of them is the one you generated into.
+        // Refused at the point of typing instead. (Name is identity for a
+        // *typed* category only; the merge engine still folds by id alone,
+        // because a generator reusing a name is not a claim of sameness.)
+        let key = TrackerMerge.matchKey(name)
+        guard !TrackerSchemaJSON.categories(from: schema.jsonData)
+            .contains(where: { TrackerMerge.matchKey($0.name) == key })
+        else { return false }
+        guard let updated = TrackerSchemaJSON.addingCategory(
+            named: name, plannedCount: plannedCount, to: schema.jsonData)
+        else { return false }
+        schema.jsonData = updated
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
+    /// Drop a planned category that was never filled.
+    ///
+    /// Only ever a PENDING one: an empty planned heading is scaffolding, but
+    /// a category with content is the user's, and removing that belongs to
+    /// the merge review rather than a stray tap.
+    @discardableResult
+    func removePlannedCategory(from game: Game, categoryID: String) -> Bool {
+        guard let schema = game.trackerSchema,
+              let root = (try? JSONSerialization.jsonObject(with: schema.jsonData)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let idx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID }),
+              (cats[idx]["pending"] as? Bool) == true,
+              ((cats[idx]["items"] as? [[String: Any]]) ?? []).isEmpty
+        else { return false }
+        cats.remove(at: idx)
+        var next = root
+        next["categories"] = cats
+        guard let data = try? JSONSerialization.data(withJSONObject: next) else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
     /// Apply an AI-generated schema to a game (create or replace), keeping
     /// the user's Personal Goals across regeneration.
     func setGeneratedSchema(for game: Game, jsonData: Data) {
@@ -953,7 +1017,19 @@ struct Repository {
             outcome.lostProgress = scoped.flatMap(\.removed).filter { progressIDs.contains($0.id) }
         }
 
-        existing.jsonData = merged
+        // A category that now has content is no longer a plan.
+        var filledSchema = merged
+        if case .replaceCategories(let ids) = mode {
+            for id in ids {
+                let hasContent = TrackerSchemaJSON.categories(from: filledSchema)
+                    .first { $0.id == id }?.items.isEmpty == false
+                if hasContent,
+                   let cleared = TrackerSchemaJSON.markingFilled(categoryID: id, in: filledSchema) {
+                    filledSchema = cleared
+                }
+            }
+        }
+        existing.jsonData = filledSchema
         existing.source = .aiGenerated
         existing.generatedAt = .now
         existing.generatedBy = "claude"

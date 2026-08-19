@@ -22,6 +22,9 @@ struct TrackerSectionView: View {
     @State private var editing: EditTarget?
     /// A tick that would close other things off, held until confirmed.
     @State private var confirmingLockout: LockoutPrompt?
+    @State private var planningCategory = false
+    @State private var plannedName = ""
+    @State private var plannedCount = ""
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
 
@@ -156,6 +159,15 @@ struct TrackerSectionView: View {
                         .font(.subheadline)
                 }
 
+                Button {
+                    plannedName = ""
+                    plannedCount = ""
+                    planningCategory = true
+                } label: {
+                    Label("Plan a Category", systemImage: "square.dashed")
+                        .font(.subheadline)
+                }
+
                 if builtinAvailable && !usingBuiltin {
                     Button {
                         confirmingUseBuiltin = true
@@ -189,6 +201,20 @@ struct TrackerSectionView: View {
         }
         .sheet(item: $editing) { target in
             TrackerItemEditView(game: game, target: target)
+        }
+        .alert("Plan a Category", isPresented: $planningCategory) {
+            TextField("Name (Bosses, Charms, Endings…)", text: $plannedName)
+            TextField("About how many? (optional)", text: $plannedCount)
+                #if !os(macOS)
+                .keyboardType(.numberPad)
+                #endif
+            Button("Add") {
+                repo.addPlannedCategory(to: game, named: plannedName,
+                                        plannedCount: Int(plannedCount))
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Sketch the shape of the tracker first, then fill each part in one at a time — each one generates on its own without disturbing the rest.")
         }
         .confirmationDialog(
             "Tick “\(confirmingLockout?.item.name ?? "")”?",
@@ -372,6 +398,56 @@ struct TrackerSectionView: View {
         }
     }
 
+    /// A category that has been planned but not filled in.
+    ///
+    /// The skeleton a stepped generation leaves behind, and equally what
+    /// sketching a tracker by hand produces. Shown as a real row with its own
+    /// Generate button rather than an empty heading, because an empty heading
+    /// reads as a bug and gives you nothing to act on.
+    @ViewBuilder
+    private func plannedCategoryRow(_ category: TrackerCategoryDTO) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.dashed")
+                .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category.name)
+                    .font(.subheadline.weight(.semibold))
+                if let count = category.plannedCount {
+                    Text("Planned · about \(count) items")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Planned — nothing generated yet")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+            if isGenerating {
+                ProgressView().controlSize(.small)
+            } else {
+                Button {
+                    generation.generateCategory(category.id, named: category.name,
+                                                for: game, context: context)
+                } label: {
+                    Label("Generate", systemImage: "sparkles")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .tint(LSTheme.accent)
+            }
+        }
+        .padding(10)
+        .background(.white.opacity(0.04), in: .rect(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(.white.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+        .contextMenu {
+            Button(role: .destructive) {
+                repo.removePlannedCategory(from: game, categoryID: category.id)
+            } label: { Label("Remove", systemImage: "trash") }
+        }
+    }
+
     // MARK: Category
 
     @ViewBuilder
@@ -380,7 +456,9 @@ struct TrackerSectionView: View {
         let visibleItems = hideCompleted
             ? category.items.filter { states[$0.id]?.completed != true }
             : category.items
-        if !visibleItems.isEmpty {
+        if category.pending && category.items.isEmpty {
+            plannedCategoryRow(category)
+        } else if !visibleItems.isEmpty {
             let done = category.items.filter { states[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
                 Group {
