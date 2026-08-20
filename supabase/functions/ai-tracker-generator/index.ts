@@ -469,8 +469,9 @@ serve(async (req: Request) => {
   // of ten per hour would make stepped generation unusable on exactly the big
   // games it exists for — Breath of the Wild is a plan plus five fills.
   //
-  // Peeked from a CLONE so guard still reads the body itself; the kill switch
-  // stays LS_KILL_AI for every mode, so one flag takes the whole thing offline.
+  // The kill switch stays LS_KILL_AI for every mode, so one flag takes the
+  // whole thing offline.
+  //
   // Peeked from a CLONE so guard still reads the body itself — but only when
   // the body is small enough that parsing it before the app-key check and the
   // size cap costs nothing. Parsing arbitrary JSON ahead of those checks let an
