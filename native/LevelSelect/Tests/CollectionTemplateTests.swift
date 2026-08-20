@@ -95,6 +95,22 @@ struct CollectionTemplateTests {
         #expect(collection.gameIDs == [a.id.uuidString, b.id.uuidString])
     }
 
+    /// The opt-out path. Passing no seed has to produce a genuinely empty
+    /// list, not a quietly re-seeded one — "Let's Be Real" answered for you
+    /// isn't a confession, and the toggle would be a lie.
+    @Test func aTemplateCanBeStartedEmptyEvenWhenItCouldSuggest() {
+        let repo = self.repo()
+        let old = Date.now.addingTimeInterval(-400 * 86_400)
+        _ = game(repo, "Never Opened", status: .backlog, addedAt: old)
+
+        let template = CollectionTemplate.all.first { $0.id == "lets-be-real" }!
+        #expect(template.seed != nil)   // it CAN suggest…
+
+        let collection = repo.createCollection(from: template)   // …and wasn't asked to
+        #expect(collection.gameIDs.isEmpty)
+        #expect(collection.notes.contains("Never once started"))
+    }
+
     // MARK: The picking rules
 
     /// Most played first, and a game with no time at all is not an answer to
