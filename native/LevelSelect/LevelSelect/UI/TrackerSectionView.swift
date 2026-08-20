@@ -8,6 +8,9 @@ struct TrackerSectionView: View {
     let game: Game
     @Environment(\.modelContext) private var context
     @State private var hideCompleted = false
+    /// Per game, and remembered: "I'm only working on Shrines right now" is a
+    /// statement about this game, and it outlives one visit to the screen.
+    @AppStorage private var hidePlanned: Bool
     @State private var addingGoal = false
     @State private var goalName = ""
     @State private var expanded: Set<String> = []
@@ -27,6 +30,11 @@ struct TrackerSectionView: View {
     @State private var plannedCount = ""
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
+
+    init(game: Game) {
+        self.game = game
+        _hidePlanned = AppStorage(wrappedValue: false, "hidePlanned.\(game.id.uuidString)")
+    }
 
     /// An item whose completion ends other things, and what it ends.
     struct LockoutPrompt: Identifiable {
@@ -118,8 +126,22 @@ struct TrackerSectionView: View {
 
             // Existing content stays visible while regenerating — hiding it
             // made a regenerate look like the tracker had been wiped.
-            ForEach(cats) { category in
+            let hiddenPlanned = hidePlanned ? cats.filter(\.pending).count : 0
+            ForEach(hidePlanned ? cats.filter { !$0.pending } : cats) { category in
                 categoryView(category, states: states, gating: gating)
+            }
+            // Never a silent disappearance: the count is the way back, and
+            // without it a tracker you'd hidden half of just looks short.
+            if hiddenPlanned > 0 {
+                Button {
+                    hidePlanned = false
+                } label: {
+                    Label("\(hiddenPlanned) planned categor\(hiddenPlanned == 1 ? "y" : "ies") hidden",
+                          systemImage: "eye.slash")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .tint(.secondary)
             }
 
             if let outcome = generation.outcome(for: game.id), !outcome.isNoOp {
@@ -430,6 +452,16 @@ struct TrackerSectionView: View {
                     .buttonStyle(.borderless)
                     .help("Hide completed")
                 }
+                if cats.contains(where: \.pending) {
+                    Button {
+                        hidePlanned.toggle()
+                    } label: {
+                        Image(systemName: hidePlanned ? "square.dashed" : "square.dashed.inset.filled")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.borderless)
+                    .help(hidePlanned ? "Show planned categories" : "Hide planned categories")
+                }
             }
             if !allItems.isEmpty {
                 ProgressView(value: Double(done), total: Double(allItems.count))
@@ -494,6 +526,8 @@ struct TrackerSectionView: View {
         .overlay(RoundedRectangle(cornerRadius: 10)
             .strokeBorder(.white.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contextMenu {
+            moveActions(category)
+            Divider()
             Button(role: .destructive) {
                 repo.removePlannedCategory(from: game, categoryID: category.id)
             } label: { Label("Remove", systemImage: "trash") }
@@ -572,10 +606,35 @@ struct TrackerSectionView: View {
                         renameText = category.name
                         renaming = (category.id, nil)
                     } label: { Label("Rename Category", systemImage: "pencil") }
+                    Divider()
+                    moveActions(category)
                 }
             }
             .tint(.secondary)
         }
+    }
+
+    /// Move this category up, down, or straight to the top.
+    ///
+    /// Buttons rather than drag-to-reorder: these rows live in a VStack inside
+    /// a scroll view, not a List, and "pin the thing I'm working on to the top"
+    /// is the actual ask — which one press does and a drag doesn't.
+    @ViewBuilder
+    private func moveActions(_ category: TrackerCategoryDTO) -> some View {
+        let ids = categories.map(\.id)
+        let index = ids.firstIndex(of: category.id)
+        Button {
+            repo.moveCategoryToTop(category.id, in: game)
+        } label: { Label("Move to Top", systemImage: "arrow.up.to.line") }
+            .disabled(index == 0)
+        Button {
+            repo.moveCategory(category.id, in: game, by: -1)
+        } label: { Label("Move Up", systemImage: "arrow.up") }
+            .disabled(index == 0)
+        Button {
+            repo.moveCategory(category.id, in: game, by: 1)
+        } label: { Label("Move Down", systemImage: "arrow.down") }
+            .disabled(index == ids.count - 1)
     }
 
     /// Items grouped under their shared location, or nil when grouping wouldn't

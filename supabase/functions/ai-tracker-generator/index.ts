@@ -412,13 +412,25 @@ async function callClaude(
     (b: { type: string; name?: string }) => b.type === 'tool_use' && b.name === opts.toolName,
   );
   if (!block) {
+    // A tool call cut off mid-write parses as no tool call at all, so a
+    // too-long category looked identical to "the model had no idea" and got
+    // told to try a better name. Different problem, different advice.
+    if (data.stop_reason === 'max_tokens') {
+      console.warn(`${opts.toolName} truncated at ${opts.max_tokens} tokens`);
+      return {
+        error: jsonResponse(
+          { error: 'That list was too long to finish in one go. Try splitting it into smaller categories.' },
+          422,
+        ),
+      };
+    }
     const said = (data.content || [])
       .filter((b: { type: string }) => b.type === 'text')
       .map((b: { text: string }) => b.text).join('\n');
     console.warn(`no ${opts.toolName} tool call; model said:`, said.slice(0, 500));
     return {
       error: jsonResponse(
-        { error: "Couldn't build that from the game name given. Try a more specific one." },
+        { error: "Couldn't build that from the game name given. Try a more specific name." },
         422,
       ),
     };
@@ -563,10 +575,16 @@ serve(async (req: Request) => {
         ? Math.max(0, Math.round(Number(body?.expectedCount)))
         : null;
 
+      // Size the budget to the category. A flat 8k cap silently truncated
+      // anything past roughly a hundred items — 120 Shrines with locations
+      // ran out mid-tool-call and came back as "nothing came back", which
+      // reads as the generator not knowing the game rather than as a limit.
+      const budget = Math.min(24_000, Math.max(6_000, 2_000 + (expectedCount ?? 40) * 90));
+
       const guideUrl = await findGuideUrl(apiKey, gameName, igdbData || null);
       const catRes = await callClaude(apiKey, {
         model: 'claude-sonnet-4-6',
-        max_tokens: 8_000,
+        max_tokens: budget,
         tools: guideUrl
           ? [CATEGORY_TOOL, { type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
           : [CATEGORY_TOOL],

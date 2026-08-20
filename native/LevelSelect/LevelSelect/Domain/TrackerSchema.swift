@@ -243,6 +243,38 @@ enum TrackerSchemaJSON {
         return try? JSONSerialization.data(withJSONObject: root)
     }
 
+    /// Reorder the categories to the given ids, keeping anything unnamed in
+    /// its existing place at the end. Ids that don't exist are ignored.
+    static func reordering(to ids: [String], in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let cats = root["categories"] as? [[String: Any]] else { return nil }
+        var remaining = cats
+        var ordered: [[String: Any]] = []
+        for id in ids {
+            if let index = remaining.firstIndex(where: { ($0["id"] as? String) == id }) {
+                ordered.append(remaining.remove(at: index))
+            }
+        }
+        ordered.append(contentsOf: remaining)
+        root["categories"] = ordered
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// Float filled categories above planned ones, each group keeping its own
+    /// order.
+    ///
+    /// A planned category is scaffolding — something still to do — and it
+    /// belongs under the tracker rather than in the middle of it. Applied to
+    /// the STORED order rather than at render time, so there is exactly one
+    /// order: what you see is what a manual move then acts on, and it is the
+    /// same on the other device.
+    static func sinkingPendingCategories(in data: Data) -> Data? {
+        let cats = categories(from: data)
+        guard cats.contains(where: \.pending) else { return nil }
+        let ordered = cats.filter { !$0.pending }.map(\.id) + cats.filter(\.pending).map(\.id)
+        return reordering(to: ordered, in: data)
+    }
+
     /// Clear the planned flag once a category has real content.
     static func markingFilled(categoryID: String, in data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],

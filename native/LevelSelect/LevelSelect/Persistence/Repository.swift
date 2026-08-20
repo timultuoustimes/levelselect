@@ -653,6 +653,42 @@ struct Repository {
         return true
     }
 
+    /// Move a category up or down the tracker.
+    ///
+    /// Order is the user's — which set they want at the top is a statement
+    /// about how they play, not something the generator gets to decide. Stored
+    /// in the tracker blob, so it syncs and needs no schema version.
+    @discardableResult
+    func moveCategory(_ categoryID: String, in game: Game, by offset: Int) -> Bool {
+        var ids = trackerCategories(for: game).map(\.id)
+        guard let from = ids.firstIndex(of: categoryID) else { return false }
+        let to = from + offset
+        guard to >= 0, to < ids.count else { return false }
+        ids.swapAt(from, to)
+        return applyCategoryOrder(ids, to: game)
+    }
+
+    @discardableResult
+    func moveCategoryToTop(_ categoryID: String, in game: Game) -> Bool {
+        var ids = trackerCategories(for: game).map(\.id)
+        guard let from = ids.firstIndex(of: categoryID), from > 0 else { return false }
+        ids.remove(at: from)
+        ids.insert(categoryID, at: 0)
+        return applyCategoryOrder(ids, to: game)
+    }
+
+    @discardableResult
+    private func applyCategoryOrder(_ ids: [String], to game: Game) -> Bool {
+        guard let schema = game.trackerSchema,
+              let data = TrackerSchemaJSON.reordering(to: ids, in: schema.jsonData)
+        else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
     /// Drop a planned category that was never filled.
     ///
     /// Only ever a PENDING one: an empty planned heading is scaffolding, but
@@ -1029,7 +1065,9 @@ struct Repository {
                 }
             }
         }
-        existing.jsonData = filledSchema
+        // A category that just gained content should rise above the ones still
+        // waiting, rather than staying wherever the plan happened to put it.
+        existing.jsonData = TrackerSchemaJSON.sinkingPendingCategories(in: filledSchema) ?? filledSchema
         existing.source = .aiGenerated
         existing.generatedAt = .now
         existing.generatedBy = "claude"
