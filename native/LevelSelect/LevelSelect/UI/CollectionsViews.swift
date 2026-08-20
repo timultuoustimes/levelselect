@@ -78,6 +78,7 @@ struct CollectionShelf: View {
     let collections: [GameCollection]
     let games: [Game]
     var onNew: () -> Void
+    var onNewFromTemplate: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -88,11 +89,30 @@ struct CollectionShelf: View {
                 Text("(\(collections.count))")
                     .font(.subheadline).foregroundStyle(.secondary)
                 Spacer()
-                Button { onNew() } label: {
-                    Image(systemName: "plus").font(.subheadline.weight(.semibold))
+                // Both routes, because this "+" was the only one and it went
+                // straight to a name field — which asks you to have already
+                // had the idea, and hides the half of the feature that
+                // supplies one.
+                if let onNewFromTemplate {
+                    Menu {
+                        Button { onNewFromTemplate() } label: {
+                            Label("Start from a Prompt", systemImage: "sparkles.rectangle.stack")
+                        }
+                        Button { onNew() } label: {
+                            Label("Empty Collection", systemImage: "square.stack")
+                        }
+                    } label: {
+                        Image(systemName: "plus").font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LSTheme.accent)
+                } else {
+                    Button { onNew() } label: {
+                        Image(systemName: "plus").font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LSTheme.accent)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(LSTheme.accent)
             }
             .padding(.horizontal)
 

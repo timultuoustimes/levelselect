@@ -48,6 +48,8 @@ struct SettingsView: View {
 
                 AppearanceSettingsSection()
 
+                RetroAchievementsSettings()
+
                 DataSettingsSection()
 
                 #if LEGACY_IMPORT

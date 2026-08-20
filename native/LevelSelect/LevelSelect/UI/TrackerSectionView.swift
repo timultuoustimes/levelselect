@@ -34,6 +34,8 @@ struct TrackerSectionView: View {
     /// hang off this view and presentation here is a single-occupancy slot —
     /// one binding with a payload, not two more modifiers.
     @State private var removing: RemovalTarget?
+    @State private var raSyncing = false
+    @State private var raResult: String?
 
     /// What a pending removal would destroy, resolved before the dialog opens
     /// so it can say the number rather than warn vaguely.
@@ -162,6 +164,25 @@ struct TrackerSectionView: View {
                 mergeSummary(outcome)
             }
 
+            if raSyncing {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking RetroAchievements…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let raResult {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(raResult, systemImage: "trophy")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 4)
+                    Button("Dismiss") { self.raResult = nil }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                }
+            }
+
             if let error = generation.error(for: game.id) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -249,6 +270,14 @@ struct TrackerSectionView: View {
                             confirmingUseBuiltin = true
                         } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
                             .disabled(isGenerating)
+                    }
+                    if raGameID != nil, RACredentials.isConfigured {
+                        Button {
+                            Task { await syncRetroAchievements() }
+                        } label: {
+                            Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(raSyncing)
                     }
                     if game.trackerSchema != nil {
                         Divider()
@@ -385,6 +414,51 @@ struct TrackerSectionView: View {
     }
 
     private var isGenerating: Bool { generation.isGenerating(game.id) }
+
+    /// The RA game this tracker was imported from, if any.
+    private var raGameID: Int? {
+        game.trackerSchema.flatMap { TrackerSchemaJSON.retroAchievementsGameID(in: $0.jsonData) }
+    }
+
+    /// Pull this account's unlocks into the dedicated RA playthrough.
+    ///
+    /// Never the playthrough you're on: RA's unlocks are account-wide and
+    /// permanent, so folding them into a run in progress would mark it
+    /// finished on the strength of a run you played years ago.
+    private func syncRetroAchievements() async {
+        guard let gameID = raGameID, let credentials = RACredentials.current else { return }
+        raSyncing = true
+        raResult = nil
+        defer { raSyncing = false }
+        do {
+            let progress = try await RetroAchievementsService.progress(
+                gameID: gameID, credentials: credentials)
+            let pt = repo.raPlaythrough(for: game)
+            let outcome = repo.applyRAUnlocks(progress.unlocked, to: pt, in: game)
+            raResult = summary(progress, outcome)
+        } catch {
+            raResult = error.localizedDescription
+        }
+    }
+
+    private func summary(_ progress: RetroAchievementsService.Progress,
+                         _ outcome: Repository.RASyncOutcome) -> String {
+        var text = "\(progress.unlocked.count) of \(progress.total) earned"
+        if progress.totalPoints > 0 {
+            text += " · \(progress.points)/\(progress.totalPoints) points"
+        }
+        if outcome.newlyTicked > 0 {
+            text += " — ticked \(outcome.newlyTicked) in RetroAchievements"
+        } else if outcome.alreadyTicked > 0 {
+            text += " — already up to date"
+        }
+        // Said out loud rather than swallowed: it means the set was revised
+        // after import, and re-importing is the fix.
+        if outcome.unknownToTracker > 0 {
+            text += ". \(outcome.unknownToTracker) aren't in this tracker — re-import to add them."
+        }
+        return text
+    }
 
     /// Drop the app-wide failure banner for THIS game — the inline error the
     /// user is looking at says the same thing. Successes are left alone: those

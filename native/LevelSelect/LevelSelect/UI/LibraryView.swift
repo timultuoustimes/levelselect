@@ -119,9 +119,10 @@ struct LibraryTab: View {
     @ViewBuilder
     private var collectionShelf: some View {
         if !collections.isEmpty {
-            CollectionShelf(collections: collections, games: games) {
-                newCollectionName = ""; newCollection = true
-            }
+            CollectionShelf(
+                collections: collections, games: games,
+                onNew: { newCollectionName = ""; newCollection = true },
+                onNewFromTemplate: { sheet = .collectionTemplates })
         }
     }
 
@@ -361,11 +362,13 @@ struct LibraryTab: View {
                 Button { sheet = .addGame } label: {
                     Label("Add Game", systemImage: "gamecontroller")
                 }
+                // "Start from a Template" never says a template of WHAT.
+                // Both of these now name the thing they make.
                 Button { sheet = .collectionTemplates } label: {
-                    Label("Start from a Template", systemImage: "square.grid.2x2")
+                    Label("Collection from a Prompt", systemImage: "sparkles.rectangle.stack")
                 }
                 Button { newCollectionName = ""; newCollection = true } label: {
-                    Label("New Collection", systemImage: "square.stack")
+                    Label("Empty Collection", systemImage: "square.stack")
                 }
             } label: {
                 Label("Add", systemImage: "plus")

@@ -22,6 +22,21 @@ struct CollectionTemplate: Identifiable, Hashable, Sendable {
         case opinions   = "Opinions"
         case occasions  = "Occasions"
         case unfinished = "Unfinished Business"
+
+        /// A hue per section, so a long page of prompts reads as places rather
+        /// than one grey wall. Fixed rather than themed: these are the app's
+        /// own furniture and shouldn't all turn one colour with the accent.
+        var tint: (r: Double, g: Double, b: Double) {
+            switch self {
+            case .identity:   (0.58, 0.36, 0.98)   // violet
+            case .time:       (0.20, 0.65, 0.85)   // teal
+            case .hardware:   (0.85, 0.55, 0.25)   // amber
+            case .waiting:    (0.35, 0.55, 0.95)   // blue
+            case .opinions:   (0.88, 0.35, 0.42)   // red
+            case .occasions:  (0.30, 0.72, 0.48)   // green
+            case .unfinished: (0.62, 0.62, 0.70)   // slate
+            }
+        }
     }
 
     /// How a template can offer a starting point from the user's own library.
@@ -41,6 +56,9 @@ struct CollectionTemplate: Identifiable, Hashable, Sendable {
         case unreleasedWishlist
     }
 
+    /// Icons lean on shared gaming furniture rather than any one game's:
+    /// hourglasses, cartridges, potions, a d-pad, a trophy. The things that
+    /// have meant the same thing across forty years of games.
     let id: String
     let name: String
     let prompt: String
@@ -60,13 +78,13 @@ extension CollectionTemplate {
         // ── Who you are
         .init(id: "made-me", name: "Six That Made Me",
               prompt: "The games that formed your taste — not your favourites",
-              slots: 6, group: .identity, systemImage: "person.crop.square"),
+              slots: 6, group: .identity, systemImage: "person.text.rectangle"),
         .init(id: "the-shelf", name: "The Shelf",
               prompt: "If you could keep only nine, forever",
               slots: 9, group: .identity, systemImage: "books.vertical"),
         .init(id: "only-one", name: "If You Only Play One",
               prompt: "Your single recommendation per genre",
-              slots: 5, group: .identity, systemImage: "hand.point.up"),
+              slots: 5, group: .identity, systemImage: "star.circle"),
 
         // ── Where the time went
         .init(id: "hundred-hours", name: "The Hundred-Hour Club",
@@ -80,7 +98,7 @@ extension CollectionTemplate {
               slots: 6, group: .time, systemImage: "arrow.counterclockwise"),
         .init(id: "first-loves", name: "First Loves",
               prompt: "The earliest games you remember finishing",
-              slots: 6, group: .time, systemImage: "sparkle"),
+              slots: 6, group: .time, systemImage: "seal"),
 
         // ── Hardware & shelves
         .init(id: "cartridge-shelf", name: "Cartridge Shelf",
@@ -91,7 +109,7 @@ extension CollectionTemplate {
               slots: 6, group: .hardware, systemImage: "cpu", seed: .emulatedOnly),
         .init(id: "launch-window", name: "Launch Window",
               prompt: "Bought on day one, with the console",
-              slots: 4, group: .hardware, systemImage: "shippingbox"),
+              slots: 4, group: .hardware, systemImage: "shippingbox.fill"),
 
         // ── Anticipation
         .init(id: "worth-the-wait", name: "Worth the Wait",
@@ -117,13 +135,13 @@ extension CollectionTemplate {
         // ── Opinions
         .init(id: "deserved-better", name: "Deserved Better",
               prompt: "Flopped, and shouldn't have",
-              slots: 6, group: .opinions, systemImage: "heart.slash"),
+              slots: 6, group: .opinions, systemImage: "heart.slash.fill"),
         .init(id: "won-me-over", name: "Won Me Over Late",
               prompt: "Didn't click until hours in",
               slots: 4, group: .opinions, systemImage: "arrow.uturn.up"),
         .init(id: "oversold", name: "I Oversold This",
               prompt: "You recommended it too hard, too often",
-              slots: 4, group: .opinions, systemImage: "megaphone"),
+              slots: 4, group: .opinions, systemImage: "megaphone.fill"),
         .init(id: "no-regret-drop", name: "Dropped Without Regret",
               prompt: "Walked away and never looked back",
               slots: 4, group: .opinions, systemImage: "xmark.bin"),
@@ -134,7 +152,7 @@ extension CollectionTemplate {
               slots: 6, group: .occasions, systemImage: "gamecontroller"),
         .init(id: "rainy-sunday", name: "Rainy Sunday",
               prompt: "The whole-day games",
-              slots: 4, group: .occasions, systemImage: "cloud.rain"),
+              slots: 4, group: .occasions, systemImage: "cloud.rain.fill"),
         .init(id: "background-games", name: "Background Games",
               prompt: "Played while listening to something else",
               slots: 4, group: .occasions, systemImage: "headphones"),

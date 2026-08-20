@@ -217,6 +217,79 @@ struct Repository {
         return pt
     }
 
+    // MARK: RetroAchievements
+
+    /// The name the RA playthrough is found by.
+    ///
+    /// A marker field would be better, but that is a new stored property and
+    /// therefore a Schema V3. Matching on the name is the trade: it syncs, it
+    /// needs no migration, and the failure mode is mild — rename it and the
+    /// next sync makes a second one rather than losing anything.
+    static let raPlaythroughName = "RetroAchievements"
+
+    /// The playthrough that holds account-level RA unlocks, made on demand.
+    ///
+    /// Separate from your own runs on purpose. RA has no concept of a
+    /// playthrough: unlocks are permanent and account-wide, so the second time
+    /// you play Super Metroid it reports nothing new. Folding that into a
+    /// fresh run would mark it finished before you'd played a minute. Kept
+    /// apart, they're two honest facts — what you did this run, and what your
+    /// account has ever earned.
+    ///
+    /// Created lazily by SYNC, never by importing a list: someone who plays
+    /// cartridges and ticks by hand should never see this playthrough at all.
+    @discardableResult
+    func raPlaythrough(for game: Game) -> Playthrough {
+        if let existing = game.livePlaythroughs.first(where: { $0.name == Self.raPlaythroughName }) {
+            return existing
+        }
+        let pt = Playthrough(name: Self.raPlaythroughName)
+        pt.notes = "Achievements earned on your RetroAchievements account, across every time you've played this."
+        context.insert(pt)
+        pt.game = game
+        // Deliberately NOT made current: this is a record, not the run you're
+        // on, and switching to it would hijack the timer's target.
+        touch(game)
+        persist()
+        return pt
+    }
+
+    struct RASyncOutcome: Sendable, Equatable {
+        var newlyTicked = 0
+        var alreadyTicked = 0
+        var unknownToTracker = 0
+    }
+
+    /// Fold RA unlocks into a playthrough's tracker state.
+    ///
+    /// Union, never subtraction. RA is authoritative for "you earned this" and
+    /// nothing else: an item you ticked here that RA doesn't know about —
+    /// because you played it on original hardware — stays ticked. Nothing in
+    /// this method can ever un-tick anything, which is the one rule that makes
+    /// a repeatable background sync safe to run.
+    @discardableResult
+    func applyRAUnlocks(_ unlocks: [RAUnlock],
+                        to pt: Playthrough, in game: Game) -> RASyncOutcome {
+        let known = Set(trackerItems(of: game).map(\.id))
+        var outcome = RASyncOutcome()
+        for unlock in unlocks {
+            guard known.contains(unlock.itemID) else {
+                // An unlock for an achievement this tracker doesn't list —
+                // the set was revised after import. Counted, so the app can
+                // suggest re-importing rather than silently dropping it.
+                outcome.unknownToTracker += 1
+                continue
+            }
+            if trackerState(pt, itemID: unlock.itemID)?.completed == true {
+                outcome.alreadyTicked += 1
+            } else {
+                setTrackerItem(pt, itemID: unlock.itemID, done: true)
+                outcome.newlyTicked += 1
+            }
+        }
+        return outcome
+    }
+
     /// Create a new playthrough and switch to it immediately (per Tim).
     @discardableResult
     func addPlaythrough(to game: Game, named name: String) -> Playthrough {

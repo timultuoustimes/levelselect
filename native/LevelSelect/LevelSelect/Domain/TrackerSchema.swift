@@ -290,6 +290,31 @@ enum TrackerSchemaJSON {
         return try? JSONSerialization.data(withJSONObject: root)
     }
 
+    /// The RetroAchievements game id this tracker was imported from, if any.
+    ///
+    /// Read back out of `sources` rather than stored in a new field: the
+    /// importer already writes the RA game URL there, so the id is available
+    /// for free and syncing needs no schema version.
+    static func retroAchievementsGameID(in data: Data) -> Int? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        // The category stamp first. Merging an import into an existing tracker
+        // keeps the CURRENT root — so its `sources` never mention RA — while
+        // the category itself is copied across whole.
+        for category in (root["categories"] as? [[String: Any]]) ?? [] {
+            if let id = (category["raGameID"] as? NSNumber)?.intValue, id > 0 { return id }
+        }
+        guard let sources = root["sources"] as? [[String: Any]] else { return nil }
+        for source in sources {
+            guard (source["type"] as? String) == "retroachievements",
+                  let url = source["url"] as? String,
+                  let last = url.split(separator: "/").last,
+                  let id = Int(last) else { continue }
+            return id
+        }
+        return nil
+    }
+
     /// Minimal empty schema for games that have no tracker yet.
     /// Turn run logging on for a game by injecting a general-purpose run
     /// template into its schema.

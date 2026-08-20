@@ -25,31 +25,32 @@ struct CollectionTemplatePicker: View {
     /// the choice is offered before rather than after.
     @AppStorage("collectionTemplatePrefill") private var prefill = true
 
+    private let columns = [GridItem(.adaptive(minimum: 158), spacing: 12)]
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    Text("Pick a question. The number is a prompt, not a limit — it's there to make you choose.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Toggle(isOn: $prefill) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Start with suggestions").font(.subheadline)
-                            Text("Some prompts can answer themselves from your library. Either way you can add and remove freely afterwards.")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .tint(LSTheme.accent)
-                }
-                ForEach(CollectionTemplate.grouped(), id: \.group) { section in
-                    Section(section.group.rawValue) {
-                        ForEach(section.templates) { template in
-                            Button { create(template) } label: { row(template) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    header
+                    ForEach(CollectionTemplate.grouped(), id: \.group) { section in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(section.group.rawValue)
+                                .font(.title3.bold())
+                                .padding(.horizontal)
+                            LazyVGrid(columns: columns, spacing: 12) {
+                                ForEach(section.templates) { template in
+                                    Button { create(template) } label: { card(template) }
+                                        .buttonStyle(PressableCardStyle())
+                                }
+                            }
+                            .padding(.horizontal)
                         }
                     }
                 }
+                .padding(.vertical)
             }
+            .scrollIndicators(.hidden)
+            .lsBackground()
             .navigationTitle("Start a Collection")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -62,36 +63,74 @@ struct CollectionTemplatePicker: View {
         }
     }
 
-    private func row(_ template: CollectionTemplate) -> some View {
-        let seeded = prefill ? seedCount(template) : 0
-        return HStack(spacing: 12) {
-            Image(systemName: template.systemImage)
-                .font(.title3)
-                .foregroundStyle(LSTheme.accent)
-                .frame(width: 30)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(template.name)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(template.prompt)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                // Only ever advertised when there is something to start from.
-                // "Starts with 0 from your library" would be a worse promise
-                // than making none.
-                if seeded > 0 {
-                    Text("Starts with \(seeded) from your library")
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Pick a question. The number is a prompt, not a limit — it's there to make you choose.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Toggle(isOn: $prefill) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Start with suggestions").font(.subheadline)
+                    Text("Some prompts can answer themselves from your library. Either way, you can add and remove freely afterwards.")
                         .font(.caption2)
-                        .foregroundStyle(LSTheme.accent.opacity(0.9))
+                        .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 8)
-            Text("\(template.slots)")
-                .font(.caption.monospacedDigit().weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8).padding(.vertical, 4)
-                .background(.white.opacity(0.06), in: .capsule)
+            .tint(LSTheme.accent)
         }
+        .padding(.horizontal)
+    }
+
+    /// A card rather than a list row.
+    ///
+    /// These are meant to be browsed and picked from, and twenty-seven grey
+    /// rows read as a settings screen. The colour comes from the section, so
+    /// the page has places in it rather than one wall of identical lines.
+    private func card(_ template: CollectionTemplate) -> some View {
+        let rgb = template.group.tint
+        let tint = Color(red: rgb.r, green: rgb.g, blue: rgb.b)
+        let seeded = prefill ? seedCount(template) : 0
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                Image(systemName: template.systemImage)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .shadow(color: tint.opacity(0.6), radius: 6)
+                Spacer(minLength: 4)
+                Text("\(template.slots)")
+                    .font(.caption.monospacedDigit().weight(.heavy))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(.black.opacity(0.28), in: .capsule)
+            }
+            Spacer(minLength: 0)
+            Text(template.name)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+            Text(template.prompt)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(3)
+                .multilineTextAlignment(.leading)
+            if seeded > 0 {
+                Label("\(seeded) to start", systemImage: "wand.and.stars")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(.black.opacity(0.28), in: .capsule)
+            }
+        }
+        .padding(12)
+        .frame(height: 152, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.55)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: .rect(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16)
+            .strokeBorder(.white.opacity(0.14), lineWidth: 1))
     }
 
     private func seedCount(_ template: CollectionTemplate) -> Int {

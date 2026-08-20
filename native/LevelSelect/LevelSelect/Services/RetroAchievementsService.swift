@@ -48,6 +48,18 @@ enum RetroAchievementsService {
         let schema: Data
     }
 
+    /// Defined in Domain so `Repository` — which the watch compiles without
+    /// any networking — can take these without importing the service.
+    typealias Unlock = RAUnlock
+
+    struct Progress: Sendable {
+        let title: String?
+        let total: Int
+        let unlocked: [Unlock]
+        let points: Int
+        let totalPoints: Int
+    }
+
     private static let functionURL = URL(
         string: "https://sextftevxqrtodlmnyve.supabase.co/functions/v1/ra-proxy")!
 
@@ -87,6 +99,54 @@ enum RetroAchievementsService {
             count: (root["count"] as? Int) ?? 0,
             points: (root["points"] as? Int) ?? 0,
             schema: try JSONSerialization.data(withJSONObject: structured))
+    }
+
+    /// Check a username and key before saving them.
+    ///
+    /// Worth a round trip: a typo'd key would otherwise fail silently at the
+    /// first sync, days later, looking like the sync is broken rather than
+    /// the credentials.
+    @discardableResult
+    static func verify(username: String, apiKey: String) async throws -> String {
+        let root = try await post([
+            "mode": "verify", "raUsername": username, "raApiKey": apiKey,
+        ])
+        guard let user = root["user"] as? String, !user.isEmpty else {
+            throw ServiceError(message: "RetroAchievements rejected that key.")
+        }
+        return user
+    }
+
+    /// What this user has unlocked on one game, across their whole account.
+    static func progress(gameID: Int, credentials: RACredentials.Value) async throws -> Progress {
+        let root = try await post([
+            "mode": "progress", "gameID": gameID,
+            "raUsername": credentials.username, "raApiKey": credentials.apiKey,
+        ])
+        let formatter = ISO8601DateFormatter()
+        // RA writes "2024-03-11 21:04:07" — a space, no zone. Parsed as UTC
+        // rather than guessed at, since a wrong zone silently shifts an
+        // unlock across a day boundary.
+        let plain = DateFormatter()
+        plain.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        plain.timeZone = TimeZone(identifier: "UTC")
+        plain.locale = Locale(identifier: "en_US_POSIX")
+
+        let unlocked = ((root["unlocked"] as? [[String: Any]]) ?? []).compactMap { entry -> Unlock? in
+            guard let id = entry["id"] as? String else { return nil }
+            let raw = entry["earnedAt"] as? String
+            return Unlock(
+                itemID: id,
+                hardcore: (entry["hardcore"] as? Bool) ?? false,
+                earnedAt: raw.flatMap { plain.date(from: $0) ?? formatter.date(from: $0) },
+                points: (entry["points"] as? Int) ?? 0)
+        }
+        return Progress(
+            title: root["title"] as? String,
+            total: (root["total"] as? Int) ?? 0,
+            unlocked: unlocked,
+            points: (root["points"] as? Int) ?? 0,
+            totalPoints: (root["totalPoints"] as? Int) ?? 0)
     }
 
     private static func consoles(from value: Any?) -> [Console] {
