@@ -29,6 +29,7 @@ struct StatsTab: View {
             .lsBackground()
             .navigationTitle("Stats")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
         }
     }

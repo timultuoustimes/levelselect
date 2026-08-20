@@ -294,6 +294,7 @@ struct HomeTab: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: PlatformRoute.self) { PlatformGamesView(platform: $0.platform) }

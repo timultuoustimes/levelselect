@@ -46,6 +46,7 @@ struct LibraryTab: View {
             .lsBackground()
             .navigationTitle("Library")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: CollectionRoute.self) { route in
                 if let collection = collections.first(where: { $0.id == route.id }) {

@@ -683,30 +683,39 @@ struct GameDetailView: View {
                 editForm
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 10) {
+                    // Every one of these is really a set of games rather than
+                    // a fact about this one, so each is a way into the library
+                    // filtered to it.
                     GridRow {
                         infoCell("Released", game.firstReleaseDate.map {
                             String(Calendar.current.component(.year, from: $0))
-                        })
-                        infoCell("Series", game.franchise)
+                        }, kind: .year)
+                        infoCell("Series", game.franchise, kind: .franchise)
                     }
                     GridRow {
-                        infoCell("Developer", game.developers.first)
-                        infoCell("Publisher", game.publishers.first)
+                        infoCell("Developer", game.developers.first, kind: .developer)
+                        infoCell("Publisher", game.publishers.first, kind: .publisher)
                     }
                 }
 
                 if !game.platforms.isEmpty {
                     platformsGroup
                 }
-                let genreTheme = game.genres + game.themes
-                if !genreTheme.isEmpty {
-                    chipGroup("Genre / Theme", genreTheme, tint: LSTheme.accent)
+                if !game.genres.isEmpty || !game.themes.isEmpty {
+                    facetChips("Genre / Theme",
+                               game.genres.map { GameFacet(kind: .genre, value: $0) }
+                             + game.themes.map { GameFacet(kind: .theme, value: $0) },
+                               tint: LSTheme.accent)
                 }
                 if !game.gameModes.isEmpty {
-                    chipGroup("Game Modes", game.gameModes, tint: .teal)
+                    facetChips("Game Modes",
+                               game.gameModes.map { GameFacet(kind: .mode, value: $0) },
+                               tint: .teal)
                 }
                 if !game.playerPerspectives.isEmpty {
-                    chipGroup("Perspective", game.playerPerspectives, tint: .gray)
+                    facetChips("Perspective",
+                               game.playerPerspectives.map { GameFacet(kind: .perspective, value: $0) },
+                               tint: .gray)
                 }
             }
 
@@ -793,12 +802,41 @@ struct GameDetailView: View {
         )
     }
 
-    private func infoCell(_ label: String, _ value: String?) -> some View {
+    /// A labelled value, tappable when there's a slice of the library behind
+    /// it. Styled the same either way — the panel is a reference table first,
+    /// and making every field look like a button would turn it into a menu.
+    @ViewBuilder
+    private func infoCell(_ label: String, _ value: String?,
+                          kind: GameFacet.Kind? = nil) -> some View {
+        let text = value?.isEmpty == false ? value! : nil
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption).foregroundStyle(.secondary)
-            Text(value?.isEmpty == false ? value! : "—").font(.subheadline)
+            if let text, let kind {
+                FacetLink(facet: GameFacet(kind: kind, value: text)) {
+                    HStack(spacing: 3) {
+                        Text(text).font(.subheadline)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            } else {
+                Text(text ?? "—").font(.subheadline)
+            }
         }
         .gridColumnAlignment(.leading)
+    }
+
+    /// Chips that lead somewhere.
+    private func facetChips(_ label: String, _ facets: [GameFacet], tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            FlowLayout(spacing: 6) {
+                ForEach(facets, id: \.self) { facet in
+                    FacetLink(facet: facet) { Chip(text: facet.value, tint: tint) }
+                }
+            }
+        }
     }
 
     /// Platforms, with yours marked.
