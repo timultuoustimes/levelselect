@@ -232,4 +232,46 @@ struct RetroAchievementsSyncTests {
         #expect(TrackerSchemaJSON.retroAchievementsGameID(
             in: game.trackerSchema!.jsonData) == nil)
     }
+
+    // MARK: Which games are offered the import
+
+    /// The console vocabulary is whatever IGDB or the user typed, so the match
+    /// has to survive all three ways of naming the same machine.
+    @Test func offersImportForCoveredConsoles() {
+        #expect(RetroAchievementsService.mayCover(platforms: ["SNES"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(platforms: ["Super Nintendo"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(
+            platforms: ["Super Nintendo Entertainment System"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(platforms: ["Sega Genesis"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(platforms: ["Game Boy Advance"], ownership: []))
+    }
+
+    /// The library stores what the user OWNS it on, not what the game was
+    /// released for — so a Genesis game played through an emulator front-end
+    /// records "Recalbox" and nothing else. Checking console names alone hid
+    /// RetroAchievements from exactly the library it serves best, since an
+    /// emulator is also what earns the unlocks in the first place.
+    @Test func offersImportForEmulatedGames() {
+        #expect(RetroAchievementsService.mayCover(platforms: ["Recalbox"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(platforms: ["RetroPie"], ownership: []))
+        // Ownership answers it even when the platform name gives nothing away.
+        #expect(RetroAchievementsService.mayCover(
+            platforms: ["Some Handheld I Built"], ownership: [Ownership.emulated.rawValue]))
+    }
+
+    /// "PlayStation" is a prefix of every Sony console, and RA stops at
+    /// PS2/PSP — modern PlayStation achievements are trophies, which are
+    /// Sony's own system. A naive contains() would offer the import on a PS5
+    /// game and could only ever disappoint.
+    @Test func doesNotOfferImportForModernPlatforms() {
+        #expect(!RetroAchievementsService.mayCover(platforms: ["PlayStation 5"], ownership: []))
+        #expect(!RetroAchievementsService.mayCover(platforms: ["PlayStation 4"], ownership: []))
+        #expect(!RetroAchievementsService.mayCover(platforms: ["PlayStation Vita"], ownership: []))
+        #expect(!RetroAchievementsService.mayCover(
+            platforms: ["PC (Microsoft Windows)"], ownership: [Ownership.digital.rawValue]))
+        #expect(!RetroAchievementsService.mayCover(platforms: [], ownership: []))
+        // The ones RA does cover still pass, or the exclusion went too far.
+        #expect(RetroAchievementsService.mayCover(platforms: ["PlayStation 2"], ownership: []))
+        #expect(RetroAchievementsService.mayCover(platforms: ["PlayStation"], ownership: []))
+    }
 }

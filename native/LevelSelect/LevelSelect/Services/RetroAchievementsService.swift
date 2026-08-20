@@ -35,6 +35,74 @@ enum RetroAchievementsService {
         let name: String
     }
 
+    /// Consoles RA covers, in the app's platform vocabulary. Matched loosely —
+    /// "SNES", "Super Nintendo" and "Super Nintendo Entertainment System" are
+    /// all the same machine, and the library stores whatever IGDB or the user
+    /// typed.
+    private static let coveredPlatformKeys: [String] = [
+        "nes", "famicom", "snes", "super nintendo", "nintendo 64", "n64",
+        "game boy", "gameboy", "gba", "virtual boy", "gamecube",
+        "nintendo ds", "nintendo dsi", "genesis", "mega drive", "master system",
+        "game gear", "sega cd", "saturn", "dreamcast", "32x", "sg 1000",
+        "playstation", "psx", "ps1", "ps2", "psp",
+        "atari", "lynx", "jaguar", "neo geo", "neogeo",
+        "pc engine", "turbografx", "wonderswan", "arcade", "msx",
+        "apple ii", "amstrad", "zx spectrum", "intellivision", "colecovision",
+        "vectrex", "3do", "odyssey", "channel f", "uzebox", "arduboy",
+    ]
+
+    /// Platforms whose names would otherwise match above but that RA does not
+    /// cover. "PlayStation" is the trap: it is a prefix of every Sony console,
+    /// and RA stops at PS2/PSP because modern PlayStation achievements are
+    /// trophies, which are Sony's own system and not RA's to publish.
+    private static let excludedPlatformKeys: [String] = [
+        "playstation 3", "playstation 4", "playstation 5", "playstation vita",
+        "ps3", "ps4", "ps5", "vita",
+    ]
+
+    /// Emulation front-ends. Someone who plays through one of these is playing
+    /// a console RA covers — the library just records the box in the living
+    /// room rather than the machine it emulates. This is also the case RA is
+    /// most useful for, since these are exactly the setups that unlock
+    /// achievements in the first place.
+    private static let emulatorPlatformKeys: [String] = [
+        "recalbox", "retropie", "batocera", "emulationstation", "retroarch",
+        "emudeck", "mister", "lakka", "emulator", "emulation",
+    ]
+
+    private static func normalized(_ value: String) -> String {
+        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Whether RetroAchievements plausibly has anything for this game.
+    ///
+    /// A local guess, not an answer. The real one costs a round trip through
+    /// the proxy, and this only decides whether to *offer* the import, so it
+    /// leans generous on purpose: an offer that finds nothing costs one tap and
+    /// a clear "no matches", while a missing offer on a SNES game leaves the
+    /// whole feature invisible to someone who never opens the menu.
+    ///
+    /// `platforms` is the user's OWN list — what they have it on — not the
+    /// game's release platforms, which the library doesn't store. So a Genesis
+    /// game played through Recalbox says "Recalbox" and nothing else, and a
+    /// console-name check alone would hide RA from precisely the library that
+    /// wants it most. Ownership answers it where the platform name can't:
+    /// `.emulated` means an emulator, and an emulator means a console old
+    /// enough for RA.
+    static func mayCover(platforms: [String], ownership: [String]) -> Bool {
+        if ownership.contains(Ownership.emulated.rawValue) { return true }
+        return platforms.contains { platform in
+            let key = normalized(platform)
+            guard !key.isEmpty else { return false }
+            if excludedPlatformKeys.contains(where: key.contains) { return false }
+            if emulatorPlatformKeys.contains(where: key.contains) { return true }
+            return coveredPlatformKeys.contains(where: key.contains)
+        }
+    }
+
     /// What a search came back with. RA's console vocabulary doesn't line up
     /// with the app's platform names, so "which system is this?" is a real
     /// answer rather than a failure — the caller asks and searches again.

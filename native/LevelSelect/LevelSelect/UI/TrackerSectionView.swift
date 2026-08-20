@@ -263,9 +263,15 @@ struct TrackerSectionView: View {
             }
 
             // Six flat buttons wrapped onto three lines and hyphenated words
-            // mid-syllable ("Regen-erate", "Catego-ry"). Grouped into four
-            // controls instead: the two anyone reaches for often, and two
-            // menus for the rest.
+            // mid-syllable ("Regen-erate", "Catego-ry"). Grouped into a primary
+            // action plus one menu instead: what you came to do stays a button,
+            // and every other way of building a tracker lives in Build.
+            //
+            // Two menus ("Add" and "More") became one because the split never
+            // survived contact — "Paste a List" and "Import Achievements" are
+            // both ways of building the thing, and which menu held which was
+            // arbitrary. More could also open completely empty, since all three
+            // of its items needed something to act on.
             HStack(spacing: 18) {
                 // The button says what it will do, and the menu lets you run it
                 // differently just this once without changing the default —
@@ -288,67 +294,86 @@ struct TrackerSectionView: View {
                 }
                 .disabled(isGenerating)
 
-                Menu {
+                // An achievement set is the better answer wherever it exists —
+                // the real authored list rather than a model's recollection —
+                // so on a console RA covers it is a button, not a menu item
+                // someone has to go looking for. Promoted only there: on a PC
+                // or PS5 game it would be an offer that can only disappoint.
+                if raImportPromoted {
                     Button {
-                        generation.suggestCategories(for: game, context: context)
+                        importingAchievements = true
                     } label: {
-                        Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
+                        Label("RetroAchievements", systemImage: "trophy")
+                            .font(.subheadline)
                     }
                     .disabled(isGenerating)
+                }
+
+                Spacer(minLength: 8)
+
+                Menu {
+                    // Suggest Categories is already a button on an empty
+                    // tracker, where "what should I even be tracking?" is the
+                    // live question. Listing it twice on the same screen would
+                    // just make the menu look longer than it is.
+                    if hasNonGoalContent {
+                        Button {
+                            generation.suggestCategories(for: game, context: context)
+                        } label: {
+                            Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
+                        }
+                        .disabled(isGenerating)
+                    }
                     Button {
                         plannedName = ""
                         plannedCount = ""
                         planningCategory = true
                     } label: { Label("Plan a Category", systemImage: "square.dashed") }
+                    Button {
+                        sheet = .importList
+                    } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
+                    // Named for where it comes from, not for what it does.
+                    // "Import Achievements" left the source unsaid, which was
+                    // fine while RA was the only one — but PlayStation trophies
+                    // would arrive as a second item under the same name, and
+                    // then neither entry tells you which list you're getting.
+                    if !raImportPromoted {
+                        Button {
+                            importingAchievements = true
+                        } label: { Label("RetroAchievements…", systemImage: "trophy") }
+                            .disabled(isGenerating)
+                    }
                     Divider()
                     Button {
                         goalName = ""
                         addingGoal = true
                     } label: { Label("Add Personal Goal", systemImage: "plus.circle") }
-                    Button {
-                        sheet = .importList
-                    } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
-                    Divider()
-                    // Was a fourth inline control, and the longest label of the
-                    // four — on a row that also has to survive the 42% iPad
-                    // tracker panel. "Import Achievements" says what it DOES;
-                    // the service name only said where from.
-                    Button {
-                        importingAchievements = true
-                    } label: { Label("Import Achievements", systemImage: "trophy") }
-                } label: {
-                    Label("Add", systemImage: "plus")
-                        .font(.subheadline)
-                }
-
-                if hasMoreActions {
-                    Menu {
-                        if builtinAvailable && !usingBuiltin {
-                            Button {
-                                confirmingUseBuiltin = true
-                            } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
-                                .disabled(isGenerating)
-                        }
-                        if raGameID != nil, RACredentials.isConfigured {
-                            Button {
-                                Task { await syncRetroAchievements() }
-                            } label: {
-                                Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
-                            }
-                            .disabled(raSyncing)
-                        }
-                        if game.trackerSchema != nil {
-                            Divider()
-                            Button(role: .destructive) {
-                                removing = RemovalTarget(categoryID: nil, name: game.name,
-                                                         cost: repo.removalCost(for: game))
-                            } label: { Label("Remove Tracker", systemImage: "trash") }
-                                .disabled(isGenerating)
-                        }
-                    } label: {
-                        Label("More", systemImage: "ellipsis.circle")
-                            .font(.subheadline)
+                    if builtinAvailable && !usingBuiltin {
+                        Divider()
+                        Button {
+                            confirmingUseBuiltin = true
+                        } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
+                            .disabled(isGenerating)
                     }
+                    if raGameID != nil, RACredentials.isConfigured {
+                        Button {
+                            Task { await syncRetroAchievements() }
+                        } label: {
+                            Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(raSyncing)
+                    }
+                    if game.trackerSchema != nil {
+                        Divider()
+                        Button(role: .destructive) {
+                            removing = RemovalTarget(categoryID: nil, name: game.name,
+                                                     cost: repo.removalCost(for: game))
+                        } label: { Label("Remove Tracker", systemImage: "trash") }
+                            .disabled(isGenerating)
+                    }
+                } label: {
+                    Label("Build", systemImage: "hammer")
+                        .font(.subheadline)
                 }
             }
             .buttonStyle(.borderless)
@@ -577,17 +602,15 @@ struct TrackerSectionView: View {
         categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
     }
 
-    /// Whether the "More" menu has anything in it.
+    /// Show the RetroAchievements import as a button rather than a menu item.
     ///
-    /// Every item in that menu needs something to act on — a built-in match, a
-    /// synced RetroAchievements set, a tracker to remove. On a game with none
-    /// of those, tapping it opened an empty menu, which reads as the control
-    /// being broken rather than as there being nothing to offer. Checked here
-    /// so the button is absent instead of inert.
-    private var hasMoreActions: Bool {
-        (builtinAvailable && !usingBuiltin)
-            || (raGameID != nil && RACredentials.isConfigured)
-            || game.trackerSchema != nil
+    /// Only where RA plausibly has the game, and only while the set isn't
+    /// already installed — once it is, the useful action is Sync, which lives
+    /// in the menu beside the other things you do to an existing tracker.
+    private var raImportPromoted: Bool {
+        raGameID == nil
+            && RetroAchievementsService.mayCover(platforms: game.platforms,
+                                                 ownership: game.ownership)
     }
 
     /// Library-wide default. Hardcoded until it can be remembered on
