@@ -49,11 +49,46 @@ export interface GuardOptions {
   maxBodyBytes: number;
   /** Quota rules, checked in order. */
   quotas: QuotaRule[];
+  /** Optional body-aware quota selection, evaluated only after auth and size checks. */
+  resolveQuota?: (body: Record<string, unknown>) => { fn: string; quotas: QuotaRule[] };
   /**
    * What to do when the quota store itself is unreachable. Expensive functions
    * (anything calling a paid API) should `deny`; cheap proxies may `allow`.
    */
   onQuotaError: 'allow' | 'deny';
+}
+
+export async function readBodyWithinLimit(
+  req: Request,
+  maxBytes: number,
+): Promise<{ raw?: string; tooLarge: boolean; size: number }> {
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    return { tooLarge: true, size: declared };
+  }
+  if (!req.body) return { raw: '', tooLarge: false, size: 0 };
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return { tooLarge: true, size };
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { raw: new TextDecoder().decode(bytes), tooLarge: false, size };
 }
 
 export interface GuardResult {
@@ -158,17 +193,20 @@ export async function guard(req: Request, opts: GuardOptions): Promise<GuardResu
     }
   }
 
-  // 3. Body size — read as text so we cap before parsing.
-  const raw = await req.text();
-  if (raw.length > opts.maxBodyBytes) {
+  // 3. Body size — stop the stream at the byte limit. Content-Length is only
+  // an early rejection hint, never proof that the body is small: a raw caller
+  // can lie or use chunked transfer encoding.
+  const read = await readBodyWithinLimit(req, opts.maxBodyBytes);
+  if (read.tooLarge) {
     console.warn(
-      `rejected: body ${raw.length}B > ${opts.maxBodyBytes}B (fn=${opts.fn} caller=${installID})`,
+      `rejected: body ${read.size}B > ${opts.maxBodyBytes}B (fn=${opts.fn} caller=${installID})`,
     );
     return {
       installID,
       rejection: jsonResponse({ error: 'Request too large.' }, 413),
     };
   }
+  const raw = read.raw ?? '';
 
   let body: Record<string, unknown>;
   try {
@@ -178,10 +216,11 @@ export async function guard(req: Request, opts: GuardOptions): Promise<GuardResu
   }
 
   // 4. Quotas.
-  const quota = await checkQuotas(opts.fn, installID, opts.quotas);
+  const quotaPlan = opts.resolveQuota?.(body) ?? { fn: opts.fn, quotas: opts.quotas };
+  const quota = await checkQuotas(quotaPlan.fn, installID, quotaPlan.quotas);
   if (!quota.ok) {
     if (quota.errored && opts.onQuotaError === 'allow') {
-      console.warn(`quota unavailable, allowing (fn=${opts.fn})`);
+      console.warn(`quota unavailable, allowing (fn=${quotaPlan.fn})`);
     } else if (quota.errored) {
       return {
         installID,
@@ -191,7 +230,7 @@ export async function guard(req: Request, opts: GuardOptions): Promise<GuardResu
         ),
       };
     } else {
-      console.warn(`rejected: quota (fn=${opts.fn} caller=${installID} ${quota.detail})`);
+      console.warn(`rejected: quota (fn=${quotaPlan.fn} caller=${installID} ${quota.detail})`);
       return {
         installID,
         rejection: jsonResponse(

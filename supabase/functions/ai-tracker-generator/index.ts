@@ -6,7 +6,13 @@
 //   ANTHROPIC_API_KEY — from console.anthropic.com
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { CORS_HEADERS, guard, jsonResponse, type QuotaRule } from '../_shared/guard.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
+import {
+  categoryTokenBudget,
+  FULL_GENERATION_MAX_TOKENS,
+  PLAN_MAX_TOKENS,
+  quotaPlanForAI,
+} from '../_shared/ai-limits.ts';
 
 // Input caps — every one of these bounds what reaches the Anthropic API.
 const MAX_GAME_NAME = 200;
@@ -463,58 +469,15 @@ serve(async (req: Request) => {
     return jsonResponse({ error: 'AI generation is not available right now.' }, 503);
   }
 
-  // Mode decides the price, so mode decides the quota. A full generation is
-  // the most expensive call in the app; a plan is a paragraph, and filling one
-  // category is a fraction of a tracker. Charging all three against one bucket
-  // of ten per hour would make stepped generation unusable on exactly the big
-  // games it exists for — Breath of the Wild is a plan plus five fills.
-  //
-  // The kill switch stays LS_KILL_AI for every mode, so one flag takes the
-  // whole thing offline.
-  //
-  // Peeked from a CLONE so guard still reads the body itself — but only when
-  // the body is small enough that parsing it before the app-key check and the
-  // size cap costs nothing. Parsing arbitrary JSON ahead of those checks let an
-  // unauthenticated caller spend our CPU and memory on a request that was
-  // always going to be rejected. Anything larger falls back to the expensive
-  // bucket, which is the safe default rather than the cheap one.
-  const declaredSize = Number(req.headers.get('content-length') ?? '0');
-  const peeked = declaredSize > 0 && declaredSize <= 2_000
-    ? await req.clone().json().catch(() => ({})) as Record<string, unknown>
-    : {};
-  const peekMode = typeof peeked?.mode === 'string' ? peeked.mode : 'auto';
-  const quotasByMode: Record<string, { fn: string; quotas: QuotaRule[] }> = {
-    plan: {
-      fn: 'ai-plan',
-      quotas: [
-        { scope: 'install', windowSeconds: 3_600, limit: 20 },
-        { scope: 'install', windowSeconds: 86_400, limit: 60 },
-        { scope: 'global', windowSeconds: 86_400, limit: 500 },
-      ],
-    },
-    category: {
-      fn: 'ai-cat',
-      quotas: [
-        { scope: 'install', windowSeconds: 3_600, limit: 20 },
-        { scope: 'install', windowSeconds: 86_400, limit: 80 },
-        { scope: 'global', windowSeconds: 86_400, limit: 500 },
-      ],
-    },
-  };
-  const plan = quotasByMode[peekMode] ?? {
-    fn: 'ai',
-    quotas: [
-      { scope: 'install', windowSeconds: 3_600, limit: 10 },
-      { scope: 'install', windowSeconds: 86_400, limit: 20 },
-      { scope: 'global', windowSeconds: 86_400, limit: 150 },
-    ],
-  };
-
   const { rejection, body } = await guard(req, {
-    fn: plan.fn,
+    fn: 'ai',
     killSwitchEnv: 'LS_KILL_AI',
     maxBodyBytes: MAX_PAYLOAD + 8_000,
-    quotas: plan.quotas,
+    quotas: [],
+    // Mode still decides the bucket, but only after the shared guard has
+    // authenticated, byte-capped, and parsed the one request body. The former
+    // clone peek trusted Content-Length as a bound, which raw clients need not.
+    resolveQuota: quotaPlanForAI,
     onQuotaError: 'deny',
   });
   if (rejection) return rejection;
@@ -548,7 +511,7 @@ serve(async (req: Request) => {
     if (mode === 'plan') {
       const planRes = await callClaude(apiKey, {
         model: 'claude-sonnet-4-6',
-        max_tokens: 1_500,
+        max_tokens: PLAN_MAX_TOKENS,
         tools: [PLAN_TOOL],
         toolName: 'plan_tracker_categories',
         userMessage: buildPlanMessage(gameName, igdbData || null),
@@ -594,14 +557,10 @@ serve(async (req: Request) => {
         return jsonResponse({ error: 'Category name is too long.' }, 400);
       }
       // Clamped, because this number buys output budget. Unbounded, a caller
-      // could ask for a category of 10,000 items, take the 20,000-token
-      // ceiling, and pay for it out of the CHEAP per-mode quota — 500 daily
-      // category calls at a larger budget than the 12,000-token full
-      // generation the expensive bucket exists to ration. 400 is well past any
-      // real category; beyond that the terse-output rule applies anyway.
-      const expectedCount = Number.isFinite(body?.expectedCount)
-        ? Math.min(400, Math.max(0, Math.round(Number(body?.expectedCount))))
-        : null;
+      // could ask for a category of 10,000 items and buy the token ceiling from
+      // the cheaper per-mode bucket. 400 is well past any real category;
+      // beyond that the terse-output rule applies anyway.
+      const { expectedCount, maxTokens: budget } = categoryTokenBudget(body?.expectedCount);
 
       // Size the budget to the category. A flat 8k cap silently truncated
       // anything past roughly a hundred items — 120 Shrines with locations
@@ -610,18 +569,9 @@ serve(async (req: Request) => {
       // Terse entries above 60 items (see buildCategoryMessage), so the
       // per-item allowance drops with them rather than budgeting for prose
       // that was explicitly asked not to be written.
-      // Hard ceiling BELOW the full generation's 12,000, because this mode is
-      // rationed by the cheap bucket: 500 calls a day against 150. Clamping
-      // expectedCount to 400 was not enough — 2,000 + 400 × 45 is exactly
-      // 20,000, so the maximum accepted request still bought more output than
-      // the expensive path it is supposed to undercut. The cost class has to
-      // be capped, not the input that feeds it.
-      const CATEGORY_MAX_TOKENS = 10_000;
-      const perItem = (expectedCount ?? 40) > 60 ? 45 : 90;
-      const budget = Math.min(
-        CATEGORY_MAX_TOKENS,
-        Math.max(6_000, 2_000 + (expectedCount ?? 40) * perItem));
-
+      // The hard ceiling stays below the full generation's 12,000. The shared
+      // limits also cap this bucket at 150 calls/day, so its worst-case 1.5M
+      // daily output tokens stays below the full bucket's 150 × 12,000.
       // Long lists skip the guide lookup. It costs its own round trip and then
       // drags a whole wiki page into the input, and the combination of that
       // and 120 entries of output does not fit inside 150 seconds — which
@@ -707,7 +657,7 @@ serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 12000,
+        max_tokens: FULL_GENERATION_MAX_TOKENS,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools,
         tool_choice: { type: 'any' },
