@@ -92,7 +92,8 @@ enum GenerationKind: Equatable, Sendable {
 }
 
 /// A finished generation waiting on the user's decision.
-struct PendingTrackerMerge: Sendable {
+struct PendingTrackerMerge: Identifiable, Sendable {
+    let id = UUID()
     let incoming: Data
     let diff: TrackerDiff
 }

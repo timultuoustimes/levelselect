@@ -100,9 +100,7 @@ struct StatsTab: View {
                         CoverThumb(urlString: game.coverURLString)
                             .frame(width: 30, height: 40)
                         VStack(alignment: .leading, spacing: 3) {
-                            // Same reasoning as the library row: a leaderboard
-                            // entry you can't read isn't a leaderboard entry.
-                            Text(game.name).font(.subheadline).lineLimit(2)
+                            Text(game.name).font(.subheadline)
                             bar(fraction: time / maxTime, color: LSTheme.accent)
                         }
                         Spacer()

@@ -11,11 +11,6 @@ struct GameRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(game.name)
                     .font(.headline)
-                    // A list row can be two lines tall. Clipping the one piece
-                    // of text that identifies the row is worse than a taller
-                    // row — and at large text sizes two regional editions
-                    // become the same truncated prefix.
-                    .lineLimit(2)
 
                 HStack(spacing: 5) {
                     Image(systemName: game.status.systemImage)

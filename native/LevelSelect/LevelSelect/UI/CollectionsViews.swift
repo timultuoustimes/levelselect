@@ -312,9 +312,6 @@ struct CollectionMembersPicker: View {
             Text(game.name)
                 .font(.caption2)
                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                // Three, not two: this is a picker, and two regional editions
-                // sharing a truncated prefix is a choice made blind.
-                .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }

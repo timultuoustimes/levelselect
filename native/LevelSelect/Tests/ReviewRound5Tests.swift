@@ -101,4 +101,24 @@ struct ReviewRound5Tests {
         #expect(query["z"] == nil)
         #expect(!url.absoluteString.contains("old-display-name"))
     }
+
+    @Test func dismissingOnePendingMergeDoesNotStrandTheNextMerge() {
+        var state = MergeReviewPresentationState()
+        let first = UUID()
+        let second = UUID()
+
+        #expect(state.pendingChanged(to: first, occupyingReviewID: nil, slotIsFree: true) == first)
+        #expect(state.sheetClosed(reviewID: first, pendingID: first) == nil)
+        #expect(state.pendingChanged(to: first, occupyingReviewID: nil, slotIsFree: true) == nil)
+
+        // The old Boolean stayed true while pending changed non-nil → non-nil,
+        // so this distinct result (including one from another game) vanished.
+        #expect(state.pendingChanged(to: second, occupyingReviewID: nil, slotIsFree: true) == second)
+
+        // A result landing behind another sheet waits, then takes the slot as
+        // soon as that unrelated presentation closes.
+        _ = state.pendingChanged(to: nil, occupyingReviewID: nil, slotIsFree: false)
+        #expect(state.pendingChanged(to: first, occupyingReviewID: nil, slotIsFree: false) == nil)
+        #expect(state.sheetClosed(reviewID: nil, pendingID: first) == first)
+    }
 }

@@ -1,6 +1,32 @@
 import SwiftUI
 import SwiftData
 
+/// Identity-aware handoff for the one sheet slot in `TrackerSectionView`.
+/// A Boolean dismissal cannot distinguish the merge the user swiped away from
+/// a later merge, including one belonging to a different game rendered by the
+/// same view identity.
+struct MergeReviewPresentationState {
+    private(set) var dismissedID: UUID?
+
+    mutating func pendingChanged(to pendingID: UUID?, occupyingReviewID: UUID?,
+                                 slotIsFree: Bool) -> UUID? {
+        guard let pendingID else {
+            dismissedID = nil
+            return nil
+        }
+        guard dismissedID != pendingID else { return nil }
+        // A new review replaces a stale review in place. A non-review sheet
+        // keeps the slot until it closes.
+        return slotIsFree || occupyingReviewID != nil ? pendingID : nil
+    }
+
+    mutating func sheetClosed(reviewID: UUID?, pendingID: UUID?) -> UUID? {
+        if let reviewID { dismissedID = reviewID }
+        guard let pendingID, dismissedID != pendingID else { return nil }
+        return pendingID
+    }
+}
+
 /// Objective tracker: schema-driven checklist (categories → items) with
 /// per-playthrough state. Personal Goals are user-added items in the same
 /// schema. Everything syncs via CloudKit like the rest of the model.
@@ -30,22 +56,26 @@ struct TrackerSectionView: View {
     /// Pushed rather than presented — a list of candidates wants a full screen
     /// and a back button, and it keeps the single sheet slot free.
     @State private var importingAchievements = false
-    /// Set when the review sheet is closed, so a swipe-down isn't undone by
-    /// the queue handing the slot straight back. Cleared when the pending
-    /// merge itself goes away, so a LATER generation still gets reviewed.
-    @State private var dismissedMerge = false
+    /// Remembers WHICH review was dismissed. A Boolean leaked across games and
+    /// could strand a different pending merge merely because both were
+    /// non-nil across the view update.
+    @State private var mergeReviewPresentation = MergeReviewPresentationState()
 
     private enum TrackerSheet: Identifiable, Equatable {
         case importList
         case editItem(EditTarget)
-        case reviewMerge
+        case reviewMerge(UUID)
 
         var id: String {
             switch self {
             case .importList:          "import"
             case .editItem(let target): "edit-\(target.id)"
-            case .reviewMerge:         "merge"
+            case .reviewMerge(let id): "merge-\(id.uuidString)"
             }
+        }
+
+        var reviewID: UUID? {
+            if case .reviewMerge(let id) = self { id } else { nil }
         }
     }
     /// Rename target: category id, plus an item id when renaming an item.
@@ -366,8 +396,8 @@ struct TrackerSectionView: View {
                 TrackerListImportView(game: game)
             case .editItem(let target):
                 TrackerItemEditView(game: game, target: target)
-            case .reviewMerge:
-                if let merge = generation.pendingMerge(for: game.id) {
+            case .reviewMerge(let id):
+                if let merge = generation.pendingMerge(for: game.id), merge.id == id {
                     TrackerMergeReviewView(game: game, merge: merge)
                 }
             }
@@ -380,18 +410,25 @@ struct TrackerSectionView: View {
         // re-presented it immediately — an un-dismissable sheet, which is a
         // worse bug than the collision this was written to prevent. A refusal
         // is remembered until the merge itself changes.
-        .onChange(of: generation.pendingMerge(for: game.id) != nil) { _, pending in
-            if pending {
-                if sheet == nil { sheet = .reviewMerge }
-            } else {
-                dismissedMerge = false
+        // `initial: true` matters because generation deliberately outlives
+        // this view. A result may already be waiting when the user navigates
+        // back; observing only future changes stranded that review off-screen.
+        .onChange(of: generation.pendingMerge(for: game.id)?.id, initial: true) { _, pendingID in
+            if let reviewID = mergeReviewPresentation.pendingChanged(
+                to: pendingID,
+                occupyingReviewID: sheet?.reviewID,
+                slotIsFree: sheet == nil
+            ) {
+                sheet = .reviewMerge(reviewID)
             }
         }
         .onChange(of: sheet) { previous, current in
-            if previous == .reviewMerge, current == nil { dismissedMerge = true }
-            if current == nil, !dismissedMerge,
-               generation.pendingMerge(for: game.id) != nil {
-                sheet = .reviewMerge
+            guard current == nil else { return }
+            if let reviewID = mergeReviewPresentation.sheetClosed(
+                reviewID: previous?.reviewID,
+                pendingID: generation.pendingMerge(for: game.id)?.id
+            ) {
+                sheet = .reviewMerge(reviewID)
             }
         }
         .alert("Plan a Category", isPresented: $planningCategory) {

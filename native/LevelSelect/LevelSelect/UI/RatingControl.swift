@@ -18,38 +18,34 @@ struct RatingControl: View {
             HStack(spacing: 6) {
                 ForEach(1...5, id: \.self) { star($0) }
             }
-            // One adjustable control rather than five unlabelled images.
-            // VoiceOver previously found "star, image" five times with no way
-            // to learn the current value or change it — the stars carry
-            // `onTapGesture`, which has no button trait and no accessible
-            // action. Swiping up and down now sets the rating directly.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Rating")
-            .accessibilityValue(accessibilityValue)
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                // Never routed through `set` at the ceiling: `set` treats
-                // "the value you already have" as the touch toggle and clears
-                // the rating, so incrementing a 5-star game unrated it. My
-                // previous guard passed `value` in exactly that case, which is
-                // the bug rather than a defence against it.
-                case .increment:
-                    if value < 5 { set(value + 1) }
-                case .decrement:
-                    // Down from one star clears it, which is what tapping the
-                    // filled first star already does.
-                    if value <= 1 { rating = nil } else { set(value - 1) }
-                @unknown default: break
-                }
-            }
             if showLabel {
                 labelView
-                    // Scales rather than pinned: 15pt fits "Loved it" at the
-                    // default text size and clips it at accessibility sizes.
-                    // The fixed height exists to stop the row jumping as the
-                    // label changes, which a scaled height still does.
-                    .frame(height: labelHeight, alignment: .leading)
+                    // A scaled MINIMUM keeps short labels from making the row
+                    // jump, but still lets "Really liked it" wrap and grow at
+                    // accessibility sizes. A scaled fixed height was still a
+                    // one-line cap — a larger box that revealed no more text.
+                    .frame(minHeight: labelHeight, alignment: .leading)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: rating)
+            }
+        }
+        // One adjustable control rather than five unlabelled images plus a
+        // separately announced visible label. Grouping the entire control
+        // keeps VoiceOver's spoken value and the on-screen text in one element.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Rating")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            // Never routed through `set` at the ceiling: `set` treats
+            // "the value you already have" as the touch toggle and clears
+            // the rating, so incrementing a 5-star game unrated it.
+            case .increment:
+                if value < 5 { set(value + 1) }
+            case .decrement:
+                // Down from one star clears it, which is what tapping the
+                // filled first star already does.
+                if value <= 1 { rating = nil } else { set(value - 1) }
+            @unknown default: break
             }
         }
     }
