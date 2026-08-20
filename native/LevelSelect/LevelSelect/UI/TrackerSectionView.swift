@@ -221,6 +221,16 @@ struct TrackerSectionView: View {
                 }
                 .disabled(isGenerating)
 
+                // Pushed, not presented — this view already carries three
+                // sheets, and sheets on this screen have swallowed each other
+                // twice before.
+                NavigationLink {
+                    RetroAchievementsImportView(game: game)
+                } label: {
+                    Label("RetroAchievements", systemImage: "trophy")
+                        .font(.subheadline)
+                }
+
                 if builtinAvailable && !usingBuiltin {
                     Button {
                         confirmingUseBuiltin = true

@@ -1,0 +1,292 @@
+// Supabase Edge Function: RetroAchievements proxy
+// Finds a game on RetroAchievements and returns its achievement list as tracker
+// content. Deploy with: supabase functions deploy ra-proxy
+//
+// Required secrets (set via: supabase secrets set KEY=value):
+//   RA_API_KEY   — retroachievements.org → Settings → Web API Key
+//   RA_USERNAME  — the account that key belongs to (RA wants both on every call)
+//
+// Why a proxy at all: the key would otherwise ship inside a public repo's app
+// binary. It also means the console list and per-console game lists can be
+// cached across warm invocations instead of re-downloaded by every device.
+//
+// This is NOT generation. For a game RA covers, the achievement list is the
+// real, authored one — no model, no guessing, no minute of waiting.
+
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
+
+const RA_BASE = 'https://retroachievements.org/API';
+const MAX_GAME_NAME = 200;
+const MAX_PLATFORM = 80;
+
+// ─── Caches (in-memory, reused across warm invocations) ──────────────────────
+
+let consoles: { id: number; name: string }[] | null = null;
+const gameLists = new Map<number, { games: RAGame[]; fetchedAt: number }>();
+const GAME_LIST_TTL = 6 * 60 * 60 * 1000;   // 6h; RA adds sets, slowly
+
+interface RAGame {
+  ID: number;
+  Title: string;
+  NumAchievements?: number;
+  ImageIcon?: string;
+}
+
+function auth(): string {
+  const key = Deno.env.get('RA_API_KEY');
+  const user = Deno.env.get('RA_USERNAME');
+  if (!key || !user) throw new Error('RA credentials not configured');
+  return `z=${encodeURIComponent(user)}&y=${encodeURIComponent(key)}`;
+}
+
+/// Case-, punctuation- and diacritic-insensitive key. Same idea as the app's
+/// TrackerMerge.matchKey, so "Castlevania II: Simon's Quest" and
+/// "castlevania ii simons quest" collapse together.
+function matchKey(value: string): string {
+  return value
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+async function getConsoles(): Promise<{ id: number; name: string }[]> {
+  if (consoles) return consoles;
+  const res = await fetch(`${RA_BASE}/API_GetConsoleIDs.php?${auth()}`);
+  if (!res.ok) throw new Error(`RA consoles failed: ${res.status}`);
+  const raw = await res.json() as { ID: number | string; Name: string }[];
+  consoles = raw.map((c) => ({ id: Number(c.ID), name: String(c.Name) }));
+  return consoles;
+}
+
+/// Resolve the app's platform string to an RA console.
+///
+/// The two vocabularies don't line up — the app says "NES", RA says
+/// "NES/Famicom"; the app says "PC (Microsoft Windows)", RA has no such
+/// console at all. So: exact key match, then either side containing the other,
+/// then a couple of aliases RA words differently enough that containment
+/// misses. Anything else returns null and the caller asks the user.
+async function resolveConsole(platform: string): Promise<{ id: number; name: string } | null> {
+  const list = await getConsoles();
+  const key = matchKey(platform);
+  if (!key) return null;
+
+  const aliases: Record<string, string> = {
+    'nes': 'nes famicom',
+    'famicom': 'nes famicom',
+    'snes': 'snes super famicom',
+    'super nintendo': 'snes super famicom',
+    'super nintendo entertainment system': 'snes super famicom',
+    'nintendo entertainment system': 'nes famicom',
+    'sega genesis': 'genesis mega drive',
+    'genesis': 'genesis mega drive',
+    'mega drive': 'genesis mega drive',
+    'turbografx 16': 'pc engine turbografx 16',
+    'turbografx16': 'pc engine turbografx 16',
+    'game boy advance': 'game boy advance',
+    'sega master system': 'master system',
+    'playstation': 'playstation',
+    'psx': 'playstation',
+    'ps1': 'playstation',
+  };
+  const target = aliases[key] ?? key;
+
+  const exact = list.find((c) => matchKey(c.name) === target);
+  if (exact) return exact;
+
+  // Containment either way, longest name first so "Game Boy Advance" is
+  // preferred over "Game Boy" for a Game Boy Advance game.
+  const byLength = [...list].sort((a, b) => b.name.length - a.name.length);
+  return byLength.find((c) => {
+    const name = matchKey(c.name);
+    return name.includes(target) || target.includes(name);
+  }) ?? null;
+}
+
+async function getGames(consoleID: number): Promise<RAGame[]> {
+  const cached = gameLists.get(consoleID);
+  if (cached && Date.now() - cached.fetchedAt < GAME_LIST_TTL) return cached.games;
+
+  // f=1 → only games that actually have an achievement set. Without it the
+  // list is mostly entries with nothing to track.
+  const res = await fetch(`${RA_BASE}/API_GetGameList.php?i=${consoleID}&f=1&${auth()}`);
+  if (!res.ok) throw new Error(`RA game list failed: ${res.status}`);
+  const games = await res.json() as RAGame[];
+  gameLists.set(consoleID, { games, fetchedAt: Date.now() });
+  return games;
+}
+
+/// Rank candidates against the name the user's library uses.
+///
+/// Deliberately returns several rather than picking one: RA titles carry
+/// regional variants ("Castlevania | Akumajou Dracula"), subsets ("[Subset -
+/// Bonus]"), and hacks, so an automatic pick would confidently install the
+/// wrong achievement set. The user chooses.
+function rank(games: RAGame[], gameName: string): RAGame[] {
+  const key = matchKey(gameName);
+  const scored = games.map((game) => {
+    const title = matchKey(game.Title);
+    // RA often writes "Title | Regional Title"; score each half.
+    const parts = title.split(' | ').map((p) => p.trim());
+    let score = 0;
+    if (title === key || parts.includes(key)) score = 100;
+    else if (parts.some((p) => p.startsWith(key) || key.startsWith(p))) score = 70;
+    else if (title.includes(key) || key.includes(title)) score = 50;
+    else {
+      // Word overlap, so "Castlevania Simons Quest" still finds
+      // "Castlevania II - Simon's Quest".
+      const words = new Set(key.split(' ').filter((w) => w.length > 2));
+      const hit = [...words].filter((w) => title.includes(w)).length;
+      score = words.size > 0 ? Math.round((hit / words.size) * 40) : 0;
+    }
+    // A subset or a hack is rarely what someone means by the base game.
+    if (/\[(subset|hack)/i.test(game.Title)) score -= 25;
+    return { game, score };
+  });
+  return scored
+    .filter((s) => s.score >= 20)
+    .sort((a, b) => b.score - a.score || a.game.Title.localeCompare(b.game.Title))
+    .slice(0, 12)
+    .map((s) => s.game);
+}
+
+interface RAAchievement {
+  ID: number | string;
+  Title: string;
+  Description?: string;
+  Points?: number | string;
+  DisplayOrder?: number | string;
+  type?: string | null;
+}
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
+  // Free upstream, and the answer is a lookup rather than a generation, so a
+  // quota-store outage shouldn't block it — fail open, like the IGDB proxy.
+  const { rejection, body } = await guard(req, {
+    fn: 'ra',
+    maxBodyBytes: 4_000,
+    quotas: [
+      { scope: 'install', windowSeconds: 3_600, limit: 60 },
+      { scope: 'global', windowSeconds: 86_400, limit: 5_000 },
+    ],
+    onQuotaError: 'allow',
+  });
+  if (rejection) return rejection;
+
+  if (!Deno.env.get('RA_API_KEY') || !Deno.env.get('RA_USERNAME')) {
+    console.error('RA_API_KEY / RA_USERNAME not configured');
+    return jsonResponse({ error: 'RetroAchievements is not set up yet.' }, 503);
+  }
+
+  try {
+    const mode = typeof body?.mode === 'string' ? body.mode : 'search';
+
+    // ── search: which RA game is this?
+    if (mode === 'search') {
+      const gameName = typeof body?.gameName === 'string' ? body.gameName.trim() : '';
+      const platform = typeof body?.platform === 'string' ? body.platform.trim() : '';
+      if (!gameName || gameName.length > MAX_GAME_NAME) {
+        return jsonResponse({ error: 'gameName is required.' }, 400);
+      }
+      if (platform.length > MAX_PLATFORM) {
+        return jsonResponse({ error: 'platform is too long.' }, 400);
+      }
+
+      const consoleID = Number.isFinite(body?.consoleID) ? Number(body?.consoleID) : null;
+      const resolved = consoleID !== null
+        ? (await getConsoles()).find((c) => c.id === consoleID) ?? null
+        : await resolveConsole(platform);
+
+      if (!resolved) {
+        // Not an error the user can't act on: hand back the console list so
+        // the app can ask which system this copy is, rather than dead-ending
+        // on a platform name RA words differently.
+        return jsonResponse({
+          needsConsole: true,
+          consoles: (await getConsoles()).sort((a, b) => a.name.localeCompare(b.name)),
+        });
+      }
+
+      const matches = rank(await getGames(resolved.id), gameName);
+      return jsonResponse({
+        console: resolved,
+        results: matches.map((g) => ({
+          id: g.ID,
+          title: g.Title,
+          achievements: Number(g.NumAchievements ?? 0),
+          iconPath: g.ImageIcon ?? null,
+        })),
+      });
+    }
+
+    // ── achievements: the real, authored list for one RA game.
+    if (mode === 'achievements') {
+      const gameID = Number.isFinite(body?.gameID) ? Number(body?.gameID) : null;
+      if (gameID === null || gameID <= 0) {
+        return jsonResponse({ error: 'gameID is required.' }, 400);
+      }
+
+      const res = await fetch(`${RA_BASE}/API_GetGameExtended.php?i=${gameID}&${auth()}`);
+      if (!res.ok) {
+        console.error('RA game extended failed:', res.status, await res.text());
+        return jsonResponse({ error: 'RetroAchievements is unavailable right now.' }, 502);
+      }
+      const game = await res.json() as {
+        Title?: string;
+        ConsoleName?: string;
+        Achievements?: Record<string, RAAchievement>;
+      };
+
+      const raw = Object.values(game.Achievements ?? {});
+      if (raw.length === 0) {
+        return jsonResponse({ error: 'That game has no achievements on RetroAchievements.' }, 422);
+      }
+
+      const items = raw
+        .sort((a, b) => Number(a.DisplayOrder ?? 0) - Number(b.DisplayOrder ?? 0))
+        .map((a) => ({
+          // Prefixed so an achievement id can never collide with a generated
+          // item id in the same tracker.
+          id: `ra-${a.ID}`,
+          name: String(a.Title ?? '').trim() || `Achievement ${a.ID}`,
+          ...(a.Description ? { description: String(a.Description) } : {}),
+          // RA marks these itself, so this is a fact rather than the guess a
+          // generated tracker makes.
+          ...(a.type === 'missable' ? { missable: true } : {}),
+          metadata: { points: Number(a.Points ?? 0), raID: Number(a.ID) },
+        }));
+
+      const structuredData = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        generatedBy: 'retroachievements',
+        sources: [{ type: 'retroachievements', url: `https://retroachievements.org/game/${gameID}` }],
+        categories: [{
+          id: 'retroachievements',
+          name: 'Achievements',
+          description: `RetroAchievements set for ${game.Title ?? 'this game'}`,
+          type: 'checklist',
+          items,
+        }],
+        runs: [],
+      };
+      return jsonResponse({
+        structuredData,
+        title: game.Title ?? null,
+        consoleName: game.ConsoleName ?? null,
+        count: items.length,
+        points: items.reduce((sum, i) => sum + (i.metadata.points || 0), 0),
+      });
+    }
+
+    return jsonResponse({ error: 'Unsupported mode.' }, 400);
+  } catch (err) {
+    console.error('ra-proxy error:', String(err));
+    return jsonResponse({ error: 'RetroAchievements lookup failed. Try again.' }, 500);
+  }
+});
