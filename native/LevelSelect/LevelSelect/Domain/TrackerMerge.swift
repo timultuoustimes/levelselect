@@ -321,12 +321,19 @@ enum TrackerMerge {
             else { continue }
             let name = (category["name"] as? String) ?? ""
             let source = category["sourceName"] as? String
+            let fallbackKeys = Set([name, source]
+                .compactMap { $0.map(matchKey) }
+                .filter { !$0.isEmpty })
+            let fallbackMatches = incCats.filter { inc in
+                fallbackKeys.contains(matchKey((inc["name"] as? String) ?? ""))
+            }
+            // A planned category has a local id, so name/sourceName is its
+            // only bridge to generated content. That bridge is safe only when
+            // it identifies exactly one incoming category; choosing the first
+            // of two same-named categories would replace user content by
+            // payload order.
             let match = incCats.first { ($0["id"] as? String) == id }
-                ?? incCats.first { matchKey(($0["name"] as? String) ?? "") == matchKey(name) }
-                ?? incCats.first { inc in
-                    guard let source else { return false }
-                    return matchKey((inc["name"] as? String) ?? "") == matchKey(source)
-                }
+                ?? (fallbackMatches.count == 1 ? fallbackMatches[0] : nil)
             guard let match, let items = match["items"] as? [[String: Any]] else { continue }
             // Start from the INCOMING category, not the existing one. Keeping
             // the old dictionary and swapping only `items` silently retained
@@ -462,10 +469,12 @@ enum TrackerMerge {
 
         var cats = (root["categories"] as? [[String: Any]]) ?? []
         let incCats = (incRoot["categories"] as? [[String: Any]]) ?? []
+        let locked = TrackerSchemaJSON.lockedCategoryIDs(in: current)
 
         for incCat in incCats {
             guard let incID = incCat["id"] as? String,
-                  incID != TrackerSchemaJSON.personalGoalsID else { continue }
+                  incID != TrackerSchemaJSON.personalGoalsID,
+                  !locked.contains(incID) else { continue }
             let incName = (incCat["name"] as? String) ?? incID
             let incItems = (incCat["items"] as? [[String: Any]]) ?? []
 
@@ -482,9 +491,14 @@ enum TrackerMerge {
             // "Bosses" with different ids are two categories, and folding an
             // incoming one into whichever came first loses its identity.
             let nameMatches = cats.indices.filter {
-                matchKey((cats[$0]["name"] as? String) ?? "") == matchKey(incName)
+                let candidateID = (cats[$0]["id"] as? String) ?? ""
+                return !locked.contains(candidateID)
+                    && candidateID != TrackerSchemaJSON.personalGoalsID
+                    && matchKey((cats[$0]["name"] as? String) ?? "") == matchKey(incName)
             }
-            let idx = cats.firstIndex { ($0["id"] as? String) == incID }
+            let idx = cats.firstIndex {
+                ($0["id"] as? String) == incID && !locked.contains(incID)
+            }
                 ?? (nameMatches.count == 1 ? nameMatches[0] : nil)
 
             guard let idx else {

@@ -830,9 +830,16 @@ struct Repository {
     func removeCategory(from game: Game, categoryID: String, at date: Date = .now) -> Bool {
         guard let schema = game.trackerSchema,
               let root = (try? JSONSerialization.jsonObject(with: schema.jsonData)) as? [String: Any],
-              var cats = root["categories"] as? [[String: Any]],
-              let index = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+              var cats = root["categories"] as? [[String: Any]]
         else { return false }
+        let matchingIndices = cats.indices.filter {
+            (cats[$0]["id"] as? String) == categoryID
+        }
+        // Older builds could persist duplicate category ids. The caller gives
+        // us only an id, so there is no factual way to know which visible row
+        // the user confirmed. Refuse the ambiguous destructive instruction;
+        // choosing the first would delete progress by payload order.
+        guard matchingIndices.count == 1, let index = matchingIndices.first else { return false }
 
         let all = TrackerSchemaJSON.categories(from: schema.jsonData)
         let leaving = Set(all.first { $0.id == categoryID }?.items.map(\.id) ?? [])
