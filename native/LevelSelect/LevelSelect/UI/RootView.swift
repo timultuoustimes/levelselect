@@ -262,6 +262,12 @@ struct HomeTab: View {
     @State private var nav = AppNavigator.shared
     /// Home categories the user has collapsed (comma-joined status raw values).
     @AppStorage("homeCollapsedStatuses") private var collapsedRaw = ""
+    /// Statuses kept off Home. Device-local on purpose, and not synced: which
+    /// shelves you want on the front page of the phone in your pocket is not
+    /// obviously the same answer as for the iPad on the desk. Saying so here
+    /// because a preference that silently doesn't sync is otherwise read as a
+    /// bug rather than a decision.
+    @AppStorage("homeHiddenStatuses") private var hiddenRaw = ""
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -384,16 +390,18 @@ struct HomeTab: View {
 
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
-                    if !items.isEmpty {
+                    if !items.isEmpty, !hiddenStatuses.contains(status.rawValue) {
                         StatusCarousel(
                             status: status, games: items,
                             collapsed: collapsedStatuses.contains(status.rawValue),
                             onOpen: { path.append($0) },
                             onSeeAll: { path.append(status) },
-                            onToggleCollapse: { toggleCollapse(status) }
+                            onToggleCollapse: { toggleCollapse(status) },
+                            onHide: { setHidden(status, true) }
                         )
                     }
                 }
+                hiddenStatusesFooter
             }
             .padding(.vertical)
         }
@@ -437,6 +445,47 @@ struct HomeTab: View {
 
     private var collapsedStatuses: Set<String> {
         Set(collapsedRaw.split(separator: ",").map(String.init))
+    }
+
+    private var hiddenStatuses: Set<String> {
+        Set(hiddenRaw.split(separator: ",").map(String.init))
+    }
+
+    private func setHidden(_ status: GameStatus, _ hidden: Bool) {
+        var set = hiddenStatuses
+        if hidden { set.insert(status.rawValue) } else { set.remove(status.rawValue) }
+        hiddenRaw = set.sorted().joined(separator: ",")
+    }
+
+    /// The way back. A shelf that vanishes with no trace of how to restore it
+    /// is a bug from the user's side, however deliberate the tap was.
+    @ViewBuilder
+    private var hiddenStatusesFooter: some View {
+        let hidden = GameStatus.displayOrder.filter {
+            hiddenStatuses.contains($0.rawValue) && !(grouped[$0] ?? []).isEmpty
+        }
+        if !hidden.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Hidden from Home")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                FlowLayout(spacing: 8) {
+                    ForEach(hidden, id: \.self) { status in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) { setHidden(status, false) }
+                        } label: {
+                            Label("\(status.sectionTitle) (\((grouped[status] ?? []).count))",
+                                  systemImage: status.systemImage)
+                                .font(.caption)
+                        }
+                        .buttonStyle(.borderless)
+                        .tint(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 4)
+        }
     }
 
     private func toggleCollapse(_ status: GameStatus) {

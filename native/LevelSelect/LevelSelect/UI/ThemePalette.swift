@@ -25,6 +25,7 @@ enum ThemePalette {
         case .shelved:   .brown
         case .abandoned: .red
         case .wishlist:  .pink
+        case .ongoing:   .teal
         }
     }
 

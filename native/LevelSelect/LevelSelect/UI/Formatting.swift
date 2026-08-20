@@ -44,12 +44,18 @@ extension GameStatus {
         case .shelved:   "archivebox"
         case .abandoned: "xmark.circle"
         case .wishlist:  "heart.fill"
+        case .ongoing:   "infinity"
         }
     }
 
     /// Display order for grouped library sections.
+    ///
+    /// `ongoing` sits straight after `playing`: a game you keep coming back to
+    /// is closer to what you're playing than to a backlog, and burying it
+    /// below the finished pile would defeat the point of having the status.
     static var displayOrder: [GameStatus] {
-        [.playing, .paused, .queued, .backlog, .wishlist, .completed, .shelved, .abandoned]
+        [.playing, .ongoing, .paused, .queued, .backlog, .wishlist,
+         .completed, .shelved, .abandoned]
     }
 
     var sectionTitle: String {
@@ -62,6 +68,11 @@ extension GameStatus {
         case .shelved:   "Shelved"
         case .abandoned: "Abandoned"
         case .wishlist:  "Wishlist"
+        // Not "Ongoing": the heading is what these games ARE to someone —
+        // Minecraft, a city builder, a live-service game they drift back to
+        // for a fortnight twice a year. There is no finish line to be short
+        // of, so none of the other statuses fit without implying one.
+        case .ongoing:   "Always Around"
         }
     }
 }

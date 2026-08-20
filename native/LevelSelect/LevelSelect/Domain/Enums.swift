@@ -4,9 +4,13 @@ import Foundation
 // All String-raw for direct SwiftData attribute storage.
 
 /// Legacy `status` — 7 values verified against the frozen library — plus
-/// `wishlist` (added 2026-08: games not yet owned, promoted from Deku Deals).
+/// `wishlist` (added 2026-08: games not yet owned, promoted from Deku Deals)
+/// and `ongoing` (added 2026-08: games with no finish line).
+///
+/// Adding a case costs no schema version: this is stored as a String
+/// attribute, so the shape on disk and in CloudKit is unchanged.
 enum GameStatus: String, Codable, CaseIterable, Sendable {
-    case backlog, playing, paused, completed, queued, shelved, abandoned, wishlist
+    case backlog, playing, paused, completed, queued, shelved, abandoned, wishlist, ongoing
 }
 
 enum SessionState: String, Codable, Sendable {

@@ -39,6 +39,7 @@ struct StatusCarousel: View {
     var onOpen: (Game) -> Void
     var onSeeAll: () -> Void
     var onToggleCollapse: () -> Void = {}
+    var onHide: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -69,6 +70,23 @@ struct StatusCarousel: View {
             }
             .padding(.horizontal)
             .contentShape(.rect)
+            .contextMenu {
+                Button {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { onToggleCollapse() }
+                } label: {
+                    Label(collapsed ? "Expand" : "Collapse",
+                          systemImage: collapsed ? "chevron.down" : "chevron.right")
+                }
+                if let onHide {
+                    // Hiding is about Home only. The games stay in the library,
+                    // still sortable and filterable by this status — "I don't
+                    // want to look at 60 backlog games every time I open the
+                    // app" is not the same wish as "forget I own them".
+                    Button(role: .destructive) {
+                        withAnimation(.easeInOut(duration: 0.25)) { onHide() }
+                    } label: { Label("Hide from Home", systemImage: "eye.slash") }
+                }
+            }
 
             if !collapsed {
             ScrollView(.horizontal, showsIndicators: false) {
