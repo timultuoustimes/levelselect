@@ -172,16 +172,20 @@ enum TrackerMerge {
 
     // MARK: Diff
 
+    /// - Parameter preserving: extra category ids the caller's mode will carry
+    ///   across untouched. Empty for a category-scoped replace, which names its
+    ///   target explicitly and must still report what changed inside it.
     static func diff(current: Data, incoming: Data,
-                     progressIDs: Set<String> = []) -> TrackerDiff {
+                     progressIDs: Set<String> = [],
+                     preserving: Set<String> = []) -> TrackerDiff {
         // Personal Goals and locked categories are the user's own content and
         // are preserved by every mode, so they're never part of the comparison
         // — reporting them as "removed" would be both wrong and alarming.
-        let locked = TrackerSchemaJSON.lockedCategoryIDs(in: current)
+        let kept = TrackerSchemaJSON.lockedCategoryIDs(in: current).union(preserving)
         let cur = TrackerSchemaJSON.categories(from: current)
-            .filter { $0.id != TrackerSchemaJSON.personalGoalsID && !locked.contains($0.id) }
+            .filter { $0.id != TrackerSchemaJSON.personalGoalsID && !kept.contains($0.id) }
         let inc = TrackerSchemaJSON.categories(from: incoming)
-            .filter { $0.id != TrackerSchemaJSON.personalGoalsID && !locked.contains($0.id) }
+            .filter { $0.id != TrackerSchemaJSON.personalGoalsID && !kept.contains($0.id) }
 
         var diffs: [TrackerCategoryDiff] = []
         var matchedCurrent = Set<String>()

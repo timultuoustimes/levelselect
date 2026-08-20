@@ -1207,8 +1207,14 @@ struct Repository {
         guard let existing = game.trackerSchema else {
             return TrackerMerge.diff(current: TrackerSchemaJSON.emptySchema(), incoming: jsonData)
         }
-        return TrackerMerge.diff(current: existing.jsonData, incoming: jsonData,
-                                 progressIDs: progressItemIDs(for: game))
+        return TrackerMerge.diff(
+            current: existing.jsonData, incoming: jsonData,
+            progressIDs: progressItemIDs(for: game),
+            // The review screen offers Replace or Add, and an imported set
+            // survives both — a replace preserves it, and the additive modes
+            // never remove anything. Listing its items as at risk would put a
+            // loss on the screen that neither choice can cause.
+            preserving: TrackerSchemaJSON.importedSourceCategoryIDs(in: existing.jsonData))
     }
 
     /// Fold a generated schema into the game's existing one on the user's
@@ -1242,8 +1248,20 @@ struct Repository {
         let states = allTrackerStates(for: game)
         let progressIDs = progressItemIDs(for: game)
 
+        // A full replace carries imported sets across, so they must not be
+        // counted as removed. A category-scoped replace is the opposite case:
+        // re-importing from RetroAchievements IS a scoped replace of that very
+        // category, and the whole point of the summary there is to say what the
+        // refresh changed.
+        let preserved: Set<String>
+        if case .replaceCategories = mode {
+            preserved = []
+        } else {
+            preserved = TrackerSchemaJSON.importedSourceCategoryIDs(in: existing.jsonData)
+        }
         let diff = TrackerMerge.diff(current: existing.jsonData,
-                                     incoming: jsonData, progressIDs: progressIDs)
+                                     incoming: jsonData, progressIDs: progressIDs,
+                                     preserving: preserved)
         let merged = TrackerMerge.merged(current: existing.jsonData,
                                          incoming: jsonData, mode: mode)
 

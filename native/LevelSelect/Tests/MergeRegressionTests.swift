@@ -479,4 +479,79 @@ struct IngestBoundaryTests {
         #expect(cats.count == 1)
         #expect(cats.first?.items.map(\.id) == ["mine", "extra"])
     }
+
+    // MARK: An imported RetroAchievements set is not regenerable content
+
+    private func raCategory(gameID: Int, items: [(String, String)]) -> [String: Any] {
+        ["id": "retroachievements", "name": "Achievements", "type": "checklist",
+         "raGameID": gameID, "items": items.map { ["id": $0.0, "name": $0.1] }]
+    }
+
+    /// A full Replace preserved only Personal Goals and locked categories, and
+    /// the RA importer sets neither — so regenerating a game that had an
+    /// imported set deleted the real, authored achievement list, along with the
+    /// `raGameID` stamp that a later sync would have needed to restore it.
+    @Test func replacePreservesImportedAchievementSet() {
+        let (repo, game) = self.game(named: "Super Metroid")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            raCategory(gameID: 236, items: [("ra-1", "Bomb Torizo"), ("ra-2", "Spore Spawn")]),
+        ]), mode: .addAll)
+
+        let outcome = repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses", items: [("ridley", "Ridley")]),
+        ]), mode: .replace)
+
+        let cats = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+        let ra = cats.first { $0.id == "retroachievements" }
+        #expect(ra?.items.map(\.id) == ["ra-1", "ra-2"])
+        // The generated content still installs alongside it.
+        #expect(cats.contains { $0.id == "bosses" })
+        // The sync link survives, or the set could not be refreshed later.
+        #expect(TrackerSchemaJSON.retroAchievementsGameID(in: game.trackerSchema!.jsonData) == 236)
+        // And the summary must not claim a deletion that did not happen.
+        #expect(outcome.removed == 0)
+    }
+
+    /// Progress on imported achievements survives that same replace. Unlocks
+    /// come from the RA account, so reporting them as lost would offer to
+    /// rescue items that were never in danger.
+    @Test func replaceKeepsProgressOnImportedAchievements() {
+        let (repo, game) = self.game(named: "Super Metroid")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            raCategory(gameID: 236, items: [("ra-1", "Bomb Torizo")]),
+        ]), mode: .addAll)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(pt, itemID: "ra-1", done: true)
+
+        let outcome = repo.applyGeneratedSchema(for: game, jsonData: schema([
+            category(id: "bosses", name: "Bosses", items: [("ridley", "Ridley")]),
+        ]), mode: .replace)
+
+        #expect(outcome.lostProgress.isEmpty)
+        #expect(repo.trackerState(pt, itemID: "ra-1")?.completed == true)
+    }
+
+    /// The adversarial half, and the reason this is not done by marking the
+    /// category `locked`: RA's own refresh is a category-scoped replace of
+    /// "retroachievements", and `replacingCategories` skips locked ids. A guard
+    /// that protected the set by locking it would have protected it from the
+    /// one operation that is meant to update it — retired achievements would
+    /// sit in the list forever and new ones would never arrive.
+    @Test func reimportStillReplacesImportedAchievementSet() {
+        let (repo, game) = self.game(named: "Super Metroid")
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            raCategory(gameID: 236, items: [("ra-1", "Bomb Torizo"), ("ra-retired", "Retired")]),
+        ]), mode: .addAll)
+
+        let outcome = repo.applyGeneratedSchema(for: game, jsonData: schema([
+            raCategory(gameID: 236, items: [("ra-1", "Bomb Torizo"), ("ra-3", "Kraid")]),
+        ]), mode: .replaceCategories(ids: ["retroachievements"]))
+
+        let ra = TrackerSchemaJSON.categories(from: game.trackerSchema!.jsonData)
+            .first { $0.id == "retroachievements" }
+        #expect(ra?.items.map(\.id) == ["ra-1", "ra-3"])
+        // A refresh that changed the set must still say so.
+        #expect(outcome.added == 1)
+        #expect(outcome.removed == 1)
+    }
 }

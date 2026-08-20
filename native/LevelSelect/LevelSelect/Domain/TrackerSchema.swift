@@ -477,6 +477,28 @@ enum TrackerSchemaJSON {
         })
     }
 
+    /// Categories that came from an authored external source rather than from
+    /// the generator — today, a RetroAchievements import.
+    ///
+    /// These are not regenerable content. The achievement list is the real one
+    /// RA publishes, and the category carries the `raGameID` stamp that every
+    /// later sync looks the game up by, so letting a full Replace drop it would
+    /// throw away both the list and the link that could restore it.
+    ///
+    /// Deliberately NOT expressed as `locked`. Locking would preserve it here
+    /// too, but `replacingCategories` refuses to touch a locked id, and RA's own
+    /// refresh is exactly that call — a scoped replace of "retroachievements".
+    /// Locking the category would protect it from regeneration by also breaking
+    /// re-import, which is the one operation that is supposed to replace it.
+    static func importedSourceCategoryIDs(in data: Data) -> Set<String> {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let cats = root["categories"] as? [[String: Any]] else { return [] }
+        return Set(cats.compactMap { cat in
+            guard let id = (cat["raGameID"] as? NSNumber)?.intValue, id > 0 else { return nil }
+            return cat["id"] as? String
+        })
+    }
+
     /// Lock or unlock a category in place.
     static func settingLock(_ locked: Bool, categoryID: String, in data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
@@ -552,13 +574,16 @@ enum TrackerSchemaJSON {
     }
 
     /// Every category the merge must carry across untouched: Personal Goals
-    /// (if it has anything in it) plus everything locked.
+    /// (if it has anything in it), everything locked, and everything imported
+    /// from an authored source.
     private static func preservedCategories(from oldData: Data) -> [[String: Any]] {
         guard let old = (try? JSONSerialization.jsonObject(with: oldData)) as? [String: Any],
               let oldCats = old["categories"] as? [[String: Any]] else { return [] }
+        let imported = importedSourceCategoryIDs(in: oldData)
         return oldCats.filter { cat in
             let id = cat["id"] as? String
             if (cat["locked"] as? Bool) == true { return true }
+            if let id, imported.contains(id) { return true }
             guard id == personalGoalsID else { return false }
             return !((cat["items"] as? [[String: Any]]) ?? []).isEmpty
         }
