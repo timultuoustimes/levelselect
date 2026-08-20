@@ -30,6 +30,20 @@ struct TrackerSectionView: View {
     @State private var plannedCount = ""
     @State private var builtinAvailable = false
     @State private var confirmingUseBuiltin = false
+    /// Both removals share one confirmation. Four confirmation dialogs already
+    /// hang off this view and presentation here is a single-occupancy slot —
+    /// one binding with a payload, not two more modifiers.
+    @State private var removing: RemovalTarget?
+
+    /// What a pending removal would destroy, resolved before the dialog opens
+    /// so it can say the number rather than warn vaguely.
+    struct RemovalTarget: Identifiable {
+        /// nil = the whole tracker.
+        let categoryID: String?
+        let name: String
+        let cost: Repository.RemovalCost
+        var id: String { categoryID ?? "__tracker__" }
+    }
 
     init(game: Game) {
         self.game = game
@@ -168,14 +182,11 @@ struct TrackerSectionView: View {
                 .onChange(of: generation.notice?.id) { _, _ in dismissRedundantNotice() }
             }
 
+            // Six flat buttons wrapped onto three lines and hyphenated words
+            // mid-syllable ("Regen-erate", "Catego-ry"). Grouped into four
+            // controls instead: the two anyone reaches for often, and two
+            // menus for the rest.
             HStack(spacing: 18) {
-                Button {
-                    goalName = ""
-                    addingGoal = true
-                } label: {
-                    Label("Add Personal Goal", systemImage: "plus.circle")
-                        .font(.subheadline)
-                }
                 // The button says what it will do, and the menu lets you run it
                 // differently just this once without changing the default —
                 // "this tracker is terrible, replace the lot" shouldn't mean a
@@ -197,29 +208,30 @@ struct TrackerSectionView: View {
                 }
                 .disabled(isGenerating)
 
-                Button {
-                    importingList = true
+                Menu {
+                    Button {
+                        generation.suggestCategories(for: game, context: context)
+                    } label: {
+                        Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
+                    }
+                    .disabled(isGenerating)
+                    Button {
+                        plannedName = ""
+                        plannedCount = ""
+                        planningCategory = true
+                    } label: { Label("Plan a Category", systemImage: "square.dashed") }
+                    Divider()
+                    Button {
+                        goalName = ""
+                        addingGoal = true
+                    } label: { Label("Add Personal Goal", systemImage: "plus.circle") }
+                    Button {
+                        importingList = true
+                    } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
                 } label: {
-                    Label("Paste a List", systemImage: "doc.on.clipboard")
+                    Label("Add", systemImage: "plus")
                         .font(.subheadline)
                 }
-
-                Button {
-                    plannedName = ""
-                    plannedCount = ""
-                    planningCategory = true
-                } label: {
-                    Label("Plan a Category", systemImage: "square.dashed")
-                        .font(.subheadline)
-                }
-
-                Button {
-                    generation.suggestCategories(for: game, context: context)
-                } label: {
-                    Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
-                        .font(.subheadline)
-                }
-                .disabled(isGenerating)
 
                 // Pushed, not presented — this view already carries three
                 // sheets, and sheets on this screen have swallowed each other
@@ -231,14 +243,24 @@ struct TrackerSectionView: View {
                         .font(.subheadline)
                 }
 
-                if builtinAvailable && !usingBuiltin {
-                    Button {
-                        confirmingUseBuiltin = true
-                    } label: {
-                        Label("Use Built-in Tracker", systemImage: "checkmark.seal")
-                            .font(.subheadline)
+                Menu {
+                    if builtinAvailable && !usingBuiltin {
+                        Button {
+                            confirmingUseBuiltin = true
+                        } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
+                            .disabled(isGenerating)
                     }
-                    .disabled(isGenerating)
+                    if game.trackerSchema != nil {
+                        Divider()
+                        Button(role: .destructive) {
+                            removing = RemovalTarget(categoryID: nil, name: game.name,
+                                                     cost: repo.removalCost(for: game))
+                        } label: { Label("Remove Tracker", systemImage: "trash") }
+                            .disabled(isGenerating)
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                        .font(.subheadline)
                 }
             }
             .buttonStyle(.borderless)
@@ -258,6 +280,27 @@ struct TrackerSectionView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Replaces the current tracker content. Personal Goals are kept, and progress follows any item that comes back under a new name — but anything the new tracker drops loses its progress.")
+        }
+        .confirmationDialog(
+            removing.map { $0.categoryID == nil ? "Remove this tracker?" : "Delete “\($0.name)”?" } ?? "",
+            isPresented: Binding(get: { removing != nil },
+                                 set: { if !$0 { removing = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button(removing?.categoryID == nil ? "Remove Tracker" : "Delete Category",
+                   role: .destructive) {
+                if let target = removing {
+                    if let id = target.categoryID {
+                        repo.removeCategory(from: game, categoryID: id)
+                    } else {
+                        repo.removeTracker(from: game)
+                    }
+                }
+                removing = nil
+            }
+            Button("Cancel", role: .cancel) { removing = nil }
+        } message: {
+            Text(removalWarning)
         }
         .sheet(isPresented: $importingList) {
             TrackerListImportView(game: game)
@@ -618,6 +661,12 @@ struct TrackerSectionView: View {
                     } label: { Label("Rename Category", systemImage: "pencil") }
                     Divider()
                     moveActions(category)
+                    Divider()
+                    Button(role: .destructive) {
+                        removing = RemovalTarget(
+                            categoryID: category.id, name: category.name,
+                            cost: repo.removalCost(for: game, categoryID: category.id))
+                    } label: { Label("Delete Category", systemImage: "trash") }
                 }
             }
             .tint(.secondary)
@@ -699,6 +748,22 @@ struct TrackerSectionView: View {
                 && item.maxRank == nil
                 && item.name.count <= 28
         }
+    }
+
+    /// Says the number. "This can't be undone" is true of everything and
+    /// tells you nothing; "12 items, 5 of which you've made progress on" is
+    /// the fact someone needs to decide with.
+    private var removalWarning: String {
+        guard let target = removing else { return "" }
+        let scope = target.categoryID == nil
+            ? "Removes the whole tracker for \(game.name)"
+            : "Removes this category"
+        if target.cost.isEmpty { return "\(scope). There's nothing in it yet." }
+        var text = "\(scope) — \(target.cost.items) item\(target.cost.items == 1 ? "" : "s")"
+        if target.cost.withProgress > 0 {
+            text += ", \(target.cost.withProgress) of which you've made progress on"
+        }
+        return text + ". Your play sessions and completions are untouched, but this can't be undone."
     }
 
     private func expansionBinding(_ id: String) -> Binding<Bool> {

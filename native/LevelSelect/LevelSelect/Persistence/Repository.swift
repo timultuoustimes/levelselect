@@ -689,6 +689,93 @@ struct Repository {
         return true
     }
 
+    /// What removing this would cost, so the confirmation can say it in
+    /// numbers rather than in a vague warning.
+    ///
+    /// Counts *work*, not ticks — a part-filled count, a rank, a note and a
+    /// revealed secret are all someone's effort, by the same definition
+    /// `progressItemIDs` uses for the merge review.
+    struct RemovalCost: Sendable, Equatable {
+        var items = 0
+        var withProgress = 0
+        var isEmpty: Bool { items == 0 }
+    }
+
+    func removalCost(for game: Game, categoryID: String? = nil) -> RemovalCost {
+        let categories = trackerCategories(for: game)
+            .filter { categoryID == nil || $0.id == categoryID }
+        let ids = Set(categories.flatMap(\.items).map(\.id))
+        let worked = progressItemIDs(for: game)
+        return RemovalCost(items: ids.count, withProgress: ids.intersection(worked).count)
+    }
+
+    /// Remove one category outright, whatever is in it.
+    ///
+    /// Distinct from `removePlannedCategory`, which only ever drops empty
+    /// scaffolding. This one destroys content and the progress recorded
+    /// against it, so it exists only behind an explicit confirmation that has
+    /// been told the numbers — the standing rule is about never removing user
+    /// data by INFERENCE, and a deliberate, informed instruction is the
+    /// opposite of that.
+    @discardableResult
+    func removeCategory(from game: Game, categoryID: String, at date: Date = .now) -> Bool {
+        guard let schema = game.trackerSchema,
+              let root = (try? JSONSerialization.jsonObject(with: schema.jsonData)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let index = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return false }
+
+        let doomed = Set(TrackerSchemaJSON.categories(from: schema.jsonData)
+            .first { $0.id == categoryID }?.items.map(\.id) ?? [])
+        cats.remove(at: index)
+        var next = root
+        next["categories"] = cats
+        guard let data = try? JSONSerialization.data(withJSONObject: next) else { return false }
+        schema.jsonData = data
+
+        // Progress for items that no longer exist would otherwise sit in the
+        // store forever, counting toward nothing and syncing to every device.
+        retireStates(for: game, itemIDs: doomed, at: date)
+        touch(schema, at: date)
+        touch(game, at: date)
+        recomputeAll(for: game)
+        persist()
+        return true
+    }
+
+    /// Remove the tracker entirely, back to "no tracker yet".
+    ///
+    /// The honest escape hatch for a tracker that is simply wrong — a
+    /// generation that misunderstood the game, or a plan that went sideways.
+    /// Regenerating could only ever replace it with another one, and "Personal
+    /// Goals are kept" is no help when the goal is to start over.
+    @discardableResult
+    func removeTracker(from game: Game, at date: Date = .now) -> Bool {
+        guard let schema = game.trackerSchema else { return false }
+        let doomed = Set(trackerItems(of: game).map(\.id))
+        retireStates(for: game, itemIDs: doomed, at: date)
+        schema.game = nil
+        context.delete(schema)
+        touch(game, at: date)
+        recomputeAll(for: game)
+        persist()
+        return true
+    }
+
+    /// Tombstone the progress records for items that just stopped existing.
+    private func retireStates(for game: Game, itemIDs: Set<String>, at date: Date) {
+        guard !itemIDs.isEmpty else { return }
+        for state in allTrackerStates(for: game) where itemIDs.contains(state.itemID) {
+            state.deletedAt = date
+            touch(state, at: date)
+        }
+    }
+
+    private func recomputeAll(for game: Game) {
+        let items = trackerItems(of: game)
+        for pt in game.livePlaythroughs { recompute(pt, allItems: items) }
+    }
+
     /// Drop a planned category that was never filled.
     ///
     /// Only ever a PENDING one: an empty planned heading is scaffolding, but
@@ -947,12 +1034,25 @@ struct Repository {
     /// that takes a note with it used to sail through the review screen
     /// unlisted, because "work" was defined as only the checkable kinds.
     func progressItemIDs(for game: Game) -> Set<String> {
-        Set(allTrackerStates(for: game)
+        var ids = Set(allTrackerStates(for: game)
             .filter {
                 $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0
                     || $0.revealed || !($0.notes ?? "").isEmpty
             }
             .map(\.itemID))
+
+        // Notes and renames live in TrackerItemDetail since Schema V2, and
+        // `TrackerStateRecord.notes` has had nothing writing to it since — so
+        // the note check above, which exists precisely so a removal can't take
+        // someone's writing with it unlisted, had quietly stopped catching the
+        // notes people actually write. The count screens read from here, so
+        // the undercount reached the merge review too.
+        for detail in (game.trackerItemDetails ?? []) where detail.deletedAt == nil {
+            if !(detail.note ?? "").isEmpty || !(detail.chosenName ?? "").isEmpty {
+                ids.insert(detail.itemID)
+            }
+        }
+        return ids
     }
 
     /// What a generated schema *would* do, without touching anything. Feeds the
