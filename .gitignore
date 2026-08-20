@@ -32,3 +32,6 @@ native/LevelSelect/Secrets.xcconfig
 native/LevelSelect/LevelSelect/Info.plist
 native/LevelSelect/Widgets/LevelSelectWidgets.entitlements
 native/LevelSelect/Watch/LevelSelectWatch.entitlements
+
+# Deno lockfile, produced by `deno check` when verifying edge functions locally.
+deno.lock
