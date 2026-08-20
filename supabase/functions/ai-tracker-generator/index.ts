@@ -363,6 +363,18 @@ function buildCategoryMessage(
     'If this set runs to roughly 150 or more near-identical entries (Korok Seeds, Riddler trophies), do NOT list them individually:',
     'return a single item named after the set with countTarget set to the total, so it tracks as a running count.',
   ].join(' '));
+  // A long list has to be a terse one. 120 shrines with a description and a
+  // source apiece is 15k tokens of output, which runs past the 150s edge
+  // function ceiling and returns nothing at all — so the detail costs the user
+  // the entire category. Name and location carry the checklist; the rest is
+  // what makes it never arrive.
+  if ((expectedCount ?? 0) > 60) {
+    parts.push([
+      '\nThis is a long list, so keep every entry short: an id, a name, and a brief location.',
+      'No descriptions, no source text, no metadata, no tags — they would push this past the time limit,',
+      'and a list that never arrives is worth less than a plain one that does.',
+    ].join(' '));
+  }
   return parts.join('\n');
 }
 
@@ -579,9 +591,20 @@ serve(async (req: Request) => {
       // anything past roughly a hundred items — 120 Shrines with locations
       // ran out mid-tool-call and came back as "nothing came back", which
       // reads as the generator not knowing the game rather than as a limit.
-      const budget = Math.min(24_000, Math.max(6_000, 2_000 + (expectedCount ?? 40) * 90));
+      // Terse entries above 60 items (see buildCategoryMessage), so the
+      // per-item allowance drops with them rather than budgeting for prose
+      // that was explicitly asked not to be written.
+      const perItem = (expectedCount ?? 40) > 60 ? 45 : 90;
+      const budget = Math.min(20_000, Math.max(6_000, 2_000 + (expectedCount ?? 40) * perItem));
 
-      const guideUrl = await findGuideUrl(apiKey, gameName, igdbData || null);
+      // Long lists skip the guide lookup. It costs its own round trip and then
+      // drags a whole wiki page into the input, and the combination of that
+      // and 120 entries of output does not fit inside 150 seconds — which
+      // means no category at all rather than a slightly less sourced one.
+      // Short lists keep it, where the accuracy is nearly free.
+      const guideUrl = (expectedCount ?? 0) > 60
+        ? null
+        : await findGuideUrl(apiKey, gameName, igdbData || null);
       const catRes = await callClaude(apiKey, {
         model: 'claude-sonnet-4-6',
         max_tokens: budget,

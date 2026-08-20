@@ -83,7 +83,9 @@ enum AITrackerService {
         ]
         if let expectedCount, expectedCount > 0 { body["expectedCount"] = expectedCount }
         if let igdbID { body["igdbID"] = igdbID }
-        let root = try await post(body, timeout: 130)
+        // Same ceiling as a full generation: the edge function caps at 150s,
+        // and a long category can legitimately use most of it.
+        let root = try await post(body, timeout: 145)
         return try schema(from: root)
     }
 
