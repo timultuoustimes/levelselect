@@ -56,6 +56,16 @@ struct GameDetailView: View {
                 CoverShowcase(urlString: game.coverURLString, isPresented: $showingCover)
             }
         }
+        .task(id: showCriticScores) {
+            // Only for people who asked to see it — which also means the
+            // network call never happens for anyone who didn't.
+            guard showCriticScores, let id = game.igdbID else { return }
+            if let hit = GameReferenceService.shared.cached(id) {
+                reference = hit
+            } else {
+                reference = await GameReferenceService.shared.load(id)
+            }
+        }
         .task {
             // Heal legacy data on open: the old web export saved empty summaries
             // and capped others at 200 chars. Pull fresh metadata once.
@@ -638,6 +648,11 @@ struct GameDetailView: View {
 
                     RatingControl(rating: $game.rating)
 
+                    // Directly under your own verdict, because the comparison
+                    // is the entire point — a critic score parked elsewhere on
+                    // the page is just trivia.
+                    referenceRow
+
                     if let franchise = game.franchise, !franchise.isEmpty {
                         Text(franchise)
                             .font(.caption)
@@ -661,6 +676,11 @@ struct GameDetailView: View {
     // MARK: Game Info
 
     @State private var editingInfo = false
+    /// Off unless asked for: someone who hasn't opted in shouldn't find a
+    /// critic's number sitting next to their own opinion. Device-local — it's
+    /// a display preference, and storing it would be a Schema V3 for a toggle.
+    @AppStorage("showCriticScores") private var showCriticScores = false
+    @State private var reference: GameReferenceService.Reference?
 
     private var gameInfo: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -836,6 +856,50 @@ struct GameDetailView: View {
                     FacetLink(facet: facet) { Chip(text: facet.value, tint: tint) }
                 }
             }
+        }
+    }
+
+    /// Critic score and typical completion time, when they're solid enough to
+    /// show and the user asked to see them.
+    ///
+    /// The scales aren't reconciled on purpose. Your rating is five stars and
+    /// theirs is out of a hundred; normalising either would invent a precision
+    /// neither has. They sit next to each other and the reader does the work.
+    @ViewBuilder
+    private var referenceRow: some View {
+        if showCriticScores, let reference, !reference.isEmpty {
+            HStack(spacing: 12) {
+                if let score = reference.criticScore {
+                    HStack(spacing: 4) {
+                        Text("\(score)")
+                            .font(.subheadline.monospacedDigit().weight(.bold))
+                            .foregroundStyle(LSTheme.accent)
+                        Text("critics")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        // The source count is shown, not hidden — it's what
+                        // separates a figure from a guess, and the reason
+                        // most of a retro library shows nothing here.
+                        Text("(\(reference.criticSources))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                if let normally = reference.normally {
+                    HStack(spacing: 4) {
+                        Image(systemName: "hourglass")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text("~\(Format.hours(normally))")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text("(\(reference.timeReports))")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 

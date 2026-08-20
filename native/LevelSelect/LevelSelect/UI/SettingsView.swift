@@ -48,6 +48,8 @@ struct SettingsView: View {
 
                 AppearanceSettingsSection()
 
+                CriticScoreSettings()
+
                 RetroAchievementsSettings()
 
                 DataSettingsSection()

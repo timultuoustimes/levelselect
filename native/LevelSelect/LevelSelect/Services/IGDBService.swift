@@ -78,6 +78,30 @@ enum IGDBService {
         try await perform("where id = \(id); \(fields) limit 1;").first
     }
 
+    /// Untyped passthrough, for endpoints whose shape isn't a game.
+    ///
+    /// `game_time_to_beats` returns rows of integers, and the critic fields
+    /// aren't part of `IGDBGame` — decoding either into the typed model would
+    /// mean widening it for two display-only numbers. Returns an empty array
+    /// on any failure: this backs an optional readout, and a game page must
+    /// not fail to draw because a critic score didn't arrive.
+    static func raw(endpoint: String, query: String) async -> [[String: Any]] {
+        var request = URLRequest(url: proxyURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        EdgeFunctions.authorize(&request)
+        request.timeoutInterval = 20
+        guard let body = try? JSONEncoder().encode(["endpoint": endpoint, "query": query])
+        else { return [] }
+        request.httpBody = body
+
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              let http = response as? HTTPURLResponse, http.statusCode == 200,
+              let rows = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]]
+        else { return [] }
+        return rows
+    }
+
     private static func perform(_ query: String) async throws -> [IGDBGame] {
         var request = URLRequest(url: proxyURL)
         request.httpMethod = "POST"

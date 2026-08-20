@@ -2,6 +2,14 @@ import SwiftUI
 
 enum Format {
     /// Compact human duration, e.g. "1h 12m", "12m 5s", "42s".
+    /// Rounded hours, for figures that are approximations to begin with —
+    /// "~14h" rather than "14h 24m", which would imply a precision that an
+    /// average of a dozen strangers' playthroughs does not have.
+    static func hours(_ t: TimeInterval) -> String {
+        let h = t / 3600
+        return h < 10 ? String(format: "%.1fh", h) : "\(Int(h.rounded()))h"
+    }
+
     static func duration(_ t: TimeInterval) -> String {
         let s = max(0, Int(t))
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
