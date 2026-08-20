@@ -121,6 +121,23 @@ struct Repository {
 
     // MARK: - Collections
 
+    /// Create a collection from a template, optionally starting it off with
+    /// games the app already knows qualify.
+    ///
+    /// The prompt is copied into `notes` so the question outlives the moment
+    /// of creation — otherwise you find a list called "One Sitting" a month
+    /// later with no memory of what counted.
+    @discardableResult
+    func createCollection(from template: CollectionTemplate,
+                          seededWith games: [Game] = []) -> GameCollection {
+        let collection = createCollection(name: template.name)
+        collection.notes = template.notes
+        collection.gameIDs = games.map(\.id.uuidString)
+        touch(collection)
+        persist()
+        return collection
+    }
+
     @discardableResult
     func createCollection(name: String, isBundle: Bool = false) -> GameCollection {
         let collection = GameCollection(name: name, isBundle: isBundle)

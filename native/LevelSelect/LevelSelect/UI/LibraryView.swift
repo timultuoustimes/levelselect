@@ -16,7 +16,15 @@ struct LibraryTab: View {
     @State private var tagFilter: String?
     @State private var platformFilter: String?
     @State private var ownershipFilter: String?
-    @State private var showingAdd = false
+    /// One sheet slot, not two. Presentation here is single-occupancy and two
+    /// `.sheet` modifiers on one view have swallowed each other twice in this
+    /// app — same fix as OverlappingTimerGuard: an enum through one binding.
+    @State private var sheet: LibrarySheet?
+
+    private enum LibrarySheet: String, Identifiable {
+        case addGame, collectionTemplates
+        var id: String { rawValue }
+    }
     @State private var newCollection = false
     @State private var newCollectionName = ""
     @AppStorage("libraryHideBundled") private var hideBundled = false
@@ -59,7 +67,12 @@ struct LibraryTab: View {
             #endif
             .toolbar { toolbarContent }
         }
-        .sheet(isPresented: $showingAdd) { AddGameSheet() }
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .addGame:            AddGameSheet()
+            case .collectionTemplates: CollectionTemplatePicker()
+            }
+        }
         .alert("New Collection", isPresented: $newCollection) {
             TextField("Name", text: $newCollectionName)
             Button("Create") {
@@ -93,7 +106,7 @@ struct LibraryTab: View {
                     } description: {
                         Text("Add the games you're playing and they'll be grouped by system here.")
                     } actions: {
-                        Button("Add a Game") { showingAdd = true }
+                        Button("Add a Game") { sheet = .addGame }
                             .buttonStyle(.borderedProminent)
                     }
                 } else {
@@ -345,8 +358,11 @@ struct LibraryTab: View {
         }
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button { showingAdd = true } label: {
+                Button { sheet = .addGame } label: {
                     Label("Add Game", systemImage: "gamecontroller")
+                }
+                Button { sheet = .collectionTemplates } label: {
+                    Label("Start from a Template", systemImage: "square.grid.2x2")
                 }
                 Button { newCollectionName = ""; newCollection = true } label: {
                     Label("New Collection", systemImage: "square.stack")
