@@ -45,12 +45,6 @@ struct RetroAchievementsSettings: View {
                 SecureField("Web API key", text: $apiKey)
                     .autocorrectionDisabled()
 
-                if let error {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(LSTheme.working)
-                }
-
                 Button {
                     Task { await connect() }
                 } label: {
@@ -63,11 +57,20 @@ struct RetroAchievementsSettings: View {
                           || username.trimmingCharacters(in: .whitespaces).isEmpty
                           || apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
             }
+
+            // Disconnect can fail while the connected branch stays visible.
+            // Keeping the error inside the form-only branch made that failure
+            // invisible even though `clear()` correctly reported it.
+            if let error {
+                Label(error, systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(LSTheme.working)
+            }
         } header: {
             Text("RetroAchievements")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Find your Web API key on retroachievements.org under Settings → Keys. It reads your account, so it's kept in the Keychain and sent only when syncing.")
+                Text("Find your Web API key on retroachievements.org under Settings → Keys. It reads your account, so it's kept in the Keychain and sent only to RetroAchievements when connecting or syncing.")
                 // Said plainly, because a preference that quietly doesn't sync
                 // reads as a bug. The key never rides iCloud Keychain.
                 Text("Stays on this device — enter it separately on each one.")

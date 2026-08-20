@@ -84,4 +84,21 @@ struct ReviewRound5Tests {
         #expect(repo.trackerState(playthrough, itemID: "first")?.completed == true)
         #expect(repo.trackerState(playthrough, itemID: "second")?.completed == true)
     }
+
+    @Test func aStableRAUserIDIsNotPairedWithAStaleDisplayUsername() throws {
+        let credentials = RACredentials.Value(
+            username: "old-display-name",
+            apiKey: "secret-key",
+            ulid: "stable-ulid"
+        )
+        let url = try RetroAchievementsService.progressURL(gameID: 123, credentials: credentials)
+        let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+        let query = Dictionary(uniqueKeysWithValues: items.map { ($0.name, $0.value ?? "") })
+
+        #expect(query["u"] == "stable-ulid")
+        #expect(query["g"] == "123")
+        #expect(query["y"] == "secret-key")
+        #expect(query["z"] == nil)
+        #expect(!url.absoluteString.contains("old-display-name"))
+    }
 }

@@ -110,7 +110,7 @@ enum RetroAchievementsService {
     /// the credentials.
     static func verify(username: String, apiKey: String) async throws -> RACredentials.Value {
         let root = try await callRA("API_GetUserProfile.php",
-                                    ["u": username], username: username, apiKey: apiKey)
+                                    ["u": username], apiKey: apiKey)
         // RA answers 200 with an empty body for a bad key rather than a 401,
         // so "the request worked" is not the same question as "the key is good".
         guard let user = root["User"] as? String, !user.isEmpty else {
@@ -124,10 +124,7 @@ enum RetroAchievementsService {
     static func progress(gameID: Int, credentials: RACredentials.Value) async throws -> Progress {
         // `u` accepts a username OR a ULID, and the ULID is the stable one —
         // RA's docs say the username "is not considered a stable value".
-        let who = (credentials.ulid?.isEmpty == false ? credentials.ulid! : credentials.username)
-        let raw = try await callRA("API_GetGameInfoAndUserProgress.php",
-                                   ["g": String(gameID), "u": who],
-                                   username: credentials.username, apiKey: credentials.apiKey)
+        let raw = try await callRA(progressURL(gameID: gameID, credentials: credentials))
         let root = shapeProgress(raw)
         let formatter = ISO8601DateFormatter()
         // RA writes "2024-03-11 21:04:07" — a space, no zone. Parsed as UTC
@@ -169,19 +166,16 @@ enum RetroAchievementsService {
     ///
     /// So the server is removed from the path entirely for anything carrying a
     /// user's credential. The key still rides in the query string, because
-    /// that is RA's own API contract and unavoidable for any client, but now
-    /// only RA sees it. The proxy keeps the catalogue lookups, which use the
-    /// app's own key and no user data.
+    /// that is RA's own API contract and unavoidable for any client, but our
+    /// infrastructure never sees it. The proxy keeps the catalogue lookups,
+    /// which use the app's own key and no user data.
     private static func callRA(_ endpoint: String, _ parameters: [String: String],
-                               username: String, apiKey: String) async throws -> [String: Any] {
-        var components = URLComponents(string: "https://retroachievements.org/API/\(endpoint)")!
-        components.queryItems = parameters.map { URLQueryItem(name: $0.key, value: $0.value) }
-            + [URLQueryItem(name: "z", value: username),
-               URLQueryItem(name: "y", value: apiKey)]
-        guard let url = components.url else {
-            throw ServiceError(message: "Couldn't build the RetroAchievements request.")
-        }
+                               apiKey: String) async throws -> [String: Any] {
+        let url = try credentialURL(endpoint: endpoint, parameters: parameters, apiKey: apiKey)
+        return try await callRA(url)
+    }
 
+    private static func callRA(_ url: URL) async throws -> [String: Any] {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
 
@@ -205,6 +199,30 @@ enum RetroAchievementsService {
             throw ServiceError(message: "RetroAchievements sent back something unreadable.")
         }
         return root
+    }
+
+    static func progressURL(gameID: Int, credentials: RACredentials.Value) throws -> URL {
+        let who = (credentials.ulid?.isEmpty == false ? credentials.ulid! : credentials.username)
+        return try credentialURL(
+            endpoint: "API_GetGameInfoAndUserProgress.php",
+            parameters: ["g": String(gameID), "u": who],
+            apiKey: credentials.apiKey
+        )
+    }
+
+    /// Current RA endpoints authenticate with `y`; `u` is the target username
+    /// or stable ULID. Sending the display username again as legacy `z` made a
+    /// later username change capable of breaking a request that otherwise
+    /// targeted the stable ULID.
+    static func credentialURL(endpoint: String, parameters: [String: String],
+                              apiKey: String) throws -> URL {
+        var components = URLComponents(string: "https://retroachievements.org/API/\(endpoint)")!
+        components.queryItems = parameters.map { URLQueryItem(name: $0.key, value: $0.value) }
+            + [URLQueryItem(name: "y", value: apiKey)]
+        guard let url = components.url else {
+            throw ServiceError(message: "Couldn't build the RetroAchievements request.")
+        }
+        return url
     }
 
     /// A session that cannot write these responses to disk.
