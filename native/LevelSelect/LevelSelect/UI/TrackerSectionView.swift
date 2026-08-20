@@ -18,11 +18,35 @@ struct TrackerSectionView: View {
     /// dies when you navigate away, and generation takes a minute or two.
     @State private var generation = TrackerGenerationStore.shared
     @State private var confirmingRegenerate = false
-    @State private var importingList = false
+    /// One slot for every sheet this view can raise.
+    ///
+    /// It had three sibling `.sheet` modifiers, and the third is driven by an
+    /// ASYNC result — a review-mode generation finishing sets a pending merge
+    /// whenever it lands. Open Paste a List or an item editor while one is in
+    /// flight and two bindings go true at once, which is exactly how this app
+    /// has twice lost a presentation. Mutually exclusive taps were never the
+    /// risk; the timer was.
+    @State private var sheet: TrackerSheet?
+    /// Pushed rather than presented — a list of candidates wants a full screen
+    /// and a back button, and it keeps the single sheet slot free.
+    @State private var importingAchievements = false
+
+    private enum TrackerSheet: Identifiable {
+        case importList
+        case editItem(EditTarget)
+        case reviewMerge
+
+        var id: String {
+            switch self {
+            case .importList:          "import"
+            case .editItem(let target): "edit-\(target.id)"
+            case .reviewMerge:         "merge"
+            }
+        }
+    }
     /// Rename target: category id, plus an item id when renaming an item.
     @State private var renaming: (category: String, item: String?)?
     @State private var renameText = ""
-    @State private var editing: EditTarget?
     /// A tick that would close other things off, held until confirmed.
     @State private var confirmingLockout: LockoutPrompt?
     @State private var planningCategory = false
@@ -247,7 +271,7 @@ struct TrackerSectionView: View {
                         addingGoal = true
                     } label: { Label("Add Personal Goal", systemImage: "plus.circle") }
                     Button {
-                        importingList = true
+                        sheet = .importList
                     } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
                 } label: {
                     Label("Add", systemImage: "plus")
@@ -295,6 +319,9 @@ struct TrackerSectionView: View {
             .buttonStyle(.borderless)
             .tint(LSTheme.accent)
         }
+        .navigationDestination(isPresented: $importingAchievements) {
+            RetroAchievementsImportView(game: game)
+        }
         .task(id: game.id) {
             builtinAvailable = BuiltinTrackers.match(for: game) != nil
         }
@@ -331,11 +358,26 @@ struct TrackerSectionView: View {
         } message: {
             Text(removalWarning)
         }
-        .sheet(isPresented: $importingList) {
-            TrackerListImportView(game: game)
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .importList:
+                TrackerListImportView(game: game)
+            case .editItem(let target):
+                TrackerItemEditView(game: game, target: target)
+            case .reviewMerge:
+                if let merge = generation.pendingMerge(for: game.id) {
+                    TrackerMergeReviewView(game: game, merge: merge)
+                }
+            }
         }
-        .sheet(item: $editing) { target in
-            TrackerItemEditView(game: game, target: target)
+        // A generation that finishes while another sheet is open no longer
+        // races it: the review takes the slot only when the slot is free, and
+        // otherwise waits for the next pass.
+        .onChange(of: generation.pendingMerge(for: game.id) != nil) { _, pending in
+            if pending, sheet == nil { sheet = .reviewMerge }
+        }
+        .onChange(of: sheet == nil) { _, closed in
+            if closed, generation.pendingMerge(for: game.id) != nil { sheet = .reviewMerge }
         }
         .alert("Plan a Category", isPresented: $planningCategory) {
             TextField("Name (Bosses, Charms, Endings…)", text: $plannedName)
@@ -367,14 +409,6 @@ struct TrackerSectionView: View {
             Button("Cancel", role: .cancel) { confirmingLockout = nil }
         } message: {
             Text("This closes off \(confirmingLockout?.losing.joined(separator: ", ") ?? "") for this playthrough. You can untick it if you change your mind.")
-        }
-        .sheet(isPresented: Binding(
-            get: { generation.pendingMerge(for: game.id) != nil },
-            set: { if !$0 { generation.discardPending(for: game.id) } }
-        )) {
-            if let merge = generation.pendingMerge(for: game.id) {
-                TrackerMergeReviewView(game: game, merge: merge)
-            }
         }
         .confirmationDialog(
             "Switch to the built-in tracker?",
@@ -982,10 +1016,10 @@ struct TrackerSectionView: View {
         .opacity({ if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 } }())
         .contextMenu {
             Button {
-                editing = EditTarget(categoryID: category.id, itemID: item.id,
-                                     name: item.name, location: item.location ?? "",
-                                     note: item.note ?? "",
-                                     countTarget: item.countTarget)
+                sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
+                                             name: item.name, location: item.location ?? "",
+                                             note: item.note ?? "",
+                                             countTarget: item.countTarget))
             } label: { Label("Edit Item", systemImage: "pencil") }
         }
     }

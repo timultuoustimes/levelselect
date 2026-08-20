@@ -47,10 +47,14 @@ struct RelatedGamesSection: View {
             || !series.isEmpty || studio != nil || !alike.isEmpty {
             VStack(alignment: .leading, spacing: 18) {
                 if !bundles.isEmpty {
-                    chips("Included In", bundles, systemImage: "shippingbox")
+                    chips("Included in Bundles", bundles, systemImage: "shippingbox")
                 }
                 if !personalLists.isEmpty {
-                    chips("Your Lists", personalLists, systemImage: "square.stack")
+                    // "Your Collections", not "Your Lists" — the app calls
+                    // these Collections everywhere else, and a second noun for
+                    // one concept is how a first-time user learns there are
+                    // two things when there is one.
+                    chips("Your Collections", personalLists, systemImage: "square.stack")
                 }
                 if !series.isEmpty, let franchise = game.franchise {
                     shelf("More from \(franchise)", games: series)

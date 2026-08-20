@@ -20,6 +20,11 @@ struct LibraryTab: View {
     /// `.sheet` modifiers on one view have swallowed each other twice in this
     /// app — same fix as OverlappingTimerGuard: an enum through one binding.
     @State private var sheet: LibrarySheet?
+    /// Bound so a collection created from a prompt can be pushed straight
+    /// after creating it. Without a path there was nowhere to send anyone, so
+    /// the sheet just closed and left them at their old scroll position with
+    /// no sign the tap had done anything.
+    @State private var path = NavigationPath()
 
     private enum LibrarySheet: String, Identifiable {
         case addGame, collectionTemplates
@@ -38,7 +43,7 @@ struct LibraryTab: View {
     private var gridSize: GridSize { GridSize(rawValue: gridSizeRaw) ?? .medium }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 if !allTags.isEmpty { tagChips }
                 content
@@ -71,7 +76,10 @@ struct LibraryTab: View {
         .sheet(item: $sheet) { which in
             switch which {
             case .addGame:            AddGameSheet()
-            case .collectionTemplates: CollectionTemplatePicker()
+            case .collectionTemplates:
+                CollectionTemplatePicker { collection in
+                    path.append(CollectionRoute(id: collection.id))
+                }
             }
         }
         .alert("New Collection", isPresented: $newCollection) {

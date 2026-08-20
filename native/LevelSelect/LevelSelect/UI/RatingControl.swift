@@ -18,6 +18,24 @@ struct RatingControl: View {
             HStack(spacing: 6) {
                 ForEach(1...5, id: \.self) { star($0) }
             }
+            // One adjustable control rather than five unlabelled images.
+            // VoiceOver previously found "star, image" five times with no way
+            // to learn the current value or change it — the stars carry
+            // `onTapGesture`, which has no button trait and no accessible
+            // action. Swiping up and down now sets the rating directly.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Rating")
+            .accessibilityValue(accessibilityValue)
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: set(min(5, value + 1) == value ? value : min(5, value + 1))
+                case .decrement:
+                    // Down from one star clears it, which is what tapping the
+                    // filled first star already does.
+                    if value <= 1 { rating = nil } else { set(value - 1) }
+                @unknown default: break
+                }
+            }
             if showLabel {
                 labelView
                     // Scales rather than pinned: 15pt fits "Loved it" at the
@@ -49,6 +67,11 @@ struct RatingControl: View {
         }
     }
 
+    private var accessibilityValue: String {
+        guard value > 0 else { return "Not rated" }
+        return "\(value) of 5, \(Self.labels[value - 1])"
+    }
+
     private func star(_ i: Int) -> some View {
         let filled = value >= i
         return Image(systemName: filled ? "star.fill" : "star")
@@ -61,6 +84,9 @@ struct RatingControl: View {
             .onTapGesture { set(i) }
     }
 
+    /// Tapping the star you're already on clears the rating; that toggle is
+    /// deliberate for touch, but an adjustable action must never use it, or
+    /// incrementing to the current value would wipe the rating instead.
     private func set(_ i: Int) {
         let newValue = (rating == i) ? nil : i
         withAnimation(.spring(response: 0.34, dampingFraction: 0.55)) {

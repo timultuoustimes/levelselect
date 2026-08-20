@@ -96,7 +96,10 @@ struct CollectionShelf: View {
                 if let onNewFromTemplate {
                     Menu {
                         Button { onNewFromTemplate() } label: {
-                            Label("Start from a Prompt", systemImage: "sparkles.rectangle.stack")
+                            // Same wording as the Library toolbar. "Start from
+                            // a Prompt" repeated the "template of WHAT?"
+                            // problem the rename was meant to end.
+                            Label("Collection from a Prompt", systemImage: "sparkles.rectangle.stack")
                         }
                         Button { onNew() } label: {
                             Label("Empty Collection", systemImage: "square.stack")
@@ -248,6 +251,9 @@ struct CollectionMembersPicker: View {
     /// make you do the filtering the prompt already did.
     @State private var status: GameStatus?
     @State private var appliedDefault = false
+    /// Grows with the reader's text size, so accessibility sizes get fewer,
+    /// wider cells instead of the same narrow columns with more clipping.
+    @ScaledMetric(relativeTo: .caption2) private var cellWidth: CGFloat = 105
 
     private var repo: Repository { Repository(context) }
 
@@ -306,7 +312,9 @@ struct CollectionMembersPicker: View {
             Text(game.name)
                 .font(.caption2)
                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .lineLimit(2)
+                // Three, not two: this is a picker, and two regional editions
+                // sharing a truncated prefix is a choice made blind.
+                .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -383,7 +391,7 @@ struct CollectionMembersPicker: View {
                             .frame(maxWidth: .infinity)
                             .padding(.top, 40)
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)],
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
                               spacing: 14) {
                         ForEach(visible) { game in
                             let isMember = members.contains(game.id.uuidString)

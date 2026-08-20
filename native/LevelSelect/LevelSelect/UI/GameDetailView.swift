@@ -46,8 +46,17 @@ struct GameDetailView: View {
                     }
                 }
             }
+            // Watching `pagePlaying != nil` alone missed the rotation case
+            // entirely: turn an iPad to landscape with a video ALREADY
+            // playing and that boolean never changes, so `stage` stayed at 1
+            // and the video panel sat at `width * 1.02` — off the trailing
+            // edge, still playing, invisible. Both inputs decide the stage, so
+            // both have to be observed.
             .onChange(of: pagePlaying != nil) { _, hasVideo in
                 if stageMode, hasVideo { stage = 3 }
+            }
+            .onChange(of: stageMode) { _, isStage in
+                if isStage, pagePlaying != nil { stage = 3 }
             }
         }
         .background { ambientBackdrop }
@@ -871,18 +880,17 @@ struct GameDetailView: View {
             HStack(spacing: 12) {
                 if let score = reference.criticScore {
                     HStack(spacing: 4) {
-                        Text("\(score)")
+                        // "/100" and a named count, because "85 critics (23)"
+                        // reads as a tally of critics rather than a score out
+                        // of a hundred agreed by 23 of them.
+                        Text("\(score)/100")
                             .font(.subheadline.monospacedDigit().weight(.bold))
                             .foregroundStyle(LSTheme.accent)
-                        Text("critics")
+                        Text(reference.criticSources == 1
+                             ? "· 1 critic review"
+                             : "· \(reference.criticSources) critic reviews")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        // The source count is shown, not hidden — it's what
-                        // separates a figure from a guess, and the reason
-                        // most of a retro library shows nothing here.
-                        Text("(\(reference.criticSources))")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
                     }
                 }
                 if let normally = reference.normally {
@@ -893,9 +901,11 @@ struct GameDetailView: View {
                         Text("~\(Format.hours(normally))")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text("(\(reference.timeReports))")
+                        Text(reference.timeReports == 1
+                             ? "· 1 time report"
+                             : "· \(reference.timeReports) time reports")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

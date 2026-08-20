@@ -14,6 +14,9 @@ struct FacetGamesView: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var library: [Game]
 
+    /// Scales with text size for the same reason the other browsing grids do.
+    @ScaledMetric(relativeTo: .caption2) private var cellWidth: CGFloat = 105
+
     private var games: [Game] { GameFacet.games(facet, in: library) }
 
     var body: some View {
@@ -32,7 +35,7 @@ struct FacetGamesView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)],
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
                               spacing: 16) {
                         ForEach(games) { game in
                             NavigationLink(value: game) {
