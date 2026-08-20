@@ -18,6 +18,10 @@ const ALLOWED_ENDPOINTS = new Set([
   'genres',
   'screenshots',
   'artworks',
+  // Average completion times, contributed by IGDB's community. The licensed
+  // answer to "how long is this?" — HowLongToBeat has no public API, disallows
+  // /api in robots.txt by name, and bans commercial use outright.
+  'game_time_to_beats',
 ]);
 
 // The app's longest query (search + full field list) is ~450 chars.
