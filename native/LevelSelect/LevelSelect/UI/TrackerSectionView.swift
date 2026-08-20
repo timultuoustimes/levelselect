@@ -563,6 +563,14 @@ struct TrackerSectionView: View {
     private func header(_ cats: [TrackerCategoryDTO], states: [String: TrackerStateRecord]) -> some View {
         let allItems = cats.flatMap(\.items)
         let done = allItems.filter { states[$0.id]?.completed == true }.count
+        // Only sources that score their items have any of this — RetroAchievements
+        // does, a generated tracker doesn't — so the whole readout stays absent
+        // rather than showing everyone a meaningless "0 pts".
+        let totalPoints = allItems.compactMap(\.points).reduce(0, +)
+        let earnedPoints = allItems
+            .filter { states[$0.id]?.completed == true }
+            .compactMap(\.points).reduce(0, +)
+        let missables = allItems.filter(\.missable).count
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Spacer()
@@ -593,6 +601,23 @@ struct TrackerSectionView: View {
             if !allItems.isEmpty {
                 ProgressView(value: Double(done), total: Double(allItems.count))
                     .tint(LSTheme.accent)
+            }
+            if totalPoints > 0 {
+                Text("\(earnedPoints) of \(totalPoints) points")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            // An icon with no key is a mystery. Shown only when the tracker
+            // actually contains missables, and worded as what it costs you
+            // rather than as a category name.
+            if missables > 0 {
+                Label {
+                    Text("Missable — can be permanently missed if you don't do it at the right time")
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
             }
         }
     }

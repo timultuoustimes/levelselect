@@ -34,9 +34,9 @@ struct RetroAchievementsSyncTests {
                 "id": "retroachievements", "name": "Achievements",
                 "type": "checklist", "raGameID": 1462,
                 "items": [
-                    ["id": "ra-1", "name": "Vampire Killer"],
-                    ["id": "ra-2", "name": "Stalker"],
-                    ["id": "ra-3", "name": "Wicked Child"],
+                    ["id": "ra-1", "name": "Vampire Killer", "metadata": ["points": 5, "raID": 1]],
+                    ["id": "ra-2", "name": "Stalker", "metadata": ["points": 5, "raID": 2]],
+                    ["id": "ra-3", "name": "Wicked Child", "metadata": ["points": 5, "raID": 3]],
                 ],
             ]],
         ])
@@ -155,6 +155,45 @@ struct RetroAchievementsSyncTests {
         #expect(outcome.newlyTicked == 1)
         #expect(outcome.unknownToTracker == 1)
         #expect(repo.trackerState(ra, itemID: "ra-999") == nil)
+    }
+
+    // MARK: Points
+
+    /// The importer has written `metadata.points` since the first version and
+    /// nothing read it, so a 635-point set reported no points at all. Parsed
+    /// off the blob, no schema version involved.
+    @Test func pointsAreReadFromItemMetadata() {
+        let (repo, game) = setup()
+        let items = repo.trackerCategories(for: game).flatMap(\.items)
+
+        #expect(items.count == 3)
+        #expect(items.allSatisfy { $0.points == 5 })
+        #expect(items.compactMap(\.points).reduce(0, +) == 15)
+    }
+
+    /// A tracker with no notion of points reports none, rather than zero —
+    /// "0 pts" on a generated tracker is noise pretending to be information.
+    @Test func aTrackerWithoutPointsHasNoneRatherThanZero() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        repo.applyGeneratedSchema(for: game, jsonData: try! JSONSerialization.data(
+            withJSONObject: ["schemaVersion": 1, "categories": [[
+                "id": "bosses", "name": "Bosses", "type": "checklist",
+                "items": [["id": "hornet", "name": "Hornet"]],
+            ]]]), mode: .addAll)
+
+        let items = repo.trackerCategories(for: game).flatMap(\.items)
+        #expect(items.first?.points == nil)
+        #expect(items.compactMap(\.points).isEmpty)
+    }
+
+    /// The name the session controls check against has to be the one the
+    /// repository actually creates, or the timer reappears on the record.
+    @Test func theRecordPlaythroughIsNamedWhatTheUICheckExpects() {
+        let (repo, game) = setup()
+        #expect(repo.raPlaythrough(for: game).name == Repository.raPlaythroughName)
+        #expect(Repository.raPlaythroughName == "RetroAchievements")
     }
 
     // MARK: Finding the game again

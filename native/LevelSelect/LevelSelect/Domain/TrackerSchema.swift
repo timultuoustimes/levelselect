@@ -36,6 +36,11 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// whatever generated or supplied the item and may be replaced freely —
     /// this one is theirs and survives every merge.
     var note: String? = nil
+    /// What this is worth, where the source has a notion of that.
+    /// RetroAchievements scores every achievement, and the importer has been
+    /// writing it into `metadata.points` since day one — unread until now,
+    /// which is why a 635-point set reported no points at all.
+    var points: Int? = nil
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -169,7 +174,8 @@ enum TrackerSchemaJSON {
                     locksOut: (item["locksOut"] as? [Any])?.compactMap { $0 as? String } ?? [],
                     countTarget: (item["countTarget"] as? NSNumber)?.intValue,
                     sourceName: item["sourceName"] as? String,
-                    note: item["note"] as? String
+                    note: item["note"] as? String,
+                    points: ((item["metadata"] as? [String: Any])?["points"] as? NSNumber)?.intValue
                 )
             }
             return TrackerCategoryDTO(

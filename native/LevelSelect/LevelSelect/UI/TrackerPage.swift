@@ -86,6 +86,27 @@ struct CompactTrackerCard: View {
         }
     }
 
+    /// Time, progress, and points where the source scores its items.
+    ///
+    /// RetroAchievements does; a generated tracker doesn't. Absent rather than
+    /// zero for everything else — "0 pts" on a tracker with no notion of
+    /// points is noise pretending to be information.
+    private func subtitle(_ pt: Playthrough) -> String {
+        var parts = ["\(Format.duration(pt.totalPlaytime())) · \(Int(pt.progressPercent))%"]
+        let items = game.trackerSchema
+            .map { TrackerSchemaJSON.categories(from: $0.jsonData) }?
+            .flatMap(\.items) ?? []
+        let total = items.compactMap(\.points).reduce(0, +)
+        if total > 0 {
+            let done = Set((pt.trackerStates ?? [])
+                .filter { $0.deletedAt == nil && $0.completed }
+                .map(\.itemID))
+            let earned = items.filter { done.contains($0.id) }.compactMap(\.points).reduce(0, +)
+            parts.append("\(earned)/\(total) pts")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private func rowContent(_ pt: Playthrough) -> some View {
                     HStack(spacing: 10) {
                         Image(systemName: "gamecontroller.fill")
@@ -100,7 +121,7 @@ struct CompactTrackerCard: View {
                                     Circle().fill(.green).frame(width: 5, height: 5)
                                 }
                             }
-                            Text("\(Format.duration(pt.totalPlaytime())) · \(Int(pt.progressPercent))%")
+                            Text(subtitle(pt))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

@@ -53,18 +53,37 @@ struct SessionControlsView: View {
         return liveSessions.filter { $0.playthrough?.id == pt.id }
     }
 
+    /// The RetroAchievements playthrough is a record of an account, not a run
+    /// you sit down to play — timing against it would file real hours under
+    /// something that never happened at a keyboard. The controls are hidden
+    /// rather than the playthrough being locked away, because it is still
+    /// worth reading.
+    private var isRecordOnly: Bool {
+        playthrough?.name == Repository.raPlaythroughName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            header
-
-            if let active = playthrough?.activeSession {
-                activeSessionControls(active)
+            if isRecordOnly {
+                Label {
+                    Text("Achievements earned on your RetroAchievements account, across every time you've played this. Switch playthrough to time a session.")
+                } icon: {
+                    Image(systemName: "trophy")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             } else {
-                idleControls
-            }
+                header
 
-            if !sessions.isEmpty {
-                recentSessions
+                if let active = playthrough?.activeSession {
+                    activeSessionControls(active)
+                } else {
+                    idleControls
+                }
+
+                if !sessions.isEmpty {
+                    recentSessions
+                }
             }
         }
         .sheet(isPresented: $showingLog) {
