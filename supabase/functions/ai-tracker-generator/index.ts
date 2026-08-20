@@ -471,7 +471,16 @@ serve(async (req: Request) => {
   //
   // Peeked from a CLONE so guard still reads the body itself; the kill switch
   // stays LS_KILL_AI for every mode, so one flag takes the whole thing offline.
-  const peeked = await req.clone().json().catch(() => ({})) as Record<string, unknown>;
+  // Peeked from a CLONE so guard still reads the body itself — but only when
+  // the body is small enough that parsing it before the app-key check and the
+  // size cap costs nothing. Parsing arbitrary JSON ahead of those checks let an
+  // unauthenticated caller spend our CPU and memory on a request that was
+  // always going to be rejected. Anything larger falls back to the expensive
+  // bucket, which is the safe default rather than the cheap one.
+  const declaredSize = Number(req.headers.get('content-length') ?? '0');
+  const peeked = declaredSize > 0 && declaredSize <= 2_000
+    ? await req.clone().json().catch(() => ({})) as Record<string, unknown>
+    : {};
   const peekMode = typeof peeked?.mode === 'string' ? peeked.mode : 'auto';
   const quotasByMode: Record<string, { fn: string; quotas: QuotaRule[] }> = {
     plan: {
@@ -583,8 +592,14 @@ serve(async (req: Request) => {
       if (categoryName.length > MAX_CATEGORY_NAME) {
         return jsonResponse({ error: 'Category name is too long.' }, 400);
       }
+      // Clamped, because this number buys output budget. Unbounded, a caller
+      // could ask for a category of 10,000 items, take the 20,000-token
+      // ceiling, and pay for it out of the CHEAP per-mode quota — 500 daily
+      // category calls at a larger budget than the 12,000-token full
+      // generation the expensive bucket exists to ration. 400 is well past any
+      // real category; beyond that the terse-output rule applies anyway.
       const expectedCount = Number.isFinite(body?.expectedCount)
-        ? Math.max(0, Math.round(Number(body?.expectedCount)))
+        ? Math.min(400, Math.max(0, Math.round(Number(body?.expectedCount))))
         : null;
 
       // Size the budget to the category. A flat 8k cap silently truncated

@@ -60,6 +60,7 @@ struct SessionControlsView: View {
     /// worth reading.
     private var isRecordOnly: Bool {
         playthrough?.name == Repository.raPlaythroughName
+            && playthrough?.notes == Repository.raPlaythroughMarker
     }
 
     var body: some View {

@@ -227,6 +227,18 @@ struct Repository {
     /// next sync makes a second one rather than losing anything.
     static let raPlaythroughName = "RetroAchievements"
 
+    /// Written into the record's notes when sync creates it, and required to
+    /// recognise it again.
+    ///
+    /// The name alone was not enough, and the failure was the dangerous
+    /// direction. A user who names an ordinary run "RetroAchievements" before
+    /// ever syncing would have had that run adopted as the account record and
+    /// filled with permanent account-wide unlocks — their actual playthrough,
+    /// overwritten. Matching on a marker this code wrote is a record; matching
+    /// on a name the user could have typed is a guess.
+    static let raPlaythroughMarker =
+        "Achievements earned on your RetroAchievements account, across every time you've played this." 
+
     /// The playthrough that holds account-level RA unlocks, made on demand.
     ///
     /// Separate from your own runs on purpose. RA has no concept of a
@@ -240,11 +252,13 @@ struct Repository {
     /// cartridges and ticks by hand should never see this playthrough at all.
     @discardableResult
     func raPlaythrough(for game: Game) -> Playthrough {
-        if let existing = game.livePlaythroughs.first(where: { $0.name == Self.raPlaythroughName }) {
+        if let existing = game.livePlaythroughs.first(where: {
+            $0.name == Self.raPlaythroughName && $0.notes == Self.raPlaythroughMarker
+        }) {
             return existing
         }
         let pt = Playthrough(name: Self.raPlaythroughName)
-        pt.notes = "Achievements earned on your RetroAchievements account, across every time you've played this."
+        pt.notes = Self.raPlaythroughMarker
         context.insert(pt)
         pt.game = game
         // Deliberately NOT made current: this is a record, not the run you're
@@ -859,6 +873,16 @@ struct Repository {
             state.deletedAt = date
             touch(state, at: date)
         }
+        // The user's notes and renames live in TrackerItemDetail, not in the
+        // state record, and are overlaid onto items BY ID. Leaving them behind
+        // meant a note written on "bat", after removing that tracker, would
+        // reappear on an unrelated future item that happened to reuse the id —
+        // someone else's tracker wearing your handwriting.
+        for detail in (game.trackerItemDetails ?? [])
+        where detail.deletedAt == nil && itemIDs.contains(detail.itemID) {
+            detail.deletedAt = date
+            touch(detail, at: date)
+        }
     }
 
     private func recomputeAll(for game: Game) {
@@ -1128,6 +1152,11 @@ struct Repository {
             .filter {
                 $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0
                     || $0.revealed || !($0.notes ?? "").isEmpty
+                    // Choosing which variant of an item you took — Hades'
+                    // Mirror of Night talents — is a decision, and a removal
+                    // that reports "nothing to lose" and then deletes it is
+                    // the exact failure this function exists to prevent.
+                    || !($0.selectedVariant ?? "").isEmpty
             }
             .map(\.itemID))
 

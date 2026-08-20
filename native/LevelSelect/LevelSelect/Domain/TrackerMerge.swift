@@ -145,8 +145,15 @@ enum TrackerMerge {
             }
         }
 
+        // One set across the WHOLE schema, not one per category. Progress is
+        // stored per item id on the playthrough, not per (category, item) —
+        // so the same id in two categories is one shared TrackerStateRecord,
+        // and ticking either row ticks both. Deleting one category then
+        // tombstones that shared state and unticks the survivor. Per-category
+        // dedup let exactly the collision it exists to prevent through the
+        // front door.
+        var seenIDs = Set<String>()
         for (idx, cat) in cats.enumerated() {
-            var seenIDs = Set<String>()
             var kept: [[String: Any]] = []
             for item in (cat["items"] as? [[String: Any]]) ?? [] {
                 let id = (item["id"] as? String) ?? ""
@@ -321,7 +328,23 @@ enum TrackerMerge {
                     return matchKey((inc["name"] as? String) ?? "") == matchKey(source)
                 }
             guard let match, let items = match["items"] as? [[String: Any]] else { continue }
-            var next = category
+            // Start from the INCOMING category, not the existing one. Keeping
+            // the old dictionary and swapping only `items` silently retained
+            // every category-level field of the previous import — including
+            // `raGameID`, so correcting a wrong RetroAchievements match left
+            // sync still asking about the game you replaced, and reporting all
+            // the new achievements as unknown.
+            //
+            // The user's own choices are then restored on top: the id is
+            // local (a planned category's id is minted on-device and can never
+            // appear in a payload), the name may have been renamed by hand,
+            // and `locked`/`sourceName` are the anchors that keep future
+            // merges matching.
+            var next = match
+            next["id"] = category["id"]
+            if let name = category["name"] { next["name"] = name }
+            if let source = category["sourceName"] { next["sourceName"] = source }
+            if let locked = category["locked"] { next["locked"] = locked }
             next["items"] = items
             cats[index] = next
         }
@@ -452,8 +475,17 @@ enum TrackerMerge {
             }
             guard !wanted.isEmpty else { continue }
 
+            // Id first. The name fallback exists because a regeneration
+            // routinely re-slugs category ids, and without it every rerun
+            // duplicates the whole tracker — but it only applies when exactly
+            // ONE existing category carries that name. Two categories called
+            // "Bosses" with different ids are two categories, and folding an
+            // incoming one into whichever came first loses its identity.
+            let nameMatches = cats.indices.filter {
+                matchKey((cats[$0]["name"] as? String) ?? "") == matchKey(incName)
+            }
             let idx = cats.firstIndex { ($0["id"] as? String) == incID }
-                ?? cats.firstIndex { matchKey(($0["name"] as? String) ?? "") == matchKey(incName) }
+                ?? (nameMatches.count == 1 ? nameMatches[0] : nil)
 
             guard let idx else {
                 // Whole category is new — take it, but only carrying the items

@@ -8,13 +8,19 @@ import Security
 /// backup or file-container pull can read. (This project has pulled that exact
 /// plist off a device to debug sync, which is precisely the argument.)
 ///
-/// Deliberately NOT synced. `kSecAttrSynchronizable` is left off, so the key
-/// stays on the device it was entered on and never rides iCloud Keychain. The
-/// server never stores it either — it's sent per request and used to call RA
-/// as the user, so RA sees their own account doing the reading.
+/// Deliberately NOT synced: `kSecAttrSynchronizable` is left off, so it never
+/// rides iCloud Keychain, and `...ThisDeviceOnly` accessibility keeps it out of
+/// encrypted backups too. Plain `AfterFirstUnlock` would still have migrated
+/// through a backup to a restored device — "stays on this device" has to mean
+/// that literally or not be claimed.
 ///
-/// Entering it on the iPad as well as the phone is a small cost for a key
-/// that never leaves the device it was typed into.
+/// It also never reaches our own server. It used to be proxied through the
+/// Supabase edge function, whose invocation logs capture request bodies AND
+/// headers — so every connect and sync was writing a password-equivalent into
+/// platform telemetry. User-scoped calls now go device → RetroAchievements
+/// directly; see `RetroAchievementsService.callRA`.
+///
+/// Entering it on the iPad as well as the phone is the cost of that.
 enum RACredentials {
     struct Value: Equatable, Sendable {
         var username: String
@@ -50,19 +56,29 @@ enum RACredentials {
         let username = value.username.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = value.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !username.isEmpty, !key.isEmpty else { return false }
+        // Key FIRST, metadata second. The other order leaves a device holding
+        // a new username and ULID beside the previous key if the Keychain
+        // write fails — a mixed state that reads as "connected as X" while
+        // authenticating as Y.
+        guard writeKey(key) else { return false }
         UserDefaults.standard.set(username, forKey: usernameKey)
         if let ulid = value.ulid, !ulid.isEmpty {
             UserDefaults.standard.set(ulid, forKey: ulidKey)
         } else {
             UserDefaults.standard.removeObject(forKey: ulidKey)
         }
-        return writeKey(key)
+        return true
     }
 
-    static func clear() {
+    /// Returns false when the Keychain item could not be removed, so the
+    /// caller can say "still connected" rather than showing a disconnected UI
+    /// over a key that is still on the device.
+    @discardableResult
+    static func clear() -> Bool {
         UserDefaults.standard.removeObject(forKey: usernameKey)
         UserDefaults.standard.removeObject(forKey: ulidKey)
-        SecItemDelete(baseQuery() as CFDictionary)
+        let status = SecItemDelete(baseQuery() as CFDictionary)
+        return status == errSecSuccess || status == errSecItemNotFound
     }
 
     // MARK: Keychain
@@ -94,12 +110,17 @@ enum RACredentials {
         let updated = SecItemUpdate(baseQuery() as CFDictionary,
                                     [kSecValueData as String: data] as CFDictionary)
         if updated == errSecSuccess { return true }
+        // Only "there was nothing to update" justifies adding. Falling through
+        // on ANY error meant a locked or otherwise unavailable item became an
+        // add that failed as a duplicate — reported as failure, but only after
+        // the caller had already been told to trust the new value.
+        guard updated == errSecItemNotFound else { return false }
 
         var query = baseQuery()
         query[kSecValueData as String] = data
-        // Available after first unlock, not while locked: a background refresh
-        // shouldn't fail just because the phone is in a pocket. Not synced.
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        // After first unlock so a background refresh works with the phone in a
+        // pocket; ThisDeviceOnly so it never migrates through a backup.
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 }

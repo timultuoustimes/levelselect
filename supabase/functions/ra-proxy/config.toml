@@ -1,0 +1,7 @@
+# These functions authenticate with an app key checked in _shared/guard.ts, not
+# a Supabase JWT — the app has no Supabase auth session to present. Without
+# this, a CLI deploy defaults to verify_jwt = true and every client request is
+# rejected before it reaches the guard, which is a failure that only shows up
+# in production.
+[functions.ra-proxy]
+verify_jwt = false

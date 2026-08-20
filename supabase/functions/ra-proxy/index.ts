@@ -33,19 +33,6 @@ interface RAGame {
   ImageIcon?: string;
 }
 
-/// Credentials for a call made AS THE USER.
-///
-/// User-scoped reads (their unlocks, their profile) go out under their own key,
-/// not the app's: RA then sees the right account doing the reading, the rate
-/// limit is theirs, and this server never has to store anyone's key. Sent per
-/// request, used once, never written down.
-function userAuth(body: Record<string, unknown> | undefined): string | null {
-  const user = typeof body?.raUsername === 'string' ? body.raUsername.trim() : '';
-  const key = typeof body?.raApiKey === 'string' ? body.raApiKey.trim() : '';
-  if (!user || !key || user.length > 64 || key.length > 128) return null;
-  return `z=${encodeURIComponent(user)}&y=${encodeURIComponent(key)}`;
-}
-
 function auth(): string {
   const key = Deno.env.get('RA_API_KEY');
   const user = Deno.env.get('RA_USERNAME');
@@ -255,11 +242,8 @@ serve(async (req: Request) => {
 
   const mode = typeof body?.mode === 'string' ? body.mode : 'search';
 
-  // `verify` and `progress` run entirely on the USER's key, so they work even
-  // if the app's own credentials were never configured. Only the catalogue
-  // lookups (which console, which game) need the server's.
-  if (mode !== 'verify' && mode !== 'progress' &&
-      (!Deno.env.get('RA_API_KEY') || !Deno.env.get('RA_USERNAME'))) {
+  // Every remaining mode is a catalogue lookup on the app's own key.
+  if (!Deno.env.get('RA_API_KEY') || !Deno.env.get('RA_USERNAME')) {
     console.error('RA_API_KEY / RA_USERNAME not configured');
     return jsonResponse({ error: 'RetroAchievements is not set up yet.' }, 503);
   }
@@ -369,89 +353,16 @@ serve(async (req: Request) => {
       });
     }
 
-    // ── verify: are these credentials real? Checked against the user's own
-    // profile, which is the cheapest call that fails cleanly on a bad key.
-    if (mode === 'verify') {
-      const credentials = userAuth(body);
-      if (!credentials) return jsonResponse({ error: 'Username and API key are required.' }, 400);
-      const user = String(body?.raUsername).trim();
-
-      const res = await fetch(
-        `${RA_BASE}/API_GetUserProfile.php?u=${encodeURIComponent(user)}&${credentials}`);
-      if (res.status === 401 || res.status === 403) {
-        return jsonResponse({ error: 'RetroAchievements rejected that key. Check both fields.' }, 401);
-      }
-      if (!res.ok) {
-        console.error('RA verify failed:', res.status);
-        return jsonResponse({ error: 'RetroAchievements is unavailable right now.' }, 502);
-      }
-      const profile = await res.json() as {
-        User?: string; ULID?: string; TotalPoints?: number | string;
-      };
-      // RA answers 200 with an empty body for a bad key rather than a 401, so
-      // "the request worked" is not the same question as "the key is good".
-      if (!profile?.User) {
-        return jsonResponse({ error: 'RetroAchievements rejected that key. Check both fields.' }, 401);
-      }
-      // RA's docs: "the username is not considered a stable value" — users
-      // have been able to change it since 2025, and every user-scoped endpoint
-      // accepts the ULID in its place. Handing that back means a rename on RA
-      // doesn't quietly break someone's sync months later.
-      return jsonResponse({
-        user: profile.User,
-        ulid: profile.ULID ?? null,
-        points: Number(profile.TotalPoints ?? 0),
-      });
-    }
-
-    // ── progress: which of this game's achievements the user has unlocked.
-    if (mode === 'progress') {
-      const credentials = userAuth(body);
-      if (!credentials) return jsonResponse({ error: 'Username and API key are required.' }, 400);
-      const gameID = Number.isFinite(body?.gameID) ? Number(body?.gameID) : null;
-      if (gameID === null || gameID <= 0) {
-        return jsonResponse({ error: 'gameID is required.' }, 400);
-      }
-      // `u` takes a username OR a ULID, and the ULID is the stable one.
-      const ulid = typeof body?.raULID === 'string' ? body.raULID.trim() : '';
-      const user = ulid || String(body?.raUsername).trim();
-
-      const res = await fetch(
-        `${RA_BASE}/API_GetGameInfoAndUserProgress.php?g=${gameID}&u=${encodeURIComponent(user)}&${credentials}`);
-      if (!res.ok) {
-        console.error('RA progress failed:', res.status);
-        return jsonResponse({ error: 'Could not read your progress from RetroAchievements.' }, 502);
-      }
-      const game = await res.json() as {
-        Title?: string;
-        Achievements?: Record<string, RAAchievement & {
-          DateEarned?: string | null;
-          DateEarnedHardcore?: string | null;
-        }>;
-      };
-
-      const all = Object.values(game.Achievements ?? {});
-      const unlocked = all
-        .filter((a) => a.DateEarned || a.DateEarnedHardcore)
-        .map((a) => ({
-          id: `ra-${a.ID}`,
-          // Hardcore is the stricter earn (no savestates, no rewind). Reported
-          // so the app can say which, not so it can filter: an unlock is an
-          // unlock either way and refusing to tick a softcore one would be
-          // telling someone they didn't do a thing they did.
-          hardcore: Boolean(a.DateEarnedHardcore),
-          earnedAt: a.DateEarnedHardcore || a.DateEarned || null,
-          points: Number(a.Points ?? 0),
-        }));
-
-      return jsonResponse({
-        title: game.Title ?? null,
-        total: all.length,
-        unlocked,
-        points: unlocked.reduce((sum, a) => sum + a.points, 0),
-        totalPoints: all.reduce((sum, a) => sum + Number(a.Points ?? 0), 0),
-      });
-    }
+    // NOTE: this proxy deliberately has no mode that accepts a user's
+    // RetroAchievements key.
+    //
+    // It used to carry `verify` and `progress`, taking the key in the request
+    // body. Supabase's Function Invocation logs capture request bodies and
+    // headers, so every connect and every sync wrote a plaintext
+    // password-equivalent into platform telemetry readable by anyone with
+    // dashboard or log-drain access. Those calls now go device → RA directly
+    // (see RetroAchievementsService.callRA); the endpoints are gone rather
+    // than merely unused, so nobody can reintroduce the leak by calling them.
 
     return jsonResponse({ error: 'Unsupported mode.' }, 400);
   } catch (err) {
