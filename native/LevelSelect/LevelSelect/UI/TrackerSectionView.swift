@@ -92,6 +92,7 @@ struct TrackerSectionView: View {
     /// hang off this view and presentation here is a single-occupancy slot —
     /// one binding with a payload, not two more modifiers.
     @State private var removing: RemovalTarget?
+    @State private var removalError: String?
     @State private var raSyncing = false
     @State private var raResult: String?
 
@@ -350,6 +351,18 @@ struct TrackerSectionView: View {
             }
             .buttonStyle(.borderless)
             .tint(LSTheme.accent)
+
+            if let removalError {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Label(removalError, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(LSTheme.working)
+                    Spacer(minLength: 4)
+                    Button("Dismiss") { self.removalError = nil }
+                        .font(.caption)
+                        .buttonStyle(.borderless)
+                }
+            }
         }
         .navigationDestination(isPresented: $importingAchievements) {
             RetroAchievementsImportView(game: game)
@@ -379,7 +392,9 @@ struct TrackerSectionView: View {
                    role: .destructive) {
                 if let target = removing {
                     if let id = target.categoryID {
-                        repo.removeCategory(from: game, categoryID: id)
+                        if !repo.removeCategory(from: game, categoryID: id) {
+                            removalError = "Couldn't delete this category because the tracker contains duplicate internal identifiers. Nothing was removed."
+                        }
                     } else {
                         repo.removeTracker(from: game)
                     }
