@@ -321,32 +321,34 @@ struct TrackerSectionView: View {
                         .font(.subheadline)
                 }
 
-                Menu {
-                    if builtinAvailable && !usingBuiltin {
-                        Button {
-                            confirmingUseBuiltin = true
-                        } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
-                            .disabled(isGenerating)
-                    }
-                    if raGameID != nil, RACredentials.isConfigured {
-                        Button {
-                            Task { await syncRetroAchievements() }
-                        } label: {
-                            Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
+                if hasMoreActions {
+                    Menu {
+                        if builtinAvailable && !usingBuiltin {
+                            Button {
+                                confirmingUseBuiltin = true
+                            } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
+                                .disabled(isGenerating)
                         }
-                        .disabled(raSyncing)
+                        if raGameID != nil, RACredentials.isConfigured {
+                            Button {
+                                Task { await syncRetroAchievements() }
+                            } label: {
+                                Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(raSyncing)
+                        }
+                        if game.trackerSchema != nil {
+                            Divider()
+                            Button(role: .destructive) {
+                                removing = RemovalTarget(categoryID: nil, name: game.name,
+                                                         cost: repo.removalCost(for: game))
+                            } label: { Label("Remove Tracker", systemImage: "trash") }
+                                .disabled(isGenerating)
+                        }
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                            .font(.subheadline)
                     }
-                    if game.trackerSchema != nil {
-                        Divider()
-                        Button(role: .destructive) {
-                            removing = RemovalTarget(categoryID: nil, name: game.name,
-                                                     cost: repo.removalCost(for: game))
-                        } label: { Label("Remove Tracker", systemImage: "trash") }
-                            .disabled(isGenerating)
-                    }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                        .font(.subheadline)
                 }
             }
             .buttonStyle(.borderless)
@@ -573,6 +575,19 @@ struct TrackerSectionView: View {
     /// Any tracker content beyond user-created Personal Goals?
     private var hasNonGoalContent: Bool {
         categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
+    }
+
+    /// Whether the "More" menu has anything in it.
+    ///
+    /// Every item in that menu needs something to act on — a built-in match, a
+    /// synced RetroAchievements set, a tracker to remove. On a game with none
+    /// of those, tapping it opened an empty menu, which reads as the control
+    /// being broken rather than as there being nothing to offer. Checked here
+    /// so the button is absent instead of inert.
+    private var hasMoreActions: Bool {
+        (builtinAvailable && !usingBuiltin)
+            || (raGameID != nil && RACredentials.isConfigured)
+            || game.trackerSchema != nil
     }
 
     /// Library-wide default. Hardcoded until it can be remembered on
