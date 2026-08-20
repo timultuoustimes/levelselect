@@ -20,11 +20,17 @@ struct RatingControl: View {
             }
             if showLabel {
                 labelView
-                    .frame(height: 15, alignment: .leading)
+                    // Scales rather than pinned: 15pt fits "Loved it" at the
+                    // default text size and clips it at accessibility sizes.
+                    // The fixed height exists to stop the row jumping as the
+                    // label changes, which a scaled height still does.
+                    .frame(height: labelHeight, alignment: .leading)
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: rating)
             }
         }
     }
+
+    @ScaledMetric(relativeTo: .caption) private var labelHeight: CGFloat = 15
 
     @ViewBuilder
     private var labelView: some View {

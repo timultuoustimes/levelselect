@@ -12,6 +12,11 @@ import SwiftData
 struct RelatedGamesSection: View {
     let game: Game
 
+    /// Cover width scales with text size, so the two-line title underneath
+    /// stays readable rather than truncating to nothing at accessibility
+    /// sizes. The 3:4 art ratio is derived from it rather than fixed twice.
+    @ScaledMetric(relativeTo: .caption2) private var coverWidth: CGFloat = 78
+
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var library: [Game]
     @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil },
@@ -93,14 +98,14 @@ struct RelatedGamesSection: View {
                         NavigationLink(value: other) {
                             VStack(alignment: .leading, spacing: 4) {
                                 CoverThumb(urlString: other.coverURLString)
-                                    .frame(width: 78, height: 104)
+                                    .frame(width: coverWidth, height: coverWidth * 4 / 3)
                                     .clipShape(.rect(cornerRadius: 8))
                                 Text(other.name)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
-                                    .frame(width: 78, alignment: .leading)
+                                    .frame(width: coverWidth, alignment: .leading)
                             }
                         }
                         .buttonStyle(PressableCardStyle())

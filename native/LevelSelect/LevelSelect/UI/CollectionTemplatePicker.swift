@@ -25,6 +25,12 @@ struct CollectionTemplatePicker: View {
     /// the choice is offered before rather than after.
     @AppStorage("collectionTemplatePrefill") private var prefill = true
 
+    /// The card's height grows with the reader's text size instead of being a
+    /// fixed 152pt. A card is a box with four lines of scaling text in it, so
+    /// pinning its height means clipping the prompt at accessibility sizes —
+    /// the same failure as an action row that hyphenates rather than wraps.
+    @ScaledMetric(relativeTo: .subheadline) private var cardHeight: CGFloat = 152
+
     private let columns = [GridItem(.adaptive(minimum: 158), spacing: 12)]
 
     var body: some View {
@@ -123,7 +129,10 @@ struct CollectionTemplatePicker: View {
             }
         }
         .padding(12)
-        .frame(height: 152, alignment: .topLeading)
+        // minHeight, not height: the grid sizes each row to its tallest card,
+        // so a long prompt at a large text size grows the row instead of
+        // losing its last line.
+        .frame(minHeight: cardHeight, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(colors: [tint.opacity(0.95), tint.opacity(0.55)],
