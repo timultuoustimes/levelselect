@@ -18,19 +18,32 @@ struct ReviewRound5Tests {
         return root["categories"] as! [[String: Any]]
     }
 
+    /// The incoming id deliberately DIFFERS from the locked local id.
+    ///
+    /// With matching ids this never reaches the fix it is meant to prove: the
+    /// older `!locked.contains(incID)` guard rejects it first, and reverting
+    /// the name-fallback exclusion leaves the test passing. A shared id tests
+    /// the guard that was already there. Only a differently-id'd category with
+    /// the same NAME reaches the name fallback, which is where a generated
+    /// category could be appended into someone's locked list.
     @Test func additiveMergeCannotWriteIntoALockedCategory() {
         let current = schema([
             ["id": "private", "name": "My Route", "type": "checklist", "locked": true,
              "items": [["id": "mine", "name": "My note"]]],
         ])
         let incoming = schema([
-            ["id": "private", "name": "My Route", "type": "checklist",
+            ["id": "generated-route", "name": "My Route", "type": "checklist",
              "items": [["id": "generated", "name": "Generated guess"]]],
         ])
 
         let result = TrackerMerge.merged(current: current, incoming: incoming, mode: .addAll)
-        let items = categories(in: result)[0]["items"] as! [[String: Any]]
+        let all = categories(in: result)
+        let lockedCategory = all.first { ($0["id"] as? String) == "private" }!
+        let items = lockedCategory["items"] as! [[String: Any]]
 
+        // The locked list is untouched. Where the generated category ends up
+        // is a separate question — appended as its own category is fine — but
+        // it must never land inside the one the user locked.
         #expect(items.compactMap { $0["id"] as? String } == ["mine"])
     }
 
