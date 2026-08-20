@@ -1,0 +1,24 @@
+# Supabase project configuration.
+#
+# These functions authenticate with an app key checked in
+# functions/_shared/guard.ts, not a Supabase JWT — the app has no Supabase auth
+# session to present. Without these pins a plain `supabase functions deploy`
+# takes the CLI default of verify_jwt = true and every client request is
+# rejected before it reaches the guard, which is a failure that only shows up
+# in production.
+#
+# This has to live at the project root: per-function config.toml files are not
+# read by the CLI, so the earlier attempt at functions/<name>/config.toml
+# pinned nothing.
+
+[functions.ai-tracker-generator]
+verify_jwt = false
+
+[functions.igdb-proxy]
+verify_jwt = false
+
+[functions.ra-proxy]
+verify_jwt = false
+
+[functions.map-finder]
+verify_jwt = false

@@ -75,10 +75,15 @@ enum RACredentials {
     /// over a key that is still on the device.
     @discardableResult
     static func clear() -> Bool {
+        // Key FIRST, and metadata only if it actually went. Removing the
+        // username before knowing the delete succeeded produced the worst
+        // outcome available: the secret still on the device, the record of
+        // whose it is gone, and a screen reporting success.
+        let status = SecItemDelete(baseQuery() as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { return false }
         UserDefaults.standard.removeObject(forKey: usernameKey)
         UserDefaults.standard.removeObject(forKey: ulidKey)
-        let status = SecItemDelete(baseQuery() as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        return true
     }
 
     // MARK: Keychain
@@ -107,8 +112,16 @@ enum RACredentials {
         // Update in place when it's already there; SecItemAdd would fail with
         // errSecDuplicateItem and silently leave the old key behind, which is
         // the worst outcome — the user changes their key and nothing changes.
-        let updated = SecItemUpdate(baseQuery() as CFDictionary,
-                                    [kSecValueData as String: data] as CFDictionary)
+        // Migrate the accessibility class along with the value. Updating only
+        // kSecValueData left an item written by an earlier build sitting on
+        // plain AfterFirstUnlock forever — still migratable through an
+        // encrypted backup, which is exactly what moving to ThisDeviceOnly was
+        // supposed to end. Anyone who connected before today would never have
+        // got the fix.
+        let updated = SecItemUpdate(baseQuery() as CFDictionary, [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ] as CFDictionary)
         if updated == errSecSuccess { return true }
         // Only "there was nothing to update" justifies adding. Falling through
         // on ANY error meant a locked or otherwise unavailable item became an

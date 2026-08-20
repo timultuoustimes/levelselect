@@ -31,7 +31,14 @@ struct CollectionTemplatePicker: View {
     /// the same failure as an action row that hyphenates rather than wraps.
     @ScaledMetric(relativeTo: .subheadline) private var cardHeight: CGFloat = 152
 
-    private let columns = [GridItem(.adaptive(minimum: 158), spacing: 12)]
+    /// Scales too, so accessibility sizes get fewer, WIDER cards rather than
+    /// the same narrow columns with more clipped text in them. Capped so a
+    /// huge text size doesn't collapse the grid to one giant column on iPad.
+    @ScaledMetric(relativeTo: .subheadline) private var columnWidth: CGFloat = 158
+
+    private var columns: [GridItem] {
+        [GridItem(.adaptive(minimum: min(columnWidth, 300)), spacing: 12)]
+    }
 
     var body: some View {
         NavigationStack {
@@ -113,12 +120,15 @@ struct CollectionTemplatePicker: View {
             Text(template.name)
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(.white)
-                .lineLimit(2)
                 .multilineTextAlignment(.leading)
             Text(template.prompt)
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.78))
-                .lineLimit(3)
+                // No cap. The prompt IS the card; growing the box while still
+                // ellipsizing at three lines meant the extra height revealed
+                // nothing, and "Let's Be Real" lost the premise that makes it
+                // work. Scaling a container is not a fix if its contents are
+                // still capped.
                 .multilineTextAlignment(.leading)
             if seeded > 0 {
                 Label("\(seeded) to start", systemImage: "wand.and.stars")

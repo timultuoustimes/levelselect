@@ -184,14 +184,11 @@ enum RetroAchievementsService {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        // Never cached: the response is account data and the URL contains the
-        // key, so a cache entry would be a second copy of the secret on disk.
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
 
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await credentialSession.data(for: request)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
@@ -209,6 +206,21 @@ enum RetroAchievementsService {
         }
         return root
     }
+
+    /// A session that cannot write these responses to disk.
+    ///
+    /// `.reloadIgnoringLocalAndRemoteCacheData` was not enough and the comment
+    /// claiming "never cached" was wrong: that policy only stops the request
+    /// READING the cache — Foundation may still store a cacheable response,
+    /// keyed by the full URL, which for these calls contains the API key. An
+    /// ephemeral configuration with no URL cache is what actually prevents a
+    /// second copy of the secret landing on disk.
+    private static let credentialSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        return URLSession(configuration: configuration)
+    }()
 
     /// Fold RA's raw achievement map into the shape `progress` reads.
     ///

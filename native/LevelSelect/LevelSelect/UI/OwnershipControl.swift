@@ -8,7 +8,10 @@ struct OwnershipControl: View {
     @Binding var ownership: [String]
 
     var body: some View {
-        HStack(spacing: 7) {
+        // Wraps rather than squeezing: three labelled chips do not fit one
+        // line at accessibility text sizes, and a chip that hyphenates
+        // "Emu-lated" is worse than one on a second row.
+        FlowLayout(spacing: 7) {
             ForEach(Ownership.allCases, id: \.self) { kind in
                 chip(kind)
             }

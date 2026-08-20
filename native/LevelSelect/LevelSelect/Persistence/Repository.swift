@@ -806,11 +806,16 @@ struct Repository {
     }
 
     func removalCost(for game: Game, categoryID: String? = nil) -> RemovalCost {
-        let categories = trackerCategories(for: game)
-            .filter { categoryID == nil || $0.id == categoryID }
-        let ids = Set(categories.flatMap(\.items).map(\.id))
+        let all = trackerCategories(for: game)
+        let categories = all.filter { categoryID == nil || $0.id == categoryID }
+        // Counted as ROWS, not distinct ids: a legacy schema with the same id
+        // in two categories shows two rows, and telling someone they're about
+        // to remove one item when they can see two is the kind of undercount
+        // this confirmation exists to prevent.
+        let rows = categories.flatMap(\.items).map(\.id)
         let worked = progressItemIDs(for: game)
-        return RemovalCost(items: ids.count, withProgress: ids.intersection(worked).count)
+        return RemovalCost(items: rows.count,
+                           withProgress: rows.filter(worked.contains).count)
     }
 
     /// Remove one category outright, whatever is in it.
@@ -829,8 +834,20 @@ struct Repository {
               let index = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
         else { return false }
 
-        let doomed = Set(TrackerSchemaJSON.categories(from: schema.jsonData)
-            .first { $0.id == categoryID }?.items.map(\.id) ?? [])
+        let all = TrackerSchemaJSON.categories(from: schema.jsonData)
+        let leaving = Set(all.first { $0.id == categoryID }?.items.map(\.id) ?? [])
+        // Ids that ALSO appear in a category that is staying are not retired.
+        //
+        // New schemas can't contain a cross-category duplicate — ingest now
+        // dedupes globally — but trackers already saved by an earlier build
+        // can, and they sync in from CloudKit. Deriving the doomed set from
+        // the removed category alone tombstones a state record that a
+        // surviving row still displays, unticking it. The sanitizer fixes the
+        // shape going forward; this makes the destructive path safe on the
+        // shapes already out there.
+        let surviving = Set(all.filter { $0.id != categoryID }.flatMap(\.items).map(\.id))
+        let doomed = leaving.subtracting(surviving)
+
         cats.remove(at: index)
         var next = root
         next["categories"] = cats

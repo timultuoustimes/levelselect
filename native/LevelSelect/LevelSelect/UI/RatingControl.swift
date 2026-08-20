@@ -28,7 +28,13 @@ struct RatingControl: View {
             .accessibilityValue(accessibilityValue)
             .accessibilityAdjustableAction { direction in
                 switch direction {
-                case .increment: set(min(5, value + 1) == value ? value : min(5, value + 1))
+                // Never routed through `set` at the ceiling: `set` treats
+                // "the value you already have" as the touch toggle and clears
+                // the rating, so incrementing a 5-star game unrated it. My
+                // previous guard passed `value` in exactly that case, which is
+                // the bug rather than a defence against it.
+                case .increment:
+                    if value < 5 { set(value + 1) }
                 case .decrement:
                     // Down from one star clears it, which is what tapping the
                     // filled first star already does.

@@ -3,11 +3,17 @@ import Foundation
 import SwiftData
 @testable import LevelSelect
 
-/// Regressions for external review round 4.
+/// Round 4 review: regressions, and a few honest compatibility guards.
 ///
-/// Each of these reproduces the adversarial shape the reviewer described, not
-/// the happy path — every one of them passed before the fix precisely because
-/// nothing had tried the hostile case.
+/// Verified empirically rather than asserted: the suite was run against a
+/// pre-fix tree, and SEVEN of these fail there. Three do not, and they are
+/// grouped separately below under their own heading — they guard behaviour
+/// worth keeping, but calling them regressions would be false, since reverting
+/// the fix they name does not make them fail.
+///
+/// The original header here claimed "every one of them passed before the fix",
+/// which cannot describe tests that did not exist before the fix. The accurate
+/// statement is that the prior suite passed because it lacked these cases.
 @MainActor
 struct ReviewRound4Tests {
 
@@ -43,6 +49,14 @@ struct ReviewRound4Tests {
 
         #expect(TrackerSchemaJSON.retroAchievementsGameID(in: game.trackerSchema!.jsonData) == 200)
         #expect(repo.trackerCategories(for: game).first?.items.map(\.id) == ["ra-9"])
+
+        // The raGameID fix rests on unknown category keys surviving the merge,
+        // so that guarantee is pinned rather than assumed — the previous
+        // version put an unknown key in the payload and never checked it.
+        let root = (try! JSONSerialization.jsonObject(with: game.trackerSchema!.jsonData))
+            as! [String: Any]
+        let category = (root["categories"] as! [[String: Any]]).first!
+        #expect(category["unknownFutureKey"] as? String == "kept")
     }
 
     /// The user's own choices still survive that replacement — a renamed
@@ -64,6 +78,58 @@ struct ReviewRound4Tests {
         #expect(category?.name == "Big Bads")
         #expect(category?.id == "bosses")
         #expect(category?.items.map(\.id) == ["b"])
+    }
+
+    // MARK: Legacy data — schemas already saved with the collision
+
+    /// Global dedup fixes the SHAPE of new schemas. It does nothing for a
+    /// tracker already saved by an earlier build and synced in from CloudKit,
+    /// and the destructive path has to be safe on those too.
+    ///
+    /// This writes the duplicate straight into the stored blob, bypassing the
+    /// sanitizer — which is the whole point. The previous test fed its input
+    /// through ingest, so after the fix the duplicate was removed before
+    /// removal ever ran and the case was never exercised.
+    @Test func removingACategoryLeavesProgressAloneWhenALegacyDuplicateSurvives() {
+        let (repo, game) = setup()
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            ["id": "main", "name": "Main", "type": "checklist",
+             "items": [["id": "seed", "name": "Placeholder"]]],
+        ]), mode: .addAll)
+
+        // The shape a pre-fix build could persist: one id in two categories.
+        game.trackerSchema!.jsonData = schema([
+            ["id": "main", "name": "Main", "type": "checklist",
+             "items": [["id": "complete", "name": "Complete the game"]]],
+            ["id": "bosses", "name": "Bosses", "type": "checklist",
+             "items": [["id": "complete", "name": "Complete the game"]]],
+        ])
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.setTrackerItem(pt, itemID: "complete", done: true)
+
+        repo.removeCategory(from: game, categoryID: "bosses")
+
+        // "Main" still shows the row, so its tick must survive.
+        #expect(repo.trackerCategories(for: game).map(\.id) == ["main"])
+        #expect(repo.trackerState(pt, itemID: "complete")?.completed == true)
+    }
+
+    /// And the confirmation counts what the user can SEE — two rows, not one
+    /// distinct id — or it promises to remove less than it removes.
+    @Test func removalCostCountsRowsNotDistinctIDs() {
+        let (repo, game) = setup()
+        repo.applyGeneratedSchema(for: game, jsonData: schema([
+            ["id": "main", "name": "Main", "type": "checklist",
+             "items": [["id": "seed", "name": "Placeholder"]]],
+        ]), mode: .addAll)
+        game.trackerSchema!.jsonData = schema([
+            ["id": "main", "name": "Main", "type": "checklist",
+             "items": [["id": "complete", "name": "Complete the game"]]],
+            ["id": "bosses", "name": "Bosses", "type": "checklist",
+             "items": [["id": "complete", "name": "Complete the game"]]],
+        ])
+
+        #expect(repo.removalCost(for: game).items == 2)
     }
 
     // MARK: Finding 4 — the same item id in two categories shared one record

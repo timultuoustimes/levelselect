@@ -21,7 +21,15 @@ struct RetroAchievementsSettings: View {
                         .foregroundStyle(LSTheme.accent)
                     Spacer()
                     Button("Disconnect", role: .destructive) {
-                        RACredentials.clear()
+                        // Reported, not assumed. `clear()` returns false when
+                        // the Keychain refused, and showing a disconnected
+                        // screen over a key that is still there is a lie about
+                        // where someone's credential is.
+                        guard RACredentials.clear() else {
+                            error = "Couldn't remove the key from the Keychain. Still connected."
+                            return
+                        }
+                        error = nil
                         self.connectedAs = nil
                         username = ""; apiKey = ""
                     }

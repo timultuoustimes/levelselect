@@ -30,8 +30,12 @@ struct TrackerSectionView: View {
     /// Pushed rather than presented — a list of candidates wants a full screen
     /// and a back button, and it keeps the single sheet slot free.
     @State private var importingAchievements = false
+    /// Set when the review sheet is closed, so a swipe-down isn't undone by
+    /// the queue handing the slot straight back. Cleared when the pending
+    /// merge itself goes away, so a LATER generation still gets reviewed.
+    @State private var dismissedMerge = false
 
-    private enum TrackerSheet: Identifiable {
+    private enum TrackerSheet: Identifiable, Equatable {
         case importList
         case editItem(EditTarget)
         case reviewMerge
@@ -273,18 +277,16 @@ struct TrackerSectionView: View {
                     Button {
                         sheet = .importList
                     } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
+                    Divider()
+                    // Was a fourth inline control, and the longest label of the
+                    // four — on a row that also has to survive the 42% iPad
+                    // tracker panel. "Import Achievements" says what it DOES;
+                    // the service name only said where from.
+                    Button {
+                        importingAchievements = true
+                    } label: { Label("Import Achievements", systemImage: "trophy") }
                 } label: {
                     Label("Add", systemImage: "plus")
-                        .font(.subheadline)
-                }
-
-                // Pushed, not presented — this view already carries three
-                // sheets, and sheets on this screen have swallowed each other
-                // twice before.
-                NavigationLink {
-                    RetroAchievementsImportView(game: game)
-                } label: {
-                    Label("RetroAchievements", systemImage: "trophy")
                         .font(.subheadline)
                 }
 
@@ -370,14 +372,27 @@ struct TrackerSectionView: View {
                 }
             }
         }
-        // A generation that finishes while another sheet is open no longer
-        // races it: the review takes the slot only when the slot is free, and
-        // otherwise waits for the next pass.
+        // A generation that finishes while another sheet is open doesn't race
+        // it: the review takes the slot only when the slot is free.
+        //
+        // But "free" is not the same as "the user hasn't refused it". Handing
+        // the slot straight back on ANY close meant swiping the review down
+        // re-presented it immediately — an un-dismissable sheet, which is a
+        // worse bug than the collision this was written to prevent. A refusal
+        // is remembered until the merge itself changes.
         .onChange(of: generation.pendingMerge(for: game.id) != nil) { _, pending in
-            if pending, sheet == nil { sheet = .reviewMerge }
+            if pending {
+                if sheet == nil { sheet = .reviewMerge }
+            } else {
+                dismissedMerge = false
+            }
         }
-        .onChange(of: sheet == nil) { _, closed in
-            if closed, generation.pendingMerge(for: game.id) != nil { sheet = .reviewMerge }
+        .onChange(of: sheet) { previous, current in
+            if previous == .reviewMerge, current == nil { dismissedMerge = true }
+            if current == nil, !dismissedMerge,
+               generation.pendingMerge(for: game.id) != nil {
+                sheet = .reviewMerge
+            }
         }
         .alert("Plan a Category", isPresented: $planningCategory) {
             TextField("Name (Bosses, Charms, Endings…)", text: $plannedName)

@@ -609,8 +609,17 @@ serve(async (req: Request) => {
       // Terse entries above 60 items (see buildCategoryMessage), so the
       // per-item allowance drops with them rather than budgeting for prose
       // that was explicitly asked not to be written.
+      // Hard ceiling BELOW the full generation's 12,000, because this mode is
+      // rationed by the cheap bucket: 500 calls a day against 150. Clamping
+      // expectedCount to 400 was not enough — 2,000 + 400 × 45 is exactly
+      // 20,000, so the maximum accepted request still bought more output than
+      // the expensive path it is supposed to undercut. The cost class has to
+      // be capped, not the input that feeds it.
+      const CATEGORY_MAX_TOKENS = 10_000;
       const perItem = (expectedCount ?? 40) > 60 ? 45 : 90;
-      const budget = Math.min(20_000, Math.max(6_000, 2_000 + (expectedCount ?? 40) * perItem));
+      const budget = Math.min(
+        CATEGORY_MAX_TOKENS,
+        Math.max(6_000, 2_000 + (expectedCount ?? 40) * perItem));
 
       // Long lists skip the guide lookup. It costs its own round trip and then
       // drags a whole wiki page into the input, and the combination of that
