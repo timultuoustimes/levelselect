@@ -58,6 +58,25 @@ enum CollectionSeeding {
                 .filter { $0.status == .backlog }
                 .sorted { ($0.addedAt, $0.name) > ($1.addedAt, $1.name) }
 
+        case .longestHeld:
+            // Oldest first — the exact opposite end of the shelf from
+            // `.backlog`, which leads with the newest.
+            picked = games
+                .filter { $0.status == .backlog }
+                .sorted { ($0.addedAt, $0.name) < ($1.addedAt, $1.name) }
+
+        case .neverStarted:
+            // Never launched, not merely unfinished: a game you played for an
+            // hour and put down is a different admission from one you have
+            // owned for a year and never opened.
+            let cutoff = now.addingTimeInterval(-365 * 86_400)
+            picked = games
+                .filter { game in
+                    guard game.status == .backlog || game.status == .queued else { return false }
+                    return game.addedAt < cutoff && sessions(game).isEmpty
+                }
+                .sorted { ($0.addedAt, $0.name) < ($1.addedAt, $1.name) }
+
         case .unreleasedWishlist:
             picked = games
                 .filter { game in

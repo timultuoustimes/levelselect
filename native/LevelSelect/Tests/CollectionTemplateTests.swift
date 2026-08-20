@@ -185,6 +185,40 @@ struct CollectionTemplateTests {
         #expect(Set(picked.map(\.name)) == ["GTA VI", "No Date"])
     }
 
+    /// The mirror of The Guilt Pile: same shelf, opposite end. If these two
+    /// ever return the same order, one of them has stopped saying anything.
+    @Test func longestHeldIsTheOppositeEndOfTheShelfFromTheGuiltPile() {
+        let repo = self.repo()
+        let ancient = game(repo, "Ancient", status: .backlog,
+                           addedAt: .now.addingTimeInterval(-900 * 86_400))
+        let recent = game(repo, "Recent", status: .backlog,
+                          addedAt: .now.addingTimeInterval(-2 * 86_400))
+
+        let oldest = CollectionSeeding.games(for: .longestHeld, from: [recent, ancient], limit: 6)
+        let newest = CollectionSeeding.games(for: .backlog, from: [recent, ancient], limit: 6)
+        #expect(oldest.map(\.name) == ["Ancient", "Recent"])
+        #expect(newest.map(\.name) == ["Recent", "Ancient"])
+    }
+
+    /// "Never once started" is a stronger admission than "unfinished" — a game
+    /// played for an hour and put down does not belong here, and including it
+    /// would make the list a lie rather than a confession.
+    @Test func letsBeRealNeedsOldAndCompletelyUntouched() {
+        let repo = self.repo()
+        let old = Date.now.addingTimeInterval(-400 * 86_400)
+
+        let untouched = game(repo, "Never Opened", status: .backlog, addedAt: old)
+        let dabbled = game(repo, "Played An Hour", status: .backlog, addedAt: old)
+        play(repo, dabbled, minutes: 60)
+        let recent = game(repo, "Bought Last Week", status: .backlog,
+                          addedAt: .now.addingTimeInterval(-7 * 86_400))
+        let finished = game(repo, "Finished", status: .completed, addedAt: old)
+
+        let picked = CollectionSeeding.games(
+            for: .neverStarted, from: [dabbled, recent, finished, untouched], limit: 6)
+        #expect(picked.map(\.name) == ["Never Opened"])
+    }
+
     /// Never more than the template asks for — the count is the point.
     @Test func aDraftNeverExceedsTheSlotCount() {
         let repo = self.repo()

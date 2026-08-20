@@ -36,6 +36,8 @@ struct CollectionTemplate: Identifiable, Hashable, Sendable {
         case physicalRetro
         case emulatedOnly
         case backlog
+        case longestHeld
+        case neverStarted
         case unreleasedWishlist
     }
 
@@ -144,6 +146,17 @@ extension CollectionTemplate {
         .init(id: "one-day", name: "One Day",
               prompt: "You'll never get to these, and won't delete them either",
               slots: 6, group: .unfinished, systemImage: "infinity"),
+        // Deliberately the mirror of The Guilt Pile: that one leads with what
+        // you added last week, this one with what has been sitting there for
+        // years. Same shelf, opposite ends, and the two say different things.
+        .init(id: "longest-held", name: "Longest on the Pile",
+              prompt: "Still unplayed, and it's been there the longest",
+              slots: 6, group: .unfinished, systemImage: "calendar.badge.exclamationmark",
+              seed: .longestHeld),
+        .init(id: "lets-be-real", name: "Let's Be Real",
+              prompt: "Owned for over a year. Never once started",
+              slots: 6, group: .unfinished, systemImage: "eye.trianglebadge.exclamationmark",
+              seed: .neverStarted),
     ]
 
     static func grouped() -> [(group: Group, templates: [CollectionTemplate])] {
