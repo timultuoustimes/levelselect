@@ -365,6 +365,11 @@ struct GameDetailView: View {
                     gameInfo
                 }
                 Divider()
+                CollapsibleSection("Connections", icon: "point.3.connected.trianglepath.dotted",
+                                   defaultExpanded: false) {
+                    RelatedGamesSection(game: game)
+                }
+                Divider()
                 CollapsibleSection("Tags", icon: "tag", defaultExpanded: false) {
                     tagsEditor
                 }
