@@ -243,12 +243,56 @@ struct CollectionMembersPicker: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var allGames: [Game]
     @State private var search = ""
+    /// nil = every game. Starts on whatever the collection's prompt implies,
+    /// so a list about the backlog doesn't open onto the whole library and
+    /// make you do the filtering the prompt already did.
+    @State private var status: GameStatus?
+    @State private var appliedDefault = false
 
     private var repo: Repository { Repository(context) }
 
     private var visible: [Game] {
-        search.isEmpty ? allGames
-            : allGames.filter { $0.name.localizedCaseInsensitiveContains(search) }
+        allGames.filter { game in
+            if let status, game.status != status { return false }
+            guard !search.isEmpty else { return true }
+            return game.name.localizedCaseInsensitiveContains(search)
+        }
+    }
+
+    /// Statuses worth offering: the ones the library actually contains, in the
+    /// app's own order. A filter for a status with nothing in it is a dead end.
+    private var statusChoices: [GameStatus] {
+        let present = Set(allGames.map(\.status))
+        return GameStatus.displayOrder.filter { present.contains($0) }
+    }
+
+    private var statusBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip(nil, label: "All")
+                ForEach(statusChoices, id: \.self) { chip($0, label: $0.sectionTitle) }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+    }
+
+    private func chip(_ value: GameStatus?, label: String) -> some View {
+        let selected = status == value
+        return Button {
+            status = value
+        } label: {
+            Text(label)
+                .font(.caption.weight(selected ? .bold : .regular))
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .background(selected ? AnyShapeStyle(LSTheme.accent.opacity(0.25))
+                                     : AnyShapeStyle(.white.opacity(0.06)),
+                            in: .capsule)
+                .overlay(Capsule().strokeBorder(
+                    selected ? LSTheme.accent.opacity(0.55) : .white.opacity(0.08), lineWidth: 1))
+                .foregroundStyle(selected ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
+        }
+        .buttonStyle(.plain)
     }
 
     var body: some View {
@@ -257,7 +301,17 @@ struct CollectionMembersPicker: View {
         // picker roughly O(games × members).
         let members = Set(collection.gameIDs)
         NavigationStack {
+            VStack(spacing: 0) {
+            statusBar
             List {
+                if visible.isEmpty {
+                    Text(status == nil
+                         ? "No games match that search."
+                         : "Nothing in your library is \(status!.sectionTitle) right now.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
                 ForEach(visible) { game in
                     let isMember = members.contains(game.id.uuidString)
                     Button {
@@ -279,6 +333,7 @@ struct CollectionMembersPicker: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
+            }
             .lsBackground()
             .searchable(text: $search, prompt: "Search games")
             .navigationTitle(collection.name)
@@ -289,6 +344,13 @@ struct CollectionMembersPicker: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+            }
+            .task {
+                // Once per presentation, and only as a starting point: after
+                // that the filter is the user's, including when they clear it.
+                guard !appliedDefault else { return }
+                appliedDefault = true
+                status = CollectionTemplate.matching(collectionNamed: collection.name)?.picksFrom
             }
         }
     }

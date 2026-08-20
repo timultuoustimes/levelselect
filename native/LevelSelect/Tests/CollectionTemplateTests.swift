@@ -65,6 +65,40 @@ struct CollectionTemplateTests {
         #expect(Set(grouped.map(\.id)) == Set(CollectionTemplate.all.map(\.id)))
     }
 
+    /// The paired opinions read as two sides of one argument, so they have to
+    /// stay the same size — a 4 against a 6 makes one look like the main event.
+    @Test func pairedOpinionTemplatesAskForTheSameNumber() {
+        let pairs = [("original-did-it-better", "better-than-original"),
+                     ("preorder-regrets", "worth-paying-early")]
+        for (a, b) in pairs {
+            let first = CollectionTemplate.all.first { $0.id == a }!
+            let second = CollectionTemplate.all.first { $0.id == b }!
+            #expect(first.slots == second.slots, "\(a) and \(b) disagree")
+            #expect(first.group == second.group)
+        }
+    }
+
+    /// A prompt about the backlog should open the picker on the backlog. The
+    /// link is by name, so it also has to survive being looked up that way.
+    @Test func backlogPromptsSayWhereToStartPicking() {
+        for id in ["guilt-pile", "longest-held", "lets-be-real", "one-day"] {
+            let template = CollectionTemplate.all.first { $0.id == id }!
+            #expect(template.picksFrom == .backlog, "\(id) should start on the backlog")
+            #expect(CollectionTemplate.matching(collectionNamed: template.name)?.id == id)
+        }
+        #expect(CollectionTemplate.all.first { $0.id == "still-waiting" }?.picksFrom == .wishlist)
+    }
+
+    /// Matching is forgiving about case and punctuation but must not match
+    /// something else entirely — a wrong match would open the picker filtered
+    /// to a status the user never asked for.
+    @Test func collectionNameMatchingIsLooseButNotWrong() {
+        #expect(CollectionTemplate.matching(collectionNamed: "let's be real")?.id == "lets-be-real")
+        #expect(CollectionTemplate.matching(collectionNamed: "Lets Be Real")?.id == "lets-be-real")
+        #expect(CollectionTemplate.matching(collectionNamed: "My Own List") == nil)
+        #expect(CollectionTemplate.matching(collectionNamed: "") == nil)
+    }
+
     // MARK: Creating
 
     @Test func creatingFromATemplateKeepsTheQuestion() {
@@ -108,7 +142,7 @@ struct CollectionTemplateTests {
 
         let collection = repo.createCollection(from: template)   // …and wasn't asked to
         #expect(collection.gameIDs.isEmpty)
-        #expect(collection.notes.contains("Never once started"))
+        #expect(collection.notes.contains("aren't getting opened"))
     }
 
     // MARK: The picking rules
@@ -233,6 +267,12 @@ struct CollectionTemplateTests {
         let picked = CollectionSeeding.games(
             for: .neverStarted, from: [dabbled, recent, finished, untouched], limit: 6)
         #expect(picked.map(\.name) == ["Never Opened"])
+        // The draft is where the answer usually lives, but which of these is
+        // never getting opened is a judgement — so the prompt says so rather
+        // than reading like the query behind it.
+        let template = CollectionTemplate.all.first { $0.id == "lets-be-real" }!
+        #expect(template.prompt.lowercased().contains("years"))
+        #expect(!template.prompt.contains("Never once started"))
     }
 
     /// Never more than the template asks for — the count is the point.

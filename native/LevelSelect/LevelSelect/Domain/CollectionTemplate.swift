@@ -66,6 +66,13 @@ struct CollectionTemplate: Identifiable, Hashable, Sendable {
     let group: Group
     let systemImage: String
     var seed: Seed?
+    /// Where "Add Games" should start looking for this prompt.
+    ///
+    /// A collection about the backlog opening onto the whole library makes you
+    /// do the filtering the prompt already implies. Separate from `seed`
+    /// because they answer different questions — one drafts a list, this one
+    /// only decides where you begin browsing.
+    var picksFrom: GameStatus?
 
     /// The note the created collection carries, so the question survives past
     /// the moment of creation — otherwise you come back in a month to a list
@@ -127,7 +134,8 @@ extension CollectionTemplate {
         .init(id: "still-waiting", name: "Still Waiting",
               prompt: "Announced, and you're still waiting",
               slots: 4, group: .waiting, systemImage: "clock.badge.questionmark",
-              seed: .unreleasedWishlist),
+              seed: .unreleasedWishlist,
+              picksFrom: .wishlist),
         .init(id: "day-one-every-time", name: "Day One, Every Time",
               prompt: "The series you buy without reading a review",
               slots: 4, group: .waiting, systemImage: "bolt.horizontal"),
@@ -142,6 +150,14 @@ extension CollectionTemplate {
         .init(id: "oversold", name: "I Oversold This",
               prompt: "You recommended it too hard, too often",
               slots: 4, group: .opinions, systemImage: "megaphone.fill"),
+        // A matched pair, same count, so they read as two sides of one
+        // argument rather than two unrelated lists.
+        .init(id: "original-did-it-better", name: "The Original Did It Better",
+              prompt: "The remake, sequel or reboot that didn't beat what came first",
+              slots: 4, group: .opinions, systemImage: "arrow.uturn.backward.circle"),
+        .init(id: "better-than-original", name: "Better Than the Original",
+              prompt: "The one that came second and got it right",
+              slots: 4, group: .opinions, systemImage: "arrow.up.forward.circle"),
         .init(id: "no-regret-drop", name: "Dropped Without Regret",
               prompt: "Walked away and never looked back",
               slots: 4, group: .opinions, systemImage: "xmark.bin"),
@@ -160,22 +176,51 @@ extension CollectionTemplate {
         // ── Unfinished business
         .init(id: "guilt-pile", name: "The Guilt Pile",
               prompt: "Backlog games you honestly intend to play",
-              slots: 6, group: .unfinished, systemImage: "tray.full", seed: .backlog),
+              slots: 6, group: .unfinished, systemImage: "tray.full", seed: .backlog,
+              picksFrom: .backlog),
         .init(id: "one-day", name: "One Day",
               prompt: "You'll never get to these, and won't delete them either",
-              slots: 6, group: .unfinished, systemImage: "infinity"),
+              slots: 6, group: .unfinished, systemImage: "infinity",
+              picksFrom: .backlog),
         // Deliberately the mirror of The Guilt Pile: that one leads with what
         // you added last week, this one with what has been sitting there for
         // years. Same shelf, opposite ends, and the two say different things.
         .init(id: "longest-held", name: "Longest on the Pile",
               prompt: "Still unplayed, and it's been there the longest",
               slots: 6, group: .unfinished, systemImage: "calendar.badge.exclamationmark",
-              seed: .longestHeld),
+              seed: .longestHeld,
+              picksFrom: .backlog),
+        // Not a rule about dates — an admission. The seed finds the long-held,
+        // never-opened ones because that's where the answer usually lives, but
+        // which of them you're never getting to is a judgement only you can
+        // make, and the wording has to sound like the thought rather than a
+        // query.
         .init(id: "lets-be-real", name: "Let's Be Real",
-              prompt: "Owned for over a year. Never once started",
+              prompt: "You've had these for years. However much you'd like to, these are the ones that aren't getting opened",
               slots: 6, group: .unfinished, systemImage: "eye.trianglebadge.exclamationmark",
-              seed: .neverStarted),
+              seed: .neverStarted,
+              picksFrom: .backlog),
     ]
+
+    /// The template a collection was made from, recognised by name.
+    ///
+    /// A stored template id would be exact, but that is a new property and so
+    /// a Schema V3. Name matching costs nothing and degrades harmlessly: rename
+    /// the collection and it simply stops opening pre-filtered, which is where
+    /// every hand-made collection already starts.
+    static func matching(collectionNamed name: String) -> CollectionTemplate? {
+        // Punctuation is REMOVED here rather than treated as a separator, which
+        // is where TrackerMerge.matchKey differs: it turns "Let's" into
+        // "let s", so a user who typed "Lets Be Real" wouldn't match. That
+        // rule is right for item identity and wrong for a title someone typed.
+        func key(_ value: String) -> String {
+            value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+                .filter(\.isLetter) + value.filter(\.isNumber)
+        }
+        let target = key(name)
+        guard !target.isEmpty else { return nil }
+        return all.first { key($0.name) == target }
+    }
 
     static func grouped() -> [(group: Group, templates: [CollectionTemplate])] {
         Group.allCases.compactMap { group in
