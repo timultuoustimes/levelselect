@@ -76,14 +76,15 @@ struct RetroAchievementsSettings: View {
         error = nil
         defer { checking = false }
         do {
+            // Comes back with the name RA itself reports (so the casing is
+            // theirs) and the ULID, which is what later calls actually use.
             let confirmed = try await RetroAchievementsService.verify(
                 username: username, apiKey: apiKey)
-            // Save the name RA itself reports, so the casing matches theirs.
-            guard RACredentials.save(.init(username: confirmed, apiKey: apiKey)) else {
+            guard RACredentials.save(confirmed) else {
                 error = "Couldn't save to the Keychain."
                 return
             }
-            connectedAs = confirmed
+            connectedAs = confirmed.username
             apiKey = ""
         } catch {
             self.error = error.localizedDescription

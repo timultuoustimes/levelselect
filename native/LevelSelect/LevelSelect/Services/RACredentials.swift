@@ -19,11 +19,18 @@ enum RACredentials {
     struct Value: Equatable, Sendable {
         var username: String
         var apiKey: String
+        /// RA's stable id for this account. Their docs say the username "is
+        /// not considered a stable value" — it has been changeable since 2025,
+        /// and every user-scoped endpoint takes a ULID in its place. Stored so
+        /// a rename on RA doesn't quietly break sync months later; the
+        /// username is kept only to show who's connected.
+        var ulid: String?
     }
 
     private static let service = "com.timultuoustimes.levelselect.retroachievements"
     private static let account = "webApiKey"
     private static let usernameKey = "ra.username"
+    private static let ulidKey = "ra.ulid"
 
     /// The username is not a secret and is shown in Settings, so it sits in
     /// UserDefaults; only the key goes in the Keychain.
@@ -32,7 +39,8 @@ enum RACredentials {
               !username.isEmpty,
               let apiKey = readKey(), !apiKey.isEmpty
         else { return nil }
-        return Value(username: username, apiKey: apiKey)
+        return Value(username: username, apiKey: apiKey,
+                     ulid: UserDefaults.standard.string(forKey: ulidKey))
     }
 
     static var isConfigured: Bool { current != nil }
@@ -43,11 +51,17 @@ enum RACredentials {
         let key = value.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !username.isEmpty, !key.isEmpty else { return false }
         UserDefaults.standard.set(username, forKey: usernameKey)
+        if let ulid = value.ulid, !ulid.isEmpty {
+            UserDefaults.standard.set(ulid, forKey: ulidKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: ulidKey)
+        }
         return writeKey(key)
     }
 
     static func clear() {
         UserDefaults.standard.removeObject(forKey: usernameKey)
+        UserDefaults.standard.removeObject(forKey: ulidKey)
         SecItemDelete(baseQuery() as CFDictionary)
     }
 

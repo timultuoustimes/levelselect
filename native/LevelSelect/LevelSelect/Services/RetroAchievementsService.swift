@@ -106,23 +106,25 @@ enum RetroAchievementsService {
     /// Worth a round trip: a typo'd key would otherwise fail silently at the
     /// first sync, days later, looking like the sync is broken rather than
     /// the credentials.
-    @discardableResult
-    static func verify(username: String, apiKey: String) async throws -> String {
+    static func verify(username: String, apiKey: String) async throws -> RACredentials.Value {
         let root = try await post([
             "mode": "verify", "raUsername": username, "raApiKey": apiKey,
         ])
         guard let user = root["user"] as? String, !user.isEmpty else {
             throw ServiceError(message: "RetroAchievements rejected that key.")
         }
-        return user
+        return RACredentials.Value(username: user, apiKey: apiKey,
+                                   ulid: root["ulid"] as? String)
     }
 
     /// What this user has unlocked on one game, across their whole account.
     static func progress(gameID: Int, credentials: RACredentials.Value) async throws -> Progress {
-        let root = try await post([
+        var body: [String: Any] = [
             "mode": "progress", "gameID": gameID,
             "raUsername": credentials.username, "raApiKey": credentials.apiKey,
-        ])
+        ]
+        if let ulid = credentials.ulid, !ulid.isEmpty { body["raULID"] = ulid }
+        let root = try await post(body)
         let formatter = ISO8601DateFormatter()
         // RA writes "2024-03-11 21:04:07" — a space, no zone. Parsed as UTC
         // rather than guessed at, since a wrong zone silently shifts an

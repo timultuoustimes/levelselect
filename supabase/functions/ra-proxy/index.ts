@@ -66,7 +66,10 @@ function matchKey(value: string): string {
 
 async function getConsoles(): Promise<{ id: number; name: string }[]> {
   if (consoles) return consoles;
-  const res = await fetch(`${RA_BASE}/API_GetConsoleIDs.php?${auth()}`);
+  // g=1 → gaming systems only. Without it the list carries Hubs and Events,
+  // which are not consoles and have no business in a "which system is this?"
+  // picker. a=1 drops systems RA has retired.
+  const res = await fetch(`${RA_BASE}/API_GetConsoleIDs.php?g=1&a=1&${auth()}`);
   if (!res.ok) throw new Error(`RA consoles failed: ${res.status}`);
   const raw = await res.json() as { ID: number | string; Name: string }[];
   consoles = raw.map((c) => ({ id: Number(c.ID), name: String(c.Name) }));
@@ -117,9 +120,67 @@ async function resolveConsole(platform: string): Promise<{ id: number; name: str
   }) ?? null;
 }
 
+/// Postgres-backed half of the game-list cache.
+///
+/// RA's docs say of this endpoint: "Consider aggressively caching this
+/// endpoint's response… Frequent calls to this endpoint may prompt us to look
+/// into your bandwidth usage." An in-memory cache dies with every cold start,
+/// so a quiet app could still pull the whole NES list many times a day — all
+/// of it attributed to one personal API key. This survives the instance.
+async function readCachedGames(consoleID: number): Promise<RAGame[] | null> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return null;
+  try {
+    const res = await fetch(
+      `${url}/rest/v1/ra_game_cache?console_id=eq.${consoleID}&select=payload,fetched_at`,
+      { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+    if (!res.ok) return null;
+    const rows = await res.json() as { payload: RAGame[]; fetched_at: string }[];
+    const row = rows[0];
+    if (!row) return null;
+    if (Date.now() - Date.parse(row.fetched_at) > GAME_LIST_TTL) return null;
+    return row.payload;
+  } catch (err) {
+    // A cache miss, not a failure — fall through to RA.
+    console.warn('ra cache read failed:', String(err));
+    return null;
+  }
+}
+
+async function writeCachedGames(consoleID: number, games: RAGame[]): Promise<void> {
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return;
+  try {
+    await fetch(`${url}/rest/v1/ra_game_cache?on_conflict=console_id`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({
+        console_id: consoleID,
+        payload: games,
+        fetched_at: new Date().toISOString(),
+      }),
+    });
+  } catch (err) {
+    console.warn('ra cache write failed:', String(err));
+  }
+}
+
 async function getGames(consoleID: number): Promise<RAGame[]> {
-  const cached = gameLists.get(consoleID);
-  if (cached && Date.now() - cached.fetchedAt < GAME_LIST_TTL) return cached.games;
+  const warm = gameLists.get(consoleID);
+  if (warm && Date.now() - warm.fetchedAt < GAME_LIST_TTL) return warm.games;
+
+  const stored = await readCachedGames(consoleID);
+  if (stored) {
+    gameLists.set(consoleID, { games: stored, fetchedAt: Date.now() });
+    return stored;
+  }
 
   // f=1 → only games that actually have an achievement set. Without it the
   // list is mostly entries with nothing to track.
@@ -127,6 +188,7 @@ async function getGames(consoleID: number): Promise<RAGame[]> {
   if (!res.ok) throw new Error(`RA game list failed: ${res.status}`);
   const games = await res.json() as RAGame[];
   gameLists.set(consoleID, { games, fetchedAt: Date.now() });
+  await writeCachedGames(consoleID, games);
   return games;
 }
 
@@ -323,14 +385,21 @@ serve(async (req: Request) => {
         console.error('RA verify failed:', res.status);
         return jsonResponse({ error: 'RetroAchievements is unavailable right now.' }, 502);
       }
-      const profile = await res.json() as { User?: string; TotalPoints?: number | string };
+      const profile = await res.json() as {
+        User?: string; ULID?: string; TotalPoints?: number | string;
+      };
       // RA answers 200 with an empty body for a bad key rather than a 401, so
       // "the request worked" is not the same question as "the key is good".
       if (!profile?.User) {
         return jsonResponse({ error: 'RetroAchievements rejected that key. Check both fields.' }, 401);
       }
+      // RA's docs: "the username is not considered a stable value" — users
+      // have been able to change it since 2025, and every user-scoped endpoint
+      // accepts the ULID in its place. Handing that back means a rename on RA
+      // doesn't quietly break someone's sync months later.
       return jsonResponse({
         user: profile.User,
+        ulid: profile.ULID ?? null,
         points: Number(profile.TotalPoints ?? 0),
       });
     }
@@ -343,7 +412,9 @@ serve(async (req: Request) => {
       if (gameID === null || gameID <= 0) {
         return jsonResponse({ error: 'gameID is required.' }, 400);
       }
-      const user = String(body?.raUsername).trim();
+      // `u` takes a username OR a ULID, and the ULID is the stable one.
+      const ulid = typeof body?.raULID === 'string' ? body.raULID.trim() : '';
+      const user = ulid || String(body?.raUsername).trim();
 
       const res = await fetch(
         `${RA_BASE}/API_GetGameInfoAndUserProgress.php?g=${gameID}&u=${encodeURIComponent(user)}&${credentials}`);
