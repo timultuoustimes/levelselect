@@ -99,6 +99,19 @@ struct CollectionTemplateTests {
         #expect(CollectionTemplate.matching(collectionNamed: "") == nil)
     }
 
+    /// The tally reads the slot count back off the collection's name, so a
+    /// collection made from a prompt has to keep resolving to it — otherwise
+    /// "pick six" is displayed while choosing and then never counted.
+    @Test func aCreatedCollectionStillResolvesToItsTemplateForTheTally() {
+        let repo = self.repo()
+        for template in CollectionTemplate.all {
+            let collection = repo.createCollection(from: template)
+            let found = CollectionTemplate.matching(collectionNamed: collection.name)
+            #expect(found?.id == template.id, "\(template.id) lost its link")
+            #expect(found?.slots == template.slots)
+        }
+    }
+
     // MARK: Creating
 
     @Test func creatingFromATemplateKeepsTheQuestion() {

@@ -277,6 +277,75 @@ struct CollectionMembersPicker: View {
         }
     }
 
+    /// Cover art with the selection on the art itself.
+    ///
+    /// The old row was a 40pt thumbnail, a name, and a dot at the far right —
+    /// three glances to answer "is this one in?". Box art is how anyone
+    /// actually recognises a game, and a ring around it answers the question
+    /// in the same look.
+    private func cell(_ game: Game, selected: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            CoverThumb(urlString: game.coverURLString)
+                .aspectRatio(3 / 4, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(.rect(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(selected ? LSTheme.accent : .clear, lineWidth: 3))
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.black, LSTheme.accent)
+                            .padding(5)
+                    }
+                }
+                // Unpicked art recedes, so the chosen ones read as a set at a
+                // glance rather than needing to be counted.
+                .opacity(selected ? 1 : 0.62)
+            Text(game.name)
+                .font(.caption2)
+                .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// How many are in, against how many the prompt asked for.
+    ///
+    /// A count the prompt names is useless if you can't see it while choosing —
+    /// "pick six" and then no sixes anywhere. Over the target is stated plainly
+    /// rather than blocked: the number was always a prompt, not a limit.
+    @ViewBuilder
+    private var tally: some View {
+        let picked = collection.gameIDs.count
+        let target = CollectionTemplate.matching(collectionNamed: collection.name)?.slots
+        HStack(spacing: 8) {
+            if let target {
+                Text("\(picked) of \(target)")
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(picked == target ? LSTheme.accent : .primary)
+                if picked > target {
+                    Text("over — that's allowed")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                } else if picked < target {
+                    Text("\(target - picked) to go")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                Text(picked == 1 ? "1 game" : "\(picked) games")
+                    .font(.headline.monospacedDigit())
+            }
+            Spacer()
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .animation(.snappy(duration: 0.2), value: picked)
+    }
+
     private func chip(_ value: GameStatus?, label: String) -> some View {
         let selected = status == value
         return Button {
@@ -302,37 +371,33 @@ struct CollectionMembersPicker: View {
         let members = Set(collection.gameIDs)
         NavigationStack {
             VStack(spacing: 0) {
-            statusBar
-            List {
-                if visible.isEmpty {
-                    Text(status == nil
-                         ? "No games match that search."
-                         : "Nothing in your library is \(status!.sectionTitle) right now.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .listRowBackground(Color.clear)
-                }
-                ForEach(visible) { game in
-                    let isMember = members.contains(game.id.uuidString)
-                    Button {
-                        repo.setMembership(collection, game: game, member: !isMember)
-                    } label: {
-                        HStack(spacing: 12) {
-                            CoverThumb(urlString: game.coverURLString)
-                                .frame(width: 40, height: 53)
-                            Text(game.name).font(.subheadline)
-                            Spacer()
-                            Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(isMember ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
-                        }
-                        .contentShape(.rect)
+                tally
+                statusBar
+                ScrollView {
+                    if visible.isEmpty {
+                        Text(status == nil
+                             ? "No games match that search."
+                             : "Nothing in your library is \(status!.sectionTitle) right now.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 40)
                     }
-                    .buttonStyle(.plain)
-                    .listRowBackground(Color.clear)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)],
+                              spacing: 14) {
+                        ForEach(visible) { game in
+                            let isMember = members.contains(game.id.uuidString)
+                            Button {
+                                repo.setMembership(collection, game: game, member: !isMember)
+                            } label: {
+                                cell(game, selected: isMember)
+                            }
+                            .buttonStyle(PressableCardStyle())
+                        }
+                    }
+                    .padding()
                 }
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+                .scrollIndicators(.hidden)
             }
             .lsBackground()
             .searchable(text: $search, prompt: "Search games")
