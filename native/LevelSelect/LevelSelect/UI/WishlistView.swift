@@ -1,14 +1,49 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
-/// Wishlist tab: your public Deku Deals wishlist, native. Tap a row → its
-/// Deku page (price history) in the in-app browser. Long-press → Add to
-/// Library (IGDB pre-searched, lands as Wishlist status). Browse button opens
-/// Deku itself; the list refreshes when the browser closes.
+/// Wishlist tab: the games you want, and the Deku Deals list beside them.
+///
+/// Two lists, deliberately not merged. Yours is IGDB-backed and lives in your
+/// library — a real Game with `.wishlist` status, so covers, platforms and
+/// everything else work the way they do anywhere else, and buying it is a
+/// status change rather than a re-entry. Deku's is a price-watching list that
+/// belongs to Deku, kept in its own vocabulary and refreshed from the public
+/// share link. Promoting a Deku row into your wishlist is a manual "Add to
+/// Library" for now; automatic matching can come later, when a wrong match
+/// costs less than it would today.
+///
+/// On a wide screen both are visible at once: yours fills, Deku sits in a
+/// sidebar you can flip between its list and its site. On a phone they share
+/// the tab through a segmented control, because a 380pt sidebar on a 393pt
+/// screen is not a sidebar.
 struct WishlistTab: View {
-    struct AddTarget: Identifiable {
-        let name: String
-        var id: String { name }
+    /// ONE presentation slot. Two `.sheet` modifiers on the same view is the
+    /// bug this project has hit twice — whichever is applied second swallows
+    /// the first, silently, and only on device.
+    private enum Sheet: Identifiable {
+        case browser(URL)
+        case addGame(String)
+
+        var id: String {
+            switch self {
+            case .browser(let url): "browser:\(url.absoluteString)"
+            case .addGame(let name): "add:\(name)"
+            }
+        }
+    }
+
+    private enum Pane: String, CaseIterable, Identifiable {
+        case yours, deku
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .yours: "Yours"
+            case .deku: "Deku Deals"
+            }
+        }
     }
 
     enum WishlistSort: String, CaseIterable, Identifiable {
@@ -30,36 +65,53 @@ struct WishlistTab: View {
         }
     }
 
+    // Status is filtered in Swift rather than in the predicate: it is stored as
+    // a raw string and the library is small enough that the difference is not
+    // measurable, while a predicate over an enum is a compile-time gamble.
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
+    private var library: [Game]
+
     @State private var store = DekuWishlistStore()
     @State private var searchText = ""
     @State private var sort: WishlistSort = .dateNewest
-    @State private var browserTarget: DekuLinkTarget?
-    @State private var addSearch: AddTarget?
+    @State private var pane: Pane = .yours
+    @State private var sheet: Sheet?
     @State private var paneURL: URL = DekuLinks.home
+    @State private var sidebarShowsSite = false
+    @State private var urlInput = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// Scales with text size for the same reason the other browsing grids do.
+    @ScaledMetric(relativeTo: .caption2) private var cellWidth: CGFloat = 105
 
     private var isSplit: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
         NavigationStack {
             Group {
-                if !store.isConfigured {
-                    setupPrompt
-                } else if isSplit {
+                if isSplit {
                     HStack(spacing: 0) {
-                        list
-                            .frame(maxWidth: 420)
+                        yours
                         Divider()
-                        DekuBrowserPane(url: $paneURL) {
-                            Task { await store.refresh() }
-                        }
+                        dekuSidebar
+                            .frame(width: 380)
                     }
                 } else {
-                    list
+                    VStack(spacing: 0) {
+                        Picker("Wishlist", selection: $pane) {
+                            ForEach(Pane.allCases) { Text($0.label).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        if pane == .yours { yours } else { dekuPane }
+                    }
                 }
             }
             .lsBackground()
             .navigationTitle("Wishlist")
+            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .searchable(text: $searchText, prompt: "Search wishlist")
             .toolbar {
                 ToolbarItem {
                     Menu {
@@ -74,26 +126,152 @@ struct WishlistTab: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        if isSplit { paneURL = DekuLinks.home }
-                        else { browserTarget = DekuLinkTarget(url: DekuLinks.home) }
+                        sheet = .addGame("")
+                    } label: {
+                        Label("Add to Wishlist", systemImage: "plus")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        openDeku(DekuLinks.home)
                     } label: {
                         Label("Browse Deku Deals", systemImage: "globe")
                     }
                 }
             }
         }
-        .dekuBrowser(target: $browserTarget) {
-            Task { await store.refresh() }   // e.g. after adding on Deku
-        }
-        .sheet(item: $addSearch) { target in
-            AddGameSheet(initialSearch: target.name, defaultStatus: .wishlist)
+        .sheet(item: $sheet, onDismiss: { Task { await store.refresh() } }) { which in
+            switch which {
+            case .browser(let url):
+                // Unreachable on macOS — `openDeku` hands the URL to the real
+                // browser there rather than presenting one.
+                #if os(iOS)
+                SafariView(url: url)
+                    .ignoresSafeArea()
+                #else
+                EmptyView()
+                #endif
+            case .addGame(let name):
+                AddGameSheet(initialSearch: name, defaultStatus: .wishlist)
+            }
         }
         .task {
             if store.isConfigured { await store.refresh() }
         }
     }
 
-    // MARK: List
+    // MARK: Yours
+
+    private var mine: [Game] {
+        let base = library.filter { $0.status == .wishlist }
+        let matched = searchText.isEmpty
+            ? base
+            : base.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+        switch sort {
+        case .dateNewest: return matched.sorted { $0.addedAt > $1.addedAt }
+        case .dateOldest: return matched.sorted { $0.addedAt < $1.addedAt }
+        case .nameAZ:
+            return matched.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        }
+    }
+
+    private var yours: some View {
+        ScrollView {
+            if mine.isEmpty {
+                ContentUnavailableView {
+                    Label(searchText.isEmpty ? "Nothing on your wishlist" : "No matches",
+                          systemImage: "bag")
+                } description: {
+                    Text(searchText.isEmpty
+                         ? "Games you want but don't own yet. They live in your library with everything else — buying one is a status change, not a re-entry."
+                         : "Nothing on your wishlist matches “\(searchText)”.")
+                } actions: {
+                    if searchText.isEmpty {
+                        Button("Add a Game") { sheet = .addGame("") }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(.top, 40)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("\(mine.count) \(mine.count == 1 ? "game" : "games")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
+                              spacing: 16) {
+                        ForEach(mine) { game in
+                            NavigationLink(value: game) {
+                                LibraryGridCell(game: game, size: .medium)
+                            }
+                            .buttonStyle(PressableCardStyle())
+                            .gameContextMenu(game)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
+                .padding(.vertical)
+            }
+        }
+        .scrollIndicators(.hidden)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: Deku
+
+    private func openDeku(_ url: URL) {
+        if isSplit {
+            paneURL = url
+            sidebarShowsSite = true
+            return
+        }
+        #if os(iOS)
+        sheet = .browser(url)
+        #else
+        NSWorkspace.shared.open(url)
+        #endif
+    }
+
+    /// The sidebar flips between Deku's list and Deku's site rather than
+    /// showing both: the list is for finding something, the site is for the
+    /// price history that is the reason to keep the list at all.
+    private var dekuSidebar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Deku Deals")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                if store.isConfigured {
+                    Button {
+                        sidebarShowsSite.toggle()
+                    } label: {
+                        Label(sidebarShowsSite ? "Show list" : "Open site",
+                              systemImage: sidebarShowsSite ? "list.bullet" : "globe")
+                            .labelStyle(.iconOnly)
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            Divider()
+            dekuPane
+        }
+    }
+
+    private var dekuPane: some View {
+        Group {
+            if !store.isConfigured {
+                setupPrompt
+            } else if isSplit && sidebarShowsSite {
+                DekuBrowserPane(url: $paneURL) {
+                    Task { await store.refresh() }
+                }
+            } else {
+                list
+            }
+        }
+    }
 
     private var visible: [DekuWishlistItem] {
         let base = searchText.isEmpty
@@ -120,10 +298,7 @@ struct WishlistTab: View {
             }
             ForEach(visible) { item in
                 Button {
-                    if let url = item.url {
-                        if isSplit { paneURL = url }
-                        else { browserTarget = DekuLinkTarget(url: url) }
-                    }
+                    if let url = item.url { openDeku(url) }
                 } label: {
                     row(item)
                 }
@@ -131,15 +306,12 @@ struct WishlistTab: View {
                 .listRowBackground(Color.clear)
                 .contextMenu {
                     Button {
-                        addSearch = AddTarget(name: item.name)
+                        sheet = .addGame(item.name)
                     } label: {
-                        Label("Add to Library", systemImage: "plus.square.on.square")
+                        Label("Add to Wishlist", systemImage: "plus.square.on.square")
                     }
                     Button {
-                        if let url = item.url {
-                            if isSplit { paneURL = url }
-                            else { browserTarget = DekuLinkTarget(url: url) }
-                        }
+                        if let url = item.url { openDeku(url) }
                     } label: {
                         Label("View on Deku Deals", systemImage: "globe")
                     }
@@ -148,7 +320,6 @@ struct WishlistTab: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .searchable(text: $searchText, prompt: "Search wishlist")
         .refreshable { await store.refresh() }
         .overlay {
             if store.isLoading && store.items.isEmpty {
@@ -192,8 +363,6 @@ struct WishlistTab: View {
     }
 
     // MARK: Setup
-
-    @State private var urlInput = ""
 
     private var setupPrompt: some View {
         ScrollView {
