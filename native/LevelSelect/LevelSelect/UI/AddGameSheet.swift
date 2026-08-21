@@ -326,7 +326,12 @@ private struct ConfirmAddView: View {
                 }
             }
             Section {
-                Button("Add to Library") {
+                // Follows the status, but only for Wishlist. Every other
+                // status describes a game you have, so "Library" is the right
+                // word for them; Wishlist is the one that means you don't own
+                // it yet, and being told you're adding it to your library is
+                // the sentence that reads wrong at exactly that moment.
+                Button(status == .wishlist ? "Add to Wishlist" : "Add to Library") {
                     let chosen = platform == customOption
                         ? customPlatform.trimmingCharacters(in: .whitespaces)
                         : platform
