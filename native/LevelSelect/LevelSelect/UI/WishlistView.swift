@@ -221,7 +221,16 @@ struct WishlistTab: View {
                 .disabled(urlInput.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(28)
+            // Two frames, and both are load-bearing. The 440 keeps the prompt
+            // readable instead of stretching one sentence across a 13" iPad.
+            // The infinity makes the ROW fill the width so the scroll view
+            // does too — without it the whole tab measured 440pt wide, and
+            // `lsBackground` paints the view's own frame, so an iPad showed a
+            // narrow strip of app floating in bare black with the navigation
+            // title stranded outside it.
             .frame(maxWidth: 440)
+            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
