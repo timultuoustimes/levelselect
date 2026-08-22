@@ -274,4 +274,42 @@ struct RetroAchievementsSyncTests {
         #expect(RetroAchievementsService.mayCover(platforms: ["PlayStation 2"], ownership: []))
         #expect(RetroAchievementsService.mayCover(platforms: ["PlayStation"], ownership: []))
     }
+
+    // MARK: Telling an authored list from a written-from-a-guide one
+
+    /// An imported RetroAchievements set and a GENERATED "Achievements"
+    /// category are indistinguishable once installed — same rows, same ticks.
+    /// The plan step really does propose "Achievements" for modern games
+    /// (verified against the live function for Cyberpunk 2077 and Hades), so
+    /// someone could track a guessed list for weeks believing it mirrored
+    /// their real account. Only the imported one carries the stamp.
+    @Test func onlyRecordedSourcesAreLabelled() {
+        let imported = TrackerSchemaJSON.categories(from: try! JSONSerialization.data(
+            withJSONObject: ["schemaVersion": 1, "categories": [
+                ["id": "retroachievements", "name": "Achievements", "type": "checklist",
+                 "raGameID": 236,
+                 "items": [["id": "ra-1", "name": "Bomb Torizo"]]],
+            ]]))
+        #expect(imported.first?.provenance == "RetroAchievements")
+
+        let pasted = TrackerSchemaJSON.categories(from: try! JSONSerialization.data(
+            withJSONObject: ["schemaVersion": 1, "categories": [
+                ["id": "mine", "name": "My List", "type": "checklist", "locked": true,
+                 "items": [["id": "a", "name": "A"]]],
+            ]]))
+        #expect(pasted.first?.provenance == "Pasted")
+
+        // A generated category records nothing about being generated, and the
+        // root's `generatedBy` belongs to the whole tracker rather than to any
+        // one category — a merge keeps the CURRENT root. So the absence of a
+        // stamp must stay silent rather than be read as "AI wrote this",
+        // which would mislabel a hand-made list the moment anyone adds one.
+        let generated = TrackerSchemaJSON.categories(from: try! JSONSerialization.data(
+            withJSONObject: ["schemaVersion": 1, "generatedBy": "claude-sonnet-4-6",
+                             "categories": [
+                ["id": "achievements", "name": "Achievements", "type": "checklist",
+                 "items": [["id": "x", "name": "Beat the game"]]],
+            ]]))
+        #expect(generated.first?.provenance == nil)
+    }
 }

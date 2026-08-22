@@ -886,6 +886,21 @@ struct TrackerSectionView: View {
                 HStack {
                     Text(category.name)
                         .font(.subheadline.weight(.semibold))
+                    // Says which lists are the authored ones. A generated
+                    // "Achievements" category for a modern game looks exactly
+                    // like an imported RetroAchievements set once installed —
+                    // same rows, same ticks — and someone could track a
+                    // guessed list for weeks believing it mirrored their real
+                    // account. Only a category that recorded its source at
+                    // creation gets a badge; silence is not a claim either way.
+                    if let source = category.provenance {
+                        Text(source)
+                            .font(.caption2.weight(.medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(LSTheme.accent.opacity(0.18), in: .capsule)
+                            .foregroundStyle(LSTheme.accent)
+                    }
                     Spacer()
                     Text("\(done)/\(category.items.count)")
                         .font(.caption.monospacedDigit())

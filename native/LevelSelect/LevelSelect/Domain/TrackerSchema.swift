@@ -66,6 +66,25 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     /// the row read "about 900 items" and then produced one, which is a
     /// promise the fill was never going to keep.
     var counted: Bool = false
+    /// The RetroAchievements game this category was imported from, stamped at
+    /// import. Its presence is what makes this list the authored one.
+    var raGameID: Int? = nil
+    /// Written by the list parser for a checklist the user pasted in.
+    var locked: Bool = false
+
+    /// Where this list came from, when the tracker recorded it at creation.
+    ///
+    /// Deliberately narrow. A generated category records nothing about being
+    /// generated — the root's `generatedBy` belongs to the last generation the
+    /// whole tracker had, not to any one category, and a merge keeps the
+    /// CURRENT root — so inferring "generated" from its absence would be a
+    /// guess, and this project does not label user content by inference.
+    /// Unlabelled therefore means "nobody wrote it down", not "AI wrote it".
+    var provenance: String? {
+        if raGameID != nil { return "RetroAchievements" }
+        if locked { return "Pasted" }
+        return nil
+    }
 }
 
 // MARK: - Run template (roguelikes / Hades)
@@ -187,7 +206,9 @@ enum TrackerSchemaJSON {
                 sourceName: raw["sourceName"] as? String,
                 pending: (raw["pending"] as? Bool) ?? false,
                 plannedCount: (raw["plannedCount"] as? NSNumber)?.intValue,
-                counted: (raw["counted"] as? Bool) ?? false
+                counted: (raw["counted"] as? Bool) ?? false,
+                raGameID: (raw["raGameID"] as? NSNumber)?.intValue,
+                locked: (raw["locked"] as? Bool) ?? false
             )
         }
     }
