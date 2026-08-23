@@ -249,12 +249,22 @@ struct LibraryTab: View {
         case .system:
             // Group by the game's most-preferred platform (Switch 2 → Switch →
             // PC → Mac → …), not IGDB's arbitrary first entry.
+            // Grouped by the name shown, not the string stored. Keying on the
+            // raw value put "Nintendo Switch 2" and "Switch 2" in separate
+            // buckets that then rendered the same heading twice, one with 14
+            // games and one with 3, with nothing on screen to tell them apart.
             let byPlatform = Dictionary(grouping: visible) {
-                PlatformPreference.owned($0.platforms) ?? "Other"
+                PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other")
             }
             return byPlatform
-                .map { LibGroup(title: PlatformShort.name($0.key), status: nil, platform: $0.key,
-                                items: $0.value.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }) }
+                .map { short, items in
+                    // Any member's raw value will do for the icon — they all
+                    // shorten to this heading, and PlatformIcon matches both
+                    // vocabularies anyway.
+                    let raw = items.compactMap { PlatformPreference.owned($0.platforms) }.first
+                    return LibGroup(title: short, status: nil, platform: raw,
+                                    items: items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
+                }
                 .sorted { ($1.items.count, $0.title) < ($0.items.count, $1.title) }
         default:
             return nil
@@ -313,15 +323,15 @@ struct LibraryTab: View {
                 Divider()
                 Picker("System", selection: $platformFilter) {
                     Text("All systems").tag(String?.none)
-                    ForEach(allPlatforms, id: \.self) { p in
+                    ForEach(allPlatforms, id: \.short) { entry in
                         Group {
-                            if let asset = PlatformIcon.assetName(p) {
-                                Label { Text(PlatformShort.name(p)) } icon: { Image(asset) }
+                            if let asset = PlatformIcon.assetName(entry.icon) {
+                                Label { Text(entry.short) } icon: { Image(asset) }
                             } else {
-                                Label(PlatformShort.name(p), systemImage: "gamecontroller")
+                                Label(entry.short, systemImage: "gamecontroller")
                             }
                         }
-                        .tag(String?.some(p))
+                        .tag(String?.some(entry.short))
                     }
                 }
                 Divider()
@@ -391,11 +401,10 @@ struct LibraryTab: View {
         Dictionary(grouping: games, by: \.status).mapValues(\.count)
     }
 
-    /// Distinct platforms across the library, in Tim's preferred order.
-    private var allPlatforms: [String] {
-        var seen = Set<String>()
-        for g in games { for p in g.platforms { seen.insert(p) } }
-        return seen.sorted { (PlatformPreference.rank($0), $0) < (PlatformPreference.rank($1), $1) }
+    /// The systems in the library, one row per name the user actually sees.
+    /// See `PlatformShort.systems(in:)` for why it groups.
+    private var allPlatforms: [(short: String, icon: String)] {
+        PlatformShort.systems(in: games.map(\.platforms))
     }
 
     private var anyFilterActive: Bool {
@@ -416,7 +425,9 @@ struct LibraryTab: View {
         return games.filter { g in
             (statusFilter == nil || g.status == statusFilter)
             && (tagFilter == nil || g.userTags.contains(tagFilter!))
-            && (platformFilter == nil || g.platforms.contains(platformFilter!))
+            // Matched by displayed name, so picking "Switch 2" finds the games
+            // stored as "Nintendo Switch 2" too.
+            && (platformFilter == nil || PlatformShort.matches(g.platforms, short: platformFilter!))
             && (ownershipFilter == nil || g.ownership.contains(ownershipFilter!))
             && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
             && matchesSearch(g)
@@ -560,6 +571,42 @@ enum PlatformShort {
         case "Other", "": "Other"
         default: p
         }
+    }
+
+    /// The systems present across these games' platform lists, one entry per
+    /// name the user actually sees.
+    ///
+    /// Grouped by short name rather than by stored string, because `name(_:)`
+    /// collapses IGDB's "Nintendo Switch 2" and the short "Switch 2" for
+    /// DISPLAY only. A menu built from distinct raw values therefore offered
+    /// both, labelled identically, filtering 14 games and 3 — two rows that
+    /// looked like one thing and were not.
+    ///
+    /// Deliberately a view-layer fix rather than a data migration. The
+    /// vocabulary split arrived with an import, so the library is full of
+    /// variants nobody chose, and nobody should have to edit 164 games to see
+    /// a correct list of their own systems.
+    ///
+    /// `icon` is the highest-ranked variant behind the name, so each row keeps
+    /// the art it had.
+    static func systems(in lists: [[String]]) -> [(short: String, icon: String)] {
+        var byShort: [String: String] = [:]
+        for list in lists {
+            for p in list {
+                let short = name(p)
+                if let held = byShort[short], PlatformPreference.rank(held) <= PlatformPreference.rank(p) { continue }
+                byShort[short] = p
+            }
+        }
+        return byShort
+            .map { (short: $0.key, icon: $0.value) }
+            .sorted { (PlatformPreference.rank($0.icon), $0.short) < (PlatformPreference.rank($1.icon), $1.short) }
+    }
+
+    /// Whether any of these stored platforms is displayed as `short` — so
+    /// picking "Switch 2" also finds what's stored as "Nintendo Switch 2".
+    static func matches(_ platforms: [String], short: String) -> Bool {
+        platforms.contains { name($0) == short }
     }
 }
 

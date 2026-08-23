@@ -123,4 +123,45 @@ struct OwnedPlatformTests {
         #expect(PlatformPreference.sorted(["Xbox 360", "Nintendo Switch"]).first == "Nintendo Switch")
         #expect(PlatformPreference.sorted(["Recalbox", "Sega Genesis"]).first == "Sega Genesis")
     }
+
+    // MARK: One row per system, not one per spelling
+
+    /// The library's systems filter listed "Switch" and "Switch 2" TWICE each,
+    /// with identical labels, filtering different games — 14 and 3.
+    ///
+    /// `PlatformShort.name` collapses IGDB's "Nintendo Switch 2" and the short
+    /// "Switch 2" for DISPLAY only, so a menu built from distinct STORED values
+    /// showed both and the shortener hid the difference it was caused by. Two
+    /// controls that look like the same thing and do different things is worse
+    /// than the untidy data underneath.
+    ///
+    /// The shape is real: Tim's library began as a Gamery import and holds
+    /// Switch 35 / Nintendo Switch 2, Switch 2 14 / Nintendo Switch 2 3.
+    @Test func systemsAreListedOncePerDisplayedName() {
+        let systems = PlatformShort.systems(in: [
+            ["Switch"], ["Switch"], ["Nintendo Switch"],
+            ["Switch 2"], ["Nintendo Switch 2"],
+            ["Mac"],
+        ])
+        let names = systems.map(\.short)
+        #expect(names.filter { $0 == "Switch" }.count == 1)
+        #expect(names.filter { $0 == "Switch 2" }.count == 1)
+        #expect(Set(names) == ["Switch", "Switch 2", "Mac"])
+        // Every row still has a raw value behind it for its icon.
+        #expect(systems.allSatisfy { !$0.icon.isEmpty })
+    }
+
+    /// Picking the one row has to find every spelling behind it, or the fix
+    /// would just hide games instead of duplicating rows.
+    @Test func pickingASystemFindsEverySpellingOfIt() {
+        #expect(PlatformShort.matches(["Nintendo Switch 2"], short: "Switch 2"))
+        #expect(PlatformShort.matches(["Switch 2"], short: "Switch 2"))
+        #expect(PlatformShort.matches(["Nintendo Switch"], short: "Switch"))
+        #expect(PlatformShort.matches(["PC (Microsoft Windows)"], short: "PC"))
+        // A game on several systems still matches the one you picked.
+        #expect(PlatformShort.matches(["Recalbox", "Genesis"], short: "Genesis"))
+        // And the collapse must not over-reach: Switch 2 is not Switch.
+        #expect(!PlatformShort.matches(["Nintendo Switch 2"], short: "Switch"))
+        #expect(!PlatformShort.matches(["Mac"], short: "PC"))
+    }
 }
