@@ -22,13 +22,18 @@ import Base from '../../layouts/Base.astro';
 
 const devices = ['iPhone', 'iPad', 'Mac', 'Apple Watch'];
 const platforms = ['Switch', 'PlayStation', 'Xbox', 'PC / Steam', 'Emulation', 'Retro hardware', 'Mobile'];
+/**
+ * `named` marks the answers where "which one?" has an answer worth having.
+ * A spreadsheet, a site, or another app all name a thing to compare against;
+ * "in my head" does not.
+ */
 const tracking = [
-  "I don't — that's the problem",
-  'In my head',
-  'A spreadsheet',
-  'Notes app or paper',
-  'Backloggd, HowLongToBeat, or similar',
-  'Another tracker app',
+  { value: 'nothing', label: "I don't — that's the problem", named: false },
+  { value: 'memory', label: 'In my head', named: false },
+  { value: 'spreadsheet', label: 'A spreadsheet', named: true },
+  { value: 'notes', label: 'Notes app or paper', named: false },
+  { value: 'site', label: 'Backloggd, HowLongToBeat, or similar', named: true },
+  { value: 'app', label: 'Another tracker app', named: true },
 ];
 ---
 <Base
@@ -71,11 +76,18 @@ const tracking = [
         </div>
       </fieldset>
 
-      <div class="field">
+      <div class="field trackfield">
         <label class="q" for="tracking">How do you keep track today?</label>
         <select id="tracking" name="tracking">
-          {tracking.map((t) => <option>{t}</option>)}
+          {tracking.map((t) => <option value={t.value}>{t.label}</option>)}
         </select>
+      </div>
+
+      <div class="field followup">
+        <label class="q" for="tool">Which one?</label>
+        <input id="tool" name="tool" type="text" autocomplete="off"
+               placeholder="Backloggd, Sheets, Notion, a shoebox of receipts…" />
+        <p class="hint">Optional, and the most useful thing you can tell me — it's what LevelSelect is being compared against.</p>
       </div>
 
       <div class="field">
@@ -134,6 +146,17 @@ const tracking = [
   /* The selected state is the checkbox's own, read straight from the DOM — no
      script, so it still works for someone browsing with JS off. */
   .chip:has(input:checked) { border-color: var(--purple); background: rgba(148, 92, 250, .16); }
+
+  /* "Which one?" only makes sense for an answer that names something, so it
+     hides itself for the ones that don't. Written as hide-when rather than
+     show-when on purpose: a browser without :has() then shows an extra
+     optional question, which is harmless, instead of silently never asking
+     it — the failure lands on the side that still collects the answer. */
+  .trackfield:has(option[value='nothing']:checked) + .followup,
+  .trackfield:has(option[value='memory']:checked) + .followup,
+  .trackfield:has(option[value='notes']:checked) + .followup {
+    display: none;
+  }
 
   .optin { display: flex; gap: .6rem; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 1.3rem; }
   .optin input { accent-color: var(--purple); margin-top: .28rem; }
