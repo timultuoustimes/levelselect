@@ -1,0 +1,147 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * Invite request form.
+ *
+ * A Netlify form, which means the markup itself is the backend: Netlify's
+ * build bot parses the static HTML at deploy time and registers any form
+ * carrying `data-netlify`. Astro renders this page statically, so there is
+ * nothing to run and nothing to maintain.
+ *
+ * Two details are load-bearing and easy to lose in an edit:
+ *   - the hidden `form-name` input must match the form's `name`, or the POST
+ *     arrives unattributed and Netlify drops it;
+ *   - `netlify-honeypot` names a field a human never sees and a bot fills in.
+ *     The alternative is reCAPTCHA, which would load Google on a site whose
+ *     whole argument is that nothing third-party is watching you.
+ *
+ * Notifications are configured per form in the Netlify UI, not here, so the
+ * address they go to is independent of whoever owns the Netlify account.
+ */
+
+const devices = ['iPhone', 'iPad', 'Mac', 'Apple Watch'];
+const platforms = ['Switch', 'PlayStation', 'Xbox', 'PC / Steam', 'Emulation', 'Retro hardware', 'Mobile'];
+const tracking = [
+  "I don't — that's the problem",
+  'In my head',
+  'A spreadsheet',
+  'Notes app or paper',
+  'Backloggd, HowLongToBeat, or similar',
+  'Another tracker app',
+];
+---
+<Base
+  title="Ask for an invite — LevelSelect"
+  description="LevelSelect is in a small closed test on iPhone, iPad, Mac and Apple Watch. Ask for an invite and you'll get one."
+>
+<main class="wrap">
+  <article class="doc">
+    <h1>Ask for an invite</h1>
+    <p class="lede">LevelSelect is in a small closed test. Tell me where to send it and I'll get you in.</p>
+
+    <form name="invite" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/invite/thanks/">
+      <input type="hidden" name="form-name" value="invite" />
+      <p class="hp" aria-hidden="true">
+        <label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
+      </p>
+
+      <div class="field">
+        <label class="q" for="email">Where should the invite go?<span class="req">required</span></label>
+        <input id="email" name="email" type="email" required placeholder="you@example.com" autocomplete="email" />
+        <p class="hint">TestFlight sends the invite here. Any address works — it doesn't have to be your Apple ID.</p>
+      </div>
+
+      <fieldset class="field">
+        <legend class="q">Which of these do you have?<span class="req">required</span></legend>
+        <div class="chips">
+          {devices.map((d) => (
+            <label class="chip"><input type="checkbox" name="devices" value={d} /> {d}</label>
+          ))}
+        </div>
+        <p class="hint">LevelSelect is Apple-only for now, so this is the one answer that decides whether it'll run for you.</p>
+      </fieldset>
+
+      <fieldset class="field">
+        <legend class="q">What do you play on?</legend>
+        <div class="chips">
+          {platforms.map((p) => (
+            <label class="chip"><input type="checkbox" name="platforms" value={p} /> {p}</label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div class="field">
+        <label class="q" for="tracking">How do you keep track today?</label>
+        <select id="tracking" name="tracking">
+          {tracking.map((t) => <option>{t}</option>)}
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="q" for="wants">Anything you'd want it to do?</label>
+        <textarea id="wants" name="wants" rows="4"
+          placeholder="Optional. A game it should handle, something that annoys you about what you use now, whatever."></textarea>
+      </div>
+
+      <label class="optin">
+        <input type="checkbox" name="updates" value="yes" />
+        <span>Email me when there's a new build. Otherwise you'll hear from me once, with the invite.</span>
+      </label>
+
+      <button class="btn btn-primary" type="submit">Send request</button>
+    </form>
+
+    <p class="privacy-note"><strong>Your address is used to send you the invite and nothing else.</strong> No list, no analytics, no third parties — the same as the app itself. Ask me to delete it any time and it's gone. <a href="/privacy/">Privacy</a>.</p>
+  </article>
+</main>
+
+<style>
+  .lede { color: var(--muted); font-size: 1.06rem; max-width: 38ch; margin-bottom: 2.2rem; }
+
+  form { display: flex; flex-direction: column; gap: 1.8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: clamp(1.1rem, 4vw, 1.9rem); }
+
+  /* Hidden from people, not from bots — display:none would be skipped by the
+     naive scrapers this is meant to catch. */
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+  .field { display: flex; flex-direction: column; gap: .5rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+  .q { font-weight: 600; font-size: 1rem; padding: 0; }
+  .req { font-family: "Press Start 2P", monospace; font-size: .52rem; color: var(--torch); margin-left: .5rem; vertical-align: middle; }
+  .hint { font-size: .82rem; color: var(--muted); line-height: 1.5; margin: 0; }
+
+  input[type='email'], select, textarea {
+    font: inherit;
+    color: var(--ink);
+    background: var(--ground);
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    padding: .72rem .85rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  textarea { resize: vertical; }
+  input::placeholder, textarea::placeholder { color: #6B6288; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: .45rem;
+    border: 1px solid var(--line); background: var(--surface-hi);
+    border-radius: 999px; padding: .42rem .8rem;
+    font-size: .93rem; cursor: pointer;
+  }
+  .chip input { accent-color: var(--purple); margin: 0; }
+  /* The selected state is the checkbox's own, read straight from the DOM — no
+     script, so it still works for someone browsing with JS off. */
+  .chip:has(input:checked) { border-color: var(--purple); background: rgba(148, 92, 250, .16); }
+
+  .optin { display: flex; gap: .6rem; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 1.3rem; }
+  .optin input { accent-color: var(--purple); margin-top: .28rem; }
+  .optin span { font-size: .95rem; color: var(--muted); }
+
+  form button { align-self: flex-start; }
+
+  .privacy-note { font-size: .88rem; color: var(--muted); margin-top: 1.3rem; }
+  .privacy-note strong { color: var(--ink); font-weight: 600; }
+</style>
+</Base>

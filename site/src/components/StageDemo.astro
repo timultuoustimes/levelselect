@@ -176,8 +176,14 @@
   .stage__row--tap { cursor: pointer; color: var(--accent, #945CFA); }
   .stage__row .dot { width: .5em; height: .5em; border-radius: 50%; background: var(--accent, #945CFA); }
 
-  .stage__timer { font-size: 1.75em; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .5rem 0; display: flex; align-items: baseline; gap: .5rem; transition: opacity 260ms ease; }
-  .stage__timer em { font-style: normal; font-size: .8em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15rem .5rem; }
+  /* em, not rem. Everything in this mock scales off the container query above,
+     so a rem gap and rem chip padding stayed their full physical size while the
+     panel shrank — at phone width the row outgrew a panel with overflow:hidden
+     and the Stop chip was cut in half. flex-wrap is the backstop: whatever the
+     arithmetic does at some future width, a control can drop to the next line
+     but can never be sliced. */
+  .stage__timer { font-size: 1.75em; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .4em 0; display: flex; align-items: baseline; gap: .35em; flex-wrap: wrap; min-width: 0; transition: opacity 260ms ease; }
+  .stage__timer em { font-style: normal; font-size: .8em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15em .45em; }
 
   .stage__bar { height: .42em; border-radius: 999px; background: rgba(255,255,255,.08); margin-bottom: .6em; }
   .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent, #945CFA); }
