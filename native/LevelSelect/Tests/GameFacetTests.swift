@@ -130,4 +130,45 @@ struct GameFacetTests {
         let data = try JSONEncoder().encode(facet)
         #expect(try JSONDecoder().decode(GameFacet.self, from: data) == facet)
     }
+
+    // MARK: Search reaches what navigation cannot
+
+    /// The case that motivated widening search: "Capcom games", meaning
+    /// published *or* developed by Capcom.
+    ///
+    /// Navigation cannot express it. `GameFacet.Kind` holds developer and
+    /// publisher as separate kinds, so tapping either gives one set and no
+    /// gesture unions them — and finding a game to tap requires already owning
+    /// one. One string against both arrays is that union.
+    @Test func searchFindsACompanyAsEitherDeveloperOrPublisher() {
+        let repo = self.repo()
+        let developed = game(repo, "Resident Evil 4", developers: ["Capcom"], publishers: ["Nintendo"])
+        let published = game(repo, "Dragon's Dogma", developers: ["Some Studio"], publishers: ["Capcom"])
+        let neither = game(repo, "Hollow Knight", developers: ["Team Cherry"], publishers: ["Team Cherry"])
+
+        #expect(LibrarySearch.matches(developed, query: "Capcom"))
+        #expect(LibrarySearch.matches(published, query: "Capcom"))
+        #expect(!LibrarySearch.matches(neither, query: "Capcom"))
+        // Case-insensitive, like every other search in the app.
+        #expect(LibrarySearch.matches(published, query: "capcom"))
+    }
+
+    /// The other axes worth reaching by typing, and the ones that must NOT be
+    /// folded in: status, ownership and platform-filter all have their own
+    /// controls beside the field, and matching them here would return games on
+    /// a meaning the user did not intend.
+    @Test func searchCoversTheDescriptiveFieldsOnly() {
+        let repo = self.repo()
+        let g = game(repo, "Mina the Hollower", developers: ["Yacht Club Games"],
+                     genres: ["Adventure"], themes: ["Horror"],
+                     perspectives: ["Bird view / Isometric"], modes: ["Single player"],
+                     franchise: "Mina")
+
+        for term in ["Mina", "Yacht Club", "Adventure", "Horror", "Isometric", "Single player"] {
+            #expect(LibrarySearch.matches(g, query: term), "should match \(term)")
+        }
+        #expect(!LibrarySearch.matches(g, query: "Capcom"))
+        // An empty query is not a filter.
+        #expect(LibrarySearch.matches(g, query: ""))
+    }
 }

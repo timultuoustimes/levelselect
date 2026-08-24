@@ -65,11 +65,11 @@ struct LibraryTab: View {
             // A library this size wants search at hand, not hidden behind a
             // gesture that has to be discovered twice.
             #if os(macOS)
-            .searchable(text: $searchText, prompt: "Search games or franchises")
+            .searchable(text: $searchText, prompt: "Search games, studios, genres")
             #else
             .searchable(text: $searchText,
                         placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Search games or franchises")
+                        prompt: "Search games, studios, genres")
             #endif
             .toolbar { toolbarContent }
         }
@@ -435,10 +435,7 @@ struct LibraryTab: View {
     }
 
     private func matchesSearch(_ g: Game) -> Bool {
-        guard !searchText.isEmpty else { return true }
-        if g.name.localizedCaseInsensitiveContains(searchText) { return true }
-        if let f = g.franchise, f.localizedCaseInsensitiveContains(searchText) { return true }
-        return g.userTags.contains { $0.localizedCaseInsensitiveContains(searchText) }
+        LibrarySearch.matches(g, query: searchText)
     }
 
     private var grouped: [GameStatus: [Game]] {
@@ -607,6 +604,35 @@ enum PlatformShort {
     /// picking "Switch 2" also finds what's stored as "Nintendo Switch 2".
     static func matches(_ platforms: [String], short: String) -> Bool {
         platforms.contains { name($0) == short }
+    }
+}
+
+/// What the library's search field matches.
+///
+/// Lifted out of the view so the suite can reach it — the predicate lived
+/// inside `LibraryTab`, which these tests cannot construct.
+///
+/// "Capcom" was unreachable before this widened. Tapping a developer opens
+/// that developer's games, but `GameFacet.Kind` keeps developer and publisher
+/// apart, so no tap can express "published OR developed by Capcom" — and
+/// finding a game to tap requires already owning one. Matching one string
+/// against both arrays IS that union, which is what a filter sheet would
+/// otherwise need an explicit any/all control for.
+///
+/// Deliberately not everything: status, ownership and platform have their own
+/// filters in the menu beside the field, and folding them in here would make
+/// "playing" match on a status the user was not searching for.
+enum LibrarySearch {
+    static func matches(_ g: Game, query: String) -> Bool {
+        guard !query.isEmpty else { return true }
+        if g.name.localizedCaseInsensitiveContains(query) { return true }
+        if let f = g.franchise, f.localizedCaseInsensitiveContains(query) { return true }
+        if g.userTags.contains(where: { $0.localizedCaseInsensitiveContains(query) }) { return true }
+        for list in [g.developers, g.publishers, g.genres, g.themes,
+                     g.playerPerspectives, g.gameModes, g.platforms] {
+            if list.contains(where: { $0.localizedCaseInsensitiveContains(query) }) { return true }
+        }
+        return false
     }
 }
 
