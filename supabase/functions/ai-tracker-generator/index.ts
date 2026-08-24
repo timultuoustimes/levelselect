@@ -7,6 +7,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
+import { gameIdentity, identityQualifier } from '../_shared/igdb.ts';
 import {
   categoryTokenBudget,
   FULL_GENERATION_MAX_TOKENS,
@@ -290,10 +291,11 @@ function buildUserMessage(
   igdbData: Record<string, unknown> | null,
   mode: string,
   payload: string | null,
+  qualifier = '',
 ): string {
   const parts: string[] = [];
 
-  parts.push(`Generate tracker data for the game: "${gameName}"`);
+  parts.push(`Generate tracker data for the game: "${gameName}"${qualifier}`);
 
   if (igdbData) {
     const meta: string[] = [];
@@ -319,9 +321,10 @@ function buildUserMessage(
   return parts.join('\n');
 }
 
-function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | null): string {
+function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | null,
+                          qualifier = ''): string {
   const parts: string[] = [
-    `What should a completion tracker for "${gameName}" be divided into?`,
+    `What should a completion tracker for "${gameName}"${qualifier} be divided into?`,
   ];
   if (igdbData) {
     const meta: string[] = [];
@@ -347,9 +350,10 @@ function buildCategoryMessage(
   expectedCount: number | null,
   igdbData: Record<string, unknown> | null,
   payload: string | null,
+  qualifier = '',
 ): string {
   const parts: string[] = [
-    `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}".`,
+    `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.`,
   ];
   if (expectedCount && expectedCount > 0) {
     parts.push(`The user expects roughly ${expectedCount} items. Treat that as a hint, not a quota — if the real number differs, use the real number.`);
@@ -506,6 +510,15 @@ serve(async (req: Request) => {
       }
     }
 
+    // Which game IS this? The app has always sent `igdbID`; until now nothing
+    // read it, so every prompt identified the game by the name alone — which is
+    // how "The Messenger" reaches a different game from 2000, and how a
+    // Castlevania request lands on the wrong entry in a series of near-identical
+    // strings. One lookup turns the id into the facts a model can actually use:
+    // canonical title, year, developer. Failure is fine and silent; this
+    // improves a prompt, it does not gate one.
+    const qualifier = identityQualifier(await gameIdentity(body?.igdbID), gameName);
+
     // ── plan: the shape only, no items. One small call, no web search: this
     // has to come back in seconds or it is no better than generating.
     if (mode === 'plan') {
@@ -514,7 +527,7 @@ serve(async (req: Request) => {
         max_tokens: PLAN_MAX_TOKENS,
         tools: [PLAN_TOOL],
         toolName: 'plan_tracker_categories',
-        userMessage: buildPlanMessage(gameName, igdbData || null),
+        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier),
       });
       if ('error' in planRes) return planRes.error;
 
@@ -588,7 +601,7 @@ serve(async (req: Request) => {
           : [CATEGORY_TOOL],
         toolName: 'generate_tracker_category',
         userMessage: buildCategoryMessage(
-          gameName, categoryName, expectedCount, igdbData || null, guideUrl),
+          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier),
       });
       if ('error' in catRes) return catRes.error;
 
@@ -635,7 +648,7 @@ serve(async (req: Request) => {
       }
     }
 
-    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null);
+    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null, qualifier);
 
     // URL mode gets web_search so Claude can fetch the page content
     const tools: unknown[] = [TRACKER_TOOL];
