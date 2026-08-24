@@ -77,11 +77,17 @@ enum AITrackerService {
     /// everything else — which on Breath of the Wild timed out before it could
     /// return an eighteen-item category.
     static func generateCategory(gameName: String, categoryName: String,
-                                 expectedCount: Int? = nil, igdbID: Int? = nil) async throws -> Data {
+                                 expectedCount: Int? = nil, counted: Bool = false,
+                                 igdbID: Int? = nil) async throws -> Data {
         var body: [String: Any] = [
             "gameName": gameName, "mode": "category", "categoryName": categoryName,
         ]
         if let expectedCount, expectedCount > 0 { body["expectedCount"] = expectedCount }
+        // The plan step already decided this set is too big to list row by row,
+        // and the placeholder has been telling the user so ("one counter up to
+        // 700"). Sending it means the server can ASK for one counter instead of
+        // inferring it from a clamped number and contradicting itself.
+        if counted { body["counted"] = true }
         if let igdbID { body["igdbID"] = igdbID }
         // Same ceiling as a full generation: the edge function caps at 150s,
         // and a long category can legitimately use most of it.

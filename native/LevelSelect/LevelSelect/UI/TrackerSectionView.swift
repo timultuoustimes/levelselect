@@ -802,6 +802,7 @@ struct TrackerSectionView: View {
                 Button {
                     generation.generateCategory(category.id, named: category.name,
                                                 expectedCount: category.plannedCount,
+                                                counted: category.counted,
                                                 for: game, context: context)
                 } label: {
                     Label("Generate", systemImage: "sparkles")

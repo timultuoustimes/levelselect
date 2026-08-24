@@ -223,7 +223,7 @@ final class TrackerGenerationStore {
     /// it simply timed out before returning. It now asks the backend for that
     /// category alone.
     func generateCategory(_ categoryID: String, named categoryName: String,
-                          expectedCount: Int? = nil,
+                          expectedCount: Int? = nil, counted: Bool = false,
                           for game: Game, context: ModelContext) {
         let id = game.id
         guard tasks[id] == nil else { return }
@@ -236,7 +236,7 @@ final class TrackerGenerationStore {
             do {
                 let jsonData = try await AITrackerService.generateCategory(
                     gameName: name, categoryName: categoryName,
-                    expectedCount: expectedCount, igdbID: igdbID)
+                    expectedCount: expectedCount, counted: counted, igdbID: igdbID)
                 let repo = Repository(context)
                 repo.ensureDefaultPlaythrough(for: game)
                 self?.outcomes[id] = repo.applyGeneratedSchema(

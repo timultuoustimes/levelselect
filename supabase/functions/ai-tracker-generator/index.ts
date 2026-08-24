@@ -351,11 +351,19 @@ function buildCategoryMessage(
   igdbData: Record<string, unknown> | null,
   payload: string | null,
   qualifier = '',
+  counted = false,
 ): string {
   const parts: string[] = [
     `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.`,
   ];
-  if (expectedCount && expectedCount > 0) {
+  // A counted set is decided at the PLAN step and the placeholder has already
+  // promised the user a counter. Asking for both "roughly 400 items" and "150+
+  // means return one countTarget item" is a contradiction, and the answer came
+  // back with an empty items array — a 95-second failure reported as though the
+  // category name were wrong.
+  if (counted) {
+    parts.push(`This set is tracked as a RUNNING TOTAL, not row by row. Return EXACTLY ONE item: name it after the set, set countTarget to the real total (the user's figure is ${expectedCount ?? 'unknown'}, use the real one if you know better), and add nothing else. Do not enumerate the entries.`);
+  } else if (expectedCount && expectedCount > 0) {
     parts.push(`The user expects roughly ${expectedCount} items. Treat that as a hint, not a quota — if the real number differs, use the real number.`);
   }
   if (igdbData) {
@@ -370,15 +378,17 @@ function buildCategoryMessage(
   parts.push([
     `\nNothing outside "${categoryName}" — no other categories, however obviously they belong in the tracker.`,
     'Echo the category name back exactly as given, since it is how the app matches your answer to the placeholder the user made.',
-    'If this set runs to roughly 150 or more near-identical entries (Korok Seeds, Riddler trophies), do NOT list them individually:',
-    'return a single item named after the set with countTarget set to the total, so it tracks as a running count.',
+    ...(counted ? [] : [
+      'If this set runs to roughly 150 or more near-identical entries (Korok Seeds, Riddler trophies), do NOT list them individually:',
+      'return a single item named after the set with countTarget set to the total, so it tracks as a running count.',
+    ]),
   ].join(' '));
   // A long list has to be a terse one. 120 shrines with a description and a
   // source apiece is 15k tokens of output, which runs past the 150s edge
   // function ceiling and returns nothing at all — so the detail costs the user
   // the entire category. Name and location carry the checklist; the rest is
   // what makes it never arrive.
-  if ((expectedCount ?? 0) > 60) {
+  if (!counted && (expectedCount ?? 0) > 60) {
     parts.push([
       '\nThis is a long list, so keep every entry short: an id, a name, and a brief location.',
       'No descriptions, no source text, no metadata, no tags — they would push this past the time limit,',
@@ -574,6 +584,7 @@ serve(async (req: Request) => {
       // the cheaper per-mode bucket. 400 is well past any real category;
       // beyond that the terse-output rule applies anyway.
       const { expectedCount, maxTokens: budget } = categoryTokenBudget(body?.expectedCount);
+      const counted = body?.counted === true;
 
       // Size the budget to the category. A flat 8k cap silently truncated
       // anything past roughly a hundred items — 120 Shrines with locations
@@ -590,18 +601,19 @@ serve(async (req: Request) => {
       // and 120 entries of output does not fit inside 150 seconds — which
       // means no category at all rather than a slightly less sourced one.
       // Short lists keep it, where the accuracy is nearly free.
-      const guideUrl = (expectedCount ?? 0) > 60
+      // A counter needs one number, not a wiki page.
+      const guideUrl = counted || (expectedCount ?? 0) > 60
         ? null
         : await findGuideUrl(apiKey, gameName, igdbData || null);
       const catRes = await callClaude(apiKey, {
         model: 'claude-sonnet-4-6',
-        max_tokens: budget,
+        max_tokens: counted ? 1_000 : budget,
         tools: guideUrl
           ? [CATEGORY_TOOL, { type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
           : [CATEGORY_TOOL],
         toolName: 'generate_tracker_category',
         userMessage: buildCategoryMessage(
-          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier),
+          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted),
       });
       if ('error' in catRes) return catRes.error;
 
@@ -609,7 +621,7 @@ serve(async (req: Request) => {
       const items = Array.isArray(category?.items) ? category.items : [];
       if (!category || items.length === 0) {
         return jsonResponse(
-          { error: `Nothing came back for "${categoryName}". Try a name closer to what the game calls it.` },
+          { error: `Nothing came back for "${categoryName}". Try again, or try a name closer to what the game calls this set.` },
           422,
         );
       }

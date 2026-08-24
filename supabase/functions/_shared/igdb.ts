@@ -98,12 +98,49 @@ export async function gameIdentity(rawID: unknown): Promise<GameIdentity | null>
  * A parenthetical that pins down which game is meant, or "" when nothing is
  * known. Deliberately plain prose: this is read by a model, not parsed.
  */
+function words(value: string): Set<string> {
+  return new Set(
+    value.toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2),
+  );
+}
+
+/**
+ * Do these two titles plausibly name the same game?
+ *
+ * Used to decide whether the stored id can be trusted to RENAME the game in
+ * the prompt. "Zelda BOTW" vs "The Legend of Zelda: Breath of the Wild" shares
+ * enough; "Hitman World of Assassination" vs "Baldur's Gate III" shares
+ * nothing, which is the signal that the id and the name disagree.
+ */
+function plausiblySameGame(a: string, b: string): boolean {
+  const left = words(a);
+  const right = words(b);
+  if (left.size === 0 || right.size === 0) return true;
+  for (const w of left) if (right.has(w)) return true;
+  return false;
+}
+
 export function identityQualifier(identity: GameIdentity | null, typedName: string): string {
   if (!identity) return '';
+
+  // A stored id can be WRONG — that is the whole reason Fix Match is wanted —
+  // and a wrong id used to be inert. Now it feeds the prompt, so it can assert
+  // a confident falsehood instead: a probe with Baldur's Gate III's id told the
+  // model that a Hitman request was "known on IGDB as Baldur's Gate III". It
+  // ignored that and answered correctly, which was luck, not design.
+  //
+  // So the canonical name is only offered when it shares a word with the name
+  // the user has. Year and developer stay either way: if they disagree with the
+  // title they read as extra context the model can weigh, not as an
+  // instruction to track a different game.
+  const trusted = plausiblySameGame(identity.name, typedName);
+
   const parts: string[] = [];
   // Only worth saying when it differs — IGDB's canonical title is the one the
   // guides use, and a user's shorthand ("Zelda BOTW") is not.
-  if (identity.name.toLowerCase() !== typedName.trim().toLowerCase()) {
+  if (trusted && identity.name.toLowerCase() !== typedName.trim().toLowerCase()) {
     parts.push(`known on IGDB as "${identity.name}"`);
   }
   if (identity.year) parts.push(`released ${identity.year}`);
