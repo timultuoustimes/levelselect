@@ -5,7 +5,7 @@ import Base from '../../layouts/Base.astro';
 <main class="wrap">
 <article class="doc">
     <h1>Privacy Policy</h1>
-    <p class="stamp">Last updated 15 August 2026</p>
+    <p class="stamp">Last updated 23 August 2026</p>
 
     <div class="callout">
       <p>LevelSelect has no accounts, no ads, no analytics, and no tracking. Your library is stored on your device and synced to your own private iCloud database. The developer cannot read it.</p>
@@ -15,18 +15,24 @@ import Base from '../../layouts/Base.astro';
     <p>Your games, play sessions, tracker progress, playthroughs, runs, collections, ratings, notes, and linked videos are stored locally and synced through <strong>your</strong> private iCloud database using CloudKit. That data is under your Apple account's control. Deleting the app and its iCloud data removes it. You can export your library's content to a readable JSON file at any time from Settings.</p>
 
     <h2>What leaves your device</h2>
-    <p>Three features talk to LevelSelect's backend. In each case, only what's listed is sent:</p>
+    <p>Four features talk to LevelSelect&rsquo;s backend. In each case, only what's listed is sent:</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Feature</th><th>What is sent</th><th>Where it goes</th></tr></thead>
         <tbody>
           <tr><td>Game search</td><td>The search text or game id you look up</td><td>Our proxy &rarr; IGDB, for titles, cover art, and release dates</td></tr>
           <tr><td>AI tracker generation</td><td>The game's name, its public IGDB metadata, and any guide text or URL you provide</td><td>Our generator &rarr; Anthropic's Claude, which may search the web for a guide</td></tr>
+          <tr><td>RetroAchievements lookup</td><td>A game name and system, or a RetroAchievements game id</td><td>Our proxy &rarr; RetroAchievements, to find a game and fetch its published achievement list. Sent with <strong>our</strong> API key, not yours &mdash; these say nothing about who you are</td></tr>
           <tr><td>Map search <em>(planned)</em></td><td>The game's name and an optional wiki page URL</td><td>Our finder &rarr; Anthropic's Claude with web search</td></tr>
         </tbody>
       </table>
     </div>
     <p>Separately, and entirely from your device: your <strong>public</strong> Deku Deals wishlist is fetched if you configure one, cover art loads from IGDB's image servers, and YouTube titles and thumbnails load for links you add.</p>
+
+    <h2>Your RetroAchievements account, and why its key skips our servers</h2>
+    <p>Connecting a RetroAchievements account is optional. If you do, your username and Web API key are stored in your device's <strong>Keychain</strong> and sent <strong>straight from your device to retroachievements.org</strong> to read what you've earned. They never pass through our backend, and they deliberately don't sync between your devices — you enter them on each one, or not at all. Removing them in Settings deletes them.</p>
+    <p>The reason is logging, and it's worth being precise rather than reassuring. Our hosting platform's function logs capture request and response data — bodies and headers alike — for a short window used for errors and abuse detection. A RetroAchievements Web API key is password-equivalent, so routing one through our backend would write it into those logs on every sync, readable by anyone with dashboard access. Putting it in a header wouldn't have helped, because headers are logged too.</p>
+    <p>So the app doesn't send it to us at all. What does go through our backend is the catalogue side — searching for a game, fetching its published achievement list — using our own key, which says nothing about who you are.</p>
 
     <h2>The install identifier</h2>
     <p>Requests to our backend carry a random identifier the app generates on first launch, used only to enforce fair-use rate limits. It isn't derived from your device's hardware, isn't linked to you or your iCloud account, and resets if you delete and reinstall the app.</p>
