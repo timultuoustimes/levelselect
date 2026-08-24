@@ -40,6 +40,11 @@ export interface GameIdentity {
   /** Release year, the single most useful disambiguator. */
   year: number | null;
   developer: string | null;
+  /** What KIND of game it is — the thing a familiar franchise name hides. */
+  genres: string[];
+  themes: string[];
+  /** IGDB's own description, trimmed. The cheapest possible retrieval. */
+  summary: string | null;
 }
 
 /**
@@ -65,7 +70,7 @@ export async function gameIdentity(rawID: unknown): Promise<GameIdentity | null>
         Authorization: `Bearer ${token}`,
         'Content-Type': 'text/plain',
       },
-      body: `fields name,first_release_date,involved_companies.developer,involved_companies.company.name; where id = ${id};`,
+      body: `fields name,first_release_date,summary,genres.name,themes.name,involved_companies.developer,involved_companies.company.name; where id = ${id};`,
     });
     if (!res.ok) {
       console.warn(`igdb identity lookup failed: ${res.status}`);
@@ -75,6 +80,9 @@ export async function gameIdentity(rawID: unknown): Promise<GameIdentity | null>
     const rows = await res.json() as Array<{
       name?: string;
       first_release_date?: number;
+      summary?: string;
+      genres?: Array<{ name?: string }>;
+      themes?: Array<{ name?: string }>;
       involved_companies?: Array<{ developer?: boolean; company?: { name?: string } }>;
     }>;
     const row = rows[0];
@@ -87,6 +95,11 @@ export async function gameIdentity(rawID: unknown): Promise<GameIdentity | null>
         ? new Date(row.first_release_date * 1000).getUTCFullYear()
         : null,
       developer: dev ?? null,
+      genres: (row.genres ?? []).map((g) => g.name).filter((n): n is string => !!n),
+      themes: (row.themes ?? []).map((t) => t.name).filter((n): n is string => !!n),
+      // Trimmed: this rides in every prompt, and the first paragraph carries
+      // what kind of game it is. The rest is marketing.
+      summary: row.summary ? row.summary.slice(0, 600) : null,
     };
   } catch (err) {
     console.warn('igdb identity lookup threw:', String(err));
@@ -146,4 +159,31 @@ export function identityQualifier(identity: GameIdentity | null, typedName: stri
   if (identity.year) parts.push(`released ${identity.year}`);
   if (identity.developer) parts.push(`developed by ${identity.developer}`);
   return parts.length > 0 ? ` (${parts.join(', ')})` : '';
+}
+
+/**
+ * What the game actually IS, for a prompt that would otherwise guess from the
+ * title.
+ *
+ * This exists because of Pokémon Pokopia. Plan mode does no web search — by
+ * design, since it has to answer in seconds — so the model saw a familiar
+ * franchise name and produced the mainline RPG skeleton: Gym Badges, Elite
+ * Four & Champion, Moves & TMs. Pokopia is a sandbox life sim where you play
+ * as a Ditto rebuilding a withered world. It has none of those things, and the
+ * plan looked completely plausible, which is the dangerous part.
+ *
+ * IGDB knew: Simulator, Adventure, Sandbox, and a summary that says so in one
+ * sentence. The identity lookup was already making this call, so the retrieval
+ * costs nothing extra — the cheapest possible fix for the app's most confident
+ * failure mode.
+ */
+export function identityContext(identity: GameIdentity | null): string {
+  if (!identity) return '';
+  const lines: string[] = [];
+  const kinds = [...identity.genres, ...identity.themes];
+  if (kinds.length > 0) lines.push(`IGDB classifies it as: ${kinds.join(', ')}.`);
+  if (identity.summary) lines.push(`IGDB's description: ${identity.summary}`);
+  if (lines.length === 0) return '';
+  return '\n\n' + lines.join('\n') +
+    '\nTrust this over any assumption from the title. A familiar series name does not mean the usual structure — spin-offs, sandboxes and remakes share names with games they are nothing like.';
 }

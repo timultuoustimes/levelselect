@@ -7,7 +7,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
-import { gameIdentity, identityQualifier } from '../_shared/igdb.ts';
+import { gameIdentity, identityContext, identityQualifier } from '../_shared/igdb.ts';
 import {
   categoryTokenBudget,
   FULL_GENERATION_MAX_TOKENS,
@@ -292,10 +292,11 @@ function buildUserMessage(
   mode: string,
   payload: string | null,
   qualifier = '',
+  context = '',
 ): string {
   const parts: string[] = [];
 
-  parts.push(`Generate tracker data for the game: "${gameName}"${qualifier}`);
+  parts.push(`Generate tracker data for the game: "${gameName}"${qualifier}${context}`);
 
   if (igdbData) {
     const meta: string[] = [];
@@ -322,9 +323,9 @@ function buildUserMessage(
 }
 
 function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | null,
-                          qualifier = ''): string {
+                          qualifier = '', context = ''): string {
   const parts: string[] = [
-    `What should a completion tracker for "${gameName}"${qualifier} be divided into?`,
+    `What should a completion tracker for "${gameName}"${qualifier} be divided into?${context}`,
   ];
   if (igdbData) {
     const meta: string[] = [];
@@ -352,9 +353,10 @@ function buildCategoryMessage(
   payload: string | null,
   qualifier = '',
   counted = false,
+  context = '',
 ): string {
   const parts: string[] = [
-    `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.`,
+    `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.${context}`,
   ];
   // A counted set is decided at the PLAN step and the placeholder has already
   // promised the user a counter. Asking for both "roughly 400 items" and "150+
@@ -527,7 +529,14 @@ serve(async (req: Request) => {
     // strings. One lookup turns the id into the facts a model can actually use:
     // canonical title, year, developer. Failure is fine and silent; this
     // improves a prompt, it does not gate one.
-    const qualifier = identityQualifier(await gameIdentity(body?.igdbID), gameName);
+    const identity = await gameIdentity(body?.igdbID);
+    const qualifier = identityQualifier(identity, gameName);
+    // What the game IS, not just which one it is. Plan mode has no web search,
+    // so without this a familiar franchise name produces the franchise's usual
+    // skeleton — Pokémon Pokopia got Gym Badges and an Elite Four it does not
+    // have. IGDB already told us it is a sandbox life sim; we just weren't
+    // asking.
+    const context = identityContext(identity);
 
     // ── plan: the shape only, no items. One small call, no web search: this
     // has to come back in seconds or it is no better than generating.
@@ -537,7 +546,7 @@ serve(async (req: Request) => {
         max_tokens: PLAN_MAX_TOKENS,
         tools: [PLAN_TOOL],
         toolName: 'plan_tracker_categories',
-        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier),
+        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier, context),
       });
       if ('error' in planRes) return planRes.error;
 
@@ -613,7 +622,7 @@ serve(async (req: Request) => {
           : [CATEGORY_TOOL],
         toolName: 'generate_tracker_category',
         userMessage: buildCategoryMessage(
-          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted),
+          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted, context),
       });
       if ('error' in catRes) return catRes.error;
 
@@ -660,7 +669,7 @@ serve(async (req: Request) => {
       }
     }
 
-    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null, qualifier);
+    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null, qualifier, context);
 
     // URL mode gets web_search so Claude can fetch the page content
     const tools: unknown[] = [TRACKER_TOOL];
