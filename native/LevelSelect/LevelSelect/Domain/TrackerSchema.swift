@@ -92,8 +92,29 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
 struct RunFieldDTO: Identifiable, Hashable, Sendable {
     let id: String
     let label: String
-    let kind: String            // "text" | "select"
+    let kind: String            // "text" | "select" | "multi"
     let options: [String]
+    /// Draw options from a tracker category's items instead of a static list
+    /// — the Hades keepsake picker is the Keepsakes category, not a copy of
+    /// it. Lives in the schema JSON; absent everywhere it isn't wanted.
+    var optionsFrom: String? = nil
+    /// With `optionsFrom`: offer only items with recorded progress (checked,
+    /// ranked or counted), falling back to the full list when nothing is —
+    /// a fresh tracker must not mean an empty picker.
+    var onlyUnlocked: Bool = false
+    /// With `optionsFrom`: another field's id; options narrow to items whose
+    /// `location` matches that field's current value (aspects belong to a
+    /// weapon, and the category records which in `location`). Falls back to
+    /// the whole category when nothing matches.
+    var dependsOn: String? = nil
+    /// "start" (default) or "end": where the value is known. You pick a
+    /// keepsake before a run; you know where you died after it.
+    var phase: String = "start"
+
+    var isEndPhase: Bool { phase == "end" }
+    /// Multi-valued fields store their value comma-joined; one place owns
+    /// the separator so entry and analytics can't drift apart.
+    static let multiSeparator = ", "
 }
 
 struct RunOutcomeDTO: Identifiable, Hashable, Sendable {
@@ -134,7 +155,11 @@ enum TrackerSchemaJSON {
             return RunFieldDTO(
                 id: id, label: label,
                 kind: (f["type"] as? String) ?? "text",
-                options: (f["options"] as? [Any])?.compactMap { $0 as? String } ?? []
+                options: (f["options"] as? [Any])?.compactMap { $0 as? String } ?? [],
+                optionsFrom: f["optionsFrom"] as? String,
+                onlyUnlocked: (f["onlyUnlocked"] as? Bool) ?? false,
+                dependsOn: f["dependsOn"] as? String,
+                phase: (f["phase"] as? String) ?? "start"
             )
         }
         // Outcomes arrive in two shapes and both have to work.

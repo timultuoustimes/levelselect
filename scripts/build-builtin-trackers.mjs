@@ -21,6 +21,7 @@ import * as loneRuin from '../src/data/loneRuinData.js';
 import { ALL_ASPECTS, WEAPONS } from '../src/data/hadesWeapons.js';
 import { COMPANIONS, KEEPSAKES } from '../src/data/hadesKeepsakes.js';
 import { ALL_MIRROR_UPGRADES } from '../src/data/hadesMirror.js';
+import { GODS } from '../src/data/hadesBoons.js';
 
 import fs from 'fs';
 
@@ -118,9 +119,23 @@ const hadesTemplate = {
   fields: [
     { id: 'weapon', label: 'Weapon', type: 'select',
       options: WEAPONS.map(w => w.name ?? String(w)) },
-    { id: 'aspect', label: 'Aspect', type: 'text', options: null },
-    { id: 'keepsake', label: 'Keepsake', type: 'text', options: null },
+    // Aspects and keepsakes draw from the tracker's own categories instead
+    // of free text — the web RunView filtered aspects to the selected weapon
+    // and keepsakes to what you'd unlocked, and the category items carry the
+    // weapon in `location`, so the same behaviour costs three keys.
+    { id: 'aspect', label: 'Aspect', type: 'select', options: null,
+      optionsFrom: 'hades-aspects', dependsOn: 'weapon' },
+    { id: 'keepsake', label: 'Keepsake', type: 'select', options: null,
+      optionsFrom: 'hades-keepsakes', onlyUnlocked: true },
     { id: 'heatLevel', label: 'Heat', type: 'text', options: null },
+    // Known only once the run is over — asked by the End Run sheet, and the
+    // pair the web analytics were built on (gods in victories, where defeats
+    // happen).
+    { id: 'gods', label: 'Gods', type: 'multi', options: GODS.map(g => g.name ?? String(g)),
+      phase: 'end' },
+    { id: 'deathLocation', label: 'Fell in', type: 'select',
+      options: ['Tartarus', 'Asphodel', 'Elysium', 'Styx', 'Final Boss'],
+      phase: 'end' },
   ],
   outcomes: outcomes(['escaped', 'defeated', 'abandoned']),
 };

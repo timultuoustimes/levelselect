@@ -144,3 +144,153 @@ struct RunTrackingTests {
         #expect(abs(pt.totalPlaytime() - 3600) < 1)
     }
 }
+
+// MARK: - Run field options + analytics (pure, no store)
+
+/// The web app's per-game run pickers and AnalyticsSection, generalised.
+/// These pin the three narrowing rules — category-backed, unlocked-only,
+/// depends-on — and the aggregation the Analytics section renders.
+struct RunFieldSupportTests {
+
+    private func cat(_ id: String, _ items: [(String, String, String?)]) -> TrackerCategoryDTO {
+        TrackerCategoryDTO(
+            id: id, name: id, categoryDescription: nil, kind: nil, items: items.map {
+                TrackerItemDTO(id: $0.0, name: $0.1, itemDescription: nil,
+                               location: $0.2, missable: false,
+                               hideUntilDiscovered: false, maxRank: nil,
+                               rankNames: nil, display: nil)
+            })
+    }
+
+    private var keepsakes: TrackerCategoryDTO {
+        cat("hades-keepsakes", [("k1", "Old Spiked Collar", nil),
+                                ("k2", "Myrmidon Bracer", nil),
+                                ("k3", "Black Shawl", nil)])
+    }
+
+    private var aspects: TrackerCategoryDTO {
+        cat("hades-aspects", [("a1", "Aspect of Zagreus", "Stygian Blade"),
+                              ("a2", "Aspect of Nemesis", "Stygian Blade"),
+                              ("a3", "Aspect of Guan Yu", "Eternal Spear")])
+    }
+
+    @Test func staticOptionsPassThrough() {
+        let field = RunFieldDTO(id: "w", label: "Weapon", kind: "select",
+                                options: ["Sword", "Spear"])
+        let opts = RunFieldSupport.options(for: field, categories: [], progressed: [], values: [:])
+        #expect(opts == ["Sword", "Spear"])
+    }
+
+    @Test func categoryBackedOptionsUseItemNames() {
+        let field = RunFieldDTO(id: "k", label: "Keepsake", kind: "select",
+                                options: [], optionsFrom: "hades-keepsakes")
+        let opts = RunFieldSupport.options(for: field, categories: [keepsakes],
+                                           progressed: [], values: [:])
+        #expect(opts == ["Old Spiked Collar", "Myrmidon Bracer", "Black Shawl"])
+    }
+
+    /// The rule the user actually missed from the web: unlocked keepsakes
+    /// only — but a fresh tracker offers the full list, never an empty picker.
+    @Test func onlyUnlockedFiltersAndFallsBack() {
+        let field = RunFieldDTO(id: "k", label: "Keepsake", kind: "select",
+                                options: [], optionsFrom: "hades-keepsakes",
+                                onlyUnlocked: true)
+        let filtered = RunFieldSupport.options(for: field, categories: [keepsakes],
+                                               progressed: ["k2"], values: [:])
+        #expect(filtered == ["Myrmidon Bracer"])
+
+        let fresh = RunFieldSupport.options(for: field, categories: [keepsakes],
+                                            progressed: [], values: [:])
+        #expect(fresh.count == 3)
+    }
+
+    /// Aspects narrow to the chosen weapon via the item's `location`, and
+    /// offer everything when no weapon is picked yet.
+    @Test func dependsOnScopesByLocation() {
+        let field = RunFieldDTO(id: "a", label: "Aspect", kind: "select",
+                                options: [], optionsFrom: "hades-aspects",
+                                dependsOn: "weapon")
+        let scoped = RunFieldSupport.options(for: field, categories: [aspects],
+                                             progressed: [],
+                                             values: ["weapon": "Stygian Blade"])
+        #expect(scoped == ["Aspect of Zagreus", "Aspect of Nemesis"])
+
+        let unscoped = RunFieldSupport.options(for: field, categories: [aspects],
+                                               progressed: [], values: [:])
+        #expect(unscoped.count == 3)
+    }
+
+    @Test func statsGroupByValueAndCountWins() {
+        let weapon = RunFieldDTO(id: "weapon", label: "Weapon", kind: "select",
+                                 options: ["Sword", "Spear"])
+        let stats = RunFieldSupport.stats(fields: [weapon], runs: [
+            (["weapon": "Sword"], true),
+            (["weapon": "Sword"], false),
+            (["weapon": "Sword"], true),
+            (["weapon": "Spear"], false),
+            (["weapon": ""], true),          // empty values never group
+        ])
+        #expect(stats.count == 1)
+        let rows = stats[0].rows
+        #expect(rows[0].value == "Sword" && rows[0].wins == 2 && rows[0].total == 3)
+        #expect(rows[1].value == "Spear" && rows[1].wins == 0 && rows[1].total == 1)
+    }
+
+    /// A multi field counts each of its values once per run.
+    @Test func multiFieldsSplitAndDeduplicate() {
+        let gods = RunFieldDTO(id: "gods", label: "Gods", kind: "multi",
+                               options: ["Zeus", "Athena", "Ares"])
+        let stats = RunFieldSupport.stats(fields: [gods], runs: [
+            (["gods": "Zeus, Athena"], true),
+            (["gods": "Zeus"], false),
+        ])
+        let rows = Dictionary(uniqueKeysWithValues: stats[0].rows.map { ($0.value, $0) })
+        #expect(rows["Zeus"]?.total == 2 && rows["Zeus"]?.wins == 1)
+        #expect(rows["Athena"]?.total == 1 && rows["Athena"]?.wins == 1)
+    }
+
+    /// Free-text fields never aggregate — typos would fragment every group.
+    @Test func textFieldsProduceNoStats() {
+        let heat = RunFieldDTO(id: "heat", label: "Heat", kind: "text", options: [])
+        let stats = RunFieldSupport.stats(fields: [heat], runs: [(["heat": "4"], true)])
+        #expect(stats.isEmpty)
+    }
+
+    /// The new schema keys survive the JSON round trip the app actually uses.
+    @Test func runTemplateParsesPickerKeys() throws {
+        let json = """
+        {"runTemplate": {"fields": [
+            {"id": "k", "label": "Keepsake", "type": "select",
+             "optionsFrom": "hades-keepsakes", "onlyUnlocked": true},
+            {"id": "d", "label": "Fell in", "type": "select",
+             "options": ["Styx"], "phase": "end"}
+        ], "outcomes": [{"id": "w", "label": "Escaped", "result": "success"}]}}
+        """
+        let template = try #require(TrackerSchemaJSON.runTemplate(from: Data(json.utf8)))
+        #expect(template.fields[0].optionsFrom == "hades-keepsakes")
+        #expect(template.fields[0].onlyUnlocked == true)
+        #expect(template.fields[0].isEndPhase == false)
+        #expect(template.fields[1].isEndPhase == true)
+    }
+}
+
+/// End-phase fields merge into the run's stored loadout when it ends.
+@MainActor
+struct EndRunFieldMergeTests {
+
+    @Test func endRunMergesExtraFields() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let run = repo.startRun(on: pt, fields: ["weapon": "Sword"])
+
+        repo.endRun(run, outcome: .failure, notes: nil,
+                    extraFields: ["deathLocation": "Styx", "gods": ""])
+
+        #expect(run.fieldsDict["weapon"] == "Sword")
+        #expect(run.fieldsDict["deathLocation"] == "Styx")
+        // Empty entries must not overwrite or appear.
+        #expect(run.fieldsDict["gods"] == nil)
+    }
+}

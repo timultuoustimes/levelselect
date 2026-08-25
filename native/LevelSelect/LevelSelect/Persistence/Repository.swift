@@ -1524,10 +1524,19 @@ struct Repository {
         return run
     }
 
-    func endRun(_ run: Run, outcome: RunOutcome, notes: String?, at date: Date = .now) {
+    func endRun(_ run: Run, outcome: RunOutcome, notes: String?,
+                extraFields: [String: String] = [:], at date: Date = .now) {
         run.endedAt = date
         run.outcome = outcome
         run.notes = (notes?.isEmpty == true) ? nil : notes
+        // End-phase fields — where you died, which gods you took — are only
+        // known now. Merge over the start-time loadout; empty entries don't
+        // overwrite anything.
+        let additions = extraFields.filter { !$0.value.isEmpty }
+        if !additions.isEmpty {
+            let merged = run.fieldsDict.merging(additions) { _, new in new }
+            run.fieldsJSON = (try? JSONSerialization.data(withJSONObject: merged)) ?? run.fieldsJSON
+        }
         touch(run, at: date)
         if let pt = run.playthrough {
             pt.lastPlayedAt = date

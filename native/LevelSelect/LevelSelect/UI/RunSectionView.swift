@@ -12,10 +12,32 @@ struct RunSectionView: View {
     @State private var startingRun = false
     @State private var loggingRun = false
     @State private var endingRun: Run?
+    @State private var showAnalytics = false
+    @State private var historyFilter: HistoryFilter = .all
+
+    enum HistoryFilter: String, CaseIterable {
+        case all = "All", wins = "Wins", losses = "Losses"
+    }
 
     private var repo: Repository { Repository(context) }
     private var playthrough: Playthrough? { game.activePlaythrough }
     private var runs: [Run] { playthrough?.liveRuns ?? [] }
+    private var finished: [Run] { runs.filter { $0.outcome != .inProgress } }
+
+    /// The tracker's categories back the run pickers (keepsakes come from the
+    /// Keepsakes category, not a copied list) — same source the tracker
+    /// section renders.
+    private var categories: [TrackerCategoryDTO] {
+        game.trackerSchema.map { TrackerSchemaJSON.categories(from: $0.jsonData) } ?? []
+    }
+
+    /// Items with any recorded progress, for `onlyUnlocked` pickers. Checked,
+    /// ranked or counted all count — a keepsake at rank 2 is unlocked.
+    private var progressedIDs: Set<String> {
+        Set((playthrough?.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && ($0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0) }
+            .map(\.itemID))
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -51,26 +73,34 @@ struct RunSectionView: View {
                 }
             }
 
+            if finished.count >= 3 {
+                analytics
+            }
+
             if !runs.isEmpty {
                 history
             }
         }
         .sheet(isPresented: $startingRun) {
-            RunFieldsSheet(template: template, title: "Start Run", confirm: "Start") { fields in
+            RunFieldsSheet(template: template, categories: categories,
+                           progressed: progressedIDs,
+                           title: "Start Run", confirm: "Start") { fields in
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.startRun(on: pt, fields: fields)
             }
         }
         .sheet(isPresented: $loggingRun) {
-            LogRunSheet(template: template) { fields, outcome, started, duration, notes in
+            LogRunSheet(template: template, categories: categories,
+                        progressed: progressedIDs) { fields, outcome, started, duration, notes in
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.logRun(on: pt, fields: fields, outcome: outcome,
                             started: started, duration: duration, notes: notes)
             }
         }
         .sheet(item: $endingRun) { run in
-            EndRunSheet(template: template, run: run) { outcome, notes in
-                repo.endRun(run, outcome: outcome, notes: notes)
+            EndRunSheet(template: template, categories: categories,
+                        progressed: progressedIDs, run: run) { outcome, notes, endFields in
+                repo.endRun(run, outcome: outcome, notes: notes, extraFields: endFields)
             }
         }
     }
@@ -118,12 +148,90 @@ struct RunSectionView: View {
         .padding(.vertical, 4)
     }
 
+    /// Win rate by loadout — the web app's AnalyticsSection, generalised.
+    /// Collapsed by default like the rest of the page's secondary content;
+    /// hidden entirely under three finished runs, where every percentage
+    /// would be noise.
+    private var analytics: some View {
+        let stats = RunFieldSupport.stats(
+            fields: template.fields,
+            runs: finished.map { ($0.fieldsDict, $0.outcome == .success) })
+        return VStack(alignment: .leading, spacing: 6) {
+            Button {
+                withAnimation(.snappy) { showAnalytics.toggle() }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("Analytics")
+                        .font(.subheadline.weight(.semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .rotationEffect(.degrees(showAnalytics ? 90 : 0))
+                }
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+
+            if showAnalytics {
+                if stats.isEmpty {
+                    Text("Runs need a loadout picked from the lists for there to be anything to compare.")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    ForEach(stats) { fieldStats in
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(fieldStats.field.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                                .textCase(.uppercase)
+                            ForEach(fieldStats.rows.prefix(6)) { row in
+                                HStack {
+                                    Text(row.value)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    // The fraction always shows; the percent
+                                    // only from three uses — "100%" alone and
+                                    // "1/1" say very different things.
+                                    Text(row.total >= 3
+                                         ? "\(row.wins)/\(row.total) · \(Int((row.winRate * 100).rounded()))%"
+                                         : "\(row.wins)/\(row.total)")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(row.wins > 0 ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
+                                }
+                            }
+                        }
+                        .padding(.top, 2)
+                    }
+                }
+            }
+        }
+    }
+
+    private var filteredHistory: [Run] {
+        switch historyFilter {
+        case .all: finished
+        case .wins: finished.filter { $0.outcome == .success }
+        case .losses: finished.filter { $0.outcome == .failure }
+        }
+    }
+
     private var history: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("History")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            ForEach(runs.filter { $0.outcome != .inProgress }.prefix(8)) { run in
+            HStack {
+                Text("History")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if finished.count >= 6 {
+                    Picker("Filter", selection: $historyFilter) {
+                        ForEach(HistoryFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 190)
+                    .labelsHidden()
+                }
+            }
+            ForEach(filteredHistory.prefix(8)) { run in
                 HStack(spacing: 8) {
                     Image(systemName: icon(run.outcome))
                         .font(.caption)
@@ -196,6 +304,8 @@ struct RunSectionView: View {
 /// Dynamic loadout entry from the template's fields.
 struct RunFieldsSheet: View {
     let template: RunTemplateDTO
+    var categories: [TrackerCategoryDTO] = []
+    var progressed: Set<String> = []
     let title: String
     let confirm: String
     var onConfirm: ([String: String]) -> Void
@@ -206,7 +316,8 @@ struct RunFieldsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                RunFieldsForm(template: template, values: $values)
+                RunFieldsForm(template: template, categories: categories,
+                              progressed: progressed, phase: .start, values: $values)
             }
             .navigationTitle(title)
             #if !os(macOS)
@@ -230,15 +341,41 @@ struct RunFieldsSheet: View {
 
 /// Shared dynamic form for a template's fields.
 struct RunFieldsForm: View {
+    enum Phase { case start, end, all }
+
     let template: RunTemplateDTO
+    var categories: [TrackerCategoryDTO] = []
+    var progressed: Set<String> = []
+    var phase: Phase = .all
     @Binding var values: [String: String]
 
+    private var visibleFields: [RunFieldDTO] {
+        switch phase {
+        case .all: template.fields
+        case .start: template.fields.filter { !$0.isEndPhase }
+        case .end: template.fields.filter { $0.isEndPhase }
+        }
+    }
+
     var body: some View {
-        ForEach(template.fields) { field in
-            if field.kind == "select", !field.options.isEmpty {
+        ForEach(visibleFields) { field in
+            let options = RunFieldSupport.options(
+                for: field, categories: categories,
+                progressed: progressed, values: values)
+            if field.kind == "multi", !options.isEmpty {
+                MultiPickRow(label: field.label, options: options,
+                             value: binding(field.id))
+            } else if !options.isEmpty {
                 Picker(field.label, selection: binding(field.id)) {
                     Text("—").tag("")
-                    ForEach(field.options, id: \.self) { Text($0).tag($0) }
+                    ForEach(options, id: \.self) { Text($0).tag($0) }
+                    // A previously-saved value that the current narrowing
+                    // excludes (weapon changed after the aspect was picked)
+                    // must stay selectable, or the Picker shows nothing.
+                    if let current = values[field.id], !current.isEmpty,
+                       !options.contains(current) {
+                        Text(current).tag(current)
+                    }
                 }
             } else {
                 TextField(field.label, text: binding(field.id))
@@ -251,15 +388,69 @@ struct RunFieldsForm: View {
     }
 }
 
-/// Outcome + notes when a live run ends.
+/// Several-of-many entry ("which gods showed up this run"), stored joined so
+/// the Run model needs nothing new. Toggles inside a disclosure rather than a
+/// menu: the list is read as much as written.
+struct MultiPickRow: View {
+    let label: String
+    let options: [String]
+    @Binding var value: String
+
+    private var chosen: Set<String> {
+        Set(value.components(separatedBy: RunFieldDTO.multiSeparator)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty })
+    }
+
+    var body: some View {
+        DisclosureGroup {
+            ForEach(options, id: \.self) { option in
+                Button {
+                    var set = chosen
+                    if set.contains(option) { set.remove(option) } else { set.insert(option) }
+                    // Preserve the options' order, not insertion order, so
+                    // the stored value reads consistently.
+                    value = options.filter(set.contains)
+                        .joined(separator: RunFieldDTO.multiSeparator)
+                } label: {
+                    HStack {
+                        Text(option).foregroundStyle(.primary)
+                        Spacer()
+                        if chosen.contains(option) {
+                            Image(systemName: "checkmark").foregroundStyle(.tint)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        } label: {
+            HStack {
+                Text(label)
+                Spacer()
+                Text(chosen.isEmpty ? "—" : "\(chosen.count)")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Outcome + notes when a live run ends — plus the template's end-phase
+/// fields (where you died, which gods you took), which are only known now.
 struct EndRunSheet: View {
     let template: RunTemplateDTO
+    var categories: [TrackerCategoryDTO] = []
+    var progressed: Set<String> = []
     let run: Run
-    var onEnd: (RunOutcome, String?) -> Void
+    var onEnd: (RunOutcome, String?, [String: String]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var outcomeID = ""
     @State private var notes = ""
+    @State private var endValues: [String: String] = [:]
+
+    private var hasEndFields: Bool {
+        template.fields.contains { $0.isEndPhase }
+    }
 
     var body: some View {
         NavigationStack {
@@ -271,6 +462,13 @@ struct EndRunSheet: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                }
+                if hasEndFields {
+                    Section("This run") {
+                        RunFieldsForm(template: template, categories: categories,
+                                      progressed: progressed, phase: .end,
+                                      values: $endValues)
+                    }
                 }
                 Section("Notes") {
                     TextField("How did it go?", text: $notes, axis: .vertical)
@@ -288,7 +486,7 @@ struct EndRunSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("End") {
                         let outcome = template.outcomes.first { $0.id == outcomeID }?.result ?? .neutral
-                        onEnd(outcome, notes.isEmpty ? nil : notes)
+                        onEnd(outcome, notes.isEmpty ? nil : notes, endValues)
                         dismiss()
                     }
                 }
@@ -297,13 +495,15 @@ struct EndRunSheet: View {
                 outcomeID = template.outcomes.first?.id ?? ""
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents(hasEndFields ? [.medium, .large] : [.medium])
     }
 }
 
 /// Manual full-run entry (fields + outcome + when + duration + notes).
 struct LogRunSheet: View {
     let template: RunTemplateDTO
+    var categories: [TrackerCategoryDTO] = []
+    var progressed: Set<String> = []
     var onSave: ([String: String], RunOutcome, Date, TimeInterval, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -317,7 +517,8 @@ struct LogRunSheet: View {
         NavigationStack {
             Form {
                 Section("Loadout") {
-                    RunFieldsForm(template: template, values: $values)
+                    RunFieldsForm(template: template, categories: categories,
+                                  progressed: progressed, phase: .all, values: $values)
                 }
                 Section {
                     Picker("Outcome", selection: $outcomeID) {
