@@ -54,7 +54,7 @@ private func playtimeLabel(_ seconds: Double) -> String {
     return "\(s)s"
 }
 
-private struct StatusPill: View {
+struct StatusPill: View {
     let snapshot: WidgetSnapshot
     var body: some View {
         let (text, color): (String, Color) =

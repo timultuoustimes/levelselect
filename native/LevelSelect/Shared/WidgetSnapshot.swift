@@ -42,6 +42,17 @@ struct WidgetShelfGame: Codable, Hashable, Identifiable {
     var name: String
     var coverFileName: String?
     var isPlaying: Bool
+    /// Additive fields for the iPad extra-large widgets. All optional so a
+    /// snapshot written by an older build still decodes (missing keys are
+    /// nil), and an older build reading a newer snapshot simply ignores them.
+    /// Library status ("playing", "paused", "queued") for the shelf's dots.
+    var statusRaw: String? = nil
+    /// Tracker progress, when the game has one.
+    var done: Int? = nil
+    var total: Int? = nil
+    /// Run record, when the game logs runs.
+    var wins: Int? = nil
+    var losses: Int? = nil
 }
 
 /// Roguelike run summary for the most recently-played game that has runs.

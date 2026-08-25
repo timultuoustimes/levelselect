@@ -66,15 +66,34 @@ enum WidgetBridge {
         let (objectives, done, total) = trackerItems(game: game, pt: pt)
         let nextIncomplete = objectives.first { !$0.done }
 
-        // Now Playing shelf: currently-playing games, most active first (max 8).
-        let nowPlaying: [WidgetShelfGame] = games
-            .filter { $0.status == .playing }
-            .sorted { activityKey($0) > activityKey($1) }
-            .prefix(8)
+        // Shelf: playing games most active first, then paused, then queued —
+        // twelve, because the iPad extra-large shelf shows a wall of twelve
+        // covers. The phone widgets still take their four or eight off the
+        // top, so they see the same games they always did.
+        let shelfStatuses: [GameStatus] = [.playing, .paused, .queued]
+        let nowPlaying: [WidgetShelfGame] = shelfStatuses
+            .flatMap { status in
+                games.filter { $0.status == status }
+                    .sorted { activityKey($0) > activityKey($1) }
+            }
+            .prefix(12)
             .map { g in
-                WidgetShelfGame(id: g.id.uuidString, name: g.name,
-                                coverFileName: coverName(g),
-                                isPlaying: g.activePlaythrough?.activeSession?.state == .running)
+                let pt = g.activePlaythrough
+                // Per-game progress for the extra-large widgets: the tracker
+                // fraction when one exists, the run record when runs do.
+                let (_, gDone, gTotal) = trackerItems(game: g, pt: pt)
+                let runs = pt?.liveRuns.filter { $0.outcome != .inProgress } ?? []
+                let wins = runs.filter { $0.outcome == .success }.count
+                let losses = runs.filter { $0.outcome == .failure }.count
+                return WidgetShelfGame(
+                    id: g.id.uuidString, name: g.name,
+                    coverFileName: coverName(g),
+                    isPlaying: pt?.activeSession?.state == .running,
+                    statusRaw: g.status.rawValue,
+                    done: gTotal > 0 ? gDone : nil,
+                    total: gTotal > 0 ? gTotal : nil,
+                    wins: runs.isEmpty ? nil : wins,
+                    losses: runs.isEmpty ? nil : losses)
             }
 
         let (weekly, gamesThisWeek) = weeklyStats(context: context)

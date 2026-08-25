@@ -6,6 +6,9 @@ import ActivityKit
 struct LevelSelectWidgets: WidgetBundle {
     var body: some Widget {
         ContinuePlayingWidget()
+        CommandBoardWidget()
+        ShelfXLWidget()
+        WhereYouStandWidget()
         NowPlayingShelfWidget()
         ObjectivesWidget()
         CompletionRingWidget()
