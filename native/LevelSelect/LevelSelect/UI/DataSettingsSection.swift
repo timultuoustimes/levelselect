@@ -15,6 +15,7 @@ struct DataSettingsSection: View {
     @State private var confirmingClear: ClearScope?
     @State private var clearResult: String?
     @State private var showingCSVImport = false
+    @State private var showingMetadataFill = false
 
     enum ClearScope: String, Identifiable {
         case sessions, trackers
@@ -71,16 +72,25 @@ struct DataSettingsSection: View {
             } label: {
                 Label("Import from CSV", systemImage: "square.and.arrow.down")
             }
+
+            Button {
+                showingMetadataFill = true
+            } label: {
+                Label("Fill in missing game info", systemImage: "sparkle.magnifyingglass")
+            }
         } header: {
             Text("Your data")
         } footer: {
-            Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Two honest limits: map images are saved as links rather than embedded, and there's no importer for the file yet, so treat it as a readable record rather than a one-tap restore. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet.")
+            Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Two honest limits: map images are saved as links rather than embedded, and there's no importer for the file yet, so treat it as a readable record rather than a one-tap restore. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet. Fill in missing game info looks up everything your games are missing — release dates, genres, developers, cover art — and adds only what's blank, so nothing you've corrected by hand is touched.")
         }
         .sheet(item: $exportURL) { url in
             ShareSheet(url: url)
         }
         .sheet(isPresented: $showingCSVImport) {
             CSVImportView()
+        }
+        .sheet(isPresented: $showingMetadataFill) {
+            MetadataFillView()
         }
 
         Section {

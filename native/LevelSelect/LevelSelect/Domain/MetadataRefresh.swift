@@ -1,0 +1,304 @@
+import Foundation
+
+/// Filling in what the library never knew.
+///
+/// Tim's library arrived from a CSV in the web-app era, and it arrived thin.
+/// 119 of its 164 games carry a `firstReleaseDate` of timestamp zero, which
+/// draws as 1969 on the game page and once put a hundred-game bar on the Stats
+/// year chart. The same rows are missing genres, developers, covers. The games
+/// already carry `igdbID`, so the facts are one lookup away — this is a
+/// refresh, not a re-match.
+///
+/// **Additive only, and that is the whole design.** A field that already holds
+/// something is never written. Tim is hand-correcting this library right now —
+/// platform names, the handful of games carrying IGDB's vocabulary instead of
+/// his — and a refresh that overwrote non-empty fields would silently undo
+/// exactly the corrections it exists to make unnecessary. The feature and the
+/// hazard arrive together, so the answer is to build the half that cannot
+/// destroy anything.
+///
+/// The overwriting half needs per-field locks (a padlock per field, Plex-style)
+/// to be safe, and locks need a stored property on `Game`, which is Schema V3
+/// and held with the rest of that batch. See
+/// `Backlog/LevelSelect metadata editing, matching and labels 2026-08-23`.
+/// Nothing here should be relaxed into an overwrite before those land.
+enum MetadataRefresh {
+
+    // MARK: What counts as empty
+
+    /// A date this close to the Unix epoch is an import artifact, not a launch
+    /// window. The web-app CSV path wrote a missing release date as timestamp
+    /// zero, and no real library has a hundred games from the year before Pong.
+    ///
+    /// Two days rather than zero because the same row could land either side of
+    /// the epoch once a timezone is applied to it.
+    static let epochArtifactWindow: TimeInterval = 172_800
+
+    /// Is this release date absent — either genuinely nil, or the epoch
+    /// placeholder that renders as 1969?
+    ///
+    /// The single definition of that question; Stats and the fill pass both
+    /// read it, so a game hidden from the year chart is exactly a game this
+    /// pass will try to fix.
+    static func isMissing(_ date: Date?) -> Bool {
+        guard let date else { return true }
+        return abs(date.timeIntervalSince1970) < epochArtifactWindow
+    }
+
+    /// IGDB summaries the web app stored were capped at 200 characters, so a
+    /// summary of exactly that length is a truncation artifact rather than a
+    /// value. `GameDetailView` already heals these one game at a time on open;
+    /// this is the same rule applied to the whole library at once.
+    ///
+    /// Safe to treat as empty because `summary` is display-only — it is
+    /// fetched, never typed. Nothing the user wrote can be sitting in it.
+    static func isMissing(summary: String?) -> Bool {
+        guard let summary, !summary.isEmpty else { return true }
+        return summary.count == 200
+    }
+
+    // MARK: Fields
+
+    /// The fields this pass will fill. Deliberately a closed list.
+    ///
+    /// Absent by design:
+    ///
+    /// - `name` — the user's, and never empty anyway.
+    /// - `platforms` — the exact field Tim is hand-correcting, and today it
+    ///   conflates "released on" with "I own it on". Writing IGDB's full
+    ///   platform list into a game that says "Switch" would reintroduce the
+    ///   vocabulary split the filter work is cleaning up. Splitting the two
+    ///   meanings is a V3 item; until then this pass stays out.
+    /// - status, rating, review, notes, ownership, tags — user data. A
+    ///   metadata refresh has no business anywhere near them.
+    enum Field: String, CaseIterable, Sendable {
+        case releaseDate
+        case cover
+        case genres
+        case themes
+        case gameModes
+        case playerPerspectives
+        case developers
+        case publishers
+        case franchise
+        case summary
+        case slug
+
+        /// Plural, for "119 games are missing a release date".
+        var label: String {
+            switch self {
+            case .releaseDate:        "a release date"
+            case .cover:              "cover art"
+            case .genres:             "genres"
+            case .themes:             "themes"
+            case .gameModes:          "game modes"
+            case .playerPerspectives: "a perspective"
+            case .developers:         "a developer"
+            case .publishers:         "a publisher"
+            case .franchise:          "a series"
+            case .summary:            "a description"
+            case .slug:               "an IGDB link"
+            }
+        }
+
+        /// Report order — most visible problem first. The 1969 dates are the
+        /// reason this exists, so they lead.
+        static let reportOrder: [Field] = [
+            .releaseDate, .cover, .genres, .developers, .publishers,
+            .themes, .gameModes, .playerPerspectives, .franchise, .summary, .slug,
+        ]
+    }
+
+    /// Which of the fillable fields this game currently has nothing in.
+    static func missingFields(of game: Game) -> Set<Field> {
+        var missing: Set<Field> = []
+        if isMissing(game.firstReleaseDate) { missing.insert(.releaseDate) }
+        if (game.coverImageID ?? "").isEmpty && (game.coverURLString ?? "").isEmpty {
+            missing.insert(.cover)
+        }
+        if game.genres.isEmpty { missing.insert(.genres) }
+        if game.themes.isEmpty { missing.insert(.themes) }
+        if game.gameModes.isEmpty { missing.insert(.gameModes) }
+        if game.playerPerspectives.isEmpty { missing.insert(.playerPerspectives) }
+        if game.developers.isEmpty { missing.insert(.developers) }
+        if game.publishers.isEmpty { missing.insert(.publishers) }
+        if (game.franchise ?? "").isEmpty { missing.insert(.franchise) }
+        if isMissing(summary: game.summary) { missing.insert(.summary) }
+        if (game.igdbSlug ?? "").isEmpty { missing.insert(.slug) }
+        return missing
+    }
+
+    // MARK: Planning a run
+
+    /// What a run would do, worked out before anything is asked of the network.
+    struct Plan {
+        /// Games with an `igdbID` and at least one empty field — the work.
+        var fillable: [Game] = []
+        /// Games missing something but with no `igdbID` to look up. Counted and
+        /// reported, never guessed at: matching these by name is the CSV
+        /// importer's review flow, and silently picking a title is how "The
+        /// Messenger" became a different game from 2000.
+        var unmatched: [Game] = []
+        /// Games with nothing missing.
+        var complete: Int = 0
+        /// How many games lack each field, across the whole library.
+        var missingCounts: [Field: Int] = [:]
+
+        var isEmpty: Bool { fillable.isEmpty }
+
+        /// Field counts in report order, dropping the ones nothing is missing.
+        var reportableCounts: [(Field, Int)] {
+            Field.reportOrder.compactMap { field in
+                (missingCounts[field] ?? 0) > 0 ? (field, missingCounts[field]!) : nil
+            }
+        }
+    }
+
+    /// Sort a library into work, unmatchable, and already-complete.
+    ///
+    /// Deleted games are skipped — deletion is soft here, and a refresh has no
+    /// reason to spend a lookup on a row that is on its way out.
+    static func plan(for library: [Game]) -> Plan {
+        var plan = Plan()
+        for game in library where game.deletedAt == nil {
+            let missing = missingFields(of: game)
+            guard !missing.isEmpty else {
+                plan.complete += 1
+                continue
+            }
+            for field in missing { plan.missingCounts[field, default: 0] += 1 }
+            if game.igdbID != nil {
+                plan.fillable.append(game)
+            } else {
+                plan.unmatched.append(game)
+            }
+        }
+        return plan
+    }
+
+    // MARK: Applying
+
+    /// Write IGDB's answer into the empty fields of one game.
+    ///
+    /// Returns what it actually filled, which is how the run reports a real
+    /// number rather than "done". A field IGDB has nothing for stays empty and
+    /// is not counted — nothing writes an empty string over an empty string.
+    ///
+    /// Every branch here is `isEmpty` on the game side first. That ordering is
+    /// the guarantee; keep it that way.
+    @discardableResult
+    static func fill(_ game: Game, from igdb: IGDBGame) -> Set<Field> {
+        var filled: Set<Field> = []
+
+        if isMissing(game.firstReleaseDate), let date = igdb.releaseDate {
+            game.firstReleaseDate = date
+            filled.insert(.releaseDate)
+        }
+        if (game.coverImageID ?? "").isEmpty && (game.coverURLString ?? "").isEmpty,
+           let cover = igdb.coverImageID, !cover.isEmpty {
+            game.coverImageID = cover
+            game.coverURLString = igdb.coverURLString
+            filled.insert(.cover)
+        }
+        if game.genres.isEmpty, !igdb.genres.isEmpty {
+            game.genres = igdb.genres
+            filled.insert(.genres)
+        }
+        if game.themes.isEmpty, !igdb.themes.isEmpty {
+            game.themes = igdb.themes
+            filled.insert(.themes)
+        }
+        if game.gameModes.isEmpty, !igdb.gameModes.isEmpty {
+            game.gameModes = igdb.gameModes
+            filled.insert(.gameModes)
+        }
+        if game.playerPerspectives.isEmpty, !igdb.playerPerspectives.isEmpty {
+            game.playerPerspectives = igdb.playerPerspectives
+            filled.insert(.playerPerspectives)
+        }
+        if game.developers.isEmpty, !igdb.developers.isEmpty {
+            game.developers = igdb.developers
+            filled.insert(.developers)
+        }
+        if game.publishers.isEmpty, !igdb.publishers.isEmpty {
+            game.publishers = igdb.publishers
+            filled.insert(.publishers)
+        }
+        if (game.franchise ?? "").isEmpty, let franchise = igdb.franchise, !franchise.isEmpty {
+            game.franchise = franchise
+            filled.insert(.franchise)
+        }
+        if isMissing(summary: game.summary), let summary = igdb.summary, !summary.isEmpty {
+            game.summary = summary
+            filled.insert(.summary)
+        }
+        if (game.igdbSlug ?? "").isEmpty, let slug = igdb.slug, !slug.isEmpty {
+            game.igdbSlug = slug
+            filled.insert(.slug)
+        }
+
+        return filled
+    }
+
+    // MARK: Spending the proxy's quota
+
+    /// How much of the IGDB proxy's allowance one run is willing to spend.
+    ///
+    /// The proxy (`supabase/functions/igdb-proxy`) guards on three buckets:
+    /// 60 requests per minute per install, 2,000 per day per install, and
+    /// 20,000 per day across everyone. Tracker generation runs on a separate
+    /// function with its own bucket, so a refresh cannot starve it — but a
+    /// per-game loop would still have cost 164 requests to fix 164 games, or
+    /// nearly three minutes of the per-minute allowance.
+    ///
+    /// It does not have to. IGDB matches a list — `where id = (1,2,3)` — so a
+    /// whole library fits in a handful of requests. At 50 per chunk, 164 games
+    /// costs four, which is 0.2% of the day's per-install budget.
+    enum Budget {
+        /// Ids per request. Bounded by the proxy's 2,000-character query cap
+        /// (`MAX_QUERY_LENGTH`) and 4,000-byte body cap, not by IGDB: the field
+        /// list is ~450 characters and 50 ids add ~350 more, leaving the query
+        /// at roughly 40% of the limit even for seven-digit ids.
+        static let chunkSize = 50
+
+        /// Requests one run will make before stopping and reporting what is
+        /// left. Twenty chunks is a thousand games — far past any real library
+        /// — while spending a third of one minute's allowance, so a refresh
+        /// never trips the rate limit and never leaves the app unable to search
+        /// for the next thing the user adds.
+        static let maxChunksPerRun = 20
+
+        /// Games one run can cover.
+        static var maxGamesPerRun: Int { chunkSize * maxChunksPerRun }
+
+        /// A breath between chunks. Not required by the quota at this volume —
+        /// it keeps a burst from looking like a scraper to the proxy's logs,
+        /// and gives the progress bar something to animate against.
+        static let pauseBetweenChunks: Duration = .milliseconds(300)
+    }
+
+    /// Split ids into request-sized chunks, in a stable order.
+    ///
+    /// Sorted and de-duplicated because a library can hold two rows pointing at
+    /// the same IGDB id (sync duplicates, or the same game on two platforms),
+    /// and paying twice for one answer is the one thing a quota-bounded pass
+    /// should not do.
+    static func chunks(of ids: [Int], size: Int = Budget.chunkSize) -> [[Int]] {
+        precondition(size > 0, "chunk size must be positive")
+        let unique = Array(Set(ids)).sorted()
+        return stride(from: 0, to: unique.count, by: size).map {
+            Array(unique[$0 ..< min($0 + size, unique.count)])
+        }
+    }
+
+    /// The chunks a run will actually make, capped at the per-run budget.
+    /// Anything past the cap is left for the next run — the pass is
+    /// resumable because a filled game stops being fillable.
+    static func scheduledChunks(of ids: [Int]) -> (run: [[Int]], deferred: Int) {
+        let all = chunks(of: ids)
+        guard all.count > Budget.maxChunksPerRun else { return (all, 0) }
+        let run = Array(all.prefix(Budget.maxChunksPerRun))
+        let deferred = all.dropFirst(Budget.maxChunksPerRun).reduce(0) { $0 + $1.count }
+        return (run, deferred)
+    }
+}

@@ -78,6 +78,32 @@ enum IGDBService {
         try await perform("where id = \(id); \(fields) limit 1;").first
     }
 
+    /// Look many ids up in ONE request.
+    ///
+    /// IGDB matches a list, so a whole-library refresh is a handful of calls
+    /// rather than one per game — which is what keeps a 164-game pass from
+    /// eating three minutes of the proxy's per-minute allowance. See
+    /// `MetadataRefresh.Budget` for the arithmetic.
+    ///
+    /// Order is IGDB's, not the caller's, and ids IGDB does not know are
+    /// simply absent from the result. Callers key by `id`.
+    static func lookup(ids: [Int]) async throws -> [IGDBGame] {
+        let unique = Array(Set(ids)).sorted()
+        guard !unique.isEmpty else { return [] }
+        return try await perform(idQuery(unique))
+    }
+
+    /// The multi-id query, exposed so a test can hold it against the proxy's
+    /// 2,000-character cap rather than trusting an estimate of it.
+    ///
+    /// `limit` is explicit because IGDB's default is 10 — without it a chunk of
+    /// 50 silently returns the first ten and the other forty look like games
+    /// IGDB has never heard of.
+    static func idQuery(_ ids: [Int]) -> String {
+        let list = ids.map(String.init).joined(separator: ",")
+        return "where id = (\(list)); \(fields) limit \(ids.count);"
+    }
+
     /// Untyped passthrough, for endpoints whose shape isn't a game.
     ///
     /// `game_time_to_beats` returns rows of integers, and the critic fields
