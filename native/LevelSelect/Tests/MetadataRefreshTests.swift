@@ -499,3 +499,81 @@ struct MetadataPlanNoiseTests {
         #expect(store.all()[id] == nil)
     }
 }
+
+/// Fix Match replaces the fetched layer and only the fetched layer.
+@MainActor
+struct FixMatchTests {
+
+    @Test func rematchReplacesFetchedAndPreservesTyped() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let game = repo.addGame(name: "My Name For It", status: .playing)
+        game.igdbID = 111
+        game.genres = ["Wrong Genre"]
+        game.summary = "The wrong game's story."
+        game.franchise = "Wrong Series"
+        game.rating = 5
+        game.notes = "my notes"
+        game.userTags = ["cozy"]
+        game.platforms = ["Super Nintendo Entertainment System"]
+
+        let right = IGDBGame(
+            id: 222, name: "The Right Game", slug: "the-right-game",
+            coverImageID: "co999", franchise: nil, releaseYear: 1994,
+            summary: "The right story.", gameType: nil,
+            platforms: ["SNES"], genres: ["Platformer"], themes: ["Action"],
+            gameModes: ["Single player"], playerPerspectives: ["Side view"],
+            developers: ["Dev"], publishers: ["Pub"])
+
+        repo.rematch(game, to: right)
+
+        // Fetched layer: replaced — including clearing what the new game lacks.
+        #expect(game.igdbID == 222)
+        #expect(game.genres == ["Platformer"])
+        #expect(game.summary == "The right story.")
+        #expect(game.franchise == nil)
+        // Typed layer: untouched.
+        #expect(game.name == "My Name For It")
+        #expect(game.rating == 5)
+        #expect(game.notes == "my notes")
+        #expect(game.userTags == ["cozy"])
+        #expect(game.platforms == ["Super Nintendo Entertainment System"])
+    }
+}
+
+/// The shuffle pool's filter: what the die may land on.
+struct ShufflePoolTests {
+
+    private func pool() -> [WidgetPoolGame] {
+        [
+            .init(id: "a", name: "A", coverFileName: nil, statusRaw: "playing", platform: "Switch"),
+            .init(id: "b", name: "B", coverFileName: nil, statusRaw: "backlog", platform: "Genesis"),
+            .init(id: "c", name: "C", coverFileName: nil, statusRaw: "completed", platform: "Genesis"),
+            .init(id: "d", name: "D", coverFileName: nil, statusRaw: "shelved", platform: "SNES"),
+        ]
+    }
+
+    @Test func statusesGate() {
+        let picked = WidgetPoolGame.filter(pool(), statuses: ["playing", "backlog"],
+                                           platform: nil, includeCompleted: false)
+        #expect(Set(picked.map(\.id)) == ["a", "b"])
+    }
+
+    @Test func completedJoinsOnlyByToggle() {
+        let without = WidgetPoolGame.filter(pool(), statuses: ["backlog"],
+                                            platform: nil, includeCompleted: false)
+        #expect(!without.contains { $0.id == "c" })
+        let with = WidgetPoolGame.filter(pool(), statuses: ["backlog"],
+                                         platform: nil, includeCompleted: true)
+        #expect(with.contains { $0.id == "c" })
+    }
+
+    @Test func platformScopes() {
+        let genesis = WidgetPoolGame.filter(pool(), statuses: ["backlog"],
+                                            platform: "Genesis", includeCompleted: true)
+        #expect(Set(genesis.map(\.id)) == ["b", "c"])
+        let any = WidgetPoolGame.filter(pool(), statuses: ["backlog"],
+                                        platform: nil, includeCompleted: true)
+        #expect(any.count == 2)
+    }
+}

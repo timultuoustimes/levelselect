@@ -164,6 +164,18 @@ struct Repository {
     /// what it already fixed.
     ///
     /// `progress` is called with 0…1 after each chunk.
+    /// Fix Match: re-point a game at the right IGDB entry. The fetched layer
+    /// is replaced (see `MetadataRefresh.rematch`), the user's layer is
+    /// untouched, and the asked-and-answered marker clears — the new id has
+    /// never been asked anything.
+    func rematch(_ game: Game, to igdb: IGDBGame,
+                 checkedStore: MetadataCheckedStore = MetadataCheckedStore()) {
+        MetadataRefresh.rematch(game, to: igdb)
+        checkedStore.clear(game.id)
+        touch(game)
+        persist()
+    }
+
     func fillMissingMetadata(
         in library: [Game],
         checkedStore: MetadataCheckedStore = MetadataCheckedStore(),

@@ -99,6 +99,34 @@ enum WidgetBridge {
         let (weekly, gamesThisWeek) = weeklyStats(context: context)
         let runGame = mostRecentRunGame(games, coverName: coverName)
 
+        // Shuffle pool: everything the "choose a game for me" widget may
+        // pick from. Wishlist and abandoned never qualify — a shuffler that
+        // suggests a game you gave up on is a nag, not a choice. Cover names
+        // are computed WITHOUT enqueueing downloads (150 covers per refresh
+        // would drown the cache); only the picks the widgets currently show
+        // get their covers fetched, read back from the picks store below.
+        let poolStatuses: Set<GameStatus> = [.playing, .paused, .queued,
+                                             .backlog, .ongoing, .shelved, .completed]
+        let shufflePool: [WidgetPoolGame] = games
+            .filter { poolStatuses.contains($0.status) }
+            .map { g in
+                WidgetPoolGame(
+                    id: g.id.uuidString, name: g.name,
+                    coverFileName: g.coverURLString.map { coverFileName(for: $0) },
+                    statusRaw: g.status.rawValue,
+                    platform: PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other"))
+            }
+        let libraryPlatforms = Array(Set(shufflePool.map(\.platform))).sorted()
+
+        // Current shuffle picks (any widget instance) get real covers.
+        if let defaults = UserDefaults(suiteName: WidgetShared.appGroup),
+           let picks = defaults.dictionary(forKey: "shufflePicks") as? [String: String] {
+            let picked = Set(picks.values)
+            for g in games where picked.contains(g.id.uuidString) {
+                _ = coverName(g)
+            }
+        }
+
         let snapshot = WidgetSnapshot(
             gameID: game.id.uuidString,
             gameName: game.name,
@@ -118,7 +146,9 @@ enum WidgetBridge {
             nowPlaying: nowPlaying,
             weeklySeconds: weekly,
             gamesPlayedThisWeek: gamesThisWeek,
-            runGame: runGame
+            runGame: runGame,
+            shufflePool: shufflePool,
+            libraryPlatforms: libraryPlatforms
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }

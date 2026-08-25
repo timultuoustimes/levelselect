@@ -6,6 +6,7 @@ struct GameDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    @State private var fixingMatch = false
     @State private var browserTarget: DekuLinkTarget?
 
     @State private var pagePlaying: GameVideo?
@@ -221,6 +222,12 @@ struct GameDetailView: View {
                         }
                     }
                     Divider()
+                    Button {
+                        fixingMatch = true
+                    } label: {
+                        Label("Fix Match…", systemImage: "link.badge.plus")
+                    }
+                    Divider()
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {
@@ -230,6 +237,9 @@ struct GameDetailView: View {
                     Image(systemName: "ellipsis.circle")
                 }
             }
+        }
+        .sheet(isPresented: $fixingMatch) {
+            FixMatchView(game: game)
         }
         .alert("New Playthrough", isPresented: $namingNewPlaythrough) {
             TextField("Name", text: $playthroughName)

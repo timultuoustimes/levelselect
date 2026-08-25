@@ -305,6 +305,37 @@ enum MetadataRefresh {
         return filled
     }
 
+    // MARK: Fix Match
+
+    /// Re-point a game at a different IGDB entry and replace its fetched
+    /// layer wholesale.
+    ///
+    /// This is the one deliberate exception to additive-only, and it's safe
+    /// for exactly the reason the fill is: the boundary between fetched and
+    /// typed is a field list, not a guess. Everything `fill` manages came
+    /// from the OLD match, so after a rematch it describes the wrong game —
+    /// keeping it would be the corruption. Everything the user owns — the
+    /// name they may have set, platforms, rating, notes, review, tags,
+    /// status, ownership, playthroughs — is untouched.
+    ///
+    /// Absent values CLEAR the field rather than surviving: a wrong game's
+    /// summary is worse than no summary.
+    static func rematch(_ game: Game, to igdb: IGDBGame) {
+        game.igdbID = igdb.id
+        game.igdbSlug = igdb.slug
+        game.firstReleaseDate = igdb.releaseDate
+        game.coverImageID = igdb.coverImageID
+        game.coverURLString = igdb.coverURLString
+        game.genres = igdb.genres
+        game.themes = igdb.themes
+        game.gameModes = igdb.gameModes
+        game.playerPerspectives = igdb.playerPerspectives
+        game.developers = igdb.developers
+        game.publishers = igdb.publishers
+        game.franchise = igdb.franchise
+        game.summary = igdb.summary
+    }
+
     // MARK: Spending the proxy's quota
 
     /// How much of the IGDB proxy's allowance one run is willing to spend.

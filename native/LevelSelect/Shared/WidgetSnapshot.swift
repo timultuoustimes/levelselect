@@ -55,6 +55,34 @@ struct WidgetShelfGame: Codable, Hashable, Identifiable {
     var losses: Int? = nil
 }
 
+/// One game in the shuffle pool — everything "choose a game for me" needs to
+/// pick and render without waking the app. Kept deliberately lean: ~150
+/// entries ride every snapshot, so no per-game arrays.
+struct WidgetPoolGame: Codable, Hashable, Identifiable {
+    var id: String
+    var name: String
+    var coverFileName: String?
+    var statusRaw: String
+    /// Preferred platform's short display name ("Switch", "SNES") — doubles
+    /// as the value the shuffler's console filter matches against.
+    var platform: String
+
+    /// The filter the shuffler applies, pure so it's testable. Statuses are
+    /// raw values; completed joins the pool only when the toggle says so —
+    /// short retro games are endlessly replayable, but that's an opt-in.
+    static func filter(_ pool: [WidgetPoolGame],
+                       statuses: Set<String>,
+                       platform: String?,
+                       includeCompleted: Bool) -> [WidgetPoolGame] {
+        pool.filter { game in
+            let statusOK = statuses.contains(game.statusRaw)
+                || (includeCompleted && game.statusRaw == "completed")
+            let platformOK = platform == nil || platform == game.platform
+            return statusOK && platformOK
+        }
+    }
+}
+
 /// Roguelike run summary for the most recently-played game that has runs.
 struct WidgetRunGame: Codable, Hashable {
     var id: String
@@ -96,6 +124,9 @@ struct WidgetSnapshot: Codable, Hashable {
     var weeklySeconds: [Double]         // 7 entries, oldest → newest (today last)
     var gamesPlayedThisWeek: Int
     var runGame: WidgetRunGame?
+    /// The shuffle pool and the platform list its config picker offers.
+    var shufflePool: [WidgetPoolGame] = []
+    var libraryPlatforms: [String] = []
 
     var hasActiveSession: Bool { isPlaying || isPaused }
 
@@ -138,7 +169,8 @@ struct WidgetSnapshot: Codable, Hashable {
         completionDone: Int, completionTotal: Int, coverFileName: String?,
         activeSessionID: String?, generatedAt: Date,
         objectives: [WidgetObjective], nowPlaying: [WidgetShelfGame],
-        weeklySeconds: [Double], gamesPlayedThisWeek: Int, runGame: WidgetRunGame?
+        weeklySeconds: [Double], gamesPlayedThisWeek: Int, runGame: WidgetRunGame?,
+        shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = []
     ) {
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
@@ -148,6 +180,7 @@ struct WidgetSnapshot: Codable, Hashable {
         self.coverFileName = coverFileName; self.activeSessionID = activeSessionID
         self.generatedAt = generatedAt
         self.objectives = objectives; self.nowPlaying = nowPlaying
+        self.shufflePool = shufflePool; self.libraryPlatforms = libraryPlatforms
         self.weeklySeconds = weeklySeconds; self.gamesPlayedThisWeek = gamesPlayedThisWeek
         self.runGame = runGame
     }
@@ -175,5 +208,7 @@ struct WidgetSnapshot: Codable, Hashable {
         weeklySeconds = try c.decodeIfPresent([Double].self, forKey: .weeklySeconds) ?? []
         gamesPlayedThisWeek = try c.decodeIfPresent(Int.self, forKey: .gamesPlayedThisWeek) ?? 0
         runGame = try c.decodeIfPresent(WidgetRunGame.self, forKey: .runGame)
+        shufflePool = try c.decodeIfPresent([WidgetPoolGame].self, forKey: .shufflePool) ?? []
+        libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
     }
 }
