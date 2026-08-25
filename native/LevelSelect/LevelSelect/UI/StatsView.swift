@@ -519,8 +519,15 @@ struct StatsTab: View {
     }
 
     private var releaseYearCounts: [(Int, Int)] {
-        let years = games.compactMap { g in
-            g.firstReleaseDate.map { Calendar.current.component(.year, from: $0) }
+        let years = games.compactMap { g -> Int? in
+            guard let date = g.firstReleaseDate,
+                  // CSV-era imports stored missing release dates as timestamp
+                  // zero, which renders as 1969 and once put a 119-game bar
+                  // on this card. A date within two days of the epoch is an
+                  // artifact, not a launch window — no real library has a
+                  // hundred games from the year before Pong.
+                  abs(date.timeIntervalSince1970) > 172_800 else { return nil }
+            return Calendar.current.component(.year, from: date)
         }
         return Dictionary(grouping: years) { $0 }.mapValues(\.count)
             .sorted { $0.key > $1.key }
