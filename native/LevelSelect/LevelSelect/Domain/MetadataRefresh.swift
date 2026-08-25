@@ -141,24 +141,62 @@ enum MetadataRefresh {
         var unmatched: [Game] = []
         /// Games with nothing missing.
         var complete: Int = 0
+        /// Games whose only absences are informational (no series) — reported,
+        /// never offered as work.
+        var informationalOnly: Int = 0
+        /// Games IGDB was asked about recently and had nothing to add for —
+        /// excluded from `fillable` until the answer goes stale.
+        var recentlyChecked: Int = 0
         /// How many games lack each field, across the whole library.
         var missingCounts: [Field: Int] = [:]
 
         var isEmpty: Bool { fillable.isEmpty }
 
-        /// Field counts in report order, dropping the ones nothing is missing.
+        /// Field counts in report order, dropping the ones nothing is missing
+        /// and the informational ones — those get their own line, phrased as
+        /// a fact rather than a gap.
         var reportableCounts: [(Field, Int)] {
             Field.reportOrder.compactMap { field in
-                (missingCounts[field] ?? 0) > 0 ? (field, missingCounts[field]!) : nil
+                guard !MetadataRefresh.informational.contains(field) else { return nil }
+                return (missingCounts[field] ?? 0) > 0 ? (field, missingCounts[field]!) : nil
+            }
+        }
+
+        /// The informational counts ("69 have no series listed"), for the
+        /// report's footnote row.
+        var informationalCounts: [(Field, Int)] {
+            Field.reportOrder.compactMap { field in
+                guard MetadataRefresh.informational.contains(field) else { return nil }
+                return (missingCounts[field] ?? 0) > 0 ? (field, missingCounts[field]!) : nil
             }
         }
     }
+
+    /// Fields whose absence is usually a fact about the game, not a gap in
+    /// the data — most games simply aren't in a series. They still FILL when a
+    /// game is looked up for other reasons, and they still report, but they
+    /// never make a game "fillable" on their own: 69 series-less games
+    /// permanently demanding a lookup was the sheet crying wolf.
+    static let informational: Set<Field> = [.franchise]
+
+    /// How long "IGDB had nothing to add" stays believed before a game is
+    /// worth asking about again. Upstream data does grow — a month is long
+    /// enough to stop the sheet re-offering the same dead lookups every run,
+    /// short enough that new IGDB data eventually arrives on its own.
+    static let recheckAfter: TimeInterval = 30 * 24 * 3600
 
     /// Sort a library into work, unmatchable, and already-complete.
     ///
     /// Deleted games are skipped — deletion is soft here, and a refresh has no
     /// reason to spend a lookup on a row that is on its way out.
-    static func plan(for library: [Game]) -> Plan {
+    ///
+    /// `checked` is the asked-and-answered cache: game id → when a lookup last
+    /// came back with nothing to add. Those games stay *missing* (the report
+    /// still counts them) but stop being *work* until the answer goes stale —
+    /// the difference between "no data locally" and "no data anywhere".
+    static func plan(for library: [Game],
+                     checked: [UUID: Date] = [:],
+                     now: Date = .now) -> Plan {
         var plan = Plan()
         for game in library where game.deletedAt == nil {
             let missing = missingFields(of: game)
@@ -167,6 +205,15 @@ enum MetadataRefresh {
                 continue
             }
             for field in missing { plan.missingCounts[field, default: 0] += 1 }
+            // Informational absences report but never demand a lookup.
+            guard !missing.subtracting(informational).isEmpty else {
+                plan.informationalOnly += 1
+                continue
+            }
+            if let asked = checked[game.id], now.timeIntervalSince(asked) < recheckAfter {
+                plan.recentlyChecked += 1
+                continue
+            }
             if game.igdbID != nil {
                 plan.fillable.append(game)
             } else {
@@ -300,5 +347,40 @@ enum MetadataRefresh {
         let run = Array(all.prefix(Budget.maxChunksPerRun))
         let deferred = all.dropFirst(Budget.maxChunksPerRun).reduce(0) { $0 + $1.count }
         return (run, deferred)
+    }
+}
+
+
+/// The asked-and-answered cache: game id → when IGDB last had nothing to add.
+///
+/// Device-local UserDefaults on purpose. This is a cache of an upstream fact,
+/// not user data — syncing it would spread one device's stale answer to
+/// another, and re-asking per device costs one lookup a month.
+struct MetadataCheckedStore {
+    private static let key = "metadataFillCheckedAt"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+
+    func all() -> [UUID: Date] {
+        guard let raw = defaults.dictionary(forKey: Self.key) as? [String: Date] else { return [:] }
+        return Dictionary(uniqueKeysWithValues: raw.compactMap { key, date in
+            UUID(uuidString: key).map { ($0, date) }
+        })
+    }
+
+    func markChecked(_ ids: [UUID], at date: Date = .now) {
+        guard !ids.isEmpty else { return }
+        var raw = (defaults.dictionary(forKey: Self.key) as? [String: Date]) ?? [:]
+        for id in ids { raw[id.uuidString] = date }
+        defaults.set(raw, forKey: Self.key)
+    }
+
+    /// A field DID fill — the game is live upstream again, forget the "nothing
+    /// there" answer so future absences re-ask promptly.
+    func clear(_ id: UUID) {
+        var raw = (defaults.dictionary(forKey: Self.key) as? [String: Date]) ?? [:]
+        raw.removeValue(forKey: id.uuidString)
+        defaults.set(raw, forKey: Self.key)
     }
 }

@@ -431,3 +431,71 @@ struct MetadataRefreshTests {
         #expect(!result.didAnything)
     }
 }
+
+/// The sheet must stop crying wolf: informational absences and
+/// asked-and-answered games report without demanding lookups.
+@MainActor
+struct MetadataPlanNoiseTests {
+
+    private func repo() -> Repository {
+        Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+    }
+
+    /// Fill a game with everything except franchise, so its only absence is
+    /// the informational one.
+    private func seriesless(_ repo: Repository, name: String) -> Game {
+        let g = repo.addGame(name: name)
+        g.igdbID = 7
+        g.firstReleaseDate = Date(timeIntervalSince1970: 1_500_000_000)
+        g.coverURLString = "https://example/cover.jpg"
+        g.genres = ["Platformer"]; g.themes = ["Action"]
+        g.gameModes = ["Single player"]; g.playerPerspectives = ["Side view"]
+        g.developers = ["Dev"]; g.publishers = ["Pub"]
+        g.summary = "A game."
+        g.igdbSlug = "a-game"
+        return g
+    }
+
+    @Test func seriesAloneIsNotWork() {
+        let repo = repo()
+        let g = seriesless(repo, name: "No Series")
+        let plan = MetadataRefresh.plan(for: [g])
+        #expect(plan.fillable.isEmpty)
+        #expect(plan.informationalOnly == 1)
+        // Still reported — as an informational count, not a missing one.
+        #expect(plan.informationalCounts.contains { $0.0 == .franchise && $0.1 == 1 })
+        #expect(!plan.reportableCounts.contains { $0.0 == .franchise })
+    }
+
+    @Test func recentlyCheckedGamesRest() {
+        let repo = repo()
+        let g = repo.addGame(name: "Asked Already")
+        g.igdbID = 9   // genuinely missing lots — but IGDB said nothing last week
+        let plan = MetadataRefresh.plan(
+            for: [g],
+            checked: [g.id: Date(timeIntervalSinceNow: -7 * 24 * 3600)])
+        #expect(plan.fillable.isEmpty)
+        #expect(plan.recentlyChecked == 1)
+    }
+
+    @Test func staleAnswersGetReAsked() {
+        let repo = repo()
+        let g = repo.addGame(name: "Stale Answer")
+        g.igdbID = 9
+        let plan = MetadataRefresh.plan(
+            for: [g],
+            checked: [g.id: Date(timeIntervalSinceNow: -45 * 24 * 3600)])
+        #expect(plan.fillable.count == 1)
+        #expect(plan.recentlyChecked == 0)
+    }
+
+    @Test func checkedStoreRoundTripsAndClears() {
+        let defaults = UserDefaults(suiteName: "metadata-checked-tests-\(UUID().uuidString)")!
+        let store = MetadataCheckedStore(defaults: defaults)
+        let id = UUID()
+        store.markChecked([id])
+        #expect(store.all()[id] != nil)
+        store.clear(id)
+        #expect(store.all()[id] == nil)
+    }
+}

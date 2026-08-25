@@ -14,6 +14,9 @@ struct StatsTab: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
 
+    /// Which decades are open in the By Release Year card.
+    @State private var expandedDecades: Set<Int> = []
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -326,35 +329,84 @@ struct StatsTab: View {
         }
     }
 
+    /// Decades by default, years on demand. A forty-year library made the
+    /// by-year list the longest card on the page; a decade row summarises it
+    /// and expands in place to the same tappable year facets as before.
     private var releaseYearsCard: some View {
-        let rows = releaseYearCounts
-        let maxCount = rows.map(\.1).max() ?? 1
+        let decades = releaseDecadeGroups
+        let maxDecade = decades.map(\.total).max() ?? 1
         return Group {
-            if rows.count >= 3 {
+            if releaseYearCounts.count >= 3 {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("By Release Year", systemImage: "calendar.badge.clock")
                         .font(.headline)
-                    ForEach(rows, id: \.0) { year, count in
-                        NavigationLink(value: GameFacet(kind: .year, value: String(year))) {
+                    ForEach(decades, id: \.decade) { group in
+                        let expanded = expandedDecades.contains(group.decade)
+                        Button {
+                            withAnimation(.snappy) {
+                                if expanded { expandedDecades.remove(group.decade) }
+                                else { expandedDecades.insert(group.decade) }
+                            }
+                        } label: {
                             HStack(spacing: 10) {
-                                Text(String(year))
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 38, alignment: .leading)
-                                bar(fraction: Double(count) / Double(max(maxCount, 1)), color: LSTheme.accent)
-                                Text("\(count)")
+                                Text("\(String(group.decade))s")
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(.primary)
+                                    .frame(width: 44, alignment: .leading)
+                                bar(fraction: Double(group.total) / Double(max(maxDecade, 1)), color: LSTheme.accent)
+                                Text("\(group.total)")
                                     .font(.caption.monospacedDigit())
                                     .foregroundStyle(.secondary)
                                     .frame(width: 26, alignment: .trailing)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(.tertiary)
+                                    .rotationEffect(.degrees(expanded ? 90 : 0))
                             }
                         }
                         .buttonStyle(.plain)
+                        if expanded {
+                            let maxYear = group.years.map(\.1).max() ?? 1
+                            ForEach(group.years, id: \.0) { year, count in
+                                NavigationLink(value: GameFacet(kind: .year, value: String(year))) {
+                                    HStack(spacing: 10) {
+                                        Text(String(year))
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 44, alignment: .trailing)
+                                        bar(fraction: Double(count) / Double(max(maxYear, 1)), color: LSTheme.accent.opacity(0.7))
+                                        Text("\(count)")
+                                            .font(.caption.monospacedDigit())
+                                            .foregroundStyle(.secondary)
+                                            .frame(width: 26, alignment: .trailing)
+                                        Spacer().frame(width: 13)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.leading, 10)
+                            }
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .lsCard()
             }
         }
+    }
+
+    private struct DecadeGroup {
+        let decade: Int
+        let total: Int
+        let years: [(Int, Int)]
+    }
+
+    private var releaseDecadeGroups: [DecadeGroup] {
+        let byDecade = Dictionary(grouping: releaseYearCounts) { ($0.0 / 10) * 10 }
+        return byDecade
+            .map { DecadeGroup(decade: $0.key,
+                               total: $0.value.reduce(0) { $0 + $1.1 },
+                               years: $0.value.sorted { $0.0 > $1.0 }) }
+            .sorted { $0.decade > $1.decade }
     }
 
     // MARK: Pieces

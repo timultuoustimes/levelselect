@@ -26,7 +26,11 @@ struct MetadataFillView: View {
     /// mid-run reads like the work is disappearing rather than being done.
     @State private var plannedCount = 0
 
-    private var plan: MetadataRefresh.Plan { MetadataRefresh.plan(for: games) }
+    /// Recompute from the asked-and-answered cache each render, so a run's
+    /// "nothing changed" outcomes take effect the moment the sheet reopens.
+    private var plan: MetadataRefresh.Plan {
+        MetadataRefresh.plan(for: games, checked: MetadataCheckedStore().all())
+    }
 
     var body: some View {
         NavigationStack {
@@ -52,6 +56,26 @@ struct MetadataFillView: View {
         }
     }
 
+    private var emptyStateText: String {
+        if plan.recentlyChecked > 0 {
+            return "IGDB had nothing to add for what's still missing — checked within the last month."
+        }
+        return plan.unmatched.isEmpty
+            ? "Every game has everything IGDB can tell us."
+            : "Every game with an IGDB match is complete."
+    }
+
+    private var footerText: String {
+        var parts = ["Counted across \(games.count) game\(games.count == 1 ? "" : "s"), \(plan.complete) of which already have everything."]
+        if plan.informationalOnly > 0 {
+            parts.append("\(plan.informationalOnly) only lack a series, which most games aren't in — they're not offered for lookup.")
+        }
+        if plan.recentlyChecked > 0 {
+            parts.append("\(plan.recentlyChecked) were looked up in the last month and IGDB had nothing to add; they'll be asked again when that's stale.")
+        }
+        return parts.joined(separator: " ")
+    }
+
     // MARK: Before
 
     @ViewBuilder
@@ -61,9 +85,7 @@ struct MetadataFillView: View {
         Section {
             if plan.isEmpty {
                 Label("Nothing to fill in", systemImage: "checkmark.circle")
-                Text(plan.unmatched.isEmpty
-                     ? "Every game has everything IGDB can tell us."
-                     : "Every game with an IGDB match is complete.")
+                Text(emptyStateText)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -76,11 +98,23 @@ struct MetadataFillView: View {
                         Text("Missing \(field.label)")
                     }
                 }
+                // Informational absences, phrased as facts: no series is the
+                // normal condition for most games, not a gap to close.
+                ForEach(plan.informationalCounts, id: \.0) { field, count in
+                    LabeledContent {
+                        Text("\(count)")
+                            .monospacedDigit()
+                            .foregroundStyle(.tertiary)
+                    } label: {
+                        Text("No \(field.label) listed")
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         } header: {
             Text("What's missing")
         } footer: {
-            Text("Counted across \(games.count) game\(games.count == 1 ? "" : "s"), \(plan.complete) of which already have everything.")
+            Text(footerText)
         }
 
         if !plan.isEmpty {

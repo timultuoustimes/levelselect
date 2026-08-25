@@ -166,9 +166,10 @@ struct Repository {
     /// `progress` is called with 0…1 after each chunk.
     func fillMissingMetadata(
         in library: [Game],
+        checkedStore: MetadataCheckedStore = MetadataCheckedStore(),
         progress: (Double) -> Void = { _ in }
     ) async -> MetadataFillResult {
-        let plan = MetadataRefresh.plan(for: library)
+        let plan = MetadataRefresh.plan(for: library, checked: checkedStore.all())
         var result = MetadataFillResult(unmatched: plan.unmatched.count)
         guard !plan.isEmpty else {
             progress(1)
@@ -216,20 +217,31 @@ struct Repository {
             }
 
             let byID = Dictionary(hits.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            var askedAndAnswered: [UUID] = []
             for id in chunk {
                 guard let igdb = byID[id] else {
                     result.unknownToIGDB += (gamesByID[id] ?? []).count
+                    // IGDB doesn't know the id at all — same "nothing there"
+                    // answer, same month before it's worth asking again.
+                    askedAndAnswered += (gamesByID[id] ?? []).map(\.id)
                     continue
                 }
                 for game in gamesByID[id] ?? [] {
                     let filled = MetadataRefresh.fill(game, from: igdb)
-                    guard !filled.isEmpty else { continue }
+                    guard !filled.isEmpty else {
+                        // Looked up, nothing new: remember, so the next run
+                        // stops offering a lookup that can't help.
+                        askedAndAnswered.append(game.id)
+                        continue
+                    }
+                    checkedStore.clear(game.id)
                     result.gamesUpdated += 1
                     result.fieldsFilled += filled.count
                     if filled.contains(.releaseDate) { result.releaseDatesFixed += 1 }
                     touch(game)
                 }
             }
+            checkedStore.markChecked(askedAndAnswered)
             // Commit per chunk, not per run: a refresh interrupted by a
             // backgrounded app or a dropped connection should keep what it
             // already fixed rather than throwing the whole pass away.
