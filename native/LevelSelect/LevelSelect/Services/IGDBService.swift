@@ -49,6 +49,29 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Why a lookup didn't come back.
+///
+/// Every one of these used to be `try?` at the call site, which is fine for a
+/// single search box that can just show nothing — and useless for a
+/// library-wide pass, where "some batches failed" is the difference between
+/// "you're offline", "you've hit the lookup limit, wait a minute", and "the
+/// proxy is refusing us". A refresh that can't say which of those happened
+/// leaves the user tapping a button that will never work.
+enum IGDBError: Error, Equatable {
+    /// 429 — the proxy's per-install quota (60/minute, 2,000/day). Retrying
+    /// immediately makes it worse; the window has to roll over first.
+    case rateLimited
+    /// 503 — kill switch flipped, or the quota store is unreachable.
+    case unavailable
+    /// Any other non-200 from the proxy, status carried for the report.
+    case rejected(status: Int)
+    /// The request never completed — no network, DNS, timeout.
+    case offline
+    /// A 200 whose body wasn't the shape we decode. One malformed row fails a
+    /// whole batch, so this is worth telling apart from an empty result.
+    case malformed
+}
+
 enum IGDBService {
     private static let proxyURL = URL(
         string: "https://sextftevxqrtodlmnyve.supabase.co/functions/v1/igdb-proxy")!
@@ -135,11 +158,27 @@ enum IGDBService {
         EdgeFunctions.authorize(&request)
         request.httpBody = try JSONEncoder().encode(["endpoint": "games", "query": query])
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw IGDBError.offline
         }
-        return try JSONDecoder().decode([RawGame].self, from: data).map { $0.toGame() }
+
+        guard let http = response as? HTTPURLResponse else { throw IGDBError.offline }
+        switch http.statusCode {
+        case 200:  break
+        case 429:  throw IGDBError.rateLimited
+        case 503:  throw IGDBError.unavailable
+        default:   throw IGDBError.rejected(status: http.statusCode)
+        }
+
+        do {
+            return try JSONDecoder().decode([RawGame].self, from: data).map { $0.toGame() }
+        } catch {
+            throw IGDBError.malformed
+        }
     }
 
     // MARK: Raw IGDB shape

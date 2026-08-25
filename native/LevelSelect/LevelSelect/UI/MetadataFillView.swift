@@ -127,8 +127,46 @@ struct MetadataFillView: View {
 
     // MARK: After
 
+    /// Plain language for why lookups didn't come back. Deliberately says what
+    /// to DO — "nothing was lost, try again in a minute" is the difference
+    /// between waiting and tapping a dead button twenty more times.
+    private func failureMessage(_ failure: IGDBError) -> (String, String, String) {
+        switch failure {
+        case .rateLimited:
+            ("Hit the lookup limit", "exclamationmark.triangle",
+             "Game lookups are capped at 60 a minute, and this run used them up — repeated runs share the same allowance. Nothing was lost and nothing was half-written. Wait a minute and run it again.")
+        case .offline:
+            ("No connection", "wifi.slash",
+             "The lookups couldn't reach the network. Nothing was changed. Try again once you're back online.")
+        case .unavailable:
+            ("Lookups are switched off", "exclamationmark.triangle",
+             "The lookup service is temporarily unavailable. Nothing was changed. Try again later.")
+        case .rejected(let status):
+            ("Lookups were refused (\(status))", "exclamationmark.triangle",
+             "The lookup service turned the request down. Nothing was changed.")
+        case .malformed:
+            ("Couldn't read the reply", "exclamationmark.triangle",
+             "A batch came back in a shape the app couldn't read. Nothing was changed.")
+        }
+    }
+
     @ViewBuilder
     private func resultSection(_ result: Repository.MetadataFillResult) -> some View {
+        // A run that fetched nothing leads with WHY. Burying that under
+        // "Nothing changed" reads as "IGDB had nothing for you", which sends
+        // someone off to re-check their library instead of waiting a minute.
+        if let failure = result.failure, !result.didAnything {
+            Section {
+                let (title, icon, detail) = failureMessage(failure)
+                Label(title, systemImage: icon)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Couldn't fetch")
+            }
+        }
+
         Section {
             if result.didAnything {
                 Label("Updated \(result.gamesUpdated) game\(result.gamesUpdated == 1 ? "" : "s")",
@@ -158,7 +196,7 @@ struct MetadataFillView: View {
                     Text("\(result.unknownToIGDB) game\(result.unknownToIGDB == 1 ? "" : "s") had an IGDB link that no longer resolves. Those need a new match rather than a refresh.")
                 }
                 if result.chunksFailed > 0 {
-                    Text("\(result.chunksFailed) batch\(result.chunksFailed == 1 ? "" : "es") couldn't be fetched. Nothing was lost — run this again when you're back online.")
+                    Text("\(result.chunksFailed) batch\(result.chunksFailed == 1 ? "" : "es") couldn't be fetched\(result.failure.map { " — \(failureMessage($0).0.lowercased())" } ?? ""). Nothing was lost; those games stay in the list and a later run picks them up.")
                 }
                 if result.deferred > 0 {
                     Text("\(result.deferred) game\(result.deferred == 1 ? "" : "s") were left for a second run, to stay inside the lookup limit. Run it again to pick them up.")

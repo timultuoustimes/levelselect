@@ -138,6 +138,10 @@ struct Repository {
         var unknownToIGDB = 0
         /// Requests that failed outright (offline, rate limited, proxy down).
         var chunksFailed = 0
+        /// WHY they failed. A pass that can only say "some batches failed"
+        /// leaves someone tapping a button that will never work until a quota
+        /// window rolls over — the one thing this report has to prevent.
+        var failure: IGDBError?
         /// Requests made. Held against `MetadataRefresh.Budget` when reporting.
         var chunksRun = 0
         /// Fillable games this run did not reach, because the per-run request
@@ -193,11 +197,21 @@ struct Repository {
             let chunkGames = chunk.flatMap { gamesByID[$0] ?? [] }
             result.gamesAttempted += chunkGames.count
 
-            guard let hits = try? await IGDBService.lookup(ids: chunk) else {
+            let hits: [IGDBGame]
+            do {
+                hits = try await IGDBService.lookup(ids: chunk)
+            } catch {
                 // A failed chunk is not a failed run. The games in it stay
                 // fillable, so the next run picks them up.
                 result.chunksFailed += 1
+                result.failure = error as? IGDBError ?? .malformed
                 progress(Double(index + 1) / Double(scheduled.count))
+                // Rate limiting is the one failure worth stopping for. The
+                // quota is per install and per minute, so the remaining
+                // chunks would each spend a request to be refused — burning
+                // more of the same allowance that is already exhausted, and
+                // pushing the window that has to roll over further out.
+                if result.failure == .rateLimited { break }
                 continue
             }
 

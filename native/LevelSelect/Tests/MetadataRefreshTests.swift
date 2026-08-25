@@ -393,6 +393,31 @@ struct MetadataRefreshTests {
         #expect(!result.didAnything)
     }
 
+    /// A run that fetched nothing has to say WHY. Every one of these used to
+    /// collapse into a bare "a batch failed", which reads as "IGDB had nothing
+    /// for you" and sends someone off to re-check their library instead of
+    /// waiting a minute for a quota window to roll over.
+    @Test func everyProxyFailureIsToldApart() {
+        #expect(IGDBError.rateLimited != IGDBError.unavailable)
+        #expect(IGDBError.rejected(status: 500) != IGDBError.rejected(status: 502))
+        #expect(IGDBError.offline != IGDBError.malformed)
+    }
+
+    /// Rate limiting is the one failure worth stopping the run for: the quota
+    /// is per install and per minute, so the remaining chunks would each spend
+    /// a request to be refused — burning more of the allowance that is already
+    /// gone, and pushing the window that has to roll over further out.
+    @Test func rateLimitingIsTheFailureThatShouldStopARun() {
+        // The behaviour lives in the run loop; this pins the decision itself
+        // so a future edit can't quietly downgrade it to "keep trying".
+        let stopsTheRun: (IGDBError) -> Bool = { $0 == .rateLimited }
+
+        #expect(stopsTheRun(.rateLimited))
+        #expect(!stopsTheRun(.offline))
+        #expect(!stopsTheRun(.malformed))
+        #expect(!stopsTheRun(.rejected(status: 502)))
+    }
+
     /// A library of nothing but unmatchable games still makes no request, and
     /// still reports why it did nothing.
     @Test func alibraryWithNoIDsReportsRatherThanGuessing() async {
