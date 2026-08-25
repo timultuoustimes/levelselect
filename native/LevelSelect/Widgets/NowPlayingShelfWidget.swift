@@ -6,23 +6,22 @@ struct ShelfCover: View {
 
     var body: some View {
         Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
-            VStack(spacing: 5) {
-                ZStack(alignment: .topTrailing) {
-                    CoverPoster(image: loadCover(game.coverFileName))
-                    if game.isPlaying {
-                        Image(systemName: "waveform")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(LSWidget.navyDeep)
-                            .padding(4)
-                            .background(LSWidget.green, in: Circle())
-                            .padding(4)
-                    }
+            // No name under the cover — box art already is the name, and a
+            // row of truncated labels was the noisiest thing on the widget.
+            // The name survives for VoiceOver, where the art can't speak.
+            ZStack(alignment: .topTrailing) {
+                CoverPoster(image: loadCover(game.coverFileName))
+                    .aspectRatio(0.72, contentMode: .fit)
+                if game.isPlaying {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(LSWidget.navyDeep)
+                        .padding(4)
+                        .background(LSWidget.green, in: Circle())
+                        .padding(4)
                 }
-                Text(game.name)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(1)
             }
+            .accessibilityLabel(game.name)
         }
     }
 }

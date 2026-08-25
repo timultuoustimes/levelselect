@@ -136,34 +136,35 @@ struct ContinuePlayingSmall: View {
     }
 }
 
-/// Contained box-art poster: the whole cover fits on a navy frame (no crop),
-/// so portrait, square, and landscape covers all read cleanly.
+/// Full-bleed box art: the cover fills its frame edge to edge, cropped
+/// minimally (IGDB covers are a uniform 3:4, so the crop is a sliver).
+///
+/// This replaces the earlier letterboxed "poster on a navy plate" look. The
+/// plate was chrome, so the accented Home Screen appearances painted it —
+/// white bars around every cover in Clear and Tinted, dark bars otherwise,
+/// exactly where the art should have been. The plate now survives only
+/// behind the placeholder glyph, where there is no art to crop.
 struct CoverPoster: View {
     let image: Image?
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .fill(LSWidget.navyDeep)
-            if let image {
-                // Cover art must stay full-colour in the Clear and Tinted
-                // Home Screen appearances. In those modes WidgetKit renders
-                // accented widgets, and any image not opted out is flattened
-                // into the tint — every cover became a solid white rounded
-                // rectangle. Artwork is content, not chrome; Photos and Music
-                // make the same call for theirs.
-                image.resizable()
-                    // Image-only modifier: must sit before scaledToFit(),
-                    // which erases to `some View`.
-                    .widgetAccentedRenderingMode(.fullColor)
-                    .scaledToFit()
-            } else {
-                Image(systemName: "gamecontroller.fill")
-                    .font(.system(size: 22))
-                    .foregroundStyle(LSWidget.purple.opacity(0.6))
+        Color.clear
+            .overlay {
+                if let image {
+                    image.resizable()
+                        .widgetAccentedRenderingMode(.fullColor)
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(LSWidget.navyDeep)
+                        Image(systemName: "gamecontroller.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(LSWidget.purple.opacity(0.6))
+                    }
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.08)))
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.08)))
     }
 }
 
@@ -176,7 +177,7 @@ struct ContinuePlayingMedium: View {
         if let snapshot {
             HStack(spacing: 12) {
                 CoverPoster(image: coverImage(snapshot))
-                    .frame(width: 74)
+                    .frame(width: 74, height: 101)
 
                 VStack(alignment: .leading, spacing: 0) {
                     StatusPill(snapshot: snapshot)

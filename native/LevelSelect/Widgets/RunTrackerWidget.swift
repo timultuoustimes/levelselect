@@ -49,7 +49,7 @@ struct RunTrackerView: View {
     private func medium(_ run: WidgetRunGame) -> some View {
         HStack(spacing: 14) {
             CoverPoster(image: loadCover(run.coverFileName))
-                .frame(width: 78)
+                .frame(width: 78, height: 106)
 
             VStack(alignment: .leading, spacing: 4) {
                 if run.inProgress { inRunPill } else { labelPill("RUNS", color: LSWidget.torch) }
