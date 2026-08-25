@@ -145,10 +145,37 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   width: 100%; height: auto;
   filter: drop-shadow(0 30px 45px rgba(0, 0, 0, .55));
 }
-/* Phone shots are tall. Capping by viewport height stops a single screenshot
-   from occupying two full screens on a laptop. */
-.shot--hero { display: flex; justify-content: center; }
-.shot--hero img { max-width: min(300px, 66vw); }
+/* ── composed shots ─────────────────────────────────
+   Devices overlap the way Tripsy and Gamery compose theirs, instead of one
+   screenshot standing at attention. Done in CSS rather than pre-rendered
+   images so a re-shoot drops straight in and every frame keeps its own alt
+   text; percentages keep the composition at every width. */
+.composite { position: relative; margin-inline: auto; }
+.composite img { position: absolute; height: auto; }
+
+/* Hero: iPad landscape behind, iPhone in front-left. The iPad leans back a
+   hair and the phone forward — soft-3D, not a tornado. */
+.composite--hero { max-width: 940px; aspect-ratio: 1.56; }
+.composite--hero .c-ipad {
+  right: 0; top: 0; width: 76%;
+  transform: rotate(1.2deg);
+  filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .5));
+}
+.composite--hero .c-phone {
+  left: 3%; bottom: 0; width: 30%; z-index: 2;
+  transform: rotate(-2.4deg);
+  filter: drop-shadow(0 34px 48px rgba(0, 0, 0, .62));
+}
+@media (max-width: 640px) {
+  /* The phone must stay readable; let the pair bleed a little wider than the
+     text column instead of shrinking with it. */
+  /* The portrait phone is the tall child: at 44% width it is ~.9× the
+     container width in height, so the ratio must drop to ~1.05 or the phone
+     pokes out the top into the hero text. */
+  .composite--hero { width: 108%; margin-inline: -4%; aspect-ratio: 1.05; }
+  .composite--hero .c-ipad { width: 92%; top: 12%; }
+  .composite--hero .c-phone { width: 44%; left: 0; }
+}
 
 .showcase { padding: var(--step) 0 calc(var(--step) * .5); }
 
@@ -157,13 +184,18 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 .story__text .lede:last-of-type { margin-bottom: 0; }
 .story .shot { display: flex; justify-content: center; gap: 1rem; }
 .story .shot img { max-width: min(280px, 60vw); }
-/* Two frames side by side. They wrap rather than shrink: at phone widths a
-   42vw cap put each one at ~158px, where the widget text stops being
-   readable and the shot stops making its point. */
-.story--flip .shot { flex-wrap: wrap; }
-.story--flip .shot img { max-width: min(230px, 42vw); }
-@media (max-width: 620px) {
-  .story--flip .shot img { max-width: min(250px, 64vw); }
+/* Sessions pair: Lock Screen front-left, widgets behind-right. Both stay
+   larger than the old side-by-side ever allowed, at every width. */
+.composite--pair { width: 100%; max-width: 460px; aspect-ratio: .76; }
+.composite--pair .c-back {
+  right: 0; top: 0; width: 62%;
+  transform: rotate(2deg);
+  filter: drop-shadow(0 24px 36px rgba(0, 0, 0, .5));
+}
+.composite--pair .c-front {
+  left: 0; bottom: 0; width: 62%; z-index: 2;
+  transform: rotate(-2deg);
+  filter: drop-shadow(0 30px 44px rgba(0, 0, 0, .62));
 }
 
 @media (min-width: 860px) {
@@ -178,14 +210,38 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
    this width and stretched each frame to 345px, which made the sequence
    larger than the hero shot above it and inverted the hierarchy. The frames
    are supporting evidence, so they stay deliberately smaller. */
-.steps { display: grid; gap: 1.4rem; grid-template-columns: 1fr; }
+.steps { display: grid; gap: 1.4rem; grid-template-columns: 1fr; counter-reset: step; }
+.step { counter-increment: step; }
 .step .shot { display: flex; justify-content: center; }
 .step .shot img { max-width: min(220px, 58vw); }
 .step p { margin: .9rem 0 0; color: var(--muted); font-size: .92rem; text-align: center; }
 .step p b { color: var(--torch); }
+.steps__legend { display: none; }
 
+/* From 700px: an overlapping cascade — frames fan left to right, middle one
+   forward, numbered chips replace the captions, one legend line below. */
 @media (min-width: 700px) {
-  .steps { grid-template-columns: repeat(3, 1fr); }
+  .steps { display: block; position: relative; max-width: 780px; margin-inline: auto; aspect-ratio: 1.2; }
+  .step { position: absolute; width: 36%; }
+  .step:nth-child(1) { left: 0;    top: 9%; transform: rotate(-2.5deg); }
+  .step:nth-child(2) { left: 31%;  top: 0;  z-index: 2; }
+  .step:nth-child(3) { left: 62%;  top: 9%; transform: rotate(2.5deg); }
+  .step .shot img { max-width: 100%; filter: drop-shadow(0 26px 38px rgba(0, 0, 0, .55)); }
+  .step p { display: none; }
+  .step .shot { position: relative; }
+  .step .shot::after {
+    content: counter(step);
+    position: absolute; top: 4%; left: 8%;
+    width: 1.9rem; height: 1.9rem; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--torch); color: #2A1804;
+    font-weight: 800; font-size: 1rem;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .5);
+  }
+  .steps__legend {
+    display: block; text-align: center; color: var(--muted);
+    font-size: .92rem; margin: 1.4rem 0 0;
+  }
 }
 
 /* ── "yours, privately" ─────────────────────────────

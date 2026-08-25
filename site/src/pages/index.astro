@@ -91,12 +91,15 @@ const steps = [
   </div>
 
   <!-- The showcase slot used to hold a hand-built HTML mock of a game card.
-       It now holds the actual app, which is both more honest and better
-       looking than the mock ever was. -->
+       Now a composed pair — iPad behind, iPhone in front — because a lone
+       portrait screenshot under the hero read as a poster, not a product,
+       and the platform badge above claims more than a phone. -->
   <div class="wrap showcase">
-    <Reveal class="shot shot--hero">
-      <img src="/assets/shots/iphone-01-home-shelf.webp" width="686" height="1400"
-           alt="LevelSelect home screen: Hollow Knight in Continue Playing with 41 hours logged, a row of console shelves, and Now Playing and Paused rows below." />
+    <Reveal class="composite composite--hero">
+      <img class="c-ipad" src="/assets/shots/ipad-01-split-tracker.webp" width="1600" height="1226"
+           alt="LevelSelect on iPad: the Hollow Knight game page beside its tracker panel in landscape split view." />
+      <img class="c-phone" src="/assets/shots/iphone-01-home-shelf.webp" width="686" height="1400"
+           alt="LevelSelect home screen on iPhone: Hollow Knight in Continue Playing with 41 hours logged, a row of console shelves, and Now Playing and Paused rows below." />
     </Reveal>
   </div>
 
@@ -127,6 +130,7 @@ const steps = [
         </Reveal>
       ))}
     </div>
+    <p class="steps__legend">{steps.map((s, i) => `${i + 1}. ${s.cap}`).join('  ·  ')}</p>
   </section>
 
   <section class="wrap story story--flip" id="sessions">
@@ -135,10 +139,10 @@ const steps = [
       <p class="lede">The Live Activity keeps counting on your Lock Screen while you play, and nudges you if you forget to stop it. Widgets put the timer, the week, and your next objective on the Home Screen — and you can tick that objective off without going anywhere.</p>
       <p class="lede"><b>Your games are Shortcuts too.</b> Say <i>"Play Hollow Knight in LevelSelect"</i> and it starts timing. Every game in your library is available to Siri, Spotlight and the Shortcuts app by name, so you can wire it into whatever you already use — an NFC tag on the console, a Focus, a scene.</p>
     </Reveal>
-    <Reveal class="shot shot--pair" from="left">
-      <img src="/assets/shots/iphone-05-lock-screen-live-activity.webp" width="686" height="1400" loading="lazy"
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-05-lock-screen-live-activity.webp" width="686" height="1400" loading="lazy"
            alt="Lock Screen showing a LevelSelect widget with Hollow Knight at 57 percent and a Live Activity counting a session at 7 minutes 46 seconds." />
-      <img src="/assets/shots/iphone-07-home-screen-widgets.webp" width="686" height="1400" loading="lazy"
+      <img class="c-back" src="/assets/shots/iphone-07-home-screen-widgets.webp" width="686" height="1400" loading="lazy"
            alt="Home Screen with LevelSelect widgets: Hollow Knight playing with its next objective, a Now Playing row, 139 hours this week, and a completion ring." />
     </Reveal>
   </section>
