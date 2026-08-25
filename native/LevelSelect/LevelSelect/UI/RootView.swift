@@ -258,8 +258,15 @@ struct HomeTab: View {
     @State private var showingAdd = false
     @State private var showingSettings = false
     @State private var showingCSVImport = false
+    @State private var showingWelcome = false
+    /// What the welcome's button asked for, fired from its onDismiss so the
+    /// next sheet never races the one still animating away.
+    @State private var welcomeChoice: WelcomeView.Choice?
     @State private var path = NavigationPath()
     @State private var nav = AppNavigator.shared
+    /// Once per device, not synced: seeing the welcome on your phone says
+    /// nothing about whether your iPad has shown it.
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     /// Home categories the user has collapsed (comma-joined status raw values).
     @AppStorage("homeCollapsedStatuses") private var collapsedRaw = ""
     /// Statuses kept off Home. Device-local on purpose, and not synced: which
@@ -321,8 +328,33 @@ struct HomeTab: View {
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
         .sheet(isPresented: $showingCSVImport) { CSVImportView() }
+        .sheet(isPresented: $showingWelcome, onDismiss: {
+            // Any way out counts as seen — including a swipe-down. A welcome
+            // that nags twice is a tour.
+            hasSeenWelcome = true
+            switch welcomeChoice {
+            case .addGame: showingAdd = true
+            case .importCSV: showingCSVImport = true
+            case nil: break
+            }
+            welcomeChoice = nil
+        }) {
+            WelcomeView { welcomeChoice = $0 }
+                .interactiveDismissDisabled(false)
+        }
         // Consume navigation requested by widgets / App Intents.
-        .onAppear { consumePendingNavigation() }
+        .onAppear {
+            // First run only: an empty library and an unseen flag. Existing
+            // libraries (every current device) never see it.
+            if !hasSeenWelcome && games.isEmpty {
+                showingWelcome = true
+            } else if !hasSeenWelcome {
+                // A populated library predates the welcome — mark it seen so
+                // emptying the library later doesn't resurrect a "first run".
+                hasSeenWelcome = true
+            }
+            consumePendingNavigation()
+        }
         .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingContinue) { _, _ in consumePendingNavigation() }
     }
