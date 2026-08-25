@@ -145,7 +145,17 @@ struct CoverPoster: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(LSWidget.navyDeep)
             if let image {
-                image.resizable().scaledToFit()
+                // Cover art must stay full-colour in the Clear and Tinted
+                // Home Screen appearances. In those modes WidgetKit renders
+                // accented widgets, and any image not opted out is flattened
+                // into the tint — every cover became a solid white rounded
+                // rectangle. Artwork is content, not chrome; Photos and Music
+                // make the same call for theirs.
+                image.resizable()
+                    // Image-only modifier: must sit before scaledToFit(),
+                    // which erases to `some View`.
+                    .widgetAccentedRenderingMode(.fullColor)
+                    .scaledToFit()
             } else {
                 Image(systemName: "gamecontroller.fill")
                     .font(.system(size: 22))
