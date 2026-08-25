@@ -119,6 +119,127 @@ struct Repository {
         persist()
     }
 
+    // MARK: Library-wide metadata fill
+
+    /// What one library-wide fill actually did.
+    struct MetadataFillResult: Equatable {
+        /// Games that gained at least one field.
+        var gamesUpdated = 0
+        /// Individual fields written, across every game.
+        var fieldsFilled = 0
+        /// Games rescued from the 1969 cohort. Called out on its own because
+        /// it is the reason this exists.
+        var releaseDatesFixed = 0
+        /// Games looked up this run.
+        var gamesAttempted = 0
+        /// Games whose id IGDB returned nothing for — a dead id, usually a
+        /// merged or withdrawn entry. Worth surfacing: it is the signal that a
+        /// game needs a re-match rather than a refresh.
+        var unknownToIGDB = 0
+        /// Requests that failed outright (offline, rate limited, proxy down).
+        var chunksFailed = 0
+        /// WHY they failed. A pass that can only say "some batches failed"
+        /// leaves someone tapping a button that will never work until a quota
+        /// window rolls over — the one thing this report has to prevent.
+        var failure: IGDBError?
+        /// Requests made. Held against `MetadataRefresh.Budget` when reporting.
+        var chunksRun = 0
+        /// Fillable games this run did not reach, because the per-run request
+        /// budget ran out. Running again picks them up.
+        var deferred = 0
+        /// Games missing something with no `igdbID` to look up. Never guessed
+        /// at — see `MetadataRefresh.Plan.unmatched`.
+        var unmatched = 0
+
+        var didAnything: Bool { gamesUpdated > 0 }
+    }
+
+    /// Fill every empty metadata field in the library from IGDB, in batches.
+    ///
+    /// Additive only: `MetadataRefresh.fill` writes a field only when the game
+    /// has nothing in it, so this cannot overwrite a correction. That is a
+    /// property of the domain function, not of this loop — the loop's own job
+    /// is the network shape: chunk the ids, stay inside the proxy's quota,
+    /// report progress, and commit once per chunk so an interrupted run keeps
+    /// what it already fixed.
+    ///
+    /// `progress` is called with 0…1 after each chunk.
+    func fillMissingMetadata(
+        in library: [Game],
+        progress: (Double) -> Void = { _ in }
+    ) async -> MetadataFillResult {
+        let plan = MetadataRefresh.plan(for: library)
+        var result = MetadataFillResult(unmatched: plan.unmatched.count)
+        guard !plan.isEmpty else {
+            progress(1)
+            return result
+        }
+
+        // One id can map to several rows (sync duplicates, or the same game
+        // held on two platforms), so the lookup is keyed by id and every row
+        // holding it gets the answer.
+        var gamesByID: [Int: [Game]] = [:]
+        for game in plan.fillable {
+            guard let id = game.igdbID else { continue }
+            gamesByID[id, default: []].append(game)
+        }
+
+        let (scheduled, deferred) = MetadataRefresh.scheduledChunks(of: Array(gamesByID.keys))
+        result.deferred = deferred
+
+        for (index, chunk) in scheduled.enumerated() {
+            if index > 0 {
+                try? await Task.sleep(for: MetadataRefresh.Budget.pauseBetweenChunks)
+            }
+            if Task.isCancelled { break }
+
+            result.chunksRun += 1
+            let chunkGames = chunk.flatMap { gamesByID[$0] ?? [] }
+            result.gamesAttempted += chunkGames.count
+
+            let hits: [IGDBGame]
+            do {
+                hits = try await IGDBService.lookup(ids: chunk)
+            } catch {
+                // A failed chunk is not a failed run. The games in it stay
+                // fillable, so the next run picks them up.
+                result.chunksFailed += 1
+                result.failure = error as? IGDBError ?? .malformed
+                progress(Double(index + 1) / Double(scheduled.count))
+                // Rate limiting is the one failure worth stopping for. The
+                // quota is per install and per minute, so the remaining
+                // chunks would each spend a request to be refused — burning
+                // more of the same allowance that is already exhausted, and
+                // pushing the window that has to roll over further out.
+                if result.failure == .rateLimited { break }
+                continue
+            }
+
+            let byID = Dictionary(hits.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+            for id in chunk {
+                guard let igdb = byID[id] else {
+                    result.unknownToIGDB += (gamesByID[id] ?? []).count
+                    continue
+                }
+                for game in gamesByID[id] ?? [] {
+                    let filled = MetadataRefresh.fill(game, from: igdb)
+                    guard !filled.isEmpty else { continue }
+                    result.gamesUpdated += 1
+                    result.fieldsFilled += filled.count
+                    if filled.contains(.releaseDate) { result.releaseDatesFixed += 1 }
+                    touch(game)
+                }
+            }
+            // Commit per chunk, not per run: a refresh interrupted by a
+            // backgrounded app or a dropped connection should keep what it
+            // already fixed rather than throwing the whole pass away.
+            persist()
+            progress(Double(index + 1) / Double(scheduled.count))
+        }
+
+        return result
+    }
+
     // MARK: - Collections
 
     /// Create a collection from a template, optionally starting it off with
