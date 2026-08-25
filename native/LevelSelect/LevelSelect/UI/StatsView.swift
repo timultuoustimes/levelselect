@@ -10,12 +10,73 @@ import SwiftData
 /// parity doc's note that a bar you can't tap is a question the app refuses
 /// to answer. Everything here is grouping over existing fields — the stats
 /// expansion held out of the beta on 08-15 and un-held 2026-08-25.
+/// One entry per Stats card, in default order. The page renders whatever
+/// order (and subset) the user chose; new cards added in later builds append
+/// at their default position via `resolveOrder`, so a stored preference from
+/// an older build never hides a card it had no way to know about.
+enum StatsCard: String, CaseIterable, Identifiable {
+    case overview, recent, ratings, library, monthly, streak
+    case mostPlayed, systems, genres, series, tags, years, completions
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .overview:    "Overview"
+        case .recent:      "Recent Play"
+        case .ratings:     "Ratings"
+        case .library:     "Library"
+        case .monthly:     "By Month"
+        case .streak:      "Streak"
+        case .mostPlayed:  "Most Played"
+        case .systems:     "By System"
+        case .genres:      "Genres"
+        case .series:      "Series"
+        case .tags:        "Tags"
+        case .years:       "By Release Year"
+        case .completions: "Completions"
+        }
+    }
+
+    /// Stored order (comma-joined raw values) → full render order. Unknown
+    /// tokens are dropped; cards absent from the stored order slot back in at
+    /// their default position relative to the ones around them.
+    static func resolveOrder(stored: String) -> [StatsCard] {
+        let chosen = stored.split(separator: ",").compactMap { StatsCard(rawValue: String($0)) }
+        guard !chosen.isEmpty else { return Array(allCases) }
+        var result = chosen
+        for (index, card) in allCases.enumerated() where !result.contains(card) {
+            // Insert after the nearest already-placed predecessor.
+            let predecessors = allCases.prefix(index).reversed()
+            if let anchor = predecessors.first(where: { result.contains($0) }),
+               let at = result.firstIndex(of: anchor) {
+                result.insert(card, at: at + 1)
+            } else {
+                result.insert(card, at: 0)
+            }
+        }
+        return result
+    }
+}
+
 struct StatsTab: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
 
     /// Which decades are open in the By Release Year card.
     @State private var expandedDecades: Set<Int> = []
+
+    /// Card order and hidden set — device-local like the Home shelves, and
+    /// for the same reason: how you read stats on the phone in your pocket
+    /// isn't obviously the same answer as on the iPad on the desk.
+    @AppStorage("statsCardOrder") private var cardOrderRaw = ""
+    @AppStorage("statsHiddenCards") private var hiddenCardsRaw = ""
+    @State private var arranging = false
+
+    private var cardOrder: [StatsCard] { StatsCard.resolveOrder(stored: cardOrderRaw) }
+    private var hiddenCards: Set<StatsCard> {
+        Set(hiddenCardsRaw.split(separator: ",").compactMap { StatsCard(rawValue: String($0)) })
+    }
 
     var body: some View {
         NavigationStack {
@@ -27,25 +88,45 @@ struct StatsTab: View {
                     // re-sorted it three times per render.
                     let sessions = allSessions
                     let top = topPlayed
-                    overviewCard(sessions: sessions)
-                    recentCard(sessions: sessions)
-                    if ratedCount > 0 { ratingsCard }
-                    statusBreakdownCard
-                    monthlyCard(sessions: sessions)
-                    heatmapCard(sessions: sessions)
-                    if !top.isEmpty { topPlayedCard(top) }
-                    platformsCard
-                    sliceCard("Genres", icon: "theatermasks.fill", rows: topCounts(\.genres, limit: 8), kind: .genre)
-                    franchisesCard
-                    sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
-                    releaseYearsCard
-                    if !completionsByYear.isEmpty { completionsCard }
+                    let visible = cardOrder.filter { !hiddenCards.contains($0) }
+                    ForEach(visible) { card in
+                        switch card {
+                        case .overview:    overviewCard(sessions: sessions)
+                        case .recent:      recentCard(sessions: sessions)
+                        case .ratings:     if ratedCount > 0 { ratingsCard }
+                        case .library:     statusBreakdownCard
+                        case .monthly:     monthlyCard(sessions: sessions)
+                        case .streak:      heatmapCard(sessions: sessions)
+                        case .mostPlayed:  if !top.isEmpty { topPlayedCard(top) }
+                        case .systems:     platformsCard
+                        case .genres:      sliceCard("Genres", icon: "theatermasks.fill", rows: topCounts(\.genres, limit: 8), kind: .genre)
+                        case .series:      franchisesCard
+                        case .tags:        sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
+                        case .years:       releaseYearsCard
+                        case .completions: if !completionsByYear.isEmpty { completionsCard }
+                        }
+                    }
+                    if visible.isEmpty {
+                        ContentUnavailableView("All cards hidden",
+                                               systemImage: "rectangle.dashed",
+                                               description: Text("Bring some back from Arrange."))
+                    }
                 }
                 .padding()
             }
             .scrollIndicators(.hidden)
             .lsBackground()
             .navigationTitle("Stats")
+            .toolbar {
+                Button {
+                    arranging = true
+                } label: {
+                    Label("Arrange", systemImage: "slider.horizontal.3")
+                }
+            }
+            .sheet(isPresented: $arranging) {
+                StatsArrangeSheet(orderRaw: $cardOrderRaw, hiddenRaw: $hiddenCardsRaw)
+            }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
@@ -623,3 +704,76 @@ private struct FlowCountRows: View {
     }
 }
 
+
+
+// MARK: - Arrange
+
+/// Reorder and hide the Stats cards. Drag to reorder, switch to show or
+/// hide; the page re-renders live behind the sheet. "Reset" clears both
+/// preferences rather than writing a copy of the defaults, so a future
+/// build's new cards appear for reset users exactly as they do for fresh
+/// installs.
+struct StatsArrangeSheet: View {
+    @Binding var orderRaw: String
+    @Binding var hiddenRaw: String
+    @Environment(\.dismiss) private var dismiss
+
+    private var order: [StatsCard] { StatsCard.resolveOrder(stored: orderRaw) }
+    private var hidden: Set<StatsCard> {
+        Set(hiddenRaw.split(separator: ",").compactMap { StatsCard(rawValue: String($0)) })
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(order) { card in
+                    HStack {
+                        Toggle(isOn: visibilityBinding(card)) {
+                            Text(card.displayName)
+                        }
+                        .tint(LSTheme.accent)
+                    }
+                }
+                .onMove { from, to in
+                    var cards = order
+                    cards.move(fromOffsets: from, toOffset: to)
+                    orderRaw = cards.map(\.rawValue).joined(separator: ",")
+                }
+            }
+            #if !os(macOS)
+            // Keep the drag handles visible without an Edit button; macOS
+            // has no editMode and reorders List rows natively.
+            .environment(\.editMode, .constant(.active))
+            #endif
+            .navigationTitle("Arrange Stats")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Reset") {
+                        orderRaw = ""
+                        hiddenRaw = ""
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func visibilityBinding(_ card: StatsCard) -> Binding<Bool> {
+        Binding(
+            get: { !hidden.contains(card) },
+            set: { visible in
+                var set = hidden
+                if visible { set.remove(card) } else { set.insert(card) }
+                // Preserve canonical order in storage so the raw string is
+                // stable and diffable rather than insertion-ordered.
+                hiddenRaw = StatsCard.allCases.filter(set.contains)
+                    .map(\.rawValue).joined(separator: ",")
+            })
+    }
+}

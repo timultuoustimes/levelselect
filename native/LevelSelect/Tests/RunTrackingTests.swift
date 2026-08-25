@@ -294,3 +294,35 @@ struct EndRunFieldMergeTests {
         #expect(run.fieldsDict["gods"] == nil)
     }
 }
+
+/// Stats card order survives builds that add cards: stored preferences from
+/// an older build must surface new cards, not silently hide them.
+struct StatsCardOrderTests {
+    @Test func emptyStoredOrderIsDefault() {
+        #expect(StatsCard.resolveOrder(stored: "") == Array(StatsCard.allCases))
+    }
+
+    @Test func storedOrderWins() {
+        let stored = StatsCard.allCases.reversed().map(\.rawValue).joined(separator: ",")
+        #expect(StatsCard.resolveOrder(stored: stored) == Array(StatsCard.allCases.reversed()))
+    }
+
+    @Test func unknownCardsAppearAtTheirDefaultNeighborhood() {
+        // A stored order missing `streak` and `years` (as if saved by a build
+        // that predates them): both must reappear, after the card that
+        // precedes them in the default order.
+        let stored = StatsCard.allCases
+            .filter { $0 != .streak && $0 != .years }
+            .map(\.rawValue).joined(separator: ",")
+        let resolved = StatsCard.resolveOrder(stored: stored)
+        #expect(resolved.count == StatsCard.allCases.count)
+        #expect(resolved.firstIndex(of: .streak)! == resolved.firstIndex(of: .monthly)! + 1)
+        #expect(resolved.firstIndex(of: .years)! == resolved.firstIndex(of: .tags)! + 1)
+    }
+
+    @Test func garbageTokensAreDropped() {
+        let resolved = StatsCard.resolveOrder(stored: "overview,notacard,streak")
+        #expect(resolved.count == StatsCard.allCases.count)
+        #expect(resolved.first == .overview)
+    }
+}

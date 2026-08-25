@@ -101,6 +101,24 @@ enum MetadataRefresh {
             }
         }
 
+        /// The bare noun, for the informational rows — "No series listed",
+        /// where the articled `label` produced "No a series listed".
+        var bareLabel: String {
+            switch self {
+            case .releaseDate:        "release date"
+            case .cover:              "cover art"
+            case .genres:             "genres"
+            case .themes:             "themes"
+            case .gameModes:          "game modes"
+            case .playerPerspectives: "perspective"
+            case .developers:         "developer"
+            case .publishers:         "publisher"
+            case .franchise:          "series"
+            case .summary:            "description"
+            case .slug:               "IGDB link"
+            }
+        }
+
         /// Report order — most visible problem first. The 1969 dates are the
         /// reason this exists, so they lead.
         static let reportOrder: [Field] = [

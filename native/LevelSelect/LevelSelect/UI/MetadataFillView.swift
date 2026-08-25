@@ -106,7 +106,7 @@ struct MetadataFillView: View {
                             .monospacedDigit()
                             .foregroundStyle(.tertiary)
                     } label: {
-                        Text("No \(field.label) listed")
+                        Text("No \(field.bareLabel) listed")
                             .foregroundStyle(.secondary)
                     }
                 }
