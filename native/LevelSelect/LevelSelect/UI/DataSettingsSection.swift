@@ -8,14 +8,34 @@ import SwiftData
 struct DataSettingsSection: View {
     @Environment(\.modelContext) private var context
 
-    @State private var exportURL: URL?
+    @State private var sheet: DataSheet?
     @State private var exportSummary: String?
     @State private var exportError: String?
     @State private var exporting = false
     @State private var confirmingClear: ClearScope?
     @State private var clearResult: String?
-    @State private var showingCSVImport = false
-    @State private var showingMetadataFill = false
+
+    /// Which sheet this section is showing.
+    ///
+    /// ONE `.sheet` modifier drives all three. SwiftUI registers a single
+    /// sheet presentation per view, so stacking modifiers means only one of
+    /// them reliably wins — the losers present and are dismissed again in the
+    /// same breath, which looks exactly like a sheet that flickers open and
+    /// shuts and swallows whatever you tapped inside it. Two were already
+    /// stacked here; adding a third is what made it show.
+    private enum DataSheet: Identifiable {
+        case export(URL)
+        case csvImport
+        case metadataFill
+
+        var id: String {
+            switch self {
+            case .export(let url): "export:\(url.absoluteString)"
+            case .csvImport:       "csv"
+            case .metadataFill:    "fill"
+            }
+        }
+    }
 
     enum ClearScope: String, Identifiable {
         case sessions, trackers
@@ -68,29 +88,40 @@ struct DataSettingsSection: View {
             }
 
             Button {
-                showingCSVImport = true
+                sheet = .csvImport
             } label: {
                 Label("Import from CSV", systemImage: "square.and.arrow.down")
             }
 
             Button {
-                showingMetadataFill = true
+                sheet = .metadataFill
             } label: {
                 Label("Fill in missing game info", systemImage: "sparkle.magnifyingglass")
+            }
+            // The sheet hangs off THIS ROW, not off the Section.
+            //
+            // `Section` is not a view that can host a presentation, so a
+            // `.sheet` written against it is pushed down into every child it
+            // has — here five of them (three buttons and two conditional
+            // captions). That is five presentations bound to one piece of
+            // state: they all fire together, collide, and dismiss each other
+            // about a second later, taking any tap inside with them. It looks
+            // precisely like a sheet that flickers open and shuts.
+            //
+            // A row is a single view, so the modifier stays singular. Keep it
+            // on an UNCONDITIONAL row — attach it to one of the captions above
+            // and the sheet would vanish whenever that caption did.
+            .sheet(item: $sheet) { which in
+                switch which {
+                case .export(let url): ShareSheet(url: url)
+                case .csvImport:       CSVImportView()
+                case .metadataFill:    MetadataFillView()
+                }
             }
         } header: {
             Text("Your data")
         } footer: {
             Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Two honest limits: map images are saved as links rather than embedded, and there's no importer for the file yet, so treat it as a readable record rather than a one-tap restore. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet. Fill in missing game info looks up everything your games are missing — release dates, genres, developers, cover art — and adds only what's blank, so nothing you've corrected by hand is touched.")
-        }
-        .sheet(item: $exportURL) { url in
-            ShareSheet(url: url)
-        }
-        .sheet(isPresented: $showingCSVImport) {
-            CSVImportView()
-        }
-        .sheet(isPresented: $showingMetadataFill) {
-            MetadataFillView()
         }
 
         Section {
@@ -104,6 +135,17 @@ struct DataSettingsSection: View {
             } label: {
                 Label("Clear all tracker progress", systemImage: "checklist.unchecked")
             }
+            // On a row, not the Section — same reason as the sheet above. This
+            // one had not visibly misbehaved, but it is the identical shape:
+            // three children, so three alerts bound to one piece of state.
+            .alert(item: $confirmingClear) { scope in
+                Alert(
+                    title: Text(scope.title),
+                    message: Text(scope.message),
+                    primaryButton: .destructive(Text(scope.confirm)) { runClear(scope) },
+                    secondaryButton: .cancel()
+                )
+            }
             if let clearResult {
                 Text(clearResult)
                     .font(.caption)
@@ -111,14 +153,6 @@ struct DataSettingsSection: View {
             }
         } footer: {
             Text("Start fresh without deleting your games.")
-        }
-        .alert(item: $confirmingClear) { scope in
-            Alert(
-                title: Text(scope.title),
-                message: Text(scope.message),
-                primaryButton: .destructive(Text(scope.confirm)) { runClear(scope) },
-                secondaryButton: .cancel()
-            )
         }
     }
 
@@ -133,7 +167,7 @@ struct DataSettingsSection: View {
                 let data = try LibraryExport.makeJSON(context: context)
                 exportSummary = LibraryExport.summary(for: data)
                 let url = try LibraryExport.writeToTemporaryFile(data: data)
-                exportURL = url
+                sheet = .export(url)
             } catch {
                 exportError = "Couldn't build the export. \(error.localizedDescription)"
             }
@@ -152,11 +186,6 @@ struct DataSettingsSection: View {
             clearResult = "Cleared progress on \(n) item\(n == 1 ? "" : "s")."
         }
     }
-}
-
-/// URL is Identifiable so it can drive a `.sheet(item:)`.
-extension URL: @retroactive Identifiable {
-    public var id: String { absoluteString }
 }
 
 #if os(iOS)
