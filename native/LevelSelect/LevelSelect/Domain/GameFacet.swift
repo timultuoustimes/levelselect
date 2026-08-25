@@ -10,7 +10,7 @@ import Foundation
 /// already-crowded menu.
 struct GameFacet: Hashable, Codable, Sendable {
     enum Kind: String, Codable, Sendable {
-        case developer, publisher, genre, theme, perspective, mode, year, franchise
+        case developer, publisher, genre, theme, perspective, mode, year, franchise, tag
 
         /// What to call the resulting screen — the field's own name, since the
         /// value is already the title.
@@ -24,6 +24,7 @@ struct GameFacet: Hashable, Codable, Sendable {
             case .mode:        "Game Mode"
             case .year:        "Released"
             case .franchise:   "Series"
+            case .tag:         "Tag"
             }
         }
 
@@ -37,6 +38,7 @@ struct GameFacet: Hashable, Codable, Sendable {
             case .mode:        "person.2"
             case .year:        "calendar"
             case .franchise:   "square.stack.3d.up"
+            case .tag:         "tag"
             }
         }
     }
@@ -59,6 +61,7 @@ struct GameFacet: Hashable, Codable, Sendable {
         case .perspective: return game.playerPerspectives.contains(value)
         case .mode:        return game.gameModes.contains(value)
         case .franchise:   return game.franchise == value
+        case .tag:         return game.userTags.contains(value)
         case .year:
             guard let date = game.firstReleaseDate else { return false }
             return String(Calendar.current.component(.year, from: date)) == value
