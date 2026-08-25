@@ -1,18 +1,18 @@
 ---
 import Base from '../layouts/Base.astro';
-import Shine from '../components/Shine.astro';
 import Reveal from '../components/Reveal.astro';
 import StageDemo from '../components/StageDemo.astro';
 
-const features = [
-  {
-    title: 'Sessions that time themselves',
-    body: "Start a session from the app, a widget, your watch, or the Lock Screen. The Live Activity keeps counting while you play, and nudges you if you forget to stop it.",
-  },
-  {
-    title: 'Trackers per game',
-    body: 'Bosses, collectibles, upgrades, endings. Import the real RetroAchievements set for a retro game, paste a checklist you already trust, write your own goals, or generate just the parts you care about — ask what a game should be divided into, then fill one category at a time and leave the rest alone.',
-  },
+/* Sections 3–5 below are the "story" half of the page: one claim, one
+   paragraph, one real screenshot each. They carry the four strongest shots
+   from the 2026-08-24 capture set.
+
+   Everything that doesn't earn a screenshot lives in `rest` at the bottom as
+   plain text. That split is deliberate — a grid where some tiles have images
+   and some don't reads as unfinished, and there is genuinely nothing to
+   photograph for "no accounts, no analytics". */
+
+const rest = [
   {
     title: 'Playthroughs and runs',
     body: 'Separate progress for a second run or NG+. Roguelikes get their own record: loadout, outcome, win rate over time.',
@@ -22,12 +22,20 @@ const features = [
     body: 'Group a trilogy, a comfort-games list, or everything you own on Genesis. Browse by system with icons that look like the hardware.',
   },
   {
-    title: 'Stats that stay honest',
-    body: "Hours by game, what you've finished, and how much you actually played this week versus how much you meant to. Only what your own sessions can prove — nothing estimated, nothing borrowed from anyone else's average.",
+    title: 'A wishlist that watches prices',
+    body: 'Point it at your Deku Deals wishlist and see what has dropped, beside a wishlist of your own.',
   },
   {
-    title: 'Yours, privately',
-    body: 'Your library lives on your device and in your own iCloud. No accounts, no ads, no analytics, no tracking — and you can export it as readable JSON whenever you want.',
+    title: 'Guides and videos in place',
+    body: 'Keep a walkthrough or a playlist attached to the game it belongs to, so you are not hunting for the tab you left it in.',
+  },
+  {
+    title: 'Import what you already have',
+    body: 'A CSV from a spreadsheet becomes a library, with its hours logged as real time rather than invented history.',
+  },
+  {
+    title: 'Stats that stay honest',
+    body: "Hours by game, what you've finished, and how much you actually played this week versus how much you meant to. Only what your own sessions can prove — nothing estimated, nothing borrowed from anyone else's average.",
   },
 ];
 
@@ -38,6 +46,26 @@ const systems = [
   { img: 'sys-mac.png', name: 'Mac', count: '51 games' },
   { img: 'sys-snes.png', name: 'SNES', count: '7 games' },
   { img: 'sys-nes.png', name: 'NES', count: '7 games' },
+];
+
+/* The generation triptych. Three frames because the feature is a sequence —
+   a single still of it is just a spinner. */
+const steps = [
+  {
+    img: 'iphone-09-generating-categories.webp',
+    cap: 'Ask what the game is made of.',
+    alt: 'LevelSelect working out a game\u2019s categories, showing "Working out the shape of this game" with a progress bar.',
+  },
+  {
+    img: 'iphone-10-generated-ready-toast.webp',
+    cap: 'Fill one category. Leave the rest planned.',
+    alt: 'A notification reading "Story Milestones is ready", with the tracker now showing 0 of 15 complete.',
+  },
+  {
+    img: 'iphone-11-generated-story-milestones.webp',
+    cap: 'Come back for the next one whenever.',
+    alt: 'The finished Story Milestones list, each objective with its own description, and later entries still hidden until revealed.',
+  },
 ];
 ---
 <Base
@@ -62,33 +90,57 @@ const systems = [
     </div>
   </div>
 
+  <!-- The showcase slot used to hold a hand-built HTML mock of a game card.
+       It now holds the actual app, which is both more honest and better
+       looking than the mock ever was. -->
   <div class="wrap showcase">
-    <div class="card-hero">
-      <Shine class="cover-wrap" idle>
-        <img class="cover" src="/assets/cover-hollow-knight.jpg" width="76" height="100"
-             alt="Hollow Knight cover art" loading="lazy" />
-      </Shine>
-      <div class="meta">
-        <div class="title">Hollow Knight</div>
-        <div class="sub2">Paused &middot; 41h 12m &middot; 3 bosses left</div>
-      </div>
-      <div class="play"><b>&#9654;</b>Play</div>
-    </div>
+    <Reveal class="shot shot--hero">
+      <img src="/assets/shots/iphone-01-home-shelf.webp" width="686" height="1400"
+           alt="LevelSelect home screen: Hollow Knight in Continue Playing with 41 hours logged, a row of console shelves, and Now Playing and Paused rows below." />
+    </Reveal>
   </div>
 
-  <section class="wrap" id="features">
-    <Reveal>
-      <h2>Built for the way a backlog actually works</h2>
-      <p class="lede">Not a spreadsheet with a coat of paint. The things you'd otherwise keep in your head, or a notes app, or nowhere.</p>
+  <section class="wrap story" id="trackers">
+    <Reveal class="story__text">
+      <h2>The game's real checklist, not a generic one</h2>
+      <p class="lede">Import the actual RetroAchievements set for a retro game and get the real achievements, real point values, and a warning on the ones you can permanently miss. Paste a checklist you already trust. Or write your own goals in your own words.</p>
+      <p class="lede">Every tracker says where it came from, so you always know whether a number is the game's or a guess.</p>
     </Reveal>
-    <div class="grid">
-      {features.map((f) => (
-        <Reveal class="tile">
-          <h3>{f.title}</h3>
-          <p>{f.body}</p>
+    <Reveal class="shot" from="right">
+      <img src="/assets/shots/iphone-03-super-metroid-retroachievements.webp" width="686" height="1400" loading="lazy"
+           alt="Super Metroid in LevelSelect showing 36 of 69 RetroAchievements earned, 197 of 656 points, a missable-achievement warning, and a RetroAchievements source badge." />
+    </Reveal>
+  </section>
+
+  <section class="wrap" id="generate">
+    <Reveal>
+      <h2>Built one piece at a time</h2>
+      <p class="lede">Ask what a game should be divided into and you get a plan, not a wall. Fill in the category you care about now — bosses, or shrines, or nothing at all — and leave the other nine sitting there until you want them.</p>
+    </Reveal>
+    <div class="steps">
+      {steps.map((s, i) => (
+        <Reveal class="step">
+          <div class="shot">
+            <img src={`/assets/shots/${s.img}`} width="686" height="1400" loading="lazy" alt={s.alt} />
+          </div>
+          <p><b>{i + 1}.</b> {s.cap}</p>
         </Reveal>
       ))}
     </div>
+  </section>
+
+  <section class="wrap story story--flip" id="sessions">
+    <Reveal class="story__text">
+      <h2>Start a session without opening the app</h2>
+      <p class="lede">The Live Activity keeps counting on your Lock Screen while you play, and nudges you if you forget to stop it. Widgets put the timer, the week, and your next objective on the Home Screen — and you can tick that objective off without going anywhere.</p>
+      <p class="lede"><b>Your games are Shortcuts too.</b> Say <i>"Play Hollow Knight in LevelSelect"</i> and it starts timing. Every game in your library is available to Siri, Spotlight and the Shortcuts app by name, so you can wire it into whatever you already use — an NFC tag on the console, a Focus, a scene.</p>
+    </Reveal>
+    <Reveal class="shot shot--pair" from="left">
+      <img src="/assets/shots/iphone-05-lock-screen-live-activity.webp" width="686" height="1400" loading="lazy"
+           alt="Lock Screen showing a LevelSelect widget with Hollow Knight at 57 percent and a Live Activity counting a session at 7 minutes 46 seconds." />
+      <img src="/assets/shots/iphone-07-home-screen-widgets.webp" width="686" height="1400" loading="lazy"
+           alt="Home Screen with LevelSelect widgets: Hollow Knight playing with its next objective, a Now Playing row, 139 hours this week, and a completion ring." />
+    </Reveal>
   </section>
 
   <section class="wrap" id="stage">
@@ -98,6 +150,24 @@ const systems = [
     </Reveal>
     <Reveal>
       <StageDemo />
+    </Reveal>
+  </section>
+
+  <!-- Deliberately the one section with no screenshot. What it describes is an
+       absence, and a Settings screen reading "Synced" would be a picture of
+       nothing. The comparison is the content. -->
+  <section class="wrap" id="privately">
+    <Reveal class="private">
+      <h2>Yours, privately</h2>
+      <p class="lede">Most trackers start by asking you to log in to PlayStation, and Xbox, and Steam, and Nintendo — handing over an account for every shelf you own.</p>
+      <p class="lede">LevelSelect never asks for one. Your library lives on your device and syncs through your own iCloud, where it is yours in the ordinary sense of the word.</p>
+      <ul class="nots">
+        <li>No account to create</li>
+        <li>No ads</li>
+        <li>No analytics, no tracking</li>
+        <li>Export the whole thing as readable JSON, whenever</li>
+      </ul>
+      <p class="beta-note">The one exception is spelled out in full: <a href="/privacy/">how your data works</a>.</p>
     </Reveal>
   </section>
 
@@ -112,6 +182,21 @@ const systems = [
           <img src={`/assets/${s.img}`} alt="" loading="lazy" />
           <div class="n">{s.name}</div>
           <div class="c">{s.count}</div>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap" id="features">
+    <Reveal>
+      <h2>And the rest of it</h2>
+      <p class="lede">The things you'd otherwise keep in your head, or a notes app, or nowhere.</p>
+    </Reveal>
+    <div class="grid">
+      {rest.map((f) => (
+        <Reveal class="tile">
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
         </Reveal>
       ))}
     </div>

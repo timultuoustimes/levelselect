@@ -128,36 +128,88 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 .btn-ghost:hover { border-color: var(--purple); transform: translateY(-2px); color: var(--ink); }
 .badge { font-size: .75rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 
-/* ── continue card (mirrors the app's hero) ─────────── */
-.showcase { padding: var(--step) 0; }
+/* ── card surface (beta CTA) ────────────────────────── */
 .card-hero {
   display: flex; align-items: center; gap: 1.1rem; padding: 1.1rem;
   border-radius: 22px; border: 1px solid var(--line);
   background: linear-gradient(135deg, rgba(77,41,140,.85), #1E1436);
   box-shadow: 0 24px 50px -28px #000;
 }
-/* Real cover art, framed the way CoverThumb frames it in the app: a soft
-   top-left gloss so the box reads as a physical object rather than a sticker. */
-.cover {
-  width: 76px; height: 100px; flex: none; border-radius: 12px; object-fit: cover;
-  border: 1px solid rgba(255,255,255,.14);
-  box-shadow: 0 10px 22px -10px #000, inset 0 1px 0 rgba(255,255,255,.22);
+/* ── screenshots ────────────────────────────────────
+   The captures are already device-framed (a gold bezel, which happens to sit
+   on --torch), so the page adds depth and nothing else — no second frame, no
+   border. A drop-shadow filter rather than box-shadow, because the source is
+   a transparent PNG with rounded bezel corners and box-shadow would draw a
+   rectangle behind it. */
+.shot img {
+  width: 100%; height: auto;
+  filter: drop-shadow(0 30px 45px rgba(0, 0, 0, .55));
 }
-.cover-wrap { position: relative; flex: none; }
-.cover-wrap::after {
-  content: ""; position: absolute; inset: 0; border-radius: 12px; pointer-events: none;
-  background: linear-gradient(150deg, rgba(255,255,255,.26), transparent 46%);
+/* Phone shots are tall. Capping by viewport height stops a single screenshot
+   from occupying two full screens on a laptop. */
+.shot--hero { display: flex; justify-content: center; }
+.shot--hero img { max-width: min(300px, 66vw); }
+
+.showcase { padding: var(--step) 0 calc(var(--step) * .5); }
+
+/* ── story rows (text beside one shot) ─────────────── */
+.story { display: grid; gap: var(--step); align-items: center; grid-template-columns: 1fr; }
+.story__text .lede:last-of-type { margin-bottom: 0; }
+.story .shot { display: flex; justify-content: center; gap: 1rem; }
+.story .shot img { max-width: min(280px, 60vw); }
+/* Two frames side by side. They wrap rather than shrink: at phone widths a
+   42vw cap put each one at ~158px, where the widget text stops being
+   readable and the shot stops making its point. */
+.story--flip .shot { flex-wrap: wrap; }
+.story--flip .shot img { max-width: min(230px, 42vw); }
+@media (max-width: 620px) {
+  .story--flip .shot img { max-width: min(250px, 64vw); }
 }
-.card-hero .meta { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
-.card-hero .title { font-weight: 650; font-size: 1.06rem; }
-.card-hero .sub2 { color: var(--muted); font-size: .86rem; }
-.play {
-  margin-left: auto; flex: none; display: flex; flex-direction: column; align-items: center; gap: .15rem;
-  padding: .7rem 1rem; border-radius: 14px; color: var(--green);
-  border: 1px solid rgba(91,217,138,.45); background: rgba(91,217,138,.12);
-  font-size: .76rem; font-weight: 650;
+
+@media (min-width: 860px) {
+  .story { grid-template-columns: 1fr 1fr; }
+  /* Source order stays text-then-image so it reads correctly without CSS and
+     to a screen reader; only the painted order flips. */
+  .story--flip .story__text { order: 2; }
 }
-.play b { font-size: 1.05rem; line-height: 1; }
+
+/* ── the generation triptych ─────────────────────────
+   Three fixed columns rather than auto-fit: auto-fit fitted a fourth track at
+   this width and stretched each frame to 345px, which made the sequence
+   larger than the hero shot above it and inverted the hierarchy. The frames
+   are supporting evidence, so they stay deliberately smaller. */
+.steps { display: grid; gap: 1.4rem; grid-template-columns: 1fr; }
+.step .shot { display: flex; justify-content: center; }
+.step .shot img { max-width: min(220px, 58vw); }
+.step p { margin: .9rem 0 0; color: var(--muted); font-size: .92rem; text-align: center; }
+.step p b { color: var(--torch); }
+
+@media (min-width: 700px) {
+  .steps { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── "yours, privately" ─────────────────────────────
+   The one section with no screenshot, so it gets a surface of its own to stop
+   it reading as a gap between two picture sections. */
+.private {
+  padding: clamp(1.4rem, 4vw, 2.2rem);
+  border-radius: 22px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+}
+.private .lede { max-width: var(--measure); }
+.nots {
+  list-style: none; margin: 1.4rem 0 0; padding: 0;
+  display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.nots li {
+  position: relative; padding-left: 1.6rem;
+  color: var(--ink); font-size: .95rem;
+}
+/* An em dash, not a checkmark: three of the four items are things the app
+   does NOT do, and ticking an absence reads as a feature list. */
+.nots li::before {
+  content: "—"; position: absolute; left: 0; color: var(--torch); font-weight: 700;
+}
 
 /* ── sections ───────────────────────────────────────── */
 section { padding: var(--step) 0; }
