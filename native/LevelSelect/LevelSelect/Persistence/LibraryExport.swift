@@ -196,6 +196,7 @@ enum LibraryExport {
                 c["platform"] = event.platform
                 c["notes"] = event.notes
                 c["datePrecision"] = event.datePrecision
+                c["playthroughID"] = event.playthrough?.id.uuidString
                 return c
             }
 

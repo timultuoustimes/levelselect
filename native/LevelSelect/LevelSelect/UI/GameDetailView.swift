@@ -305,16 +305,31 @@ struct GameDetailView: View {
         let layout = typeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
             : AnyLayout(HStackLayout(spacing: 10))
+        let activeFinished = game.activePlaythrough?.isFinished == true
         return layout {
             Menu {
+                // A finished run shouldn't be the path of least resistance:
+                // when the current one is done, starting fresh leads.
+                if activeFinished {
+                    Button {
+                        playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
+                        namingNewPlaythrough = true
+                    } label: {
+                        Label("New Playthrough…", systemImage: "plus")
+                    }
+                    Divider()
+                }
                 ForEach(game.livePlaythroughs) { pt in
                     Button {
                         repo.setActivePlaythrough(pt, for: game)
                     } label: {
+                        let title = pt.isFinished ? "\(pt.name) — finished" : pt.name
                         if pt.id == game.activePlaythrough?.id {
-                            Label(pt.name, systemImage: "checkmark")
+                            Label(title, systemImage: "checkmark")
+                        } else if pt.isFinished {
+                            Label(title, systemImage: "flag.checkered")
                         } else {
-                            Text(pt.name)
+                            Text(title)
                         }
                     }
                 }
@@ -342,6 +357,11 @@ struct GameDetailView: View {
                         .font(.caption)
                     Text(game.activePlaythrough?.name ?? "Playthrough")
                         .font(.subheadline.weight(.semibold))
+                    if activeFinished {
+                        Image(systemName: "flag.checkered")
+                            .font(.caption2)
+                            .accessibilityLabel("Finished")
+                    }
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.caption2)
                         .foregroundStyle(.secondary)

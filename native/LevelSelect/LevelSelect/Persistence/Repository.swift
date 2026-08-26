@@ -1966,11 +1966,13 @@ struct Repository {
         precision: String? = nil,
         platform: String? = nil,
         customLabel: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        playthrough: Playthrough? = nil
     ) -> CompletionEvent {
         let event = CompletionEvent(date: date, label: label, customLabel: customLabel)
         context.insert(event)
         event.game = game
+        event.playthrough = playthrough
         event.datePrecision = precision
         event.platform = platform
         event.notes = notes

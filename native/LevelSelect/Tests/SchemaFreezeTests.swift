@@ -137,10 +137,10 @@ struct SchemaFreezeTests {
     /// deliberately — and promoting the CloudKit schema before shipping.
     @Test func schemaV2ShapeIsPinned() {
         let expected = [
-            // datePrecision added 2026-08-26 (fuzzy beaten dates). Seed +
-            // promote the CloudKit schema before shipping a build that
-            // writes it.
-            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,revision,updatedAt,userID",
+            // datePrecision + playthrough added 2026-08-26 (fuzzy beaten
+            // dates; the run a beaten moment capped). One seed-and-promote
+            // covers both before any build that writes them ships.
+            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playthrough,revision,updatedAt,userID",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             "Game: addedAt,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
@@ -148,7 +148,7 @@ struct SchemaFreezeTests {
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
             "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
             "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
-            "Playthrough: createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
+            "Playthrough: completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playthrough,revision,startedAt,templateID,updatedAt,userID",
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",

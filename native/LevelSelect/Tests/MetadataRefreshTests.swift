@@ -973,3 +973,56 @@ struct CompletionEventTests {
         #expect(restored.label == .cleared)
     }
 }
+
+@Suite("Playthrough finish links")
+struct PlaythroughFinishTests {
+
+    @Test("A beaten event finishes its run; deleting it un-finishes with no cleanup")
+    @MainActor
+    func derivedFinish() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Hades")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        #expect(pt.isFinished == false)
+
+        let event = repo.addCompletion(to: game, label: .cleared, playthrough: pt)
+        #expect(pt.isFinished == true)
+
+        repo.removeCompletion(event)
+        #expect(pt.isFinished == false)
+    }
+
+    @Test("A historical beat links to no run, and finishes none")
+    @MainActor
+    func historicalBeatIsGameOnly() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Skyrim")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let event = repo.addCompletion(
+            to: game, label: .cleared,
+            date: Calendar.current.date(from: DateComponents(year: 2011, month: 1, day: 1))!,
+            precision: "year")
+        #expect(event.playthrough == nil)
+        #expect(pt.isFinished == false)
+    }
+
+    @Test("The playthrough link survives the export/import round trip")
+    @MainActor
+    func linkRoundTrip() throws {
+        let source = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(source.mainContext)
+        let game = repo.addGame(name: "Citizen Sleeper")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.addCompletion(to: game, label: .cleared, playthrough: pt)
+        let data = try LibraryExport.makeJSON(context: source.mainContext)
+
+        let dest = LevelSelectStore.makeContainer(inMemory: true)
+        _ = try LibraryImport.apply(data: data, context: dest.mainContext)
+        let games = try dest.mainContext.fetch(FetchDescriptor<Game>())
+        let restored = try #require(games.first?.completionEvents?.first)
+        #expect(restored.playthrough?.id == pt.id)
+        #expect(restored.playthrough?.isFinished == true)
+    }
+}

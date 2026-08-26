@@ -20,12 +20,23 @@ final class Playthrough {
 
     var game: Game?
 
+    /// Beaten and no longer the run you're actively working: true when a
+    /// live completion event points here. Derived, so deleting the event
+    /// un-finishes the run with no cleanup and no flags to reconcile.
+    var isFinished: Bool {
+        (completionEvents ?? []).contains { $0.deletedAt == nil }
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \Session.playthrough)
     var sessions: [Session]?
     @Relationship(deleteRule: .cascade, inverse: \TrackerStateRecord.playthrough)
     var trackerStates: [TrackerStateRecord]?
     @Relationship(deleteRule: .cascade, inverse: \Run.playthrough)
     var runs: [Run]?
+    /// Nullify, not cascade: deleting a playthrough must not erase the fact
+    /// you beat the game — the event survives, pointed at the game alone.
+    @Relationship(deleteRule: .nullify, inverse: \CompletionEvent.playthrough)
+    var completionEvents: [CompletionEvent]?
 
     /// Active session = the running session, or a paused one when nothing is
     /// running (no separate stored flag).

@@ -281,6 +281,12 @@ enum LibraryImport {
                 let event = makeCompletion(cDict, id: cID)
                 context.insert(event)
                 event.game = game
+                // Relink to its playthrough — restored this pass or already
+                // present, either way it's reachable through the game.
+                if let ptID = uuid(cDict["playthroughID"]) {
+                    event.playthrough = ptsByID[ptID]
+                        ?? (game.playthroughs ?? []).first { $0.id == ptID }
+                }
                 outcome.created["completions", default: 0] += 1
             }
             for vDict in (gameDict["videos"] as? [[String: Any]]) ?? [] {

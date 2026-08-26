@@ -154,8 +154,10 @@ enum CloudKitSchemaSeeder {
         completion.customLabel = marker
         completion.platform = marker
         completion.notes = marker
+        completion.datePrecision = "year"
         context.insert(completion)
         completion.game = game
+        completion.playthrough = pt
 
         // --- GameVideo ---
         let video = GameVideo(kind: .playlist, urlString: marker, youtubeID: marker, title: marker)

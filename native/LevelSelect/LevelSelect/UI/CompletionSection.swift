@@ -25,6 +25,11 @@ struct CompletionSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if events.count > 1 {
+                Text("Beaten \(events.count) times")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
             ForEach(events, id: \.id) { event in
                 HStack(spacing: 8) {
                     Image(systemName: event.label == .hundredPercent
@@ -37,6 +42,12 @@ struct CompletionSection: View {
                         Text("· \(PlatformShort.name(platform))")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                    if let run = event.playthrough {
+                        Text("· \(run.name)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
                     }
                     Spacer()
                     Text(event.dateText)
@@ -92,6 +103,8 @@ struct MarkCompletionSheet: View {
     @State private var month = Calendar.current.component(.month, from: .now)
     @State private var platform = ""
     @State private var notes = ""
+    /// nil = "just the game" — a historical beat no tracked run ever saw.
+    @State private var playthroughID: UUID?
 
     private var repo: Repository { Repository(context) }
 
@@ -151,6 +164,14 @@ struct MarkCompletionSheet: View {
                 }
 
                 Section("Details (optional)") {
+                    if !game.livePlaythroughs.isEmpty {
+                        Picker("Playthrough", selection: $playthroughID) {
+                            Text("Just the game").tag(UUID?.none)
+                            ForEach(game.livePlaythroughs) { pt in
+                                Text(pt.name).tag(UUID?.some(pt.id))
+                            }
+                        }
+                    }
                     if !game.platforms.isEmpty {
                         Picker("Platform", selection: $platform) {
                             Text("Not said").tag("")
@@ -179,6 +200,11 @@ struct MarkCompletionSheet: View {
                 if platform.isEmpty {
                     platform = PlatformPreference.owned(game.platforms) ?? ""
                 }
+                // Today's credits almost always cap the run you're on;
+                // "Just the game" stays one tap away for history.
+                if playthroughID == nil {
+                    playthroughID = game.activePlaythrough?.id
+                }
             }
         }
     }
@@ -200,7 +226,8 @@ struct MarkCompletionSheet: View {
             precision: precision == "day" ? nil : precision,
             platform: platform.isEmpty ? nil : platform,
             customLabel: label == .custom ? customLabel : nil,
-            notes: notes.isEmpty ? nil : notes)
+            notes: notes.isEmpty ? nil : notes,
+            playthrough: game.livePlaythroughs.first { $0.id == playthroughID })
         dismiss()
     }
 }

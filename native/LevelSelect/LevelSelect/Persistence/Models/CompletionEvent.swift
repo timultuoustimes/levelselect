@@ -26,6 +26,12 @@ final class CompletionEvent {
     var datePrecision: String?
 
     var game: Game?
+    /// The run this moment capped, when there was one. Optional on purpose:
+    /// a 2011 clear logged from memory belongs to the game, not to any
+    /// playthrough the app ever saw. "Finished" on a playthrough is DERIVED
+    /// from these — a live beaten event pointing at it — never stored as a
+    /// second flag that could disagree.
+    var playthrough: Playthrough?
 
     init(
         id: UUID = UUID(),
