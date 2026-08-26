@@ -15,9 +15,16 @@ struct LevelSelectWidgets: WidgetBundle {
         CompletionRingWidget()
         WeekStatWidget()
         RunTrackerWidget()
+        HeatmapWidget()
+        FinishedShareWidget()
+        LauncherWidget()
         LockRectangularWidget()
         LockInlineWidget()
         CompletionCircularWidget()
+        ShuffleLockWidget()
+        NextUpLockWidget()
+        WeekGaugeLockWidget()
+        StreakLockWidget()
         SessionLiveActivity()
     }
 }

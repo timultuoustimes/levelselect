@@ -76,10 +76,45 @@ struct StatusPill: View {
 // MARK: - Small
 
 struct ContinuePlayingSmall: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let snapshot: WidgetSnapshot?
 
     var body: some View {
-        if let snapshot {
+        if let snapshot, renderingMode == .vibrant {
+            // Lock Screen (vibrant): art flattens into wallpaper-tinted fog
+            // with no opt-out, so the layout leads with what vibrant does
+            // well — a bold control, the name, the numbers.
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Image(systemName: snapshot.isPlaying ? "waveform" : "play.circle.fill")
+                        .font(.system(size: 26, weight: .bold))
+                    Spacer()
+                }
+                Spacer(minLength: 0)
+                Text(snapshot.gameName)
+                    .font(.system(size: 14, weight: .bold))
+                    .lineLimit(2)
+                HStack(spacing: 4) {
+                    if snapshot.playtimeSeconds > 0 {
+                        Text(lsPlaytime(snapshot.playtimeSeconds))
+                    }
+                    if snapshot.completionTotal > 0 {
+                        Text("· \(Int((Double(snapshot.completionDone) / Double(max(1, snapshot.completionTotal)) * 100).rounded()))%")
+                    }
+                }
+                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .opacity(0.7)
+                if let objective = snapshot.nextObjective {
+                    HStack(spacing: 5) {
+                        Image(systemName: "circle").font(.system(size: 10, weight: .semibold))
+                        Text(objective).font(.system(size: 10)).lineLimit(1)
+                    }
+                    .opacity(0.85)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .widgetURL(WidgetShared.gameURL(snapshot.gameID))
+        } else if let snapshot {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .top, spacing: 8) {
                     // Whole cover, contained (matches the medium's poster).

@@ -3,17 +3,49 @@ import SwiftUI
 
 struct RunTrackerView: View {
     @Environment(\.widgetFamily) private var family
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let snapshot: WidgetSnapshot?
 
     var body: some View {
         if let run = snapshot?.runGame {
-            switch family {
-            case .systemMedium: medium(run)
-            default: small(run)
+            if renderingMode == .vibrant {
+                vibrant(run)
+            } else {
+                switch family {
+                case .systemMedium: medium(run)
+                default: small(run)
+                }
             }
         } else {
             empty
         }
+    }
+
+    /// Lock Screen: the record as type, the last outcomes as segments — no
+    /// cover to lose to the wallpaper tint.
+    private func vibrant(_ run: WidgetRunGame) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(run.name.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .opacity(0.7)
+                .lineLimit(1)
+            Text("\(Int((run.winRate * 100).rounded()))%")
+                .font(.system(size: 28, weight: .heavy).monospacedDigit())
+            Text("\(run.wins)W · \(run.losses)L")
+                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                .opacity(0.7)
+            Spacer(minLength: 0)
+            HStack(spacing: 3) {
+                let decided = max(run.wins + run.losses, 1)
+                ForEach(0..<min(decided, 7), id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 2)
+                        .opacity(index < run.wins ? 1 : 0.3)
+                        .frame(height: 5)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .widgetURL(WidgetShared.gameURL(run.id))
     }
 
     // MARK: Small

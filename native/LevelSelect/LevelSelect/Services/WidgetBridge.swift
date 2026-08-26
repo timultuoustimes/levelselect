@@ -118,6 +118,20 @@ enum WidgetBridge {
             }
         let libraryPlatforms = Array(Set(shufflePool.map(\.platform))).sorted()
 
+        // Daily rollup (16 weeks), the 4-week pace, finished share, and the
+        // collections the launcher widget can point at.
+        let daily = dailyStats(context: context, days: 112)
+        let priorFourWeeks = daily.dropLast(7).suffix(28)
+        let weeklyAverage = priorFourWeeks.isEmpty ? 0
+            : priorFourWeeks.reduce(0, +) * 60 / 4
+        let completedCount = games.filter { $0.status == .completed }.count
+        let collectionDescriptor = FetchDescriptor<GameCollection>(
+            predicate: #Predicate { $0.deletedAt == nil })
+        let collectionRefs: [WidgetCollectionRef] = ((try? context.fetch(collectionDescriptor)) ?? [])
+            .map { WidgetCollectionRef(id: $0.id.uuidString, name: $0.name,
+                                       count: gamesCount(in: $0)) }
+            .sorted { $0.name < $1.name }
+
         // Current shuffle picks (any widget instance) get real covers.
         if let defaults = UserDefaults(suiteName: WidgetShared.appGroup),
            let picks = defaults.dictionary(forKey: "shufflePicks") as? [String: String] {
@@ -148,7 +162,12 @@ enum WidgetBridge {
             gamesPlayedThisWeek: gamesThisWeek,
             runGame: runGame,
             shufflePool: shufflePool,
-            libraryPlatforms: libraryPlatforms
+            libraryPlatforms: libraryPlatforms,
+            dailyMinutes: daily,
+            weeklyAverageSeconds: weeklyAverage,
+            completedCount: completedCount,
+            libraryCount: games.count,
+            collections: collectionRefs
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }
@@ -191,6 +210,31 @@ enum WidgetBridge {
 
     /// Playtime per day for the last 7 days (index 0 = 6 days ago, 6 = today)
     /// plus the count of distinct games played in that window.
+    /// Minutes per day for the trailing `days` window, oldest → newest.
+    private static func dailyStats(context: ModelContext, days: Int) -> [Double] {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: .now)
+        guard let windowStart = cal.date(byAdding: .day, value: -(days - 1), to: today)
+        else { return [] }
+        let descriptor = FetchDescriptor<Session>(
+            predicate: #Predicate { $0.deletedAt == nil && $0.startDate >= windowStart })
+        guard let sessions = try? context.fetch(descriptor) else {
+            return Array(repeating: 0, count: days)
+        }
+        var buckets = Array(repeating: 0.0, count: days)
+        for s in sessions {
+            let day = cal.startOfDay(for: s.startDate)
+            guard let offset = cal.dateComponents([.day], from: day, to: today).day,
+                  offset >= 0, offset < days else { continue }
+            buckets[days - 1 - offset] += s.elapsed() / 60
+        }
+        return buckets
+    }
+
+    private static func gamesCount(in collection: GameCollection) -> Int {
+        collection.gameIDs.count
+    }
+
     private static func weeklyStats(context: ModelContext) -> ([Double], Int) {
         let cal = Calendar.current
         let today = cal.startOfDay(for: .now)

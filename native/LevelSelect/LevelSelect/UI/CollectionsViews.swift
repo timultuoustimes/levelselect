@@ -425,3 +425,21 @@ struct CollectionMembersPicker: View {
         }
     }
 }
+
+/// Resolve a CollectionRoute to its detail view — the launcher widget's
+/// landing. LibraryView resolves inline against its own query; this is the
+/// same resolution for stacks (Home) that don't hold one.
+struct CollectionRouteView: View {
+    let route: CollectionRoute
+    @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil })
+    private var collections: [GameCollection]
+
+    var body: some View {
+        if let collection = collections.first(where: { $0.id == route.id }) {
+            CollectionDetailView(collection: collection)
+        } else {
+            ContentUnavailableView("Collection not found",
+                                   systemImage: "square.stack.3d.up.slash")
+        }
+    }
+}

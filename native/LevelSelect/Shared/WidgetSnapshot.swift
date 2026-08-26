@@ -127,6 +127,17 @@ struct WidgetSnapshot: Codable, Hashable {
     /// The shuffle pool and the platform list its config picker offers.
     var shufflePool: [WidgetPoolGame] = []
     var libraryPlatforms: [String] = []
+    /// Minutes played per day, oldest → newest, today last (16 weeks' worth).
+    /// Feeds the heatmap widget, the streak, and the week gauge.
+    var dailyMinutes: [Double] = []
+    /// Average seconds per week over the four *finished* weeks before this
+    /// one — the gauge's "my own pace" reference.
+    var weeklyAverageSeconds: Double = 0
+    /// Library-wide finished share, for the stats tile.
+    var completedCount: Int = 0
+    var libraryCount: Int = 0
+    /// Collections, for the launcher widget's picker.
+    var collections: [WidgetCollectionRef] = []
 
     var hasActiveSession: Bool { isPlaying || isPaused }
 
@@ -170,7 +181,10 @@ struct WidgetSnapshot: Codable, Hashable {
         activeSessionID: String?, generatedAt: Date,
         objectives: [WidgetObjective], nowPlaying: [WidgetShelfGame],
         weeklySeconds: [Double], gamesPlayedThisWeek: Int, runGame: WidgetRunGame?,
-        shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = []
+        shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = [],
+        dailyMinutes: [Double] = [], weeklyAverageSeconds: Double = 0,
+        completedCount: Int = 0, libraryCount: Int = 0,
+        collections: [WidgetCollectionRef] = []
     ) {
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
@@ -181,6 +195,9 @@ struct WidgetSnapshot: Codable, Hashable {
         self.generatedAt = generatedAt
         self.objectives = objectives; self.nowPlaying = nowPlaying
         self.shufflePool = shufflePool; self.libraryPlatforms = libraryPlatforms
+        self.dailyMinutes = dailyMinutes; self.weeklyAverageSeconds = weeklyAverageSeconds
+        self.completedCount = completedCount; self.libraryCount = libraryCount
+        self.collections = collections
         self.weeklySeconds = weeklySeconds; self.gamesPlayedThisWeek = gamesPlayedThisWeek
         self.runGame = runGame
     }
@@ -210,5 +227,43 @@ struct WidgetSnapshot: Codable, Hashable {
         runGame = try c.decodeIfPresent(WidgetRunGame.self, forKey: .runGame)
         shufflePool = try c.decodeIfPresent([WidgetPoolGame].self, forKey: .shufflePool) ?? []
         libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
+        dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
+        weeklyAverageSeconds = try c.decodeIfPresent(Double.self, forKey: .weeklyAverageSeconds) ?? 0
+        completedCount = try c.decodeIfPresent(Int.self, forKey: .completedCount) ?? 0
+        libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount) ?? 0
+        collections = try c.decodeIfPresent([WidgetCollectionRef].self, forKey: .collections) ?? []
+    }
+}
+
+
+/// A collection the launcher widget can point at.
+struct WidgetCollectionRef: Codable, Hashable, Identifiable {
+    var id: String
+    var name: String
+    var count: Int
+}
+
+/// Pure math shared by the streak, gauge, and heatmap surfaces — pure so the
+/// tests need no store and the widgets and app can't drift apart.
+enum WidgetMath {
+    /// Consecutive play days counting back from today. A zero TODAY doesn't
+    /// break the streak — the day isn't over — but a zero before that does.
+    static func streak(dailyMinutes: [Double]) -> Int {
+        guard !dailyMinutes.isEmpty else { return 0 }
+        var days = dailyMinutes
+        let today = days.removeLast()
+        var run = today > 0 ? 1 : 0
+        for minutes in days.reversed() {
+            guard minutes > 0 else { break }
+            run += 1
+        }
+        return run
+    }
+
+    /// Gauge position: this week against your own four-week pace, clamped so
+    /// a monster week pins the needle rather than wrapping it.
+    static func gaugeValue(thisWeekSeconds: Double, averageSeconds: Double) -> Double {
+        guard averageSeconds > 0 else { return thisWeekSeconds > 0 ? 1 : 0 }
+        return min(thisWeekSeconds / averageSeconds, 1.0)
     }
 }

@@ -153,7 +153,55 @@ struct RootView: View {
         case "library": nav.go(to: .library)
         case "wishlist": nav.go(to: .wishlist)
         case "stats": nav.go(to: .stats)
+        case "shuffle":
+            // The lock-screen die: every tap is a fresh roll, made HERE at
+            // launch — a widget URL is baked per timeline entry, so rolling
+            // app-side is the only way a tap is genuinely random each time.
+            rollShuffle(from: url)
+        case "status":
+            if let raw = url.pathComponents.last,
+               let status = GameStatus(rawValue: raw) {
+                nav.push(status)
+            }
+        case "platform":
+            if let name = url.pathComponents.last?.removingPercentEncoding {
+                nav.push(PlatformRoute(platform: name))
+            }
+        case "collection":
+            if let last = url.pathComponents.last, let id = UUID(uuidString: last) {
+                nav.push(CollectionRoute(id: id))
+            }
         default: nav.go(to: .home)
+        }
+    }
+
+    /// Pick a random game matching the die's filters and open it. Same
+    /// semantics as the Home Screen shuffler's pool: wishlist and abandoned
+    /// never qualify, completed only when the toggle says so.
+    private func rollShuffle(from url: URL) {
+        let params = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems ?? []
+        func value(_ name: String) -> String? {
+            params.first { $0.name == name }?.value
+        }
+        let statuses: Set<String> = Set((value("s") ?? "playing,paused,queued,backlog")
+            .split(separator: ",").map(String.init))
+        let platform = value("p")
+        let includeCompleted = value("c") == "1"
+
+        let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil })
+        let games = (try? context.fetch(descriptor)) ?? []
+        let candidates = games.filter { g in
+            let statusOK = statuses.contains(g.status.rawValue)
+                || (includeCompleted && g.status == .completed)
+            let platformOK = platform == nil
+                || PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other") == platform
+            return statusOK && platformOK && g.status != .abandoned && g.status != .wishlist
+        }
+        if let pick = candidates.randomElement() {
+            nav.open(gameID: pick.id)
+        } else {
+            nav.go(to: .library)
         }
     }
 }
@@ -305,6 +353,7 @@ struct HomeTab: View {
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: PlatformRoute.self) { PlatformGamesView(platform: $0.platform) }
+            .navigationDestination(for: CollectionRoute.self) { CollectionRouteView(route: $0) }
             .toolbar {
                 #if !os(macOS)
                 ToolbarItem(placement: .principal) {
@@ -357,6 +406,7 @@ struct HomeTab: View {
         }
         .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingContinue) { _, _ in consumePendingNavigation() }
+        .onChange(of: nav.pendingRoute) { _, _ in consumePendingNavigation() }
     }
 
     /// Push a game the navigator asked for (deep link or App Intent).
@@ -375,6 +425,14 @@ struct HomeTab: View {
                 path = NavigationPath()
                 path.append(game)
             }
+        }
+        if let route = nav.pendingRoute {
+            nav.pendingRoute = nil
+            path = NavigationPath()
+            // Launcher deep links: status shelf, system shelf, or collection.
+            if let status = route as? GameStatus { path.append(status) }
+            else if let platform = route as? PlatformRoute { path.append(platform) }
+            else if let collection = route as? CollectionRoute { path.append(collection) }
         }
     }
 

@@ -326,3 +326,29 @@ struct StatsCardOrderTests {
         #expect(resolved.first == .overview)
     }
 }
+
+/// The lock-screen math: streaks and the pace gauge.
+struct WidgetMathTests {
+    @Test func streakCountsBackFromToday() {
+        #expect(WidgetMath.streak(dailyMinutes: [0, 30, 45, 20]) == 3)
+    }
+
+    /// Today at zero doesn't break the streak — the day isn't over.
+    @Test func zeroTodayKeepsYesterdaysStreak() {
+        #expect(WidgetMath.streak(dailyMinutes: [30, 45, 0]) == 2)
+    }
+
+    @Test func gapBeforeYesterdayEndsIt() {
+        #expect(WidgetMath.streak(dailyMinutes: [30, 0, 45, 0]) == 1)
+        #expect(WidgetMath.streak(dailyMinutes: [0, 0]) == 0)
+        #expect(WidgetMath.streak(dailyMinutes: []) == 0)
+    }
+
+    @Test func gaugeMeasuresAgainstOwnPaceAndClamps() {
+        #expect(WidgetMath.gaugeValue(thisWeekSeconds: 3600, averageSeconds: 7200) == 0.5)
+        #expect(WidgetMath.gaugeValue(thisWeekSeconds: 9000, averageSeconds: 3600) == 1.0)
+        // No history yet: any play pins the gauge, none zeroes it.
+        #expect(WidgetMath.gaugeValue(thisWeekSeconds: 60, averageSeconds: 0) == 1)
+        #expect(WidgetMath.gaugeValue(thisWeekSeconds: 0, averageSeconds: 0) == 0)
+    }
+}

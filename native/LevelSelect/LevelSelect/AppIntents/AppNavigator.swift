@@ -23,6 +23,15 @@ final class AppNavigator {
     /// Request to open the current "continue playing" game.
     var pendingContinue = false
 
+    /// A route value to push onto the Home stack (StatusListView,
+    /// PlatformGamesView, CollectionDetailView…) — consumed by HomeTab.
+    var pendingRoute: AnyHashable?
+
+    func push(_ route: AnyHashable) {
+        selectedTab = .home
+        pendingRoute = route
+    }
+
     func open(gameID: UUID) {
         selectedTab = .home
         pendingGameID = gameID
