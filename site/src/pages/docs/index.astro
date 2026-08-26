@@ -36,16 +36,16 @@ const steps = [
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
-    <ol class="steps">
+    <ol class="guide-steps">
       {steps.map((s) => (
-        <li class="step">
-          <span class="step__n" aria-hidden="true"></span>
-          <div class="step__body">
-            <b class="step__t">{s.t}</b>
-            <span class="step__d">{s.d}</span>
-            {s.link && <a class="step__link" href={s.link.href}>{s.link.label} &rarr;</a>}
+        <li class="guide-step">
+          <span class="guide-step__n" aria-hidden="true"></span>
+          <div class="guide-step__body">
+            <b class="guide-step__t">{s.t}</b>
+            <span class="guide-step__d">{s.d}</span>
+            {s.link && <a class="guide-step__link" href={s.link.href}>{s.link.label} &rarr;</a>}
           </div>
-          <span class="step__time">{s.time}</span>
+          <span class="guide-step__time">{s.time}</span>
         </li>
       ))}
     </ol>
@@ -146,15 +146,15 @@ const steps = [
   }
   .lede { font-size: 1.05rem; color: var(--ink); }
 
-  .steps { counter-reset: step; list-style: none; padding: 0; margin: 1.6rem 0 0; display: flex; flex-direction: column; gap: .6rem; }
-  .step {
+  .guide-steps { counter-reset: guide-step; list-style: none; padding: 0; margin: 1.6rem 0 0; display: flex; flex-direction: column; gap: .6rem; }
+  .guide-step {
     display: flex; gap: .8rem; align-items: flex-start;
     border: 1px solid var(--line); border-radius: 12px;
     background: rgba(255, 255, 255, .045);
     padding: .85rem .95rem;
   }
-  .step__n {
-    counter-increment: step;
+  .guide-step__n {
+    counter-increment: guide-step;
     width: 1.7rem; height: 1.7rem; flex: none;
     display: grid; place-items: center; border-radius: 50%;
     background: rgba(148, 92, 250, .18);
@@ -163,17 +163,17 @@ const steps = [
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: .78rem; font-weight: 700;
   }
-  .step__n::before { content: counter(step); }
-  .step__body { min-width: 0; }
-  .step__t { display: block; font-weight: 650; }
-  .step__d { display: block; color: var(--muted); font-size: .93rem; margin-top: .15rem; }
-  .step__link { display: inline-block; font-size: .88rem; margin-top: .35rem; }
-  .step__time {
+  .guide-step__n::before { content: counter(guide-step); }
+  .guide-step__body { min-width: 0; }
+  .guide-step__t { display: block; font-weight: 650; }
+  .guide-step__d { display: block; color: var(--muted); font-size: .93rem; margin-top: .15rem; }
+  .guide-step__link { display: inline-block; font-size: .88rem; margin-top: .35rem; }
+  .guide-step__time {
     margin-left: auto; flex: none; white-space: nowrap;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     font-size: .72rem; color: var(--muted);
   }
-  @media (max-width: 520px) { .step__time { display: none; } }
+  @media (max-width: 520px) { .guide-step__time { display: none; } }
 
   .divider { display: flex; align-items: center; gap: .8rem; margin: 2.4rem 0 .4rem; }
   .divider span {
