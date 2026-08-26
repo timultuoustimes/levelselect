@@ -17,14 +17,29 @@ import SwiftUI
 /// window of disagreement something people can actually see, by dragging
 /// through it. One source of truth removes it.
 enum StageLayout {
-    /// Where the stage earns its keep. 852 is a standard iPhone's landscape
-    /// width, so every iPhone from that size up — and every unfolded phone
-    /// wide enough to deserve it — gets the split; smaller windows keep the
-    /// single column. Tim's call, made by looking at the panes: 852 gives the
-    /// tracker 358pt beside a 494pt page, which reads.
-    static let minimumWidth: CGFloat = 852
+    /// Where the stage earns its keep, in the units this actually measures:
+    /// **usable** width, safe areas already subtracted.
+    ///
+    /// That distinction cost a round trip. Tim asked for 852 — a standard
+    /// iPhone's landscape width — but a phone in landscape spends ~124pt of
+    /// that on the notch insets, so a 956pt Pro Max reports ~832 usable and a
+    /// 852pt iPhone reports ~728. A threshold of 852 quietly excluded every
+    /// phone it was chosen to include.
+    ///
+    /// 720 is the same intent stated in the right units: it's where the
+    /// tracker pane (42% of the width) clears 300pt, which a phone in
+    /// landscape manages and a phone in portrait never does.
+    static let minimumWidth: CGFloat = 720
 
     static func fits(_ size: CGSize) -> Bool {
-        size.width >= minimumWidth && size.width > size.height
+        #if DEBUG
+        // Simulators can't be rotated from the command line, and the stage
+        // only exists in landscape — so a debug default lets it be exercised
+        // in portrait while testing. Never true in a shipping build.
+        if UserDefaults.standard.bool(forKey: "ls.forceStage") {
+            return size.width >= 400
+        }
+        #endif
+        return size.width >= minimumWidth && size.width > size.height
     }
 }

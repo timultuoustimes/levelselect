@@ -23,6 +23,11 @@ struct GameDetailView: View {
     /// The page's own container size, read without becoming a layout
     /// container — see the note on `body`.
     @State private var containerSize: CGSize = .zero
+    /// How much of the bottom the tab bar occupies, latched from the page's
+    /// own geometry. Latched rather than tracked because the stage below
+    /// ignores that inset to reach the screen edge, and a value that fed back
+    /// into its own measurement would oscillate.
+    @State private var tabBarInset: CGFloat = 0
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
 
@@ -67,6 +72,11 @@ struct GameDetailView: View {
             }
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
+        // Measured here, at page level, where the inset is still reported —
+        // the stage below ignores it to reach the screen edge.
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { newValue in
+            if newValue > 0 { tabBarInset = newValue }
+        }
             // Watching `pagePlaying != nil` alone missed the rotation case
             // entirely: turn an iPad to landscape with a video ALREADY
             // playing and that boolean never changes, so `stage` stayed at 1
@@ -500,6 +510,16 @@ struct GameDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(.spring(response: 0.5, dampingFraction: 0.85), value: stage)
         .clipped()
+        // Both panes should run to the bottom of the screen and let content
+        // pass under the floating tab bar, the way the single-column page
+        // already does. Without this the stage is handed a frame that stops
+        // 83pt short, so both panes end in a hard edge with the page
+        // background showing beneath them — a black band on iPad, a colour
+        // band on iPhone. Reaching under the bar means the content needs that
+        // inset back, or the last row of whichever pane you scrolled would sit
+        // beneath it, unreachable.
+        .contentMargins(.bottom, tabBarInset, for: .scrollContent)
+        .ignoresSafeArea(.container, edges: .bottom)
     }
 
     private var trackerPanel: some View {

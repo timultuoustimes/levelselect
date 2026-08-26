@@ -1051,21 +1051,22 @@ struct StageLayoutTests {
         // Unfolded and wider than tall — the stage earns its keep.
         #expect(StageLayout.fits(CGSize(width: 1024, height: 820)))
         // Right at the boundary.
-        #expect(StageLayout.fits(CGSize(width: 852, height: 700)))
-        #expect(!StageLayout.fits(CGSize(width: 851, height: 700)))
+        #expect(StageLayout.fits(CGSize(width: 720, height: 700)))
+        #expect(!StageLayout.fits(CGSize(width: 719, height: 700)))
         // The sliver a resizable window can be dragged to.
         #expect(!StageLayout.fits(CGSize(width: 180, height: 960)))
     }
 
-    @Test("852 is the line: a standard iPhone's landscape width splits, narrower doesn't")
+    @Test("Phones in landscape split — measured in USABLE width, not device width")
     func iPhoneLandscapeSplits() {
-        // iPhone 17 / 16 landscape — Tim's call: it can carry the split.
-        #expect(StageLayout.fits(CGSize(width: 852, height: 393)))
-        // Pro Max landscape, comfortably.
-        #expect(StageLayout.fits(CGSize(width: 956, height: 440)))
-        // A smaller phone in landscape stays one column.
-        #expect(!StageLayout.fits(CGSize(width: 736, height: 414)))
+        // The sizes a GeometryReader actually reports, with the landscape
+        // notch insets already taken out. King Kai (Pro Max) reporting ~832
+        // is the case that caught the units bug.
+        #expect(StageLayout.fits(CGSize(width: 832, height: 390)))   // Pro Max landscape
+        #expect(StageLayout.fits(CGSize(width: 728, height: 340)))   // standard iPhone landscape
         // Portrait phones never split, however tall.
-        #expect(!StageLayout.fits(CGSize(width: 440, height: 956)))
+        #expect(!StageLayout.fits(CGSize(width: 402, height: 830)))
+        // The sliver a resizable window can be dragged to.
+        #expect(!StageLayout.fits(CGSize(width: 240, height: 900)))
     }
 }
