@@ -17,6 +17,7 @@ import SwiftData
 enum StatsCard: String, CaseIterable, Identifiable {
     case overview, recent, ratings, library, monthly, streak
     case mostPlayed, systems, genres, series, tags, years, completions
+    case raWall
 
     var id: String { rawValue }
 
@@ -35,6 +36,7 @@ enum StatsCard: String, CaseIterable, Identifiable {
         case .tags:        "Tags"
         case .years:       "By Release Year"
         case .completions: "Completions"
+        case .raWall:      "RA Masteries"
         }
     }
 
@@ -63,6 +65,8 @@ struct StatsTab: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
     @Environment(\.dynamicTypeSize) private var typeSize
+    @State private var raAwards: [RetroAchievementsService.Award] = []
+    @State private var raBrowser: DekuLinkTarget?
 
     /// Which decades are open in the By Release Year card.
     @State private var expandedDecades: Set<Int> = []
@@ -105,6 +109,7 @@ struct StatsTab: View {
                         case .tags:        sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
                         case .years:       releaseYearsCard
                         case .completions: if !completionsByYear.isEmpty { completionsCard }
+                        case .raWall:      if !raAwards.isEmpty { raWallCard }
                         }
                     }
                     if visible.isEmpty {
@@ -131,6 +136,20 @@ struct StatsTab: View {
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
+            .dekuBrowser(target: $raBrowser)
+            .task { await loadRAAwards() }
+        }
+    }
+
+    /// Cached wall first, then a refresh at most once a day. No account, no
+    /// card — the wall simply doesn't exist rather than nagging to connect.
+    private func loadRAAwards() async {
+        guard RACredentials.isConfigured else { return }
+        raAwards = RAAwardsCache.load()?.awards ?? []
+        guard RAAwardsCache.isStale, let credentials = RACredentials.current else { return }
+        if let fresh = try? await RetroAchievementsService.masteries(credentials: credentials) {
+            RAAwardsCache.save(fresh)
+            raAwards = fresh
         }
     }
 
@@ -366,6 +385,57 @@ struct StatsTab: View {
         let days = cells.flatMap(\.self)
         let played = days.filter { $0.minutes > 0 }.count
         return "Play heatmap, last 15 weeks: played on \(played) of \(days.count) days"
+    }
+
+    /// The trophy shelf: every set this account has mastered or completed,
+    /// wearing RA's own game icons. Gold border = hardcore mastery, RA's
+    /// distinction and RA's convention — a softcore completion never dresses
+    /// as one. Tapping an icon opens the set's page on RA.
+    private var raWallCard: some View {
+        let mastered = raAwards.filter(\.hardcore).count
+        let completed = raAwards.count - mastered
+        return VStack(alignment: .leading, spacing: 10) {
+            Label("RA Masteries", systemImage: "trophy.fill")
+                .font(.headline)
+            Text(wallSummary(mastered: mastered, completed: completed))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], spacing: 8) {
+                ForEach(raAwards, id: \.gameID) { award in
+                    Button {
+                        raBrowser = DekuLinkTarget(url: RAArt.gamePage(award.gameID))
+                    } label: {
+                        AsyncImage(url: RAArt.mediaURL(award.iconPath)) { phase in
+                            if case .success(let image) = phase {
+                                image.resizable().scaledToFill()
+                            } else {
+                                RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06))
+                            }
+                        }
+                        .frame(width: 52, height: 52)
+                        .clipShape(.rect(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(award.hardcore ? Color.yellow.opacity(0.85) : .white.opacity(0.25),
+                                          lineWidth: award.hardcore ? 2 : 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(award.title), \(award.hardcore ? "mastered" : "completed")")
+                    .accessibilityHint("Opens the set on RetroAchievements")
+                }
+            }
+            Text("Art and awards from RetroAchievements")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    private func wallSummary(mastered: Int, completed: Int) -> String {
+        var parts: [String] = []
+        if mastered > 0 { parts.append("\(mastered) mastered") }
+        if completed > 0 { parts.append("\(completed) completed") }
+        return parts.joined(separator: " · ")
     }
 
     /// Games per system, the way the library groups them — by the platform

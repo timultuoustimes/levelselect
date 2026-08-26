@@ -788,6 +788,15 @@ struct GameDetailView: View {
                         Label("IGDB", systemImage: "arrow.up.right.square")
                     }
                 }
+                if let raID = game.trackerSchema.flatMap({
+                    TrackerSchemaJSON.retroAchievementsGameID(in: $0.jsonData)
+                }) {
+                    Button {
+                        browserTarget = DekuLinkTarget(url: RAArt.gamePage(raID))
+                    } label: {
+                        Label("RetroAchievements", systemImage: "trophy.fill")
+                    }
+                }
             }
             .font(.subheadline)
             .buttonStyle(.borderless)

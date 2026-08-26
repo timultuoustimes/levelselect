@@ -12,6 +12,7 @@ struct RetroAchievementsSettings: View {
     @State private var checking = false
     @State private var error: String?
     @State private var connectedAs: String?
+    @State private var profileTarget: DekuLinkTarget?
 
     var body: some View {
         Section {
@@ -32,9 +33,23 @@ struct RetroAchievementsSettings: View {
                         error = nil
                         self.connectedAs = nil
                         username = ""; apiKey = ""
+                        // The wall is drawn from this account; keeping it
+                        // after disconnect would show someone else's trophies
+                        // to the next account.
+                        RAAwardsCache.clear()
                     }
                     .font(.caption)
                 }
+                Button {
+                    if let url = RAArt.profilePage(username: connectedAs) {
+                        profileTarget = DekuLinkTarget(url: url)
+                    }
+                } label: {
+                    Label("Open your profile", systemImage: "arrow.up.right.square")
+                }
+                // On the row, NOT the Section — a sheet on a Section becomes
+                // one per child and flickers.
+                .dekuBrowser(target: $profileTarget)
             } else {
                 TextField("RetroAchievements username", text: $username)
                     .textContentType(.username)

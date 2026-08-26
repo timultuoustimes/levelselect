@@ -41,6 +41,10 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// writing it into `metadata.points` since day one — unread until now,
     /// which is why a 635-point set reported no points at all.
     var points: Int? = nil
+    /// RA's badge id for this achievement (`metadata.badge`), when the row
+    /// arrived from an imported set. Presence is what turns the row's art on;
+    /// schemas without it render exactly as before.
+    var badge: String? = nil
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -219,7 +223,8 @@ enum TrackerSchemaJSON {
                     countTarget: (item["countTarget"] as? NSNumber)?.intValue,
                     sourceName: item["sourceName"] as? String,
                     note: item["note"] as? String,
-                    points: ((item["metadata"] as? [String: Any])?["points"] as? NSNumber)?.intValue
+                    points: ((item["metadata"] as? [String: Any])?["points"] as? NSNumber)?.intValue,
+                    badge: (item["metadata"] as? [String: Any])?["badge"] as? String
                 )
             }
             return TrackerCategoryDTO(

@@ -7,6 +7,8 @@ import SwiftData
 struct AppearanceSettingsSection: View {
     @Environment(\.modelContext) private var context
     @Query private var themeSettings: [ThemeSettings]
+    /// Device-local, not synced: it's a display preference, like stats order.
+    @AppStorage("levelselect.showRAArt") private var showRAArt = true
 
     private var settings: ThemeSettings? { themeSettings.first }
 
@@ -26,6 +28,8 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
+            Toggle("Show RetroAchievements art", isOn: $showRAArt)
+
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     ColorPicker(selection: statusBinding(status), supportsOpacity: false) {
@@ -44,7 +48,7 @@ struct AppearanceSettingsSection: View {
         } header: {
             Text("Appearance")
         } footer: {
-            Text("Colors sync to your other devices via iCloud.")
+            Text("Colors sync to your other devices via iCloud. Achievement art comes from RetroAchievements and is shown only on imported sets.")
         }
     }
 

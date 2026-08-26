@@ -31,6 +31,8 @@ struct MergeReviewPresentationState {
 /// per-playthrough state. Personal Goals are user-added items in the same
 /// schema. Everything syncs via CloudKit like the rest of the model.
 struct TrackerSectionView: View {
+    @AppStorage("levelselect.showRAArt") private var showRAArt = true
+    @State private var raBrowserTarget: DekuLinkTarget?
     let game: Game
     @Environment(\.modelContext) private var context
     @State private var hideCompleted = false
@@ -406,6 +408,7 @@ struct TrackerSectionView: View {
         .navigationDestination(isPresented: $importingAchievements) {
             RetroAchievementsImportView(game: game)
         }
+        .dekuBrowser(target: $raBrowserTarget)
         .task(id: game.id) {
             builtinAvailable = BuiltinTrackers.match(for: game) != nil
         }
@@ -939,6 +942,12 @@ struct TrackerSectionView: View {
                 }
                 .contentShape(.rect)
                 .contextMenu {
+                    if let raID = category.raGameID {
+                        Button {
+                            raBrowserTarget = DekuLinkTarget(url: RAArt.gamePage(raID))
+                        } label: { Label("View on RetroAchievements", systemImage: "arrow.up.right.square") }
+                        Divider()
+                    }
                     Button {
                         renameText = category.name
                         renaming = (category.id, nil)
@@ -1107,6 +1116,23 @@ struct TrackerSectionView: View {
             .accessibilityValue(done ? "Completed" : "Not completed")
             .accessibilityHint(hidden ? "Reveals what it is"
                                : (done ? "Marks it not completed" : "Marks it completed"))
+
+            // RA's own badge art, in RA's own states: colour when earned,
+            // their greyed "_lock" variant when not — so nothing unearned can
+            // look earned. Hidden rows show nothing; the art is a hint too.
+            if showRAArt, let badge = item.badge, !hidden {
+                AsyncImage(url: RAArt.badgeURL(badge, earned: done)) { phase in
+                    if case .success(let image) = phase {
+                        image.resizable().scaledToFit()
+                    } else {
+                        Color.clear
+                    }
+                }
+                .frame(width: 26, height: 26)
+                .clipShape(.rect(cornerRadius: 5))
+                .opacity(done ? 1 : 0.8)
+                .accessibilityHidden(true)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {

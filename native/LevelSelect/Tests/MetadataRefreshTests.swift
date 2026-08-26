@@ -827,3 +827,81 @@ struct LibraryImportTests {
         }
     }
 }
+
+// MARK: - RA art
+
+@Suite("RA art")
+struct RAArtTests {
+
+    @Test("Badge URLs: colour when earned, RA's lock variant when not")
+    func badgeURLs() {
+        #expect(RAArt.badgeURL("250341", earned: true)?.absoluteString
+                == "https://media.retroachievements.org/Badge/250341.png")
+        #expect(RAArt.badgeURL("250341", earned: false)?.absoluteString
+                == "https://media.retroachievements.org/Badge/250341_lock.png")
+        #expect(RAArt.mediaURL("/Images/067895.png")?.absoluteString
+                == "https://retroachievements.org/Images/067895.png")
+        #expect(RAArt.mediaURL(nil) == nil)
+        #expect(RAArt.gamePage(14402).absoluteString
+                == "https://retroachievements.org/game/14402")
+    }
+
+    @Test("Schema decode carries metadata.badge; its absence stays nil")
+    func schemaCarriesBadge() throws {
+        let json: [String: Any] = [
+            "schemaVersion": 1,
+            "categories": [[
+                "id": "retroachievements",
+                "name": "Achievements",
+                "raGameID": 14402,
+                "items": [
+                    ["id": "ra-1", "name": "First Blood",
+                     "metadata": ["points": 5, "raID": 1, "badge": "250341"]],
+                    ["id": "ra-2", "name": "No Badge Yet",
+                     "metadata": ["points": 10, "raID": 2]],
+                ],
+            ]],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let categories = TrackerSchemaJSON.categories(from: data)
+        #expect(categories.count == 1)
+        #expect(categories[0].items[0].badge == "250341")
+        #expect(categories[0].items[0].points == 5)
+        #expect(categories[0].items[1].badge == nil)
+    }
+
+    @Test("Award shaping: filters to masteries, prefers hardcore, keeps flags honest")
+    func awardShaping() {
+        let root: [String: Any] = [
+            "TotalAwardsCount": 4,
+            "VisibleUserAwards": [
+                // Softcore completion first, hardcore mastery of the SAME game
+                // later — one wall slot, wearing the mastery.
+                ["AwardType": "Mastery/Completion", "AwardData": 100,
+                 "AwardDataExtra": 0, "Title": "Ridge Racer",
+                 "ConsoleName": "PlayStation", "ImageIcon": "/Images/000100.png",
+                 "AwardedAt": "2024-01-01T10:00:00+00:00"],
+                ["AwardType": "Mastery/Completion", "AwardData": 100,
+                 "AwardDataExtra": 1, "Title": "Ridge Racer",
+                 "ConsoleName": "PlayStation", "ImageIcon": "/Images/000100.png",
+                 "AwardedAt": "2024-06-01T10:00:00+00:00"],
+                ["AwardType": "Mastery/Completion", "AwardData": 200,
+                 "AwardDataExtra": 0, "Title": "Pikmin",
+                 "ConsoleName": "GameCube", "ImageIcon": "/Images/000200.png",
+                 "AwardedAt": "2024-03-01T10:00:00+00:00"],
+                // Site award, not a game — never on the wall.
+                ["AwardType": "Achievement Points Yield", "AwardData": 5000,
+                 "AwardDataExtra": 0, "Title": "5000 points"],
+            ],
+        ]
+        let awards = RetroAchievementsService.shapeAwards(root)
+        #expect(awards.count == 2)
+        let ridge = awards.first { $0.gameID == 100 }
+        #expect(ridge?.hardcore == true)
+        let pikmin = awards.first { $0.gameID == 200 }
+        #expect(pikmin?.hardcore == false)
+        #expect(pikmin?.consoleName == "GameCube")
+        // Newest first: the June mastery outranks the March completion.
+        #expect(awards.first?.gameID == 100)
+    }
+}

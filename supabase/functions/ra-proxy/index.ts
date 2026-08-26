@@ -220,6 +220,7 @@ interface RAAchievement {
   Points?: number | string;
   DisplayOrder?: number | string;
   type?: string | null;
+  BadgeName?: string;
 }
 
 serve(async (req: Request) => {
@@ -322,7 +323,15 @@ serve(async (req: Request) => {
           // RA marks these itself, so this is a fact rather than the guess a
           // generated tracker makes.
           ...(a.type === 'missable' ? { missable: true } : {}),
-          metadata: { points: Number(a.Points ?? 0), raID: Number(a.ID) },
+          // The badge id, so the app can show RA's own art for each row
+          // (media.retroachievements.org/Badge/{name}.png, _lock when
+          // unearned). In metadata beside points: invisible to merge logic,
+          // preserved by item edits, ignored by older builds.
+          metadata: {
+            points: Number(a.Points ?? 0),
+            raID: Number(a.ID),
+            ...(a.BadgeName ? { badge: String(a.BadgeName) } : {}),
+          },
         }));
 
       const structuredData = {

@@ -122,6 +122,19 @@ enum RetroAchievementsService {
     /// any networking — can take these without importing the service.
     typealias Unlock = RAUnlock
 
+    /// One game-shaped site award — a mastered or completed set. The wall
+    /// people share.
+    struct Award: Sendable, Equatable, Codable {
+        let gameID: Int
+        let title: String
+        let consoleName: String?
+        let iconPath: String?
+        /// RA's own distinction: hardcore mastery vs softcore completion.
+        /// The wall must say which, so it's carried rather than flattened.
+        let hardcore: Bool
+        let awardedAt: Date?
+    }
+
     struct Progress: Sendable {
         let title: String?
         let total: Int
@@ -218,6 +231,47 @@ enum RetroAchievementsService {
             unlocked: unlocked,
             points: (root["points"] as? Int) ?? 0,
             totalPoints: (root["totalPoints"] as? Int) ?? 0)
+    }
+
+    /// Every mastery/completion on this account, newest first.
+    ///
+    /// Direct to RA with the user's key, like all user-scoped calls — the
+    /// proxy never sees credentials.
+    static func masteries(credentials: RACredentials.Value) async throws -> [Award] {
+        let root = try await callRA("API_GetUserAwards.php",
+                                    ["u": credentials.ulid ?? credentials.username],
+                                    apiKey: credentials.apiKey)
+        return shapeAwards(root)
+    }
+
+    /// Pure, so tests can feed it fixtures. Keeps only "Mastery/Completion"
+    /// awards; a game that has both a softcore completion and a later
+    /// hardcore mastery appears once, wearing the mastery.
+    static func shapeAwards(_ root: [String: Any]) -> [Award] {
+        let iso = ISO8601DateFormatter()
+        let rows = (root["VisibleUserAwards"] as? [[String: Any]]) ?? []
+        var byGame: [Int: Award] = [:]
+        var order: [Int] = []
+        for row in rows {
+            guard (row["AwardType"] as? String) == "Mastery/Completion",
+                  let gameID = (row["AwardData"] as? NSNumber)?.intValue,
+                  let title = row["Title"] as? String, !title.isEmpty else { continue }
+            let award = Award(
+                gameID: gameID,
+                title: title,
+                consoleName: row["ConsoleName"] as? String,
+                iconPath: row["ImageIcon"] as? String,
+                hardcore: (row["AwardDataExtra"] as? NSNumber)?.intValue == 1,
+                awardedAt: (row["AwardedAt"] as? String).flatMap { iso.date(from: $0) })
+            if let existing = byGame[gameID] {
+                if !existing.hardcore && award.hardcore { byGame[gameID] = award }
+            } else {
+                byGame[gameID] = award
+                order.append(gameID)
+            }
+        }
+        return order.compactMap { byGame[$0] }
+            .sorted { ($0.awardedAt ?? .distantPast) > ($1.awardedAt ?? .distantPast) }
     }
 
     // MARK: Talking to RetroAchievements directly
