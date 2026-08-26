@@ -35,3 +35,6 @@ native/LevelSelect/Watch/LevelSelectWatch.entitlements
 
 # Deno lockfile, produced by `deno check` when verifying edge functions locally.
 deno.lock
+
+# Claude Code session files (local worktrees, launch config)
+.claude/

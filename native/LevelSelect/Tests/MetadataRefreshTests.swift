@@ -734,3 +734,96 @@ struct RecentlyDeletedTests {
         #expect(repo.trashedPlaythroughs().isEmpty)
     }
 }
+
+/// Export → import round trip: the restore point the export always claimed
+/// to be. Additive-by-id is the invariant every test leans on.
+@MainActor
+struct LibraryImportTests {
+
+    private func populated() throws -> (Repository, Data) {
+        let repo = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        game.rating = 5
+        game.userTags = ["metroidvania"]
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.logManualSession(on: pt, duration: 3600,
+                                  date: Date(timeIntervalSince1970: 1_755_000_000))
+        _ = repo.startRun(on: pt, fields: ["weapon": "Nail"])
+        repo.setGeneratedSchema(for: game, jsonData: Data(
+            #"{"schemaVersion":1,"categories":[{"id":"bosses","name":"Bosses","items":[{"id":"b1","name":"Hornet"}]}]}"#.utf8))
+        repo.setTrackerItem(pt, itemID: "b1", done: true)
+        _ = repo.createCollection(name: "Comfort")
+        let data = try LibraryExport.makeJSON(context: repo.context)
+        return (repo, data)
+    }
+
+    @Test func roundTripRestoresIntoEmptyLibrary() throws {
+        let (_, data) = try populated()
+        let fresh = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+
+        let preview = try LibraryImport.preview(data: data, context: fresh.context)
+        #expect(preview.totalSkips == 0)
+        #expect(preview.creates["games"] == 1)
+        #expect(preview.problems.isEmpty)
+
+        let outcome = try LibraryImport.apply(data: data, context: fresh.context)
+        #expect(outcome.created["games"] == 1)
+        #expect(outcome.created["playthroughs"] == 1)
+        #expect(outcome.created["sessions"] == 1)
+        #expect(outcome.created["runs"] == 1)
+        #expect(outcome.created["tracker schemas"] == 1)
+        #expect(outcome.created["tracker progress"] == 1)
+        #expect(outcome.created["collections"] == 1)
+
+        let games = try fresh.context.fetch(FetchDescriptor<Game>())
+        let game = try #require(games.first)
+        #expect(game.name == "Hollow Knight")
+        #expect(game.rating == 5)
+        #expect(game.userTags == ["metroidvania"])
+        // Progress recomputed from restored state: 1/1 bosses done.
+        #expect(game.activePlaythrough?.progressPercent == 100)
+    }
+
+    /// Running it twice is a no-op — the restore point can't duplicate.
+    @Test func importIsIdempotent() throws {
+        let (_, data) = try populated()
+        let fresh = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+        _ = try LibraryImport.apply(data: data, context: fresh.context)
+        let second = try LibraryImport.apply(data: data, context: fresh.context)
+        #expect(second.totalCreated == 0)
+        #expect(try fresh.context.fetch(FetchDescriptor<Game>()).count == 1)
+    }
+
+    /// Partial disaster: the missing piece comes back, everything present is
+    /// untouched — including field values that have since changed.
+    @Test func importRestoresOnlyWhatsMissing() throws {
+        let (repo, data) = try populated()
+        // "Disaster": the collection vanishes; the game's rating changes.
+        let collection = try #require(repo.context.fetch(
+            FetchDescriptor<GameCollection>()).first)
+        repo.context.delete(collection)
+        let game = try #require(repo.context.fetch(FetchDescriptor<Game>()).first)
+        game.rating = 2
+        try repo.context.save()
+
+        let outcome = try LibraryImport.apply(data: data, context: repo.context)
+        #expect(outcome.created["collections"] == 1)
+        #expect(outcome.created["games"] == nil)
+        // Present record untouched: the changed rating survives the import.
+        #expect(game.rating == 2)
+    }
+
+    @Test func wrongVersionAndGarbageAreRefused() throws {
+        let fresh = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+        let wrongVersion = Data(#"{"manifest":{"formatVersion":99},"games":[]}"#.utf8)
+        #expect(throws: LibraryImport.ImportError.self) {
+            try LibraryImport.preview(data: wrongVersion, context: fresh.context)
+        }
+        #expect(throws: LibraryImport.ImportError.self) {
+            try LibraryImport.preview(data: Data("not json".utf8), context: fresh.context)
+        }
+        #expect(throws: LibraryImport.ImportError.self) {
+            try LibraryImport.preview(data: Data(#"{"games":[]}"#.utf8), context: fresh.context)
+        }
+    }
+}

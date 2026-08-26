@@ -26,12 +26,14 @@ struct DataSettingsSection: View {
     private enum DataSheet: Identifiable {
         case export(URL)
         case csvImport
+        case libraryImport
         case metadataFill
 
         var id: String {
             switch self {
             case .export(let url): "export:\(url.absoluteString)"
             case .csvImport:       "csv"
+            case .libraryImport:   "libraryImport"
             case .metadataFill:    "fill"
             }
         }
@@ -94,6 +96,12 @@ struct DataSettingsSection: View {
             }
 
             Button {
+                sheet = .libraryImport
+            } label: {
+                Label("Import LevelSelect export", systemImage: "arrow.uturn.backward.circle")
+            }
+
+            Button {
                 sheet = .metadataFill
             } label: {
                 Label("Fill in missing game info", systemImage: "sparkle.magnifyingglass")
@@ -121,13 +129,14 @@ struct DataSettingsSection: View {
                 switch which {
                 case .export(let url): ShareSheet(url: url)
                 case .csvImport:       CSVImportView()
+                case .libraryImport:    LibraryImportView()
                 case .metadataFill:    MetadataFillView()
                 }
             }
         } header: {
             Text("Your data")
         } footer: {
-            Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Two honest limits: map images are saved as links rather than embedded, and there's no importer for the file yet, so treat it as a readable record rather than a one-tap restore. iCloud keeps your devices in sync, but it isn't a backup. Import brings a library in from a CSV exported by another app or a spreadsheet. Fill in missing game info looks up everything your games are missing — release dates, genres, developers, cover art — and adds only what's blank, so nothing you've corrected by hand is touched.")
+            Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Import LevelSelect export reads that same file back, restoring anything that's missing and never touching what's already here — so an old export plus a current library merge safely. One honest limit: map images are saved as links rather than embedded. iCloud keeps your devices in sync, but it isn't a backup; the export is. Import from CSV brings a library in from another app or a spreadsheet. Fill in missing game info looks up everything your games are missing — release dates, genres, developers, cover art — and adds only what's blank, so nothing you've corrected by hand is touched.")
         }
 
         Section {
