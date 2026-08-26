@@ -130,6 +130,7 @@ struct ContinueHeroCard: View {
     }
 
     private var active: Session? { playthrough?.activeSession }
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: 14) {
@@ -191,12 +192,18 @@ struct ContinueHeroCard: View {
                     Button(action: onPauseResume) {
                         VStack(spacing: 4) {
                             Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
-                            Text(active.state == .running ? "Pause" : "Resume")
-                                .font(.caption.weight(.semibold))
+                            // At accessibility sizes the caption can't fit the
+                            // fixed square — the glyph alone reads better than
+                            // "P…", and the label below says the word.
+                            if !typeSize.isAccessibilitySize {
+                                Text(active.state == .running ? "Pause" : "Resume")
+                                    .font(.caption.weight(.semibold))
+                            }
                         }
                         .frame(width: 56, height: 56)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(active.state == .running ? "Pause" : "Resume")
                     .background(LSTheme.accent.opacity(0.16), in: .rect(cornerRadius: 12))
                     .overlay(RoundedRectangle(cornerRadius: 12)
                         .strokeBorder(LSTheme.accent.opacity(0.6), lineWidth: 1))
@@ -206,11 +213,14 @@ struct ContinueHeroCard: View {
                 Button(action: onPlay) {
                     VStack(spacing: 4) {
                         Image(systemName: "play.fill")
-                        Text("Play").font(.caption.weight(.semibold))
+                        if !typeSize.isAccessibilitySize {
+                            Text("Play").font(.caption.weight(.semibold))
+                        }
                     }
                     .frame(width: 56, height: 56)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Play")
                 .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
                 .foregroundStyle(.green)

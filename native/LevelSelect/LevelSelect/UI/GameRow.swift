@@ -52,5 +52,19 @@ struct GameRow: View {
             }
         }
         .padding(.vertical, 2)
+        // One utterance, not five fragments: the status icon, star row, and
+        // pin are all decoration around facts this sentence carries.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenSummary)
+    }
+
+    private var spokenSummary: String {
+        var parts = [game.name, game.status.label]
+        if let platform = PlatformPreference.owned(game.platforms) {
+            parts.append(PlatformShort.name(platform))
+        }
+        if let rating = game.rating { parts.append("rated \(rating) of 5") }
+        if game.pinned { parts.append("pinned") }
+        return parts.joined(separator: ", ")
     }
 }

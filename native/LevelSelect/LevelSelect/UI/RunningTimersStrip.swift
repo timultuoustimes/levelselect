@@ -101,6 +101,9 @@ struct RunningTimersStrip: View {
                 .buttonStyle(.plain)
                 .background(LSTheme.accent.opacity(0.15), in: .rect(cornerRadius: 8))
                 .foregroundStyle(LSTheme.accent)
+                // The square is chrome with a fixed frame; an unbounded glyph
+                // overflows it into the stop button at accessibility sizes.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .accessibilityLabel(session.state == .running ? "Pause" : "Resume")
 
                 Button {
@@ -112,6 +115,7 @@ struct RunningTimersStrip: View {
                 .buttonStyle(.plain)
                 .background(.red.opacity(0.14), in: .rect(cornerRadius: 8))
                 .foregroundStyle(.red.opacity(0.9))
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .accessibilityLabel("Stop")
             }
             .padding(8)

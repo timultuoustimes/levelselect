@@ -95,8 +95,12 @@ struct PlatformEditor: View {
                 platforms.removeAll { $0 == platform }
             } label: {
                 Image(systemName: "xmark").font(.system(size: 8, weight: .bold))
+                    // An 8pt glyph is a caption, not a target.
+                    .frame(width: 22, height: 22)
+                    .contentShape(.rect)
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Remove \(PlatformShort.name(platform))")
         }
         .padding(.horizontal, 9).padding(.vertical, 5)
         .background((isMine ? LSTheme.accent : .blue).opacity(0.18), in: .capsule)

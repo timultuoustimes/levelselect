@@ -62,6 +62,7 @@ enum StatsCard: String, CaseIterable, Identifiable {
 struct StatsTab: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     /// Which decades are open in the By Release Year card.
     @State private var expandedDecades: Set<Int> = []
@@ -136,15 +137,32 @@ struct StatsTab: View {
     // MARK: Cards
 
     private func overviewCard(sessions: [Session]) -> some View {
-        HStack(spacing: 0) {
-            stat(number: "\(games.count)", label: "Games")
-            divider
-            stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
-            divider
-            stat(number: "\(sessions.count)", label: "Sessions")
-            divider
-            // Completed share of the library — the web's headline number.
-            stat(number: "\(Int((completionRate * 100).rounded()))%", label: "Finished")
+        // Four-across survives every regular size; at accessibility sizes it
+        // hyphenates every word, so the strip folds into a 2×2 grid.
+        Group {
+            if typeSize.isAccessibilitySize {
+                Grid(horizontalSpacing: 0, verticalSpacing: 14) {
+                    GridRow {
+                        stat(number: "\(games.count)", label: "Games")
+                        stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
+                    }
+                    GridRow {
+                        stat(number: "\(sessions.count)", label: "Sessions")
+                        stat(number: "\(Int((completionRate * 100).rounded()))%", label: "Finished")
+                    }
+                }
+            } else {
+                HStack(spacing: 0) {
+                    stat(number: "\(games.count)", label: "Games")
+                    divider
+                    stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
+                    divider
+                    stat(number: "\(sessions.count)", label: "Sessions")
+                    divider
+                    // Completed share of the library — the web's headline number.
+                    stat(number: "\(Int((completionRate * 100).rounded()))%", label: "Finished")
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .lsCard()
@@ -326,6 +344,10 @@ struct StatsTab: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
+            // 105 unlabeled squares is noise to a screen reader; the grid
+            // speaks as one summary and the legend stays visual-only.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(heatmapSummary(cells))
             HStack(spacing: 6) {
                 Text("Less").font(.caption2).foregroundStyle(.tertiary)
                 ForEach([0.0, 20, 60, 120], id: \.self) { m in
@@ -334,9 +356,16 @@ struct StatsTab: View {
                 Text("More").font(.caption2).foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, alignment: .center)
+            .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .lsCard()
+    }
+
+    private func heatmapSummary(_ cells: [[DayCell]]) -> String {
+        let days = cells.flatMap(\.self)
+        let played = days.filter { $0.minutes > 0 }.count
+        return "Play heatmap, last 15 weeks: played on \(played) of \(days.count) days"
     }
 
     /// Games per system, the way the library groups them — by the platform

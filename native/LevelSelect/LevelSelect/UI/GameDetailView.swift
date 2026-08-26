@@ -19,6 +19,7 @@ struct GameDetailView: View {
     @State private var newCollection = false
     @State private var newCollectionName = ""
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
 
@@ -287,7 +288,12 @@ struct GameDetailView: View {
     // MARK: Playthrough picker (appears only with 2+)
 
     private var playthroughPicker: some View {
-        HStack(spacing: 10) {
+        // Same overflow rule as the hero: capsule plus caption can outgrow
+        // the screen at accessibility sizes, so they stack instead.
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 10))
+        return layout {
             Menu {
                 ForEach(game.livePlaythroughs) { pt in
                     Button {
@@ -638,7 +644,11 @@ struct GameDetailView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 16) {
+            // At accessibility text sizes the cover-beside-text row can't fit
+            // its own minimums (fixed cover + five stars beat the screen), and
+            // one over-wide child drags the whole page's column offscreen with
+            // it. Stack instead: cover above, text at full width.
+            heroLayout {
                 CoverThumb(urlString: game.coverURLString)
                     .frame(width: 138, height: 184)
                     .overlay { CoverShine(delay: 0.25) }
@@ -684,6 +694,12 @@ struct GameDetailView: View {
             // Full-width so the three chips never wrap.
             OwnershipControl(ownership: $game.ownership)
         }
+    }
+
+    private var heroLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
     }
 
     private var notesField: some View {

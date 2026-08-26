@@ -1102,6 +1102,11 @@ struct TrackerSectionView: View {
                     .contentShape(.rect)
             }
             .buttonStyle(.borderless)
+            // The glyph alone reads as "circle" — say what it ticks.
+            .accessibilityLabel(hidden ? "Hidden item" : item.name)
+            .accessibilityValue(done ? "Completed" : "Not completed")
+            .accessibilityHint(hidden ? "Reveals what it is"
+                               : (done ? "Marks it not completed" : "Marks it completed"))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -1114,6 +1119,7 @@ struct TrackerSectionView: View {
                             .font(.caption2)
                             .foregroundStyle(.orange)
                             .help("Missable")
+                            .accessibilityLabel("Missable")
                     }
                 }
                 if !hidden, case .blocked(let needs) = gating.status(of: item) {
@@ -1196,6 +1202,7 @@ struct TrackerSectionView: View {
             }
             .buttonStyle(.borderless)
             .disabled(current <= 0)
+            .accessibilityLabel("Decrease \(item.name) count")
 
             VStack(spacing: 3) {
                 Text("\(current)/\(target)")
@@ -1218,6 +1225,7 @@ struct TrackerSectionView: View {
             }
             .buttonStyle(.borderless)
             .disabled(current >= target)
+            .accessibilityLabel("Increase \(item.name) count")
         }
         .foregroundStyle(LSTheme.accent)
         .animation(.snappy, value: current)

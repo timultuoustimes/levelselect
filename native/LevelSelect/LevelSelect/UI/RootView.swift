@@ -5,6 +5,7 @@ import SwiftData
 struct RootView: View {
     @Query private var themeSettings: [ThemeSettings]
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var context
     @State private var persistence = PersistenceMonitor.shared
     @State private var generation = TrackerGenerationStore.shared
@@ -13,6 +14,12 @@ struct RootView: View {
     @State private var themeVersion = 0
     @State private var showingSplash = true
     @State private var nav = AppNavigator.shared
+
+    /// Banners slide up from the tab bar — unless the system asks for less
+    /// motion, in which case they simply appear.
+    private var slideIn: AnyTransition {
+        reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
+    }
 
     var body: some View {
         ZStack {
@@ -45,7 +52,7 @@ struct RootView: View {
                         .padding(.horizontal)
                         .padding(.bottom, 64)  // clear the tab bar
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(slideIn)
                 .zIndex(2)
             }
 
@@ -64,7 +71,7 @@ struct RootView: View {
                     .padding(.horizontal)
                     .padding(.bottom, 64)
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(slideIn)
                 .zIndex(3)
                 .task(id: roll.id) {
                     DiceHaptics.tumble()
@@ -86,7 +93,7 @@ struct RootView: View {
                     // Stack above the save-failure banner when both are up.
                     .padding(.bottom, persistence.lastErrorMessage != nil ? 128 : 64)
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(slideIn)
                 .zIndex(2)
                 // Successes clear themselves; failures wait to be seen.
                 .task(id: notice.id) {
