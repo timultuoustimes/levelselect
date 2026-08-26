@@ -336,6 +336,75 @@ struct Repository {
 
     /// Soft delete — sets a tombstone so trash/undo is possible and the deletion
     /// propagates via CloudKit.
+    // MARK: Recently Deleted
+
+    /// Everything soft-deleted, for the Recently Deleted screen. Deliberate
+    /// whole-thing deletions only — games, playthroughs, collections. A
+    /// playthrough inside a trashed GAME isn't listed; it rides its game's
+    /// restore instead of offering a restore into a trashed parent.
+    func trashedGames() -> [Game] {
+        let d = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt != nil })
+        return ((try? context.fetch(d)) ?? []).sorted {
+            ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast)
+        }
+    }
+
+    func trashedPlaythroughs() -> [Playthrough] {
+        let d = FetchDescriptor<Playthrough>(predicate: #Predicate { $0.deletedAt != nil })
+        return ((try? context.fetch(d)) ?? [])
+            .filter { $0.game?.deletedAt == nil && $0.game != nil }
+            .sorted { ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast) }
+    }
+
+    func trashedCollections() -> [GameCollection] {
+        let d = FetchDescriptor<GameCollection>(predicate: #Predicate { $0.deletedAt != nil })
+        return ((try? context.fetch(d)) ?? []).sorted {
+            ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast)
+        }
+    }
+
+    /// Un-delete. The record was never gone — deletion is soft everywhere —
+    /// so restore is exactly one field, plus the recompute the reappearing
+    /// data deserves.
+    func restore(_ game: Game) {
+        game.deletedAt = nil
+        touch(game)
+        recomputeProgress(game)
+        persist()
+    }
+
+    func restore(_ pt: Playthrough) {
+        pt.deletedAt = nil
+        touch(pt)
+        if let game = pt.game { recomputeProgress(game) }
+        persist()
+    }
+
+    func restore(_ collection: GameCollection) {
+        collection.deletedAt = nil
+        touch(collection)
+        persist()
+    }
+
+    /// The one hard delete in the app, and it lives behind the Recently
+    /// Deleted screen's confirmation only. Children go with it — the model's
+    /// cascade rules were built for exactly this — and the CloudKit mirror
+    /// propagates the deletion to other devices.
+    func deleteForever(_ game: Game) {
+        context.delete(game)
+        persist()
+    }
+
+    func deleteForever(_ pt: Playthrough) {
+        context.delete(pt)
+        persist()
+    }
+
+    func deleteForever(_ collection: GameCollection) {
+        context.delete(collection)
+        persist()
+    }
+
     func softDelete(_ game: Game, at date: Date = .now) {
         game.deletedAt = date
         touch(game, at: date)

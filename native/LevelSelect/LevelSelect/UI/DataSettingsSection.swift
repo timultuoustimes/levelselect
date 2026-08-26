@@ -98,6 +98,12 @@ struct DataSettingsSection: View {
             } label: {
                 Label("Fill in missing game info", systemImage: "sparkle.magnifyingglass")
             }
+
+            NavigationLink {
+                RecentlyDeletedView()
+            } label: {
+                Label("Recently Deleted", systemImage: "trash")
+            }
             // The sheet hangs off THIS ROW, not off the Section.
             //
             // `Section` is not a view that can host a presentation, so a

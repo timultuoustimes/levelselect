@@ -687,3 +687,50 @@ struct HonestyTailTests {
         #expect(read.isEmpty)
     }
 }
+
+/// The deletion safety net: restore is one field, forever is really forever.
+@MainActor
+struct RecentlyDeletedTests {
+
+    private func repo() -> Repository {
+        Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+    }
+
+    @Test func softDeletedGameIsListedAndRestores() {
+        let repo = repo()
+        let game = repo.addGame(name: "Under the Island", status: .playing)
+        repo.softDelete(game)
+        #expect(repo.trashedGames().map(\.id) == [game.id])
+
+        repo.restore(game)
+        #expect(repo.trashedGames().isEmpty)
+        #expect(game.deletedAt == nil)
+    }
+
+    @Test func deleteForeverCascadesChildren() {
+        let repo = repo()
+        let game = repo.addGame(name: "Doomed", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.startRun(on: pt, fields: [:])
+        repo.softDelete(game)
+
+        repo.deleteForever(game)
+        #expect(repo.trashedGames().isEmpty)
+        // The cascade took the playthrough (and its run) with it.
+        let strays = try? repo.context.fetch(FetchDescriptor<Playthrough>())
+        #expect(strays?.contains { $0.id == pt.id } != true)
+    }
+
+    /// A playthrough inside a trashed game rides the game's restore — it
+    /// must not be offered separately into a trashed parent.
+    @Test func playthroughInsideTrashedGameIsNotListed() {
+        let repo = repo()
+        let game = repo.addGame(name: "Nested", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        repo.deletePlaythrough(pt, from: game)
+        #expect(repo.trashedPlaythroughs().map(\.id) == [pt.id])
+
+        repo.softDelete(game)
+        #expect(repo.trashedPlaythroughs().isEmpty)
+    }
+}
