@@ -7,6 +7,7 @@ import UIKit
 /// The feel of dice settling: four transient knocks, each softer and duller
 /// than the last, spaced like a die losing momentum. A single medium tap
 /// said "notification"; this says "rolled".
+@MainActor
 enum DiceHaptics {
     #if os(iOS)
     /// Kept alive for the pattern's duration; recreated per tumble because
