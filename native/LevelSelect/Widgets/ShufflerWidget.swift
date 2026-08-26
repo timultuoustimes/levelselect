@@ -187,6 +187,7 @@ struct ShufflerProvider: AppIntentTimelineProvider {
 // MARK: - Views
 
 private struct DieButton: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let config: ShufflerConfigIntent
     var size: CGFloat = 30
 
@@ -199,9 +200,9 @@ private struct DieButton: View {
         ) {
             Image(systemName: "dice")
                 .font(.system(size: size * 0.45, weight: .bold))
-                .foregroundStyle(LSWidget.navyDeep)
+                .foregroundStyle(LSWidget.controlFG(renderingMode))
                 .frame(width: size, height: size)
-                .background(LSWidget.torch, in: Circle())
+                .background(LSWidget.controlBG(renderingMode), in: Circle())
         }
         .buttonStyle(.plain)
     }

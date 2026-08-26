@@ -5,6 +5,18 @@ import AppIntents
 // MARK: - Palette (mirrors the app theme; the widget process can't read it)
 
 enum LSWidget {
+    /// Control colors that survive the accented Home Screen appearances.
+    /// In Clear and Tinted, EVERY color is flattened into the tint — a
+    /// navyDeep glyph on a torch circle becomes white-on-white. Opacity is
+    /// the only contrast that survives, so accented controls become a
+    /// translucent plate with a full-opacity glyph.
+    static func controlFG(_ mode: WidgetRenderingMode) -> Color {
+        mode == .fullColor ? navyDeep : .white
+    }
+    static func controlBG(_ mode: WidgetRenderingMode) -> Color {
+        mode == .fullColor ? torch : .white.opacity(0.24)
+    }
+
     static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
     static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)
     static let navy = Color(red: 0.094, green: 0.075, blue: 0.176)
@@ -151,9 +163,9 @@ struct ContinuePlayingSmall: View {
             Button(intent: StartSessionIntent(gameID: s.gameID)) {
                 Image(systemName: "play.fill")
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(LSWidget.navyDeep)
+                    .foregroundStyle(LSWidget.controlFG(renderingMode))
                     .frame(width: 34, height: 34)
-                    .background(LSWidget.torch, in: Circle())
+                    .background(LSWidget.controlBG(renderingMode), in: Circle())
             }
             .buttonStyle(.plain)
         }
@@ -206,6 +218,7 @@ struct CoverPoster: View {
 // MARK: - Medium
 
 struct ContinuePlayingMedium: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let snapshot: WidgetSnapshot?
 
     var body: some View {
@@ -289,9 +302,9 @@ struct ContinuePlayingMedium: View {
                     Image(systemName: "play.fill").font(.system(size: 9, weight: .bold))
                     Text(s.isPaused ? "Resume" : "Play").font(.system(size: 11, weight: .bold))
                 }
-                .foregroundStyle(LSWidget.navyDeep)
+                .foregroundStyle(LSWidget.controlFG(renderingMode))
                 .padding(.horizontal, 11).padding(.vertical, 5)
-                .background(LSWidget.torch, in: Capsule())
+                .background(LSWidget.controlBG(renderingMode), in: Capsule())
             }
             .buttonStyle(.plain)
         } else {

@@ -43,8 +43,17 @@ enum DiceHaptics {
             }
             let player = try engine.makePlayer(with: CHHapticPattern(events: events, parameters: []))
             try player.start(atTime: 0)
-            // Let the pattern finish, then let the engine go.
-            engine.notifyWhenPlayersFinished { _ in .stopEngine }
+            // Stop the engine AFTER the pattern — via a main-actor Task, not
+            // notifyWhenPlayersFinished: CoreHaptics invokes that completion
+            // on its own dispatch queue, and under this project's default
+            // MainActor isolation the closure asserted its executor and
+            // trapped. Both of tonight's lock-screen crashes were this one
+            // closure. The pattern lasts ~0.4s; a second is plenty.
+            Task {
+                try? await Task.sleep(for: .seconds(1))
+                engine.stop(completionHandler: nil)
+                if Self.engine === engine { Self.engine = nil }
+            }
         } catch {
             // Any engine trouble degrades to the old single tap — a roll
             // should never be silent to the hand entirely.

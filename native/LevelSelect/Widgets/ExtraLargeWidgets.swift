@@ -17,6 +17,7 @@ import AppIntents
 /// week and the completion ring on the right. Every element already existed
 /// in a smaller widget — this is the "whole gaming life at one glance" board.
 struct CommandBoardView: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
     let snapshot: WidgetSnapshot?
 
     var body: some View {
@@ -123,7 +124,8 @@ struct CommandBoardView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(LSWidget.purple, in: RoundedRectangle(cornerRadius: 11))
+                .background(renderingMode == .fullColor ? LSWidget.purple : .white.opacity(0.24),
+                            in: RoundedRectangle(cornerRadius: 11))
             }
             .buttonStyle(.plain)
         }
