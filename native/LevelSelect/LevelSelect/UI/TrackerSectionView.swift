@@ -33,6 +33,11 @@ struct MergeReviewPresentationState {
 struct TrackerSectionView: View {
     @AppStorage("levelselect.showRAArt") private var showRAArt = true
     @State private var raBrowserTarget: DekuLinkTarget?
+    @Query private var themeSettings: [ThemeSettings]
+    /// "Show item hints" (synced): hints are the description and location a
+    /// generator or RA wrote — clutter to some, spoilers to others. The
+    /// user's own note is theirs and never hides.
+    private var hintsShown: Bool { themeSettings.first?.showItemHints ?? true }
     let game: Game
     @Environment(\.modelContext) private var context
     @State private var hideCompleted = false
@@ -873,7 +878,7 @@ struct TrackerSectionView: View {
             let done = category.items.filter { states[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
                 Group {
-                    if let groups = locationGroups(visibleItems) {
+                    if let groups = hintsShown ? locationGroups(visibleItems) : nil {
                         // "Koala Village" under all nine of its Heart Coins is
                         // the same word nine times. Hoisting it into a
                         // subheading says it once, and leaves the items as bare
@@ -1128,7 +1133,8 @@ struct TrackerSectionView: View {
                         Color.clear
                     }
                 }
-                .frame(width: 30, height: 30)
+                // Bare rows leave room for the art to actually read.
+                .frame(width: hintsShown ? 30 : 36, height: hintsShown ? 30 : 36)
                 .clipShape(.rect(cornerRadius: 5))
                 .opacity(done ? 1 : 0.8)
                 .accessibilityHidden(true)
@@ -1159,7 +1165,7 @@ struct TrackerSectionView: View {
                         .font(.caption2)
                         .foregroundStyle(.orange.opacity(0.9))
                 }
-                if !hidden, !hideLocation, let location = item.location {
+                if !hidden, !hideLocation, hintsShown, let location = item.location {
                     Text(location)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -1167,7 +1173,7 @@ struct TrackerSectionView: View {
                 // Descriptions that carry an "(Alt: …)" clause — Hades' Mirror
                 // of Night does — get the alternative behind a chip instead of
                 // running both variants together in one sentence.
-                if !hidden, let description = item.itemDescription, !description.isEmpty {
+                if !hidden, hintsShown, let description = item.itemDescription, !description.isEmpty {
                     AltDescription(text: description, tint: LSTheme.accent,
                                    selectedVariant: state?.selectedVariant) { variant in
                         let pt = repo.ensureDefaultPlaythrough(for: game)
@@ -1204,6 +1210,11 @@ struct TrackerSectionView: View {
                                              note: item.note ?? "",
                                              countTarget: item.countTarget))
             } label: { Label("Edit Item", systemImage: "pencil") }
+        } preview: {
+            // The press-and-hold peek: with hints off this is where the
+            // description and location live — one row at a time, on purpose,
+            // so a glance can't spoil the whole list.
+            HintPeekCard(item: item, done: done, showArt: showRAArt)
         }
     }
 
@@ -1338,5 +1349,71 @@ struct ApplicabilitySheet: View {
             }
         }
         .presentationDetents([.medium])
+    }
+}
+
+/// The press-and-hold peek for one tracker item: everything the row might be
+/// hiding — hint, location, points — shown one item at a time so checking a
+/// single objective never spoils the ones below it.
+private struct HintPeekCard: View {
+    let item: TrackerItemDTO
+    let done: Bool
+    let showArt: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if showArt, let badge = item.badge {
+                    AsyncImage(url: RAArt.badgeURL(badge, earned: done)) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFit()
+                        } else {
+                            Color.clear
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(.rect(cornerRadius: 7))
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.name)
+                        .font(.headline)
+                    HStack(spacing: 8) {
+                        if done {
+                            Label("Completed", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.green)
+                        }
+                        if item.missable {
+                            Label("Missable", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                        if let points = item.points {
+                            Text("\(points) pts")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if let description = item.itemDescription, !description.isEmpty {
+                Text(description)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            if let location = item.location, !location.isEmpty {
+                Label(location, systemImage: "mappin.and.ellipse")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if item.itemDescription?.isEmpty != false && item.location?.isEmpty != false {
+                Text("No hint recorded for this one.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: 340, alignment: .leading)
+        .background(LSTheme.background)
     }
 }

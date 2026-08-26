@@ -30,6 +30,15 @@ struct AppearanceSettingsSection: View {
 
             Toggle("Show RetroAchievements art", isOn: $showRAArt)
 
+            Toggle("Show item hints", isOn: Binding(
+                get: { settings?.showItemHints ?? true },
+                set: { newValue in
+                    let s = ensureSettings()
+                    s.showItemHints = newValue
+                    save(s)
+                }
+            ))
+
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     ColorPicker(selection: statusBinding(status), supportsOpacity: false) {
@@ -48,7 +57,7 @@ struct AppearanceSettingsSection: View {
         } header: {
             Text("Appearance")
         } footer: {
-            Text("Colors sync to your other devices via iCloud. Achievement art comes from RetroAchievements and is shown only on imported sets.")
+            Text("Colors sync to your other devices via iCloud. Achievement art comes from RetroAchievements and is shown only on imported sets. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location.")
         }
     }
 
