@@ -1026,3 +1026,46 @@ struct PlaythroughFinishTests {
         #expect(restored.playthrough?.isFinished == true)
     }
 }
+
+@Suite("Stage layout rule")
+struct StageLayoutTests {
+
+    @Test("The rule is a pure function of the container — same size, same answer, always")
+    func deterministic() {
+        // The bug this pins: the old rule mixed horizontalSizeClass (which
+        // updates on its own schedule) with geometry (which updates at once),
+        // so mid-resize the same size could answer differently on different
+        // frames. A pure function can't.
+        let wide = CGSize(width: 1280, height: 960)
+        #expect(StageLayout.fits(wide))
+        #expect(StageLayout.fits(wide))   // idempotent by construction
+        #expect(StageLayout.fits(CGSize(width: 1280, height: 960)))
+    }
+
+    @Test("Stage needs real width AND landscape-ish shape")
+    func thresholds() {
+        // A folded phone: too narrow for two panes.
+        #expect(!StageLayout.fits(CGSize(width: 440, height: 956)))
+        // Unfolded but taller than wide — one column is right.
+        #expect(!StageLayout.fits(CGSize(width: 820, height: 1180)))
+        // Unfolded and wider than tall — the stage earns its keep.
+        #expect(StageLayout.fits(CGSize(width: 1024, height: 820)))
+        // Right at the boundary.
+        #expect(StageLayout.fits(CGSize(width: 852, height: 700)))
+        #expect(!StageLayout.fits(CGSize(width: 851, height: 700)))
+        // The sliver a resizable window can be dragged to.
+        #expect(!StageLayout.fits(CGSize(width: 180, height: 960)))
+    }
+
+    @Test("852 is the line: a standard iPhone's landscape width splits, narrower doesn't")
+    func iPhoneLandscapeSplits() {
+        // iPhone 17 / 16 landscape — Tim's call: it can carry the split.
+        #expect(StageLayout.fits(CGSize(width: 852, height: 393)))
+        // Pro Max landscape, comfortably.
+        #expect(StageLayout.fits(CGSize(width: 956, height: 440)))
+        // A smaller phone in landscape stays one column.
+        #expect(!StageLayout.fits(CGSize(width: 736, height: 414)))
+        // Portrait phones never split, however tall.
+        #expect(!StageLayout.fits(CGSize(width: 440, height: 956)))
+    }
+}

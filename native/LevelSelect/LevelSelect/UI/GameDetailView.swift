@@ -19,8 +19,10 @@ struct GameDetailView: View {
     private var collections: [GameCollection]
     @State private var newCollection = false
     @State private var newCollectionName = ""
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.dynamicTypeSize) private var typeSize
+    /// The page's own container size, read without becoming a layout
+    /// container — see the note on `body`.
+    @State private var containerSize: CGSize = .zero
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
 
@@ -32,35 +34,50 @@ struct GameDetailView: View {
 
     private var repo: Repository { Repository(context) }
 
+    /// Whether this page is wide enough to hold its tracker beside it.
+    private var stageMode: Bool {
+        StageLayout.fits(containerSize) && game.resolvedTrackerDisplay == .compact
+    }
+
+    /// The page reads its container's size, but is NOT wrapped in a
+    /// GeometryReader any more.
+    ///
+    /// That wrapper cost something invisible until you look for it: a
+    /// ScrollView nested inside a GeometryReader doesn't get the automatic
+    /// bottom content inset the system gives a tab's scrollable content, so
+    /// the last row of the last section — the final video in Guides & Videos
+    /// — sat under the tab bar with no way to scroll it clear. On every
+    /// device, iPad included, and long before anything was resizable;
+    /// dragging an iPhone window wider just made it obvious.
+    ///
+    /// `onGeometryChange` reads the same number without participating in
+    /// layout, so the ScrollView is a plain descendant again and the inset
+    /// comes back.
     var body: some View {
-        GeometryReader { geo in
-            let stageMode = horizontalSizeClass == .regular
-                && geo.size.width > geo.size.height
-                && game.resolvedTrackerDisplay == .compact
-            Group {
-                if stageMode {
-                    stageLayout(width: geo.size.width)
-                } else {
-                    VStack(spacing: 0) {
-                        if let video = pagePlaying {
-                            VideoPlayerDock(video: video) { pagePlaying = nil }
-                        }
-                        standardScroll(stageMode: false)
+        Group {
+            if stageMode {
+                stageLayout(width: containerSize.width)
+            } else {
+                VStack(spacing: 0) {
+                    if let video = pagePlaying {
+                        VideoPlayerDock(video: video) { pagePlaying = nil }
                     }
+                    standardScroll(stageMode: false)
                 }
             }
+        }
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
             // Watching `pagePlaying != nil` alone missed the rotation case
             // entirely: turn an iPad to landscape with a video ALREADY
             // playing and that boolean never changes, so `stage` stayed at 1
             // and the video panel sat at `width * 1.02` — off the trailing
             // edge, still playing, invisible. Both inputs decide the stage, so
             // both have to be observed.
-            .onChange(of: pagePlaying != nil) { _, hasVideo in
-                if stageMode, hasVideo { stage = 3 }
-            }
-            .onChange(of: stageMode) { _, isStage in
-                if isStage, pagePlaying != nil { stage = 3 }
-            }
+        .onChange(of: pagePlaying != nil) { _, hasVideo in
+            if stageMode, hasVideo { stage = 3 }
+        }
+        .onChange(of: stageMode) { _, isStage in
+            if isStage, pagePlaying != nil { stage = 3 }
         }
         .background { ambientBackdrop }
         .overlay {

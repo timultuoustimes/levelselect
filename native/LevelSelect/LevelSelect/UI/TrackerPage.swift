@@ -206,9 +206,11 @@ struct TrackerPageView: View {
         .background {
             GeometryReader { geo in
                 Color.clear
-                    .onChange(of: geo.size.width > geo.size.height) { _, isLandscape in
-                        guard isLandscape,
-                              horizontalSizeClass == .regular,
+                    // Watches the SAME rule the detail page uses to become
+                    // the stage, so the two can never disagree about whether
+                    // this page is redundant.
+                    .onChange(of: StageLayout.fits(geo.size)) { _, becameStage in
+                        guard becameStage,
                               game.resolvedTrackerDisplay == .compact,
                               playing == nil
                         else { return }
