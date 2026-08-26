@@ -193,6 +193,10 @@ targets:
     sources:
       - path: Widgets
       - path: Shared
+      # The console-icon imagesets, so a "Switch 2" launcher shows the actual
+      # claymorphic hardware instead of a generic controller glyph. Brings
+      # the whole catalog (harmless duplicates like the app icon set).
+      - path: LevelSelect/Assets.xcassets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect.widgets

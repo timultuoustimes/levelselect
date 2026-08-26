@@ -109,6 +109,7 @@ enum WidgetBridge {
                                              .backlog, .ongoing, .shelved, .completed]
         let shufflePool: [WidgetPoolGame] = games
             .filter { poolStatuses.contains($0.status) }
+            .sorted { activityKey($0) > activityKey($1) }
             .map { g in
                 WidgetPoolGame(
                     id: g.id.uuidString, name: g.name,
@@ -127,10 +128,31 @@ enum WidgetBridge {
         let completedCount = games.filter { $0.status == .completed }.count
         let collectionDescriptor = FetchDescriptor<GameCollection>(
             predicate: #Predicate { $0.deletedAt == nil })
+        let gamesByUUID = Dictionary(uniqueKeysWithValues: games.map { ($0.id.uuidString, $0) })
         let collectionRefs: [WidgetCollectionRef] = ((try? context.fetch(collectionDescriptor)) ?? [])
-            .map { WidgetCollectionRef(id: $0.id.uuidString, name: $0.name,
-                                       count: gamesCount(in: $0)) }
+            .map { collection in
+                let members = collection.gameIDs.compactMap { gamesByUUID[$0] }
+                    .sorted { activityKey($0) > activityKey($1) }
+                    .prefix(8)
+                return WidgetCollectionRef(
+                    id: collection.id.uuidString, name: collection.name,
+                    count: collection.gameIDs.count,
+                    memberIDs: members.map { $0.id.uuidString },
+                    memberCovers: members.map { g in
+                        g.coverURLString.map { coverFileName(for: $0) }
+                    })
+            }
             .sorted { $0.name < $1.name }
+
+        // Short platform name → console icon asset, for launcher portals.
+        var platformIcons: [String: String] = [:]
+        for g in games {
+            guard let raw = PlatformPreference.owned(g.platforms) else { continue }
+            let short = PlatformShort.name(raw)
+            if platformIcons[short] == nil, let asset = PlatformIcon.assetName(raw) {
+                platformIcons[short] = asset
+            }
+        }
 
         // Current shuffle picks (any widget instance) get real covers.
         if let defaults = UserDefaults(suiteName: WidgetShared.appGroup),
@@ -138,6 +160,33 @@ enum WidgetBridge {
             let picked = Set(picks.values)
             for g in games where picked.contains(g.id.uuidString) {
                 _ = coverName(g)
+            }
+        }
+        // …and so do the games each configured portal launcher shows. The
+        // provider records its targets in the App Group; caching all ~150
+        // pool covers on every refresh was the alternative, and it isn't one.
+        if let defaults = UserDefaults(suiteName: WidgetShared.appGroup),
+           let targets = defaults.array(forKey: "portalTargets") as? [String] {
+            for target in Set(targets) {
+                let parts = target.split(separator: ":", maxSplits: 1).map(String.init)
+                guard parts.count == 2 else { continue }
+                let shown: [Game]
+                switch parts[0] {
+                case "status":
+                    shown = games.filter { $0.status.rawValue == parts[1] }
+                        .sorted { activityKey($0) > activityKey($1) }.prefix(8).map { $0 }
+                case "platform":
+                    shown = games.filter {
+                        PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other") == parts[1]
+                    }
+                    .sorted { activityKey($0) > activityKey($1) }.prefix(8).map { $0 }
+                case "collection":
+                    shown = collectionRefs.first { $0.id == parts[1] }
+                        .map { $0.memberIDs.compactMap { gamesByUUID[$0] } } ?? []
+                default:
+                    shown = []
+                }
+                for g in shown { _ = coverName(g) }
             }
         }
 
@@ -167,7 +216,8 @@ enum WidgetBridge {
             weeklyAverageSeconds: weeklyAverage,
             completedCount: completedCount,
             libraryCount: games.count,
-            collections: collectionRefs
+            collections: collectionRefs,
+            platformIcons: platformIcons
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }

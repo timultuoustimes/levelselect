@@ -138,6 +138,8 @@ struct WidgetSnapshot: Codable, Hashable {
     var libraryCount: Int = 0
     /// Collections, for the launcher widget's picker.
     var collections: [WidgetCollectionRef] = []
+    /// Short platform name → console icon asset name, for launcher portals.
+    var platformIcons: [String: String] = [:]
 
     var hasActiveSession: Bool { isPlaying || isPaused }
 
@@ -184,7 +186,8 @@ struct WidgetSnapshot: Codable, Hashable {
         shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = [],
         dailyMinutes: [Double] = [], weeklyAverageSeconds: Double = 0,
         completedCount: Int = 0, libraryCount: Int = 0,
-        collections: [WidgetCollectionRef] = []
+        collections: [WidgetCollectionRef] = [],
+        platformIcons: [String: String] = [:]
     ) {
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
@@ -198,6 +201,7 @@ struct WidgetSnapshot: Codable, Hashable {
         self.dailyMinutes = dailyMinutes; self.weeklyAverageSeconds = weeklyAverageSeconds
         self.completedCount = completedCount; self.libraryCount = libraryCount
         self.collections = collections
+        self.platformIcons = platformIcons
         self.weeklySeconds = weeklySeconds; self.gamesPlayedThisWeek = gamesPlayedThisWeek
         self.runGame = runGame
     }
@@ -232,6 +236,7 @@ struct WidgetSnapshot: Codable, Hashable {
         completedCount = try c.decodeIfPresent(Int.self, forKey: .completedCount) ?? 0
         libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount) ?? 0
         collections = try c.decodeIfPresent([WidgetCollectionRef].self, forKey: .collections) ?? []
+        platformIcons = try c.decodeIfPresent([String: String].self, forKey: .platformIcons) ?? [:]
     }
 }
 
@@ -241,6 +246,28 @@ struct WidgetCollectionRef: Codable, Hashable, Identifiable {
     var id: String
     var name: String
     var count: Int
+    /// Top members (most active first) for the portal launcher's art wall.
+    /// Parallel arrays over a struct to keep the synthesized Codable simple.
+    var memberIDs: [String] = []
+    var memberCovers: [String?] = []
+
+    /// Tolerant on purpose: this morning's snapshots already carry
+    /// collections WITHOUT the member arrays, and a widget that can't decode
+    /// yesterday's file shows nothing until the app happens to open.
+    init(id: String, name: String, count: Int,
+         memberIDs: [String] = [], memberCovers: [String?] = []) {
+        self.id = id; self.name = name; self.count = count
+        self.memberIDs = memberIDs; self.memberCovers = memberCovers
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        count = try c.decodeIfPresent(Int.self, forKey: .count) ?? 0
+        memberIDs = try c.decodeIfPresent([String].self, forKey: .memberIDs) ?? []
+        memberCovers = try c.decodeIfPresent([String?].self, forKey: .memberCovers) ?? []
+    }
 }
 
 /// Pure math shared by the streak, gauge, and heatmap surfaces — pure so the

@@ -85,31 +85,202 @@ struct LauncherConfigIntent: WidgetConfigurationIntent {
 struct LauncherEntry: TimelineEntry {
     let date: Date
     let target: LauncherTarget?
+    let snapshot: WidgetSnapshot?
 }
 
 struct LauncherProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> LauncherEntry {
-        LauncherEntry(date: .now, target: nil)
+        LauncherEntry(date: .now, target: nil, snapshot: nil)
     }
     func snapshot(for configuration: LauncherConfigIntent, in context: Context) async -> LauncherEntry {
-        LauncherEntry(date: .now, target: configuration.target)
+        entry(configuration)
     }
     func timeline(for configuration: LauncherConfigIntent, in context: Context) async -> Timeline<LauncherEntry> {
-        Timeline(entries: [LauncherEntry(date: .now, target: configuration.target)], policy: .never)
+        // Record this placement's target so the bridge caches cover art for
+        // the games it shows — the same pattern as the shuffler's picks.
+        if let id = configuration.target?.id,
+           let defaults = UserDefaults(suiteName: WidgetShared.appGroup) {
+            var targets = (defaults.array(forKey: "portalTargets") as? [String]) ?? []
+            if !targets.contains(id) {
+                targets.append(id)
+                defaults.set(targets, forKey: "portalTargets")
+            }
+        }
+        // Hourly so the art wall follows the library as it changes.
+        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        return Timeline(entries: [entry(configuration)], policy: .after(next))
+    }
+
+    private func entry(_ configuration: LauncherConfigIntent) -> LauncherEntry {
+        LauncherEntry(date: .now, target: configuration.target,
+                      snapshot: WidgetSnapshot.load())
+    }
+}
+
+/// The games a portal shows: id + cover pairs, most active first.
+func portalGames(for target: LauncherTarget,
+                 in snapshot: WidgetSnapshot?) -> [(id: String, cover: String?)] {
+    guard let snapshot else { return [] }
+    let parts = target.id.split(separator: ":", maxSplits: 1).map(String.init)
+    guard parts.count == 2 else { return [] }
+    switch parts[0] {
+    case "status":
+        return snapshot.shufflePool.filter { $0.statusRaw == parts[1] }
+            .prefix(8).map { ($0.id, $0.coverFileName) }
+    case "platform":
+        return snapshot.shufflePool.filter { $0.platform == parts[1] }
+            .prefix(8).map { ($0.id, $0.coverFileName) }
+    case "collection":
+        guard let ref = snapshot.collections.first(where: { $0.id == parts[1] })
+        else { return [] }
+        return zip(ref.memberIDs,
+                   ref.memberCovers + Array(repeating: nil,
+                                            count: max(0, ref.memberIDs.count - ref.memberCovers.count)))
+            .map { ($0, $1) }
+    default:
+        return []
+    }
+}
+
+/// The portal's identity mark: the real console icon for a system target
+/// (the claymorphic art the app's shelves use), the SF symbol otherwise.
+struct PortalMark: View {
+    let target: LauncherTarget
+    let snapshot: WidgetSnapshot?
+    var size: CGFloat = 24
+
+    var body: some View {
+        if target.id.hasPrefix("platform:"),
+           let asset = snapshot?.platformIcons[target.name],
+           let ui = UIImage(named: asset) {
+            Image(uiImage: ui)
+                .resizable()
+                .widgetAccentedRenderingMode(.fullColor)
+                .scaledToFit()
+                .frame(width: size * 1.6, height: size * 1.6)
+        } else {
+            Image(systemName: target.symbol)
+                .font(.system(size: size, weight: .bold))
+                .foregroundStyle(LSWidget.torch)
+        }
     }
 }
 
 // MARK: - View
 
 struct LauncherWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: LauncherEntry
+
+    var body: some View {
+        switch family {
+        case .systemMedium: LauncherPortalMedium(entry: entry)
+        case .systemLarge: LauncherPortalLarge(entry: entry)
+        default: LauncherSmallView(entry: entry)
+        }
+    }
+}
+
+/// A visual doorway: the section's own art, four covers wide (medium) or a
+/// 2×4 wall (large), each cover a Link to its game, everything else opening
+/// the section itself. The Now Playing shelf's idea, pointed anywhere.
+struct LauncherPortalMedium: View {
+    let entry: LauncherEntry
+
+    var body: some View {
+        if let target = entry.target {
+            let games = portalGames(for: target, in: entry.snapshot)
+            VStack(alignment: .leading, spacing: 8) {
+                PortalHeader(target: target, snapshot: entry.snapshot)
+                if games.isEmpty {
+                    Spacer()
+                    Text("Nothing here yet")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                } else {
+                    HStack(spacing: 10) {
+                        ForEach(Array(games.prefix(4)), id: \.id) { game in
+                            Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
+                                CoverPoster(image: loadCover(game.cover))
+                                    .aspectRatio(0.72, contentMode: .fit)
+                            }
+                        }
+                        if games.count < 4 {
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+            .widgetURL(target.url ?? WidgetShared.homeURL)
+        } else {
+            LauncherSmallView(entry: entry)
+        }
+    }
+}
+
+struct LauncherPortalLarge: View {
+    let entry: LauncherEntry
+
+    var body: some View {
+        if let target = entry.target {
+            let games = portalGames(for: target, in: entry.snapshot)
+            VStack(alignment: .leading, spacing: 10) {
+                PortalHeader(target: target, snapshot: entry.snapshot)
+                if games.isEmpty {
+                    Spacer()
+                    Text("Nothing here yet")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .frame(maxWidth: .infinity)
+                    Spacer()
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4),
+                              spacing: 12) {
+                        ForEach(Array(games.prefix(8)), id: \.id) { game in
+                            Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
+                                CoverPoster(image: loadCover(game.cover))
+                                    .aspectRatio(0.72, contentMode: .fit)
+                            }
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+            .widgetURL(target.url ?? WidgetShared.homeURL)
+        } else {
+            LauncherSmallView(entry: entry)
+        }
+    }
+}
+
+struct PortalHeader: View {
+    let target: LauncherTarget
+    let snapshot: WidgetSnapshot?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            PortalMark(target: target, snapshot: snapshot, size: 13)
+            Text(target.name.uppercased())
+                .font(.system(size: 11, weight: .bold)).tracking(0.6)
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.4))
+        }
+    }
+}
+
+struct LauncherSmallView: View {
     let entry: LauncherEntry
 
     var body: some View {
         if let target = entry.target {
             VStack(alignment: .leading, spacing: 0) {
-                Image(systemName: target.symbol)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(LSWidget.torch)
+                PortalMark(target: target, snapshot: entry.snapshot)
                 Spacer(minLength: 0)
                 Text(target.name)
                     .font(.system(size: 15, weight: .bold))
@@ -152,6 +323,6 @@ struct LauncherWidget: Widget {
         }
         .configurationDisplayName("Open To…")
         .description("A door straight to a collection, a status shelf, or a system.")
-        .supportedFamilies([.systemSmall])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
