@@ -142,7 +142,7 @@ enum LiveActivityManager {
                     startedAt: Date.now.addingTimeInterval(-session.elapsed()),
                     accumulated: session.elapsed(),
                     isRunning: session.state == .running))
-            })
+            }, uniquingKeysWith: { first, _ in first })
         if let sid = currentSessionID, states[sid] == nil { currentSessionID = nil }
         Task.detached {
             for activity in Activity<SessionActivityAttributes>.activities {

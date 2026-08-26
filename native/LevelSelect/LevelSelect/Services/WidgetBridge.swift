@@ -128,7 +128,14 @@ enum WidgetBridge {
         let completedCount = games.filter { $0.status == .completed }.count
         let collectionDescriptor = FetchDescriptor<GameCollection>(
             predicate: #Predicate { $0.deletedAt == nil })
-        let gamesByUUID = Dictionary(uniqueKeysWithValues: games.map { ($0.id.uuidString, $0) })
+        // uniquingKeysWith, NEVER uniqueKeysWithValues: CloudKit sync twins
+        // are two rows with the same id, and uniqueKeysWithValues fatally
+        // crashes on them — at launch, since the bridge runs at launch. This
+        // is the crash Tim hit rolling the lock-screen die the night the
+        // portals shipped. Which twin wins doesn't matter here; both carry
+        // the same cover.
+        let gamesByUUID = Dictionary(games.map { ($0.id.uuidString, $0) },
+                                     uniquingKeysWith: { first, _ in first })
         let collectionRefs: [WidgetCollectionRef] = ((try? context.fetch(collectionDescriptor)) ?? [])
             .map { collection in
                 let members = collection.gameIDs.compactMap { gamesByUUID[$0] }
