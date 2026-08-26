@@ -61,7 +61,7 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" \
   | grep -E "error:|EXPORT (SUCCEEDED|FAILED)|Upload" || true
 
 step "6/7 Commit the bump"
-git add project.yml LevelSelect.xcodeproj/project.pbxproj
+git add project.yml   # pbxproj is generated and gitignored; yml is the truth
 git commit -m "Send build $BUILD to TestFlight"
 echo "Committed. Push when ready: git push"
 
