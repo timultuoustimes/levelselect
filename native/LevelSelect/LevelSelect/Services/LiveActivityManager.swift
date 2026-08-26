@@ -135,8 +135,11 @@ enum LiveActivityManager {
     /// local ever told it the session had ended.
     static func sync(unstopped: [Session]) {
         guard enabled else { return }
+        // Sessions sync through CloudKit too, so twins with one id are
+        // possible here for the same reason they are for games — and this
+        // runs at launch, where a crash is a bricked app icon.
         let states: [String: SessionActivityAttributes.ContentState] = Dictionary(
-            uniqueKeysWithValues: unstopped.map { session in
+            unstopped.map { session in
                 (session.id.uuidString,
                  SessionActivityAttributes.ContentState(
                     startedAt: Date.now.addingTimeInterval(-session.elapsed()),
