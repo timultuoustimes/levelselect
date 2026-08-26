@@ -1962,17 +1962,36 @@ struct Repository {
     func addCompletion(
         to game: Game,
         label: CompletionLabel = .cleared,
-        date: Date = .now
+        date: Date = .now,
+        precision: String? = nil,
+        platform: String? = nil,
+        customLabel: String? = nil,
+        notes: String? = nil
     ) -> CompletionEvent {
-        let event = CompletionEvent(date: date, label: label)
+        let event = CompletionEvent(date: date, label: label, customLabel: customLabel)
         context.insert(event)
         event.game = game
-        if label == .completed, game.status != .completed {
+        event.datePrecision = precision
+        event.platform = platform
+        event.notes = notes
+        // Any finish-shaped label moves the game to Completed — but never
+        // back: a historical "beat it in 2011" on a game you're replaying
+        // shouldn't yank it off the Playing shelf.
+        if [.cleared, .completed, .hundredPercent].contains(label),
+           game.status != .completed, game.status != .ongoing {
             game.status = .completed
         }
-        touch(game, at: date)
+        touch(game, at: .now)
         persist()
         return event
+    }
+
+    /// Soft, like every delete: the event lands in the same recoverable
+    /// state as everything else.
+    func removeCompletion(_ event: CompletionEvent) {
+        event.deletedAt = .now
+        if let game = event.game { touch(game, at: .now) }
+        persist()
     }
 
     // MARK: CloudKit reconciliation

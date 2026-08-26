@@ -1128,7 +1128,7 @@ struct TrackerSectionView: View {
                         Color.clear
                     }
                 }
-                .frame(width: 26, height: 26)
+                .frame(width: 30, height: 30)
                 .clipShape(.rect(cornerRadius: 5))
                 .opacity(done ? 1 : 0.8)
                 .accessibilityHidden(true)

@@ -905,3 +905,71 @@ struct RAArtTests {
         #expect(awards.first?.gameID == 100)
     }
 }
+
+// MARK: - Beaten & completed
+
+@Suite("Completion events")
+struct CompletionEventTests {
+
+    @Test("Marking beaten records the event and moves the shelf — but never off Always Around")
+    @MainActor
+    func markBeaten() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let context = container.mainContext
+        let repo = Repository(context)
+
+        let game = repo.addGame(name: "Skyrim")
+        game.status = .backlog
+        game.platforms = ["Xbox 360"]
+        let event = repo.addCompletion(
+            to: game, label: .cleared,
+            date: Calendar.current.date(from: DateComponents(year: 2011, month: 1, day: 1))!,
+            precision: "year", platform: "Xbox 360")
+        #expect(game.status == .completed)
+        #expect(event.dateText == "2011")
+        #expect(event.labelText == "Beat the game")
+        #expect(event.platform == "Xbox 360")
+
+        let ongoing = repo.addGame(name: "Balatro")
+        ongoing.status = .ongoing
+        _ = repo.addCompletion(to: ongoing, label: .cleared)
+        #expect(ongoing.status == .ongoing)
+
+        repo.removeCompletion(event)
+        #expect(event.deletedAt != nil)
+    }
+
+    @Test("Fuzzy dates print only what they know")
+    func fuzzyText() throws {
+        let date = Calendar.current.date(from: DateComponents(year: 2020, month: 3, day: 14))!
+        let year = CompletionEvent(date: date, label: .cleared)
+        year.datePrecision = "year"
+        #expect(year.dateText == "2020")
+        let month = CompletionEvent(date: date, label: .cleared)
+        month.datePrecision = "month"
+        #expect(month.dateText.contains("March") && month.dateText.contains("2020"))
+        let day = CompletionEvent(date: date, label: .cleared)
+        #expect(day.dateText.contains("2020") && !day.dateText.hasPrefix("2020"))
+    }
+
+    @Test("Precision survives the export/import round trip")
+    @MainActor
+    func precisionRoundTrip() throws {
+        let source = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(source.mainContext)
+        let game = repo.addGame(name: "Citizen Sleeper")
+        _ = repo.addCompletion(
+            to: game, label: .cleared,
+            date: Calendar.current.date(from: DateComponents(year: 2026, month: 1, day: 1))!,
+            precision: "year")
+        let data = try LibraryExport.makeJSON(context: source.mainContext)
+
+        let dest = LevelSelectStore.makeContainer(inMemory: true)
+        _ = try LibraryImport.apply(data: data, context: dest.mainContext)
+        let games = try dest.mainContext.fetch(FetchDescriptor<Game>())
+        let restored = try #require(games.first?.completionEvents?.first)
+        #expect(restored.datePrecision == "year")
+        #expect(restored.dateText == "2026")
+        #expect(restored.label == .cleared)
+    }
+}

@@ -702,20 +702,104 @@ struct StatusListView: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var allGames: [Game]
 
-    private var games: [Game] { allGames.filter { $0.status == status } }
+    /// One preference for every status shelf, not one per status — the way
+    /// you like reading a shelf is about you, not about which shelf it is.
+    @AppStorage("statusList.sort") private var sortRaw = StatusSort.name.rawValue
+    @AppStorage("statusList.grid") private var asGrid = false
+    @AppStorage("libraryGridSize") private var gridSizeRaw = GridSize.medium.rawValue
 
-    var body: some View {
-        List {
-            ForEach(games) { game in
-                NavigationLink(value: game) { GameRow(game: game) }
-                    .listRowBackground(Color.clear)
-                    .gameContextMenu(game)
+    private var sort: StatusSort { StatusSort(rawValue: sortRaw) ?? .name }
+    private var gridSize: GridSize { GridSize(rawValue: gridSizeRaw) ?? .medium }
+
+    enum StatusSort: String, CaseIterable {
+        case name, lastPlayed, added, rating, releaseYear
+
+        var label: String {
+            switch self {
+            case .name:        "Name"
+            case .lastPlayed:  "Last played"
+            case .added:       "Recently added"
+            case .rating:      "Rating"
+            case .releaseYear: "Release year"
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+    }
+
+    private var games: [Game] {
+        let filtered = allGames.filter { $0.status == status }
+        switch sort {
+        case .name:
+            return filtered
+        case .lastPlayed:
+            return filtered.sorted {
+                ($0.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? .distantPast)
+                    > ($1.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? .distantPast)
+            }
+        case .added:
+            return filtered.sorted { $0.addedAt > $1.addedAt }
+        case .rating:
+            return filtered.sorted {
+                if ($0.rating ?? -1) != ($1.rating ?? -1) { return ($0.rating ?? -1) > ($1.rating ?? -1) }
+                return $0.name < $1.name
+            }
+        case .releaseYear:
+            return filtered.sorted { ($0.firstReleaseDate ?? .distantPast) > ($1.firstReleaseDate ?? .distantPast) }
+        }
+    }
+
+    var body: some View {
+        Group {
+            if asGrid {
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: gridSize.minWidth), spacing: 12)],
+                        spacing: 16
+                    ) {
+                        ForEach(games) { game in
+                            NavigationLink(value: game) {
+                                LibraryGridCell(game: game, size: gridSize)
+                            }
+                            .buttonStyle(PressableCardStyle())
+                            .gameContextMenu(game)
+                        }
+                    }
+                    .padding()
+                }
+                .scrollIndicators(.hidden)
+            } else {
+                List {
+                    ForEach(games) { game in
+                        NavigationLink(value: game) { GameRow(game: game) }
+                            .listRowBackground(Color.clear)
+                            .gameContextMenu(game)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
         .lsBackground()
         .navigationTitle(status.sectionTitle)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Picker("Sort by", selection: $sortRaw) {
+                        ForEach(StatusSort.allCases, id: \.rawValue) { option in
+                            Text(option.label).tag(option.rawValue)
+                        }
+                    }
+                    Divider()
+                    Button {
+                        asGrid.toggle()
+                    } label: {
+                        Label(asGrid ? "Show as List" : "Show as Grid",
+                              systemImage: asGrid ? "list.bullet" : "square.grid.2x2")
+                    }
+                } label: {
+                    Label("Sort and layout", systemImage: "arrow.up.arrow.down")
+                }
+            }
+        }
     }
 }
 

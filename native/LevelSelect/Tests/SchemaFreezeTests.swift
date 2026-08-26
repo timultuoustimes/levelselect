@@ -137,7 +137,10 @@ struct SchemaFreezeTests {
     /// deliberately — and promoting the CloudKit schema before shipping.
     @Test func schemaV2ShapeIsPinned() {
         let expected = [
-            "CompletionEvent: createdAt,customLabel,date,deletedAt,game,id,label,legacyID,notes,platform,revision,updatedAt,userID",
+            // datePrecision added 2026-08-26 (fuzzy beaten dates). Seed +
+            // promote the CloudKit schema before shipping a build that
+            // writes it.
+            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,revision,updatedAt,userID",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             "Game: addedAt,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",

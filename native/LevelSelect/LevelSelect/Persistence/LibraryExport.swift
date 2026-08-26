@@ -195,6 +195,7 @@ enum LibraryExport {
                 c["customLabel"] = event.customLabel
                 c["platform"] = event.platform
                 c["notes"] = event.notes
+                c["datePrecision"] = event.datePrecision
                 return c
             }
 

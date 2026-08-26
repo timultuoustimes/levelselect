@@ -136,6 +136,7 @@ struct StatsTab: View {
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
+            .navigationDestination(for: CompletionYearRoute.self) { CompletionYearView(year: $0.year) }
             .dekuBrowser(target: $raBrowser)
             .task { await loadRAAwards() }
         }
@@ -257,17 +258,30 @@ struct StatsTab: View {
 
     private var completionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Completions", systemImage: "checkmark.seal.fill")
+            Label("Beaten & Completed", systemImage: "flag.checkered")
                 .font(.headline)
-            ForEach(completionsByYear, id: \.0) { year, count in
-                HStack {
-                    Text(String(year)).font(.subheadline)
-                    Spacer()
-                    Text("\(count)")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+            ForEach(completionsByYear, id: \.year) { row in
+                NavigationLink(value: CompletionYearRoute(year: row.year)) {
+                    HStack {
+                        Text(String(row.year))
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(yearSummary(row))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(String(row.year)): \(yearSummary(row))")
             }
+            Text("Mark a game beaten from its page — the ⋯ menu, or the Beaten section. Past years welcome.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .lsCard()
@@ -429,6 +443,13 @@ struct StatsTab: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .lsCard()
+    }
+
+    private func yearSummary(_ row: (year: Int, beaten: Int, hundred: Int)) -> String {
+        var parts: [String] = []
+        if row.beaten > 0 { parts.append("\(row.beaten) beaten") }
+        if row.hundred > 0 { parts.append("\(row.hundred) at 100%") }
+        return parts.joined(separator: " · ")
     }
 
     private func wallSummary(mastered: Int, completed: Int) -> String {
@@ -765,10 +786,77 @@ struct StatsTab: View {
             .sorted { $0.key > $1.key }
     }
 
-    private var completionsByYear: [(Int, Int)] {
-        let events = games.flatMap { $0.completionEvents ?? [] }
+    /// Per year: things beaten (credits rolled, NG+, custom moments) and
+    /// trackers finished to 100%. Two different achievements — one is the
+    /// game's ending, the other is the end of YOUR list — so they refuse to
+    /// share a number.
+    private var completionsByYear: [(year: Int, beaten: Int, hundred: Int)] {
+        let events = games.flatMap { $0.completionEvents ?? [] }.filter { $0.deletedAt == nil }
         let byYear = Dictionary(grouping: events) { Calendar.current.component(.year, from: $0.date) }
-        return byYear.mapValues(\.count).sorted { $0.key > $1.key }
+        return byYear.map { year, list in
+            (year: year,
+             beaten: list.filter { $0.label != .hundredPercent }.count,
+             hundred: list.filter { $0.label == .hundredPercent }.count)
+        }
+        .sorted { $0.year > $1.year }
+    }
+}
+
+struct CompletionYearRoute: Hashable {
+    let year: Int
+}
+
+/// Everything finished in one year — the answer to "wait, what DID I beat
+/// in 2026?", which a bare count in a card can't give.
+struct CompletionYearView: View {
+    let year: Int
+    @Query private var allGames: [Game]
+
+    private var rows: [(event: CompletionEvent, game: Game)] {
+        allGames.flatMap { game in
+            (game.completionEvents ?? [])
+                .filter { $0.deletedAt == nil
+                    && Calendar.current.component(.year, from: $0.date) == year }
+                .map { (event: $0, game: game) }
+        }
+        .sorted { $0.event.date > $1.event.date }
+    }
+
+    var body: some View {
+        List {
+            ForEach(rows, id: \.event.id) { row in
+                NavigationLink(value: row.game) {
+                    HStack(spacing: 12) {
+                        CoverThumb(urlString: row.game.coverURLString)
+                            .frame(width: 40, height: 53)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(row.game.name)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            HStack(spacing: 5) {
+                                Text(row.event.labelText)
+                                if let platform = row.event.platform, !platform.isEmpty {
+                                    Text("· \(PlatformShort.name(platform))")
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(row.event.dateText)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(row.game.name), \(row.event.labelText), \(row.event.dateText)")
+                }
+                .listRowBackground(Color.clear)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .lsBackground()
+        .navigationTitle("Finished in \(String(year))")
     }
 }
 

@@ -8,6 +8,7 @@ struct GameDetailView: View {
     @State private var confirmingDelete = false
     @State private var fixingMatch = false
     @State private var browserTarget: DekuLinkTarget?
+    @State private var markingBeaten = false
 
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
@@ -112,6 +113,12 @@ struct GameDetailView: View {
             }
         }
         .dekuBrowser(target: $browserTarget)
+        .sheet(isPresented: $markingBeaten) {
+            MarkCompletionSheet(game: game)
+                #if !os(macOS)
+                .presentationDetents([.medium, .large])
+                #endif
+        }
         .alert("New Collection", isPresented: $newCollection) {
             TextField("Name", text: $newCollectionName)
             Button("Create") {
@@ -144,6 +151,11 @@ struct GameDetailView: View {
                                 Label(s.label, systemImage: game.status == s ? "checkmark" : s.systemImage)
                             }
                         }
+                    }
+                    Button {
+                        markingBeaten = true
+                    } label: {
+                        Label("Mark as Beaten…", systemImage: "flag.checkered")
                     }
                     Menu {
                         ForEach(collections) { collection in
@@ -360,6 +372,11 @@ struct GameDetailView: View {
                 Divider()
                 CollapsibleSection("Sessions", icon: "stopwatch") {
                     SessionControlsView(game: game)
+                }
+                Divider()
+                CollapsibleSection("Beaten", icon: "flag.checkered",
+                                   defaultExpanded: false) {
+                    CompletionSection(game: game)
                 }
                 // Runs render in BOTH display modes. A run is a play-logging
                 // action, the sibling of a session — and Sessions is right

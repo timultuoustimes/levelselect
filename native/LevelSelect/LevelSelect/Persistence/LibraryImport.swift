@@ -444,6 +444,7 @@ enum LibraryImport {
             customLabel: d["customLabel"] as? String)
         event.platform = d["platform"] as? String
         event.notes = d["notes"] as? String
+        event.datePrecision = d["datePrecision"] as? String
         return event
     }
 
