@@ -67,9 +67,7 @@ struct RootView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(3)
                 .task(id: roll.id) {
-                    #if os(iOS)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    #endif
+                    DiceHaptics.tumble()
                     try? await Task.sleep(for: .seconds(5))
                     if nav.shuffleRoll?.id == roll.id { nav.shuffleRoll = nil }
                 }

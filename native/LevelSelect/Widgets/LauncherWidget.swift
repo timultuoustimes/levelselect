@@ -278,7 +278,29 @@ struct LauncherSmallView: View {
     let entry: LauncherEntry
 
     var body: some View {
-        if let target = entry.target {
+        if let target = entry.target,
+           target.id.hasPrefix("platform:"),
+           let asset = entry.snapshot?.platformIcons[target.name],
+           let ui = UIImage(named: asset) {
+            // A system's small launcher is a shelf ornament: the claymorphic
+            // hardware nearly fills the widget, name beneath. A row of these
+            // reads as "my consoles", which is exactly the point of pinning
+            // them.
+            VStack(spacing: 4) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .widgetAccentedRenderingMode(.fullColor)
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .shadow(color: .black.opacity(0.45), radius: 8, y: 4)
+                Text(target.name)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            .padding(2)
+            .widgetURL(target.url ?? WidgetShared.homeURL)
+        } else if let target = entry.target {
             VStack(alignment: .leading, spacing: 0) {
                 PortalMark(target: target, snapshot: entry.snapshot)
                 Spacer(minLength: 0)
