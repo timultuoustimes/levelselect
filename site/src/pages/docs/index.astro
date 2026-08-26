@@ -26,13 +26,13 @@ const steps = [
 ---
 <Base
   title="Help — LevelSelect"
-  description="How to use LevelSelect: where to begin, pasting a checklist into a tracker, regenerating safely, and getting your data out."
+  description="How to use LevelSelect: where to begin, pasting a checklist into a tracker, Siri and Shortcuts, widgets, and getting your data out."
   current="docs"
 >
 <main class="wrap">
   <article class="doc">
     <h1>Help</h1>
-    <p class="stamp">Last updated 17 August 2026</p>
+    <p class="stamp">Last updated 25 August 2026</p>
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
@@ -97,6 +97,25 @@ const steps = [
     <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
     <p>They're deliberately separate. A run doesn't start a timer, and a session doesn't record a run, so your playtime never gets inflated by counting attempts. Run logging is off until you turn it on for a game (⋯ &rarr; <em>Log Runs for This Game</em>), because plenty of games deserve a tracker without one.</p>
 
+    <h2 id="shortcuts">Siri, Shortcuts, and your games by name</h2>
+    <p>Every game in your library is a real entity in the Shortcuts app, Siri, and Spotlight — not just the app itself, each <em>game</em>. That means:</p>
+    <ul>
+      <li><strong>"Play Hollow Knight in LevelSelect"</strong> starts a timed session for that game — from Siri, without opening anything. "Open <em>game</em> in LevelSelect" jumps to its page.</li>
+      <li><strong>"Continue playing in LevelSelect"</strong> resumes whatever you were last playing. "Open LevelSelect stats" (or library, or wishlist) goes straight to a tab.</li>
+      <li><strong>Build your own automations.</strong> Because sessions are Shortcuts actions, you can wire them to anything the Shortcuts app can see: an NFC tag stuck to the console that starts a session when you tap your phone on it, a Focus that opens your library, a bedtime automation that reminds you a timer's still running.</li>
+    </ul>
+    <p>Nothing to set up — the shortcuts register themselves when the app is installed. Open the Shortcuts app and search LevelSelect to see the full set.</p>
+
+    <h2 id="widgets">Widgets <span class="soon">arriving in 0.1.0 (27)</span></h2>
+    <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
+    <ul>
+      <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), the Now Playing shelf, <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system (with the section's own cover art at medium and large sizes), a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
+      <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
+      <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
+      <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
+      <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
+    </ul>
+
     <h2 id="data">Getting your data out</h2>
     <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
     <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, and collections — each record with its stable id — plus your appearance settings as a single preferences block.</p>
@@ -108,6 +127,10 @@ const steps = [
 </main>
 
 <style>
+  .soon {
+    font-size: .65em; font-weight: 700; letter-spacing: .04em;
+    color: var(--torch); vertical-align: middle; margin-left: .5rem;
+  }
   .lede { font-size: 1.05rem; color: var(--ink); }
 
   .steps { counter-reset: step; list-style: none; padding: 0; margin: 1.6rem 0 0; display: flex; flex-direction: column; gap: .6rem; }
