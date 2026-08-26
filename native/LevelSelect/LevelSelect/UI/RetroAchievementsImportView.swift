@@ -17,6 +17,8 @@ struct RetroAchievementsImportView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    /// Finished items the refresh dropped, awaiting the keep-or-let-go call.
+    @State private var lostProgress: [TrackerItemDTO] = []
 
     @State private var loading = true
     @State private var error: String?
@@ -101,6 +103,26 @@ struct RetroAchievementsImportView: View {
             }
         }
         .navigationTitle("RetroAchievements")
+        .confirmationDialog(
+            "\(lostProgress.count) finished item\(lostProgress.count == 1 ? "" : "s") dropped",
+            isPresented: Binding(get: { !lostProgress.isEmpty },
+                                 set: { if !$0 { lostProgress = [] } }),
+            titleVisibility: .visible
+        ) {
+            Button("Keep as Personal Goals") {
+                Repository(context).rescueAsPersonalGoals(lostProgress, for: game)
+                lostProgress = []
+                dismiss()
+            }
+            Button("Let Them Go", role: .destructive) {
+                lostProgress = []
+                dismiss()
+            }
+        } message: {
+            let names = lostProgress.prefix(3).map(\.name).joined(separator: ", ")
+            let more = lostProgress.count > 3 ? " and \(lostProgress.count - 3) more" : ""
+            Text("RetroAchievements retired or revised achievements you'd finished — \(names)\(more). Keep them as Personal Goals with their checkmarks, or let them go.")
+        }
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -145,10 +167,20 @@ struct RetroAchievementsImportView: View {
             // sitting in the list forever. First time, it's a plain install.
             let existing = repo.trackerCategories(for: game)
                 .contains { $0.id == "retroachievements" }
-            repo.applyGeneratedSchema(
+            let outcome = repo.applyGeneratedSchema(
                 for: game, jsonData: installed.schema,
-                mode: existing ? .replaceCategories(ids: ["retroachievements"]) : .addAll)
-            dismiss()
+                mode: existing ? .replaceCategories(ids: ["retroachievements"]) : .addAll,
+                source: .imported, attribution: "retroachievements")
+            // A refresh replaces the category, and RA does retire and revise
+            // achievements — anything you'd FINISHED that fell out must be
+            // offered back, not silently discarded with the dismiss. Same
+            // rescue the regeneration path has had; this view just never
+            // looked at the outcome it was handed.
+            if outcome.lostProgress.isEmpty {
+                dismiss()
+            } else {
+                lostProgress = outcome.lostProgress
+            }
         } catch {
             self.error = error.localizedDescription
         }

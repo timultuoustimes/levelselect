@@ -577,3 +577,113 @@ struct ShufflePoolTests {
         #expect(any.count == 2)
     }
 }
+
+/// Goal 3's honesty tail, pinned.
+@MainActor
+struct HonestyTailTests {
+
+    private func repo() -> (Repository, ModelContext) {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        return (Repository(context), context)
+    }
+
+    // MARK: One progress calculator
+
+    /// Counted items are binary (the counter flips `completed` at target),
+    /// hidden items always count toward the total. Change this HERE, in one
+    /// place, deliberately — never in one of the three former copies.
+    @Test func tallySemanticsPinned() {
+        let items = [
+            TrackerItemDTO(id: "plain", name: "Boss", itemDescription: nil, location: nil,
+                           missable: false, hideUntilDiscovered: false, maxRank: nil,
+                           rankNames: nil, display: nil),
+            TrackerItemDTO(id: "hidden", name: "Secret", itemDescription: nil, location: nil,
+                           missable: false, hideUntilDiscovered: true, maxRank: nil,
+                           rankNames: nil, display: nil),
+            TrackerItemDTO(id: "counter", name: "Koroks", itemDescription: nil, location: nil,
+                           missable: false, hideUntilDiscovered: false, maxRank: nil,
+                           rankNames: nil, display: nil),
+        ]
+        let done: Set<String> = ["plain"]
+        let tally = TrackerProgress.tally(items: items) { done.contains($0) }
+        #expect(tally.done == 1)
+        #expect(tally.total == 3)   // hidden + counter both in the denominator
+        #expect(abs(tally.percent - 33.3) < 1)
+    }
+
+    @Test func emptySchemaIsZeroNotStale() {
+        #expect(TrackerProgress.tally(items: []) { _ in true } == .init(done: 0, total: 0))
+        #expect(TrackerProgress.tally(items: []) { _ in true }.percent == 0)
+    }
+
+    // MARK: Provenance
+
+    @Test func raOnlySchemaGetsRepairedToImported() {
+        let (repo, _) = repo()
+        let game = repo.addGame(name: "Super Metroid")
+        let schema = """
+        {"schemaVersion":1,"categories":[
+          {"id":"retroachievements","name":"Achievements","raGameID":1103,
+           "items":[{"id":"a1","name":"Ridley"}]}
+        ]}
+        """
+        // The old ingest path: stamped as if Claude made it.
+        repo.setGeneratedSchema(for: game, jsonData: Data(schema.utf8))
+        #expect(game.trackerSchema?.source == .aiGenerated)
+
+        repo.reconcile(game)
+        #expect(game.trackerSchema?.source == .imported)
+        #expect(game.trackerSchema?.generatedBy == "retroachievements")
+    }
+
+    @Test func mixedSchemaStaysGenerated() {
+        let (repo, _) = repo()
+        let game = repo.addGame(name: "Hollow Knight")
+        let schema = """
+        {"schemaVersion":1,"categories":[
+          {"id":"retroachievements","name":"Achievements","raGameID":9,
+           "items":[{"id":"a1","name":"X"}]},
+          {"id":"bosses","name":"Bosses","items":[{"id":"b1","name":"Hornet"}]}
+        ]}
+        """
+        repo.setGeneratedSchema(for: game, jsonData: Data(schema.utf8))
+        repo.reconcile(game)
+        #expect(game.trackerSchema?.source == .aiGenerated)
+    }
+
+    @Test func importedIngestStampsHonestly() {
+        let (repo, _) = repo()
+        let game = repo.addGame(name: "Castlevania")
+        let schema = """
+        {"schemaVersion":1,"categories":[
+          {"id":"retroachievements","name":"Achievements","raGameID":7,
+           "items":[{"id":"a1","name":"Whip"}]}
+        ]}
+        """
+        repo.applyGeneratedSchema(for: game, jsonData: Data(schema.utf8),
+                                  mode: .addAll, source: .imported,
+                                  attribution: "retroachievements")
+        #expect(game.trackerSchema?.source == .imported)
+        #expect(game.trackerSchema?.generatedBy == "retroachievements")
+    }
+
+    // MARK: Applicability
+
+    @Test func applicabilityRoundTripsAndClears() {
+        let (repo, _) = repo()
+        let game = repo.addGame(name: "Skyrim")
+        repo.setGeneratedSchema(for: game, jsonData: Data(
+            #"{"schemaVersion":1,"categories":[]}"#.utf8))
+
+        repo.setApplicability(
+            .init(platform: "Switch", edition: "Anniversary", notes: "no Creations"),
+            for: game)
+        var read = TrackerSchemaJSON.applicability(in: game.trackerSchema!.jsonData)
+        #expect(read.platform == "Switch")
+        #expect(read.summary == "Switch · Anniversary · no Creations")
+
+        repo.setApplicability(.init(), for: game)
+        read = TrackerSchemaJSON.applicability(in: game.trackerSchema!.jsonData)
+        #expect(read.isEmpty)
+    }
+}

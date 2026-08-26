@@ -144,6 +144,13 @@ struct TrackerSectionView: View {
     /// reference, making one render of a large tracker roughly
     /// O(items × states). At 180 items that's ~180 rebuilds of a 180-entry
     /// dictionary per frame. Same data, built once, passed down.
+    @State private var editingApplicability = false
+
+    private var applicability: TrackerSchemaJSON.Applicability {
+        game.trackerSchema.map { TrackerSchemaJSON.applicability(in: $0.jsonData) }
+            ?? TrackerSchemaJSON.Applicability()
+    }
+
     private var stateByItem: [String: TrackerStateRecord] {
         Dictionary(
             (playthrough?.trackerStates ?? [])
@@ -348,6 +355,11 @@ struct TrackerSectionView: View {
                         goalName = ""
                         addingGoal = true
                     } label: { Label("Add Personal Goal", systemImage: "plus.circle") }
+                    Button {
+                        editingApplicability = true
+                    } label: { Label(applicability.isEmpty ? "Set What This Applies To…"
+                                                          : "Edit What This Applies To…",
+                                     systemImage: "scope") }
                     if builtinAvailable && !usingBuiltin {
                         Divider()
                         Button {
@@ -529,6 +541,9 @@ struct TrackerSectionView: View {
         } message: {
             Text("A generator's naming is a suggestion. Renaming keeps your progress and won't confuse a future regeneration.")
         }
+        .sheet(isPresented: $editingApplicability) {
+            ApplicabilitySheet(game: game)
+        }
         .alert("New Personal Goal", isPresented: $addingGoal) {
             TextField("Goal", text: $goalName)
             Button("Add") {
@@ -701,7 +716,8 @@ struct TrackerSectionView: View {
 
     private func header(_ cats: [TrackerCategoryDTO], states: [String: TrackerStateRecord]) -> some View {
         let allItems = cats.flatMap(\.items)
-        let done = allItems.filter { states[$0.id]?.completed == true }.count
+        let tally = TrackerProgress.tally(items: allItems) { states[$0]?.completed == true }
+        let done = tally.done
         // Only sources that score their items have any of this — RetroAchievements
         // does, a generated tracker doesn't — so the whole readout stays absent
         // rather than showing everyone a meaningless "0 pts".
@@ -714,7 +730,7 @@ struct TrackerSectionView: View {
             HStack {
                 Spacer()
                 if !allItems.isEmpty {
-                    Text("\(done)/\(allItems.count)")
+                    Text("\(done)/\(tally.total)")
                         .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                     Button {
@@ -738,13 +754,27 @@ struct TrackerSectionView: View {
                 }
             }
             if !allItems.isEmpty {
-                ProgressView(value: Double(done), total: Double(allItems.count))
+                ProgressView(value: Double(tally.done), total: Double(max(1, tally.total)))
                     .tint(LSTheme.accent)
             }
             if totalPoints > 0 {
                 Text("\(earnedPoints) of \(totalPoints) points")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+            }
+            // What these numbers are TRUE OF. A tracker for the Switch
+            // Definitive Edition scoped no-DLC says so here, where the
+            // numbers live — not in a note nobody reads.
+            if !applicability.isEmpty {
+                Button {
+                    editingApplicability = true
+                } label: {
+                    Label(applicability.summary, systemImage: "scope")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .buttonStyle(.plain)
             }
             // An icon with no key is a mystery. Shown only when the tracker
             // actually contains missables, and worded as what it costs you
@@ -1210,5 +1240,69 @@ struct TrackerSectionView: View {
             repo.setTrackerRank(pt, itemID: item.id,
                                 rank: max(0, min(newRank, maxRank)), maxRank: maxRank)
         }
+    }
+}
+
+
+/// "What do these numbers apply to?" — platform, edition, and scope notes.
+/// Three plain fields on purpose: applicability is prose about a specific
+/// copy of a specific game, and structured pickers would fight every real
+/// answer ("PS5 via PS Plus", "the 2013 remaster", "pre-2.0, no DLC").
+struct ApplicabilitySheet: View {
+    let game: Game
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var platform = ""
+    @State private var edition = ""
+    @State private var notes = ""
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("Platform (e.g. Switch)", text: $platform)
+                    TextField("Edition (e.g. Definitive Edition)", text: $edition)
+                    TextField("Scope (e.g. base game, no DLC)", text: $notes)
+                } footer: {
+                    Text("Shown with the tracker's numbers, so anyone reading them knows which version of the game they're true of. A tracker for the wrong edition is how numbers stop being true.")
+                }
+                if !game.platforms.isEmpty && platform.isEmpty {
+                    Section("Your platforms") {
+                        ForEach(game.platforms, id: \.self) { p in
+                            Button(PlatformShort.name(p)) { platform = PlatformShort.name(p) }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Applies To")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Repository(context).setApplicability(
+                            .init(platform: platform.trimmingCharacters(in: .whitespaces),
+                                  edition: edition.trimmingCharacters(in: .whitespaces),
+                                  notes: notes.trimmingCharacters(in: .whitespaces)),
+                            for: game)
+                        dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                let current = game.trackerSchema.map {
+                    TrackerSchemaJSON.applicability(in: $0.jsonData)
+                } ?? .init()
+                platform = current.platform
+                edition = current.edition
+                notes = current.notes
+            }
+        }
+        .presentationDetents([.medium])
     }
 }

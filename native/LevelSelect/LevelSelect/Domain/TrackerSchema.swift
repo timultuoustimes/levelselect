@@ -545,6 +545,50 @@ enum TrackerSchemaJSON {
         })
     }
 
+    // MARK: Applicability
+
+    /// What this tracker is FOR — the platform, edition, and DLC/patch scope
+    /// its numbers are true of. A tracker for the wrong edition is the
+    /// fastest way to make "the numbers are true" false, and until now the
+    /// tracker had nowhere to say which edition it meant. Root-level JSON
+    /// keys, so no schema version.
+    struct Applicability: Equatable {
+        var platform: String = ""
+        var edition: String = ""
+        var notes: String = ""
+
+        var isEmpty: Bool { platform.isEmpty && edition.isEmpty && notes.isEmpty }
+
+        /// "Switch · Definitive Edition · post-1.5, no DLC"
+        var summary: String {
+            [platform, edition, notes].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+    }
+
+    static func applicability(in data: Data) -> Applicability {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let raw = root["applicability"] as? [String: Any] else { return Applicability() }
+        return Applicability(
+            platform: (raw["platform"] as? String) ?? "",
+            edition: (raw["edition"] as? String) ?? "",
+            notes: (raw["notes"] as? String) ?? "")
+    }
+
+    static func settingApplicability(_ value: Applicability, in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        if value.isEmpty {
+            root.removeValue(forKey: "applicability")
+        } else {
+            var raw: [String: Any] = [:]
+            if !value.platform.isEmpty { raw["platform"] = value.platform }
+            if !value.edition.isEmpty { raw["edition"] = value.edition }
+            if !value.notes.isEmpty { raw["notes"] = value.notes }
+            root["applicability"] = raw
+        }
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
     /// Lock or unlock a category in place.
     static func settingLock(_ locked: Bool, categoryID: String, in data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],

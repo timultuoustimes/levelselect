@@ -195,7 +195,7 @@ enum WidgetBridge {
                                 uniquingKeysWith: { a, b in b.outranks(a) ? b : a })
 
         let allItems = cats.flatMap(\.items)
-        let done = allItems.filter { byItem[$0.id]?.completed == true }.count
+        let done = TrackerProgress.tally(items: allItems) { byItem[$0]?.completed == true }.done
 
         // Objectives for the checklist: incomplete non-spoiler items first, in
         // schema order (capped) — the actionable "what's next" list.

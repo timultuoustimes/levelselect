@@ -32,6 +32,15 @@ final class AppNavigator {
         pendingRoute = route
     }
 
+    /// The die's last roll, for the toast: which game, and the URL that
+    /// rolled it (so Re-roll repeats the same filters).
+    struct ShuffleRoll: Equatable {
+        let id = UUID()
+        let gameName: String
+        let sourceURL: URL
+    }
+    var shuffleRoll: ShuffleRoll?
+
     func open(gameID: UUID) {
         selectedTab = .home
         pendingGameID = gameID

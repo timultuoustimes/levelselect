@@ -47,6 +47,13 @@ enum CompletionLabel: String, Codable, CaseIterable, Sendable {
 
 enum TrackerSource: String, Codable, Sendable {
     case builtIn, aiGenerated
+    /// Authored content brought in from a real source — RetroAchievements
+    /// today. A String-raw case costs nothing (the "ongoing" status rule);
+    /// what it buys is the record agreeing with the badge: the UI has said
+    /// "RetroAchievements" since the badge shipped while the DATA said an AI
+    /// made it, and an export that claims Claude wrote Nintendo's achievement
+    /// list is the kind of lie this app exists to not tell.
+    case imported
 }
 
 enum TrackerEngine: String, Codable, Sendable {

@@ -1086,7 +1086,9 @@ struct Repository {
 
     /// Apply an AI-generated schema to a game (create or replace), keeping
     /// the user's Personal Goals across regeneration.
-    func setGeneratedSchema(for game: Game, jsonData: Data) {
+    func setGeneratedSchema(for game: Game, jsonData: Data,
+                            source: TrackerSource = .aiGenerated,
+                            attribution: String? = "claude") {
         // Generated ids are untrusted input, not a valid key set — duplicate
         // item ids share one state record (ticking either row ticks both).
         // Sanitize at the boundary so no install path accepts them raw.
@@ -1097,13 +1099,13 @@ struct Repository {
             schema.jsonData = TrackerSchemaJSON.mergingPersonalGoals(
                 from: existing.jsonData, into: jsonData)
         } else {
-            schema = TrackerSchemaRecord(source: .aiGenerated, engine: .objective, jsonData: jsonData)
+            schema = TrackerSchemaRecord(source: source, engine: .objective, jsonData: jsonData)
             context.insert(schema)
             schema.game = game
         }
-        schema.source = .aiGenerated
+        schema.source = source
         schema.generatedAt = .now
-        schema.generatedBy = "claude"
+        schema.generatedBy = attribution
         touch(schema)
         touch(game)
         recomputeProgress(game)
@@ -1373,7 +1375,9 @@ struct Repository {
     /// lose anything.
     @discardableResult
     func applyGeneratedSchema(for game: Game, jsonData: Data,
-                              mode: TrackerMergeMode) -> TrackerMergeOutcome {
+                              mode: TrackerMergeMode,
+                              source: TrackerSource = .aiGenerated,
+                              attribution: String? = "claude") -> TrackerMergeOutcome {
         // The ONE ingest boundary: first generation, Replace, Add-to-existing
         // and Add-new-category all pass through here, so sanitizing the
         // payload once covers every mode — the previous seen-set fix deduped
@@ -1385,7 +1389,8 @@ struct Repository {
         reconcile(game)
         guard let existing = game.trackerSchema else {
             // Nothing to merge into — first generation is just an install.
-            setGeneratedSchema(for: game, jsonData: jsonData)
+            setGeneratedSchema(for: game, jsonData: jsonData,
+                               source: source, attribution: attribution)
             let cats = TrackerSchemaJSON.categories(from: jsonData)
             return TrackerMergeOutcome(added: cats.flatMap(\.items).count)
         }
@@ -1640,14 +1645,24 @@ struct Repository {
         } else {
             let byItem = Dictionary(grouping: (pt.trackerStates ?? [])
                 .filter { $0.deletedAt == nil }, by: \.itemID)
-            let done = allItems.filter {
-                byItem[$0.id].flatMap(TrackerStateRecord.winner)?.completed == true
-            }.count
-            percent = Double(done) / Double(allItems.count) * 100
+            percent = TrackerProgress.tally(items: allItems) {
+                byItem[$0].flatMap(TrackerStateRecord.winner)?.completed == true
+            }.percent
         }
         guard pt.progressPercent != percent else { return }
         pt.progressPercent = percent
         touch(pt)
+    }
+
+    /// Record what the tracker applies to (platform/edition/scope).
+    func setApplicability(_ value: TrackerSchemaJSON.Applicability, for game: Game) {
+        guard let schema = game.trackerSchema,
+              let updated = TrackerSchemaJSON.settingApplicability(value, in: schema.jsonData)
+        else { return }
+        schema.jsonData = updated
+        touch(schema)
+        touch(game)
+        persist()
     }
 
     // MARK: Runs (roguelikes / Hades)
@@ -1927,9 +1942,29 @@ struct Repository {
             outcome.mergedStates += mergeDuplicateStates(in: pt, at: date)
         }
         outcome.closedSessions = reconcileSessions(in: game, at: date)
+        repairProvenance(of: game)
         if outcome.mergedStates > 0 { recomputeProgress(game) }
         if !outcome.isNoOp { persist() }
         return outcome
+    }
+
+    /// Re-stamp records whose ingest predates the `.imported` source: a
+    /// schema whose every real category came from RetroAchievements was
+    /// stamped `.aiGenerated` / "claude" by the old install path, so the
+    /// badge told the truth while the data lied. Idempotent, narrow, and it
+    /// leaves mixed content alone — a tracker with one imported category and
+    /// three generated ones IS generated with an import inside it.
+    private func repairProvenance(of game: Game) {
+        guard let schema = game.trackerSchema,
+              schema.source == .aiGenerated else { return }
+        let imported = TrackerSchemaJSON.importedSourceCategoryIDs(in: schema.jsonData)
+        guard !imported.isEmpty else { return }
+        let real = TrackerSchemaJSON.categories(from: schema.jsonData)
+            .filter { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
+        guard !real.isEmpty, real.allSatisfy({ imported.contains($0.id) }) else { return }
+        schema.source = .imported
+        schema.generatedBy = "retroachievements"
+        touch(schema)
     }
 
     /// Sessions currently unstopped anywhere in the live library. One small

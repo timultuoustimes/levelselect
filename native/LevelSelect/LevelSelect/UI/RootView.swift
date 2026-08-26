@@ -53,6 +53,28 @@ struct RootView: View {
             // navigated away by the time it finishes — without an app-wide
             // surface, a background failure was completely silent and a
             // success went unnoticed until they wandered back.
+            if let roll = nav.shuffleRoll {
+                VStack {
+                    Spacer()
+                    ShuffleToast(roll: roll) {
+                        route(roll.sourceURL)          // re-roll, same filters
+                    } dismiss: {
+                        nav.shuffleRoll = nil
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 64)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(3)
+                .task(id: roll.id) {
+                    #if os(iOS)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    #endif
+                    try? await Task.sleep(for: .seconds(5))
+                    if nav.shuffleRoll?.id == roll.id { nav.shuffleRoll = nil }
+                }
+            }
+
             if let notice = generation.notice {
                 VStack {
                     Spacer()
@@ -200,6 +222,9 @@ struct RootView: View {
         }
         if let pick = candidates.randomElement() {
             nav.open(gameID: pick.id)
+            // The roll happened invisibly during launch — the toast is what
+            // makes it feel like dice instead of an arbitrary landing.
+            nav.shuffleRoll = .init(gameName: pick.name, sourceURL: url)
         } else {
             nav.go(to: .library)
         }
@@ -247,6 +272,46 @@ private struct SaveFailureBanner: View {
 /// "Tracker ready / generation failed" toast — the app-wide answer to a
 /// generation finishing while the user is anywhere else. Open jumps straight
 /// to the game.
+/// "🎲 Rolled: Spyro the Dragon" — the die's landing, announced. Re-roll
+/// repeats the exact same filters without touching the widget again.
+private struct ShuffleToast: View {
+    let roll: AppNavigator.ShuffleRoll
+    var reroll: () -> Void
+    var dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "dice.fill")
+                .font(.title3)
+                .foregroundStyle(LSTheme.torch)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Rolled")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(roll.gameName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Button("Re-roll") { reroll() }
+                .font(.footnote.weight(.semibold))
+                .buttonStyle(.bordered)
+                .tint(LSTheme.accent)
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.08)))
+    }
+}
+
 private struct GenerationNoticeBanner: View {
     let notice: GenerationNotice
     let open: () -> Void
