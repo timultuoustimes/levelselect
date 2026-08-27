@@ -2022,6 +2022,40 @@ struct Repository {
         persist()
     }
 
+    /// Everyone you've recorded playing with, most-used first.
+    ///
+    /// Derived, not stored: the people are already written on finishes,
+    /// sessions and runs, so a separate roster would be a second copy to keep
+    /// in step — and a roster of people is a contact list, which is the thing
+    /// this app keeps declining to become. Deriving it means someone who only
+    /// ever appears once still gets suggested, and someone you stop playing
+    /// with quietly stops being offered.
+    func knownCompanions() -> [Companion] {
+        var all: [Companion] = []
+        for event in (try? context.fetch(FetchDescriptor<CompletionEvent>())) ?? []
+        where event.deletedAt == nil { all += event.companions }
+        for session in (try? context.fetch(FetchDescriptor<Session>())) ?? []
+        where session.deletedAt == nil { all += session.companions }
+        for run in (try? context.fetch(FetchDescriptor<Run>())) ?? []
+        where run.deletedAt == nil { all += run.companions }
+
+        // Same person, however they were typed: match on whichever parts are
+        // filled, case-insensitively, and keep the spelling used most.
+        var counts: [String: (companion: Companion, uses: Int)] = [:]
+        for person in all where !person.isEmpty {
+            let key = (person.name.trimmingCharacters(in: .whitespaces).lowercased())
+                + "|" + (person.handle.trimmingCharacters(in: .whitespaces).lowercased())
+            if let existing = counts[key] {
+                counts[key] = (existing.companion, existing.uses + 1)
+            } else {
+                counts[key] = (Companion(name: person.name, handle: person.handle), 1)
+            }
+        }
+        return counts.values
+            .sorted { ($0.uses, $1.companion.display) > ($1.uses, $0.companion.display) }
+            .map(\.companion)
+    }
+
     /// Record how a run ended — or clear it, because a run you wrote off and
     /// came back to is a good day, not a data-entry error.
     func setPlaythroughOutcome(_ pt: Playthrough,

@@ -1193,3 +1193,54 @@ struct CompletionEditTests {
         #expect(restored.companions.sentence == "Kenny and Cate")
     }
 }
+
+@Suite("Known companions")
+struct KnownCompanionTests {
+
+    @Test("People are gathered from finishes, sessions and runs, most-used first")
+    @MainActor
+    func gathersAndRanks() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let context = container.mainContext
+        let repo = Repository(context)
+
+        let coop = repo.addGame(name: "Cat Quest III")
+        let pt = repo.ensureDefaultPlaythrough(for: coop)
+        _ = repo.addCompletion(to: coop, label: .cleared,
+                               playedWith: [Companion(name: "Rosalie", handle: "@umigame")])
+        let session = repo.logManualSession(on: pt, duration: 3600, date: .now)
+        session.companions = [Companion(name: "Rosalie", handle: "@umigame"),
+                              Companion(name: "Kenny")]
+
+        let known = repo.knownCompanions()
+        #expect(known.count == 2)
+        // Rosalie appears twice, so she's offered first.
+        #expect(known.first?.name == "Rosalie")
+        #expect(known.first?.handle == "@umigame")
+        #expect(known.contains { $0.name == "Kenny" })
+    }
+
+    @Test("The same person typed differently is one suggestion, not three")
+    @MainActor
+    func dedupesByCase() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Fall Guys")
+        _ = repo.addCompletion(to: game, label: .cleared,
+                               playedWith: [Companion(name: "rosalie")])
+        _ = repo.addCompletion(to: game, label: .newGamePlus,
+                               playedWith: [Companion(name: "Rosalie")])
+        #expect(repo.knownCompanions().count == 1)
+    }
+
+    @Test("Empty entries are never suggested")
+    @MainActor
+    func ignoresBlanks() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Solo Game")
+        _ = repo.addCompletion(to: game, label: .cleared,
+                               playedWith: [Companion(name: "  ", handle: "")])
+        #expect(repo.knownCompanions().isEmpty)
+    }
+}

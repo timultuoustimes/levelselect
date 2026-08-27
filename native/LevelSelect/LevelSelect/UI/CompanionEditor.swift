@@ -9,6 +9,21 @@ import SwiftUI
 /// make the other unrecordable.
 struct CompanionEditor: View {
     @Binding var companions: [Companion]
+    @Environment(\.modelContext) private var context
+
+    /// People already recorded elsewhere in the library, minus whoever is
+    /// already on this record. Typing "Rosalie" and her gamertag again every
+    /// single co-op night is exactly the kind of chore the app shouldn't ask
+    /// for when it already knows the answer.
+    private var suggestions: [Companion] {
+        let taken = Set(companions.map {
+            $0.name.lowercased() + "|" + $0.handle.lowercased()
+        })
+        return Repository(context).knownCompanions()
+            .filter { !taken.contains($0.name.lowercased() + "|" + $0.handle.lowercased()) }
+            .prefix(8)
+            .map { $0 }
+    }
 
     var body: some View {
         ForEach($companions) { $companion in
@@ -36,6 +51,34 @@ struct CompanionEditor: View {
         } label: {
             Label(companions.isEmpty ? "Add someone" : "Add another",
                   systemImage: "person.badge.plus")
+        }
+
+        if !suggestions.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(companions.isEmpty ? "Played with before" : "Also")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                FlowLayout(spacing: 6) {
+                    ForEach(suggestions) { person in
+                        Button {
+                            // Name AND handle, so one tap records them the way
+                            // they were recorded last time.
+                            companions.append(Companion(name: person.name,
+                                                        handle: person.handle))
+                        } label: {
+                            Label(person.display, systemImage: "plus")
+                                .font(.caption)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(LSTheme.accent.opacity(0.16), in: .capsule)
+                                .overlay(Capsule().strokeBorder(LSTheme.accent.opacity(0.4),
+                                                                lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .tint(LSTheme.accent)
+                    }
+                }
+            }
         }
     }
 }
