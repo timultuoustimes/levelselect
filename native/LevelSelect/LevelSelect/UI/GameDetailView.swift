@@ -9,6 +9,8 @@ struct GameDetailView: View {
     @State private var fixingMatch = false
     @State private var browserTarget: DekuLinkTarget?
     @State private var markingBeaten = false
+    @State private var editingOutcomeNote = false
+    @State private var outcomeNoteDraft = ""
 
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
@@ -138,6 +140,19 @@ struct GameDetailView: View {
             }
         }
         .dekuBrowser(target: $browserTarget)
+        .alert("Why did it end?", isPresented: $editingOutcomeNote) {
+            TextField("Optional — combat never clicked, lost the save…",
+                      text: $outcomeNoteDraft)
+            Button("Save") {
+                if let pt = game.activePlaythrough {
+                    repo.setPlaythroughOutcome(pt, outcome: pt.outcome,
+                                               note: outcomeNoteDraft)
+                }
+            }
+            Button("Skip", role: .cancel) {}
+        } message: {
+            Text("The reason is the part worth keeping — a status on its own doesn't say what happened.")
+        }
         .sheet(isPresented: $markingBeaten) {
             MarkCompletionSheet(game: game)
                 #if !os(macOS)
@@ -242,6 +257,26 @@ struct GameDetailView: View {
                                 ? "Turn Off Run Logging" : "Log Runs for This Game",
                               systemImage: repo.runTrackingEnabled(for: game)
                                 ? "flag.slash" : "flag.checkered")
+                    }
+                    Menu("Item Hints") {
+                        Button {
+                            repo.edit(game) { $0.showItemHintsOverride = nil }
+                        } label: {
+                            Label("Follow Default", systemImage:
+                                    game.showItemHintsOverride == nil ? "checkmark" : "gear")
+                        }
+                        Button {
+                            repo.edit(game) { $0.showItemHintsOverride = true }
+                        } label: {
+                            Label("Show Hints", systemImage:
+                                    game.showItemHintsOverride == true ? "checkmark" : "eye")
+                        }
+                        Button {
+                            repo.edit(game) { $0.showItemHintsOverride = false }
+                        } label: {
+                            Label("Hide Hints (play blind)", systemImage:
+                                    game.showItemHintsOverride == false ? "checkmark" : "eye.slash")
+                        }
                     }
                     Menu("Tracker Display") {
                         Button {
@@ -370,6 +405,29 @@ struct GameDetailView: View {
                     renamingPlaythrough = true
                 } label: {
                     Label("Rename…", systemImage: "pencil")
+                }
+                Menu("How it ended") {
+                    Button {
+                        if let pt = game.activePlaythrough {
+                            repo.setPlaythroughOutcome(pt, outcome: nil, note: nil)
+                        }
+                    } label: {
+                        Label("Still going", systemImage: game.activePlaythrough?.outcome == nil
+                              ? "checkmark" : "play.circle")
+                    }
+                    ForEach(PlaythroughOutcome.allCases, id: \.self) { choice in
+                        Button {
+                            if let pt = game.activePlaythrough {
+                                repo.setPlaythroughOutcome(pt, outcome: choice, note: pt.outcomeNote)
+                                outcomeNoteDraft = pt.outcomeNote ?? ""
+                                editingOutcomeNote = true
+                            }
+                        } label: {
+                            Label(choice.label,
+                                  systemImage: game.activePlaythrough?.outcome == choice
+                                  ? "checkmark" : choice.systemImage)
+                        }
+                    }
                 }
                 Button(role: .destructive) {
                     confirmingPlaythroughDelete = true

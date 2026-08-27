@@ -59,6 +59,7 @@ enum CloudKitSchemaSeeder {
         game.addedAt = now
         game.currentPlaythroughID = UUID()
         game.trackerDisplayRaw = TrackerDisplay.inline.rawValue
+        game.showItemHintsOverride = true
         game.platforms = [marker]
         game.ownership = [Ownership.physical.rawValue]
         game.userTags = [marker]
@@ -78,6 +79,8 @@ enum CloudKitSchemaSeeder {
         pt.name = marker
         pt.notes = marker
         pt.progressPercent = 50
+        pt.outcomeRaw = PlaythroughOutcome.shelved.rawValue
+        pt.outcomeNote = marker
         pt.startedAt = now
         pt.lastPlayedAt = now
         context.insert(pt)
@@ -91,6 +94,7 @@ enum CloudKitSchemaSeeder {
         session.startDate = now
         session.endDate = now
         session.accumulatedDuration = 60
+        session.companions = [Companion(name: marker, handle: marker)]
         session.resumedAt = now
         session.pausedAt = now
         session.state = .stopped
@@ -111,6 +115,7 @@ enum CloudKitSchemaSeeder {
         run.outcome = .success
         run.fieldsJSON = stamp
         run.notes = marker
+        run.companions = [Companion(name: marker, handle: marker)]
         context.insert(run)
         run.playthrough = pt
 
@@ -156,7 +161,7 @@ enum CloudKitSchemaSeeder {
         completion.platform = marker
         completion.notes = marker
         completion.datePrecision = "year"
-        completion.playedWith = marker
+        completion.companions = [Companion(name: marker, handle: marker)]
         context.insert(completion)
         completion.game = game
         completion.playthrough = pt

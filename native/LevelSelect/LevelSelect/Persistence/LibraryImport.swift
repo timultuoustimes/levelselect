@@ -403,6 +403,8 @@ enum LibraryImport {
                              startedAt: date(d["startedAt"]))
         pt.notes = d["notes"] as? String
         pt.lastPlayedAt = date(d["lastPlayedAt"])
+        pt.outcomeRaw = d["outcome"] as? String
+        pt.outcomeNote = d["outcomeNote"] as? String
         return pt
     }
 
@@ -417,6 +419,7 @@ enum LibraryImport {
         session.notes = d["notes"] as? String
         session.resumedAt = date(d["resumedAt"])
         session.pausedAt = date(d["pausedAt"])
+        session.companions = companions(d["playedWith"])
         return session
     }
 
@@ -428,6 +431,7 @@ enum LibraryImport {
                       fieldsJSON: (try? JSONSerialization.data(withJSONObject: d["fields"] ?? [:])) ?? Data())
         run.endedAt = date(d["endedAt"])
         run.notes = d["notes"] as? String
+        run.companions = companions(d["playedWith"])
         return run
     }
 
@@ -442,6 +446,14 @@ enum LibraryImport {
         return state
     }
 
+    private static func companions(_ any: Any?) -> [Companion] {
+        guard let rows = any as? [[String: Any]] else { return [] }
+        return rows.map {
+            Companion(name: ($0["name"] as? String) ?? "",
+                      handle: ($0["handle"] as? String) ?? "")
+        }
+    }
+
     private static func makeCompletion(_ d: [String: Any], id: UUID) -> CompletionEvent {
         let event = CompletionEvent(
             id: id,
@@ -451,7 +463,7 @@ enum LibraryImport {
         event.platform = d["platform"] as? String
         event.notes = d["notes"] as? String
         event.datePrecision = d["datePrecision"] as? String
-        event.playedWith = d["playedWith"] as? String
+        event.companions = companions(d["playedWith"])
         return event
     }
 

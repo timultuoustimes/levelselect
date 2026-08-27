@@ -16,6 +16,17 @@ final class Playthrough {
     var notes: String?
     var progressPercent: Double = 0
     var startedAt: Date?
+    /// How this run ended, when it did — see `PlaythroughOutcome`. Nil means
+    /// it's still going, which is what most runs are.
+    ///
+    /// Distinct from the game's status: a game can be Playing because a second
+    /// save is alive while the first was abandoned twenty hours in. Only the
+    /// run knows that, and until now nothing recorded it.
+    var outcomeRaw: String?
+    /// Why it ended that way, in your words. The whole point of recording a
+    /// dropped run is the sentence explaining it — "combat never clicked",
+    /// "lost the save" — which a status alone can't carry.
+    var outcomeNote: String?
     var lastPlayedAt: Date?
 
     var game: Game?
@@ -23,6 +34,12 @@ final class Playthrough {
     /// Beaten and no longer the run you're actively working: true when a
     /// live completion event points here. Derived, so deleting the event
     /// un-finishes the run with no cleanup and no flags to reconcile.
+    /// How this run ended, if it has.
+    var outcome: PlaythroughOutcome? {
+        get { outcomeRaw.flatMap(PlaythroughOutcome.init(rawValue:)) }
+        set { outcomeRaw = newValue?.rawValue }
+    }
+
     var isFinished: Bool {
         (completionEvents ?? []).contains { $0.deletedAt == nil }
     }

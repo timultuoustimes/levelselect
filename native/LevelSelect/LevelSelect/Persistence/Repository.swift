@@ -1974,7 +1974,7 @@ struct Repository {
         platform: String? = nil,
         customLabel: String? = nil,
         notes: String? = nil,
-        playedWith: String? = nil,
+        playedWith: [Companion] = [],
         playthrough: Playthrough? = nil
     ) -> CompletionEvent {
         let event = CompletionEvent(date: date, label: label, customLabel: customLabel)
@@ -1984,7 +1984,7 @@ struct Repository {
         event.datePrecision = precision
         event.platform = platform
         event.notes = notes
-        event.playedWith = playedWith
+        event.companions = playedWith
         // Any finish-shaped label moves the game to Completed — but never
         // back: a historical "beat it in 2011" on a game you're replaying
         // shouldn't yank it off the Playing shelf.
@@ -2007,7 +2007,7 @@ struct Repository {
         platform: String?,
         customLabel: String?,
         notes: String?,
-        playedWith: String?
+        playedWith: [Companion]
     ) {
         event.label = label
         event.date = date
@@ -2015,10 +2015,21 @@ struct Repository {
         event.platform = platform
         event.customLabel = customLabel
         event.notes = notes
-        event.playedWith = playedWith
+        event.companions = playedWith
         event.updatedAt = .now
         event.revision += 1
         if let game = event.game { touch(game, at: .now) }
+        persist()
+    }
+
+    /// Record how a run ended — or clear it, because a run you wrote off and
+    /// came back to is a good day, not a data-entry error.
+    func setPlaythroughOutcome(_ pt: Playthrough,
+                               outcome: PlaythroughOutcome?,
+                               note: String?) {
+        pt.outcomeRaw = outcome?.rawValue
+        pt.outcomeNote = (note?.isEmpty == true) ? nil : note
+        touch(pt)
         persist()
     }
 

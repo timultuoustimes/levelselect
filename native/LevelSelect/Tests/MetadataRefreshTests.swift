@@ -1159,18 +1159,20 @@ struct CompletionEditTests {
         let game = repo.addGame(name: "It Takes Two")
         let event = repo.addCompletion(to: game, label: .cleared,
                                        date: Date(timeIntervalSince1970: 1_700_000_000),
-                                       playedWith: "Rosalie")
-        #expect(event.playedWith == "Rosalie")
+                                       playedWith: [Companion(name: "Rosalie", handle: "@umigame")])
+        #expect(event.companions.first?.name == "Rosalie")
+        #expect(event.companions.first?.handle == "@umigame")
 
         // Misremembered the year; also want the label to say 100%.
         let corrected = Calendar.current.date(from: DateComponents(year: 2024, month: 1, day: 1))!
         repo.updateCompletion(event, label: .hundredPercent, date: corrected,
                               precision: "year", platform: "PC",
-                              customLabel: nil, notes: "co-op", playedWith: "Rosalie")
+                              customLabel: nil, notes: "co-op", playedWith: [Companion(name: "Rosalie", handle: "@umigame")])
         #expect(event.label == .hundredPercent)
         #expect(event.dateText == "2024")
         #expect(event.platform == "PC")
-        #expect(event.playedWith == "Rosalie")
+        #expect(event.companions.first?.name == "Rosalie")
+        #expect(event.companions.first?.handle == "@umigame")
         // Same record, not a second one.
         #expect((game.completionEvents ?? []).filter { $0.deletedAt == nil }.count == 1)
     }
@@ -1181,13 +1183,13 @@ struct CompletionEditTests {
         let source = LevelSelectStore.makeContainer(inMemory: true)
         let repo = Repository(source.mainContext)
         let game = repo.addGame(name: "Overcooked 2")
-        _ = repo.addCompletion(to: game, label: .cleared, playedWith: "Kenny and Cate")
+        _ = repo.addCompletion(to: game, label: .cleared, playedWith: [Companion(name: "Kenny"), Companion(name: "Cate")])
         let data = try LibraryExport.makeJSON(context: source.mainContext)
 
         let dest = LevelSelectStore.makeContainer(inMemory: true)
         _ = try LibraryImport.apply(data: data, context: dest.mainContext)
         let games = try dest.mainContext.fetch(FetchDescriptor<Game>())
         let restored = try #require(games.first?.completionEvents?.first)
-        #expect(restored.playedWith == "Kenny and Cate")
+        #expect(restored.companions.sentence == "Kenny and Cate")
     }
 }

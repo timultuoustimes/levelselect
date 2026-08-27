@@ -40,6 +40,10 @@ final class Game {
     var currentPlaythroughID: UUID?
     /// Per-game tracker display override; nil = follow the library default.
     var trackerDisplayRaw: String?
+    /// Overrides the library-wide "Show item hints" for this game alone.
+    /// Nil follows the global setting — blind for the game you're savouring,
+    /// hints on everywhere else.
+    var showItemHintsOverride: Bool?
 
     // Value metadata arrays
     var platforms: [String] = []

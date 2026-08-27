@@ -132,6 +132,7 @@ enum LibraryExport {
                         // without them "running" is unreconstructable.
                         s["resumedAt"] = session.resumedAt.map(iso)
                         s["pausedAt"] = session.pausedAt.map(iso)
+                        s["playedWith"] = session.companions.map { ["name": $0.name, "handle": $0.handle] }
                         return s
                     }
 
@@ -147,6 +148,7 @@ enum LibraryExport {
                     ]
                     r["endedAt"] = run.endedAt.map(iso)
                     r["notes"] = run.notes
+                    r["playedWith"] = run.companions.map { ["name": $0.name, "handle": $0.handle] }
                     return r
                 }
 
@@ -183,6 +185,8 @@ enum LibraryExport {
                 p["notes"] = pt.notes
                 p["startedAt"] = pt.startedAt.map(iso)
                 p["lastPlayedAt"] = pt.lastPlayedAt.map(iso)
+                p["outcome"] = pt.outcomeRaw
+                p["outcomeNote"] = pt.outcomeNote
                 playthroughObjects.append(p)
             }
             dict["playthroughs"] = playthroughObjects
@@ -197,7 +201,7 @@ enum LibraryExport {
                 c["notes"] = event.notes
                 c["datePrecision"] = event.datePrecision
                 c["playthroughID"] = event.playthrough?.id.uuidString
-                c["playedWith"] = event.playedWith
+                c["playedWith"] = event.companions.map { ["name": $0.name, "handle": $0.handle] }
                 return c
             }
 

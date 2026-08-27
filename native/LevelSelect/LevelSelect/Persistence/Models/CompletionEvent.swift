@@ -17,11 +17,10 @@ final class CompletionEvent {
     var customLabel: String?   // used when label == .custom
     var platform: String?
     var notes: String?
-    /// Who you played it with — free text, because the point is the memory,
-    /// not a contact list. The app has no social graph and isn't getting one;
-    /// this is the couch, the co-op partner, the friend on voice chat, written
-    /// down where the finish is recorded rather than lost in a general note.
-    var playedWith: String?
+    /// Who you played it with. See `Companion` — names and handles, stored as
+    /// JSON rather than a table, because these are strings attached to a
+    /// moment and not people the app knows.
+    var playedWithData: Data?
     /// How much of `date` is real: nil/"day" = the whole thing, "month" =
     /// month+year, "year" = year only. "I beat Skyrim the year it came out"
     /// is a true statement with a year in it — storing it as January 1st and
@@ -57,6 +56,11 @@ final class CompletionEvent {
 extension CompletionEvent: Identifiable {}
 
 extension CompletionEvent {
+    var companions: [Companion] {
+        get { [Companion].decoded(playedWithData) }
+        set { playedWithData = newValue.encoded }
+    }
+
     /// The date, said only as precisely as it's known.
     var dateText: String {
         switch datePrecision {

@@ -21,6 +21,9 @@ final class Session {
     var state: SessionState = SessionState.stopped
     var isManual: Bool = false
     var notes: String?
+    /// Who was playing with you. Co-op is mostly a Tuesday evening rather
+    /// than a finish, so the field belongs here too. See `Companion`.
+    var playedWithData: Data?
     /// Which device this session was started on ("King Kai"), stamped once at
     /// creation. Schema V2. Two-device testing made the case: when two timers
     /// disagree, "another device" is a much worse answer than the name of the
@@ -68,5 +71,12 @@ final class Session {
         self.startDate = startDate
         self.state = state
         self.isManual = isManual
+    }
+}
+
+extension Session {
+    var companions: [Companion] {
+        get { [Companion].decoded(playedWithData) }
+        set { playedWithData = newValue.encoded }
     }
 }

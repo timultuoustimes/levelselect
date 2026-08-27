@@ -32,38 +32,10 @@ struct CompletionSection: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(events, id: \.id) { event in
-                HStack(spacing: 8) {
-                    Image(systemName: event.label == .hundredPercent
-                          ? "checkmark.seal.fill" : "flag.checkered")
-                        .font(.caption)
-                        .foregroundStyle(LSTheme.accent)
-                    Text(event.labelText)
-                        .font(.subheadline.weight(.medium))
-                    if let platform = event.platform, !platform.isEmpty {
-                        Text("· \(PlatformShort.name(platform))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    if let with = event.playedWith, !with.isEmpty {
-                        Label(with, systemImage: "person.2.fill")
-                            .font(.caption)
-                            .foregroundStyle(LSTheme.accent.opacity(0.9))
-                            .lineLimit(1)
-                    }
-                    if let run = event.playthrough {
-                        Text("· \(run.name)")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Text(event.dateText)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
+                CompletionRow(event: event)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(event.labelText), \(event.dateText)"
-                                    + (event.playedWith.map { ", with \($0)" } ?? ""))
+                                    + (event.companions.isEmpty ? "" : ", with \(event.companions.sentence)"))
                 .accessibilityHint("Opens this record to edit")
                 .contentShape(.rect)
                 .onTapGesture { editing = event }
@@ -127,7 +99,7 @@ struct MarkCompletionSheet: View {
     @State private var month = Calendar.current.component(.month, from: .now)
     @State private var platform = ""
     @State private var notes = ""
-    @State private var playedWith = ""
+    @State private var playedWith: [Companion] = []
     /// nil = "just the game" — a historical beat no tracked run ever saw.
     @State private var playthroughID: UUID?
 
@@ -203,10 +175,7 @@ struct MarkCompletionSheet: View {
                             ForEach(game.platforms, id: \.self) { Text($0).tag($0) }
                         }
                     }
-                    TextField("Played with", text: $playedWith)
-                        #if !os(macOS)
-                        .textInputAutocapitalization(.words)
-                        #endif
+                    CompanionEditor(companions: $playedWith)
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(2...)
                 } header: {
@@ -239,7 +208,7 @@ struct MarkCompletionSheet: View {
                     month = Calendar.current.component(.month, from: editing.date)
                     platform = editing.platform ?? ""
                     notes = editing.notes ?? ""
-                    playedWith = editing.playedWith ?? ""
+                    playedWith = editing.companions
                     return
                 }
                 if platform.isEmpty {
@@ -273,7 +242,7 @@ struct MarkCompletionSheet: View {
                 platform: platform.isEmpty ? nil : platform,
                 customLabel: label == .custom ? customLabel : nil,
                 notes: notes.isEmpty ? nil : notes,
-                playedWith: playedWith.isEmpty ? nil : playedWith)
+                playedWith: playedWith)
         } else {
             repo.addCompletion(
                 to: game,
@@ -283,9 +252,48 @@ struct MarkCompletionSheet: View {
                 platform: platform.isEmpty ? nil : platform,
                 customLabel: label == .custom ? customLabel : nil,
                 notes: notes.isEmpty ? nil : notes,
-                playedWith: playedWith.isEmpty ? nil : playedWith,
+                playedWith: playedWith,
                 playthrough: game.livePlaythroughs.first { $0.id == playthroughID })
         }
         dismiss()
+    }
+}
+
+
+/// One recorded finish. Extracted because the row grew past what SwiftUI's
+/// type-checker will infer in one expression — four optional clauses in a
+/// single HStack is where it gives up.
+private struct CompletionRow: View {
+    let event: CompletionEvent
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: event.label == .hundredPercent
+                  ? "checkmark.seal.fill" : "flag.checkered")
+                .font(.caption)
+                .foregroundStyle(LSTheme.accent)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(event.labelText)
+                        .font(.subheadline.weight(.medium))
+                    if let platform = event.platform, !platform.isEmpty {
+                        Text("· \(PlatformShort.name(platform))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let run = event.playthrough {
+                        Text("· \(run.name)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+                CompanionLine(companions: event.companions)
+            }
+            Spacer(minLength: 4)
+            Text(event.dateText)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
     }
 }

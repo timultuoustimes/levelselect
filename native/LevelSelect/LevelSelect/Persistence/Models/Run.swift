@@ -19,6 +19,9 @@ final class Run {
     var outcome: RunOutcome = RunOutcome.inProgress
     var fieldsJSON: Data = Data()    // setup + in-run field values
     var notes: String?
+    /// Who was playing with you. Co-op is mostly a Tuesday evening rather
+    /// than a finish, so the field belongs here too. See `Companion`.
+    var playedWithData: Data?
 
     var playthrough: Playthrough?
 
@@ -36,5 +39,12 @@ final class Run {
         self.startedAt = startedAt
         self.outcome = outcome
         self.fieldsJSON = fieldsJSON
+    }
+}
+
+extension Run {
+    var companions: [Companion] {
+        get { [Companion].decoded(playedWithData) }
+        set { playedWithData = newValue.encoded }
     }
 }

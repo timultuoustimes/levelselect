@@ -37,7 +37,11 @@ struct TrackerSectionView: View {
     /// "Show item hints" (synced): hints are the description and location a
     /// generator or RA wrote — clutter to some, spoilers to others. The
     /// user's own note is theirs and never hides.
-    private var hintsShown: Bool { themeSettings.first?.showItemHints ?? true }
+    private var hintsShown: Bool {
+        // A per-game answer wins over the library-wide one: blind for the game
+        // you're savouring, hints on everywhere else.
+        game.showItemHintsOverride ?? themeSettings.first?.showItemHints ?? true
+    }
     let game: Game
     @Environment(\.modelContext) private var context
     @State private var hideCompleted = false
