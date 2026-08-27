@@ -1,0 +1,81 @@
+import SwiftUI
+import SwiftData
+
+/// "Where you left off" — the last thing you ticked, and your note about it.
+///
+/// The app's whole pitch is remembering a game you haven't touched in weeks,
+/// and until now it could tell you *how far* you'd got but never *what you
+/// were doing*. A percentage doesn't survive three weeks away; "Restore First
+/// Spark Generator, 3 weeks ago" does.
+///
+/// It also teaches the note feature by showing it working. A per-item note was
+/// documented only as a promise — that regenerating wouldn't erase it — and
+/// lived behind a context menu labelled "Edit", so people never found it.
+/// Seeing someone's own note surfaced here, next to the thing it belongs to,
+/// explains the field better than a docs paragraph can.
+///
+/// **Honest limit:** the timestamp is the state record's `updatedAt`, which
+/// moves whenever that row changes — un-ticking an old item makes it look
+/// recent. Hence "Last ticked" rather than any claim to a real history.
+struct LastTickedRow: View {
+    let game: Game
+    @Environment(\.modelContext) private var context
+
+    private var repo: Repository { Repository(context) }
+
+    private struct Recent {
+        let name: String
+        let note: String?
+        let at: Date
+    }
+
+    private var recent: Recent? {
+        guard let playthrough = game.activePlaythrough else { return nil }
+        let done = (playthrough.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && $0.completed }
+        guard let latest = done.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
+
+        // Names and notes come from the overlaid read, so a renamed item shows
+        // the name its owner chose rather than the generated one.
+        for category in repo.trackerCategories(for: game) {
+            if let item = category.items.first(where: { $0.id == latest.itemID }) {
+                return Recent(name: item.name,
+                              note: item.note?.isEmpty == false ? item.note : nil,
+                              at: latest.updatedAt)
+            }
+        }
+        return nil
+    }
+
+    var body: some View {
+        if let recent {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.uturn.left.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(LSTheme.accent)
+                    Text("Where you left off")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Text(recent.at.formatted(.relative(presentation: .named)))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Text(recent.name)
+                    .font(.subheadline.weight(.medium))
+                if let note = recent.note {
+                    Label(note, systemImage: "pencil.line")
+                        .font(.caption)
+                        .foregroundStyle(LSTheme.accent.opacity(0.85))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .background(.white.opacity(0.045), in: .rect(cornerRadius: 10))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Where you left off: \(recent.name), \(recent.at.formatted(.relative(presentation: .named)))"
+                                + (recent.note.map { ". Your note: \($0)" } ?? ""))
+        }
+    }
+}

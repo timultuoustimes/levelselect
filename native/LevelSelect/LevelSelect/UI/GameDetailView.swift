@@ -439,6 +439,10 @@ struct GameDetailView: View {
                 }
                 Divider()
                 CollapsibleSection("Tracker", icon: "checklist") {
+                    // Above both display modes: the question "what was I
+                    // doing?" is the same one whether the checklist is inline
+                    // or behind a card.
+                    LastTickedRow(game: game)
                     if game.resolvedTrackerDisplay == .compact {
                         CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
                     } else {

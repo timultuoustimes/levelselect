@@ -1070,3 +1070,48 @@ struct StageLayoutTests {
         #expect(!StageLayout.fits(CGSize(width: 240, height: 900)))
     }
 }
+
+@Suite("Where you left off")
+struct LastTickedTests {
+
+    @Test("The most recently ticked item wins, and un-ticked ones don't count")
+    @MainActor
+    func picksLatestCompleted() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let context = container.mainContext
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        let older = TrackerStateRecord(itemID: "a")
+        older.completed = true
+        older.updatedAt = Date(timeIntervalSince1970: 1_000_000)
+        let newer = TrackerStateRecord(itemID: "b")
+        newer.completed = true
+        newer.updatedAt = Date(timeIntervalSince1970: 2_000_000)
+        // Ticked most recently of all, but then un-ticked — not where you are.
+        let undone = TrackerStateRecord(itemID: "c")
+        undone.completed = false
+        undone.updatedAt = Date(timeIntervalSince1970: 3_000_000)
+        for s in [older, newer, undone] {
+            context.insert(s)
+            s.playthrough = pt
+        }
+
+        let done = (pt.trackerStates ?? []).filter { $0.deletedAt == nil && $0.completed }
+        let latest = done.max(by: { $0.updatedAt < $1.updatedAt })
+        #expect(latest?.itemID == "b")
+        #expect(done.count == 2)
+    }
+
+    @Test("A playthrough with nothing ticked has nowhere to have left off")
+    @MainActor
+    func emptyIsSilent() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Untouched")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        let done = (pt.trackerStates ?? []).filter { $0.deletedAt == nil && $0.completed }
+        #expect(done.isEmpty)
+    }
+}

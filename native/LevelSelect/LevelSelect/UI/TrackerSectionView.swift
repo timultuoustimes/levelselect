@@ -1204,12 +1204,25 @@ struct TrackerSectionView: View {
         // tracker.
         .opacity({ if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 } }())
         .contextMenu {
+            // Two doors into the same sheet, because "Edit" alone never told
+            // anyone a per-item note existed — the feature was documented as a
+            // promise ("regenerating won't touch your note") and hidden behind
+            // a generic verb. Naming it is what makes it findable.
             Button {
                 sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
                                              name: item.name, location: item.location ?? "",
                                              note: item.note ?? "",
                                              countTarget: item.countTarget))
-            } label: { Label("Edit Item", systemImage: "pencil") }
+            } label: {
+                Label(item.note?.isEmpty == false ? "Edit Your Note" : "Add a Note",
+                      systemImage: "pencil.line")
+            }
+            Button {
+                sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
+                                             name: item.name, location: item.location ?? "",
+                                             note: item.note ?? "",
+                                             countTarget: item.countTarget))
+            } label: { Label("Rename, Location & Note…", systemImage: "pencil") }
         } preview: {
             // The press-and-hold peek: with hints off this is where the
             // description and location live — one row at a time, on purpose,
