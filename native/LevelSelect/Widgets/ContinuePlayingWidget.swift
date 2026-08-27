@@ -263,6 +263,15 @@ struct ContinuePlayingMedium: View {
                                     .font(.system(size: 12))
                                     .foregroundStyle(.white.opacity(0.92))
                                     .lineLimit(1)
+                                // What's next tells you where to go; what you
+                                // last ticked tells you where you were, which
+                                // is the half that goes missing over weeks.
+                                if let last = snapshot.lastTicked {
+                                    Text("Left off: \(last)")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.white.opacity(0.5))
+                                        .lineLimit(1)
+                                }
                             }
                             Spacer(minLength: 0)
                             resumeButton(snapshot)

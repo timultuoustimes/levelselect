@@ -19,6 +19,9 @@ import SwiftData
 /// recent. Hence "Last ticked" rather than any claim to a real history.
 struct LastTickedRow: View {
     let game: Game
+    /// Home wants the same fact in one line, under a card that's already
+    /// carrying a cover, a timer and a play button.
+    var compact = false
     @Environment(\.modelContext) private var context
 
     private var repo: Repository { Repository(context) }
@@ -54,7 +57,13 @@ struct LastTickedRow: View {
     }
 
     var body: some View {
-        if let recent {
+        if let recent, compact {
+            Label("Left off: \(recent.name)", systemImage: "arrow.uturn.left.circle.fill")
+                .font(.caption2)
+                .foregroundStyle(LSTheme.accent.opacity(0.9))
+                .lineLimit(1)
+                .accessibilityLabel("Left off at \(recent.name)")
+        } else if let recent {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.uturn.left.circle.fill")

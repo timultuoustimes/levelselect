@@ -168,6 +168,11 @@ struct ContinueHeroCard: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+
+                // The card said how long ago and for how long, never what you
+                // were doing — which is the question you actually opened the
+                // app with.
+                LastTickedRow(game: game, compact: true)
             }
 
             Spacer(minLength: 0)

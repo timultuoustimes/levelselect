@@ -433,7 +433,7 @@ struct GameDetailView: View {
                     TrackerSchemaJSON.runTemplate(from: $0.jsonData)
                 }) {
                     Divider()
-                    CollapsibleSection("Runs", icon: "flag.checkered") {
+                    CollapsibleSection("Runs", icon: "arrow.2.squarepath") {
                         RunSectionView(game: game, template: template)
                     }
                 }

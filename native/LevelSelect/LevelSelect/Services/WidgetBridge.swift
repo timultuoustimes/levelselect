@@ -48,6 +48,24 @@ enum WidgetBridge {
         guard let games = try? context.fetch(descriptor), !games.isEmpty else { return nil }
 
         var covers: [CoverJob] = []
+
+        /// The last item ticked in this run — the same rule the game page uses
+        /// (most recently updated completed state), so the widget and the app
+        /// can't disagree about where you left off.
+        func lastTickedName(game: Game, playthrough: Playthrough?) -> String? {
+            guard let playthrough else { return nil }
+            let done = (playthrough.trackerStates ?? [])
+                .filter { $0.deletedAt == nil && $0.completed }
+            guard let latest = done.max(by: { $0.updatedAt < $1.updatedAt }),
+                  let schema = game.trackerSchema else { return nil }
+            for category in TrackerSchemaJSON.categories(from: schema.jsonData) {
+                if let item = category.items.first(where: { $0.id == latest.itemID }) {
+                    return item.name
+                }
+            }
+            return nil
+        }
+
         func coverName(_ g: Game) -> String? {
             guard let s = g.coverURLString, let url = URL(string: s) else { return nil }
             let name = coverFileName(for: s)
@@ -224,7 +242,8 @@ enum WidgetBridge {
             completedCount: completedCount,
             libraryCount: games.count,
             collections: collectionRefs,
-            platformIcons: platformIcons
+            platformIcons: platformIcons,
+            lastTicked: lastTickedName(game: game, playthrough: pt)
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }

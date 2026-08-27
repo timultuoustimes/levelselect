@@ -112,6 +112,9 @@ struct WidgetSnapshot: Codable, Hashable {
     var lastPlayedAt: Date?
     var nextObjective: String?
     var nextObjectiveID: String?
+    /// The last thing ticked — what you were *doing*, as opposed to what's
+    /// next. Additive and optional, so an older snapshot still decodes.
+    var lastTicked: String? = nil
     var completionDone: Int
     var completionTotal: Int
     var coverFileName: String?
@@ -187,8 +190,10 @@ struct WidgetSnapshot: Codable, Hashable {
         dailyMinutes: [Double] = [], weeklyAverageSeconds: Double = 0,
         completedCount: Int = 0, libraryCount: Int = 0,
         collections: [WidgetCollectionRef] = [],
-        platformIcons: [String: String] = [:]
+        platformIcons: [String: String] = [:],
+        lastTicked: String? = nil
     ) {
+        self.lastTicked = lastTicked
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
         self.playtimeSeconds = playtimeSeconds; self.lastPlayedAt = lastPlayedAt
@@ -213,6 +218,7 @@ struct WidgetSnapshot: Codable, Hashable {
         gameID = try c.decode(String.self, forKey: .gameID)
         gameName = try c.decode(String.self, forKey: .gameName)
         statusRaw = try c.decodeIfPresent(String.self, forKey: .statusRaw) ?? ""
+        lastTicked = try c.decodeIfPresent(String.self, forKey: .lastTicked)
         isPlaying = try c.decodeIfPresent(Bool.self, forKey: .isPlaying) ?? false
         isPaused = try c.decodeIfPresent(Bool.self, forKey: .isPaused) ?? false
         playtimeSeconds = try c.decodeIfPresent(Double.self, forKey: .playtimeSeconds) ?? 0

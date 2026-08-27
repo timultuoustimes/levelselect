@@ -260,7 +260,7 @@ struct TrackerPageView: View {
     @ViewBuilder
     private var trackerContent: some View {
         if let template = runTemplate {
-            CollapsibleSection("Runs", icon: "flag.checkered") {
+            CollapsibleSection("Runs", icon: "arrow.2.squarepath") {
                 RunSectionView(game: game, template: template)
             }
             Divider()

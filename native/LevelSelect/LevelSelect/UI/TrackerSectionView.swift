@@ -219,6 +219,17 @@ struct TrackerSectionView: View {
             ForEach(hidePlanned ? cats.filter { !$0.pending } : cats) { category in
                 categoryView(category, states: states, gating: gating)
             }
+            // Says the note exists, once, to someone who has items to write one
+            // on and hasn't. It disappears the moment any item has a note —
+            // a tip that keeps teaching after you've learned it is nagging.
+            if !cats.isEmpty,
+               cats.allSatisfy({ $0.items.allSatisfy { ($0.note ?? "").isEmpty } }) {
+                Label("Press and hold any item to add your own note — where you were, what you meant to try next.",
+                      systemImage: "pencil.line")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
+            }
             // Never a silent disappearance: the count is the way back, and
             // without it a tracker you'd hidden half of just looks short.
             if hiddenPlanned > 0 {
