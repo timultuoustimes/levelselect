@@ -60,12 +60,28 @@ def shot(name, height):
     return im.resize((w, height), Image.LANCZOS)
 
 
-def wordmark(draw, xy, size, anchor="lt"):
-    """Torch-coloured, with the site's dropped shadow beneath it."""
+def wordmark(img, xy, size, anchor="lt"):
+    """The site's wordmark, both shadows included.
+
+    style.css uses *two*: a zero-blur offset at 0.16em for legibility (pixel
+    strokes are thin and blur eats their corners) and a soft torch glow at
+    0.65em that fills the gaps between strokes. Drawing only the hard one —
+    as the first pass did — gives a wordmark that reads thin and unlit next
+    to the real thing. CSS blur radius r is roughly a Gaussian sigma of r/2.
+    """
     f = ImageFont.truetype(PIXEL, size)
     x, y = xy
-    draw.text((x, y + size * 0.16), "LevelSelect", font=f, fill=TORCH_DEEP, anchor=anchor)
-    draw.text((x, y), "LevelSelect", font=f, fill=TORCH, anchor=anchor)
+
+    glow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(glow_layer).text((x, y), "LevelSelect", font=f,
+                                    fill=TORCH + (77,), anchor=anchor)   # .3 alpha
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(size * 0.65 / 2))
+    img = Image.alpha_composite(img, glow_layer)
+
+    d = ImageDraw.Draw(img)
+    d.text((x, y + size * 0.16), "LevelSelect", font=f, fill=TORCH_DEEP, anchor=anchor)
+    d.text((x, y), "LevelSelect", font=f, fill=TORCH, anchor=anchor)
+    return img
 
 
 def sans(size, weight=400):
@@ -95,13 +111,14 @@ def open_graph():
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((128, 128), Image.LANCZOS)
     img.paste(icon, (74, 92), icon)
 
-    wordmark(d, (74, 262), 46)
-    d.text((74, 348), "Every game you're playing,", font=sans(38, 500), fill=INK)
-    d.text((74, 398), "and exactly where you left off.", font=sans(38, 500), fill=INK)
-    d.text((74, 470), "Library · session timer · progress tracker",
-           font=sans(25, 400), fill=MUTED)
-    d.text((74, 520), "iPhone · iPad · Mac · Watch", font=sans(23, 400), fill=MUTED)
-    d.text((74, 566), "levelselect.app", font=sans(27, 600), fill=TORCH)
+    img = wordmark(img, (74, 250), 62)
+    d = ImageDraw.Draw(img)
+    d.text((74, 352), "Every game you're playing,", font=sans(32, 400), fill=INK)
+    d.text((74, 396), "and exactly where you left off.", font=sans(32, 400), fill=INK)
+    d.text((74, 462), "Library · session timer · progress tracker",
+           font=sans(24, 400), fill=MUTED)
+    d.text((74, 508), "iPhone · iPad · Mac · Watch", font=sans(22, 400), fill=MUTED)
+    d.text((74, 560), "levelselect.app", font=sans(28, 600), fill=TORCH)
 
     # One device, bled off the right edge so the crop can't behead it.
     s = shot("iphone-01-home-shelf.webp", 700)
@@ -120,9 +137,10 @@ def story():
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((150, 150), Image.LANCZOS)
     img.paste(icon, (465, 300), icon)
 
-    wordmark(d, (540, 505), 46, anchor="mt")
-    d.text((540, 600), "Every game you're playing,", font=sans(40, 500), fill=INK, anchor="mt")
-    d.text((540, 652), "and exactly where you left off.", font=sans(40, 500), fill=INK, anchor="mt")
+    img = wordmark(img, (540, 495), 66, anchor="mt")
+    d = ImageDraw.Draw(img)
+    d.text((540, 610), "Every game you're playing,", font=sans(34, 400), fill=INK, anchor="mt")
+    d.text((540, 656), "and exactly where you left off.", font=sans(34, 400), fill=INK, anchor="mt")
 
     s = shot("iphone-01-home-shelf.webp", 900)
     img.alpha_composite(s, ((W - s.width) // 2, 760))
@@ -142,9 +160,10 @@ def square():
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((120, 120), Image.LANCZOS)
     img.paste(icon, (480, 118), icon)
 
-    wordmark(d, (540, 290), 40, anchor="mt")
-    d.text((540, 372), "Every game you're playing,", font=sans(34, 500), fill=INK, anchor="mt")
-    d.text((540, 418), "and exactly where you left off.", font=sans(34, 500), fill=INK, anchor="mt")
+    img = wordmark(img, (540, 282), 54, anchor="mt")
+    d = ImageDraw.Draw(img)
+    d.text((540, 378), "Every game you're playing,", font=sans(29, 400), fill=INK, anchor="mt")
+    d.text((540, 418), "and exactly where you left off.", font=sans(29, 400), fill=INK, anchor="mt")
 
     s = shot("iphone-01-home-shelf.webp", 560)
     img.alpha_composite(s, ((W - s.width) // 2, 500))
