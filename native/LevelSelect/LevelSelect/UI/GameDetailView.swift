@@ -20,14 +20,7 @@ struct GameDetailView: View {
     @State private var newCollection = false
     @State private var newCollectionName = ""
     @Environment(\.dynamicTypeSize) private var typeSize
-    /// The page's own container size, read without becoming a layout
-    /// container — see the note on `body`.
-    @State private var containerSize: CGSize = .zero
-    /// How much of the bottom the tab bar occupies, latched from the page's
-    /// own geometry. Latched rather than tracked because the stage below
-    /// ignores that inset to reach the screen edge, and a value that fed back
-    /// into its own measurement would oscillate.
-    @State private var tabBarInset: CGFloat = 0
+    @State private var nav = AppNavigator.shared
     /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
     @State private var stage = 1
 
@@ -40,55 +33,60 @@ struct GameDetailView: View {
     private var repo: Repository { Repository(context) }
 
     /// Whether this page is wide enough to hold its tracker beside it.
-    private var stageMode: Bool {
-        StageLayout.fits(containerSize) && game.resolvedTrackerDisplay == .compact
+    private func isStage(_ size: CGSize) -> Bool {
+        StageLayout.fits(size) && game.resolvedTrackerDisplay == .compact
     }
 
-    /// The page reads its container's size, but is NOT wrapped in a
-    /// GeometryReader any more.
+    /// The page reads its container inline, from a GeometryReader, and keeps
+    /// nothing about its own size in state.
     ///
-    /// That wrapper cost something invisible until you look for it: a
-    /// ScrollView nested inside a GeometryReader doesn't get the automatic
-    /// bottom content inset the system gives a tab's scrollable content, so
-    /// the last row of the last section — the final video in Guides & Videos
-    /// — sat under the tab bar with no way to scroll it clear. On every
-    /// device, iPad included, and long before anything was resizable;
-    /// dragging an iPhone window wider just made it obvious.
+    /// Storing it seemed tidier and was worse: rotating away from the stage
+    /// left the stored width behind, so a portrait phone went on rendering a
+    /// landscape-width stage — content wider than the screen, shifted off the
+    /// leading edge. Read inline, the size cannot be stale.
     ///
-    /// `onGeometryChange` reads the same number without participating in
-    /// layout, so the ScrollView is a plain descendant again and the inset
-    /// comes back.
+    /// The page ignores the bottom safe area so both stage panes reach the
+    /// screen edge instead of stopping short of the tab bar (which left a
+    /// band of bare background under the split). Everything that scrolls then
+    /// needs that inset handed back explicitly — `contentMargins` below —
+    /// because content under a bar you can't scroll past is worse than a band.
     var body: some View {
-        Group {
-            if stageMode {
-                stageLayout(width: containerSize.width)
-            } else {
-                VStack(spacing: 0) {
-                    if let video = pagePlaying {
-                        VideoPlayerDock(video: video) { pagePlaying = nil }
+        GeometryReader { geo in
+            let stageMode = isStage(geo.size)
+            Group {
+                if stageMode {
+                    stageLayout(width: geo.size.width)
+                } else {
+                    VStack(spacing: 0) {
+                        if let video = pagePlaying {
+                            VideoPlayerDock(video: video) { pagePlaying = nil }
+                        }
+                        standardScroll(stageMode: false)
                     }
-                    standardScroll(stageMode: false)
                 }
             }
-        }
-        .onGeometryChange(for: CGSize.self) { $0.size } action: { containerSize = $0 }
-        // Measured here, at page level, where the inset is still reported —
-        // the stage below ignores it to reach the screen edge.
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { newValue in
-            if newValue > 0 { tabBarInset = newValue }
-        }
+            .contentMargins(.bottom, geo.safeAreaInsets.bottom, for: .scrollContent)
             // Watching `pagePlaying != nil` alone missed the rotation case
             // entirely: turn an iPad to landscape with a video ALREADY
             // playing and that boolean never changes, so `stage` stayed at 1
             // and the video panel sat at `width * 1.02` — off the trailing
             // edge, still playing, invisible. Both inputs decide the stage, so
             // both have to be observed.
-        .onChange(of: pagePlaying != nil) { _, hasVideo in
-            if stageMode, hasVideo { stage = 3 }
+            .onChange(of: pagePlaying != nil) { _, hasVideo in
+                if stageMode, hasVideo { stage = 3 }
+            }
+            .onChange(of: stageMode) { _, isStage in
+                if isStage, pagePlaying != nil { stage = 3 }
+            }
+            // A tracker page that dismissed itself because the stage became
+            // available asks for its pane to be opened here.
+            .task(id: stageMode) {
+                guard stageMode, nav.trackerStageRequest == game.id else { return }
+                nav.trackerStageRequest = nil
+                stage = pagePlaying == nil ? 2 : 3
+            }
         }
-        .onChange(of: stageMode) { _, isStage in
-            if isStage, pagePlaying != nil { stage = 3 }
-        }
+        .ignoresSafeArea(.container, edges: .bottom)
         .background { ambientBackdrop }
         .overlay {
             if showingCover {
@@ -510,16 +508,7 @@ struct GameDetailView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(.spring(response: 0.5, dampingFraction: 0.85), value: stage)
         .clipped()
-        // Both panes should run to the bottom of the screen and let content
-        // pass under the floating tab bar, the way the single-column page
-        // already does. Without this the stage is handed a frame that stops
-        // 83pt short, so both panes end in a hard edge with the page
-        // background showing beneath them — a black band on iPad, a colour
-        // band on iPhone. Reaching under the bar means the content needs that
-        // inset back, or the last row of whichever pane you scrolled would sit
-        // beneath it, unreachable.
-        .contentMargins(.bottom, tabBarInset, for: .scrollContent)
-        .ignoresSafeArea(.container, edges: .bottom)
+
     }
 
     private var trackerPanel: some View {

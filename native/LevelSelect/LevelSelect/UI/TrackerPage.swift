@@ -214,6 +214,11 @@ struct TrackerPageView: View {
                               game.resolvedTrackerDisplay == .compact,
                               playing == nil
                         else { return }
+                        // Leaving isn't enough: the page behind opens at its
+                        // first stage, which shows the game and no tracker —
+                        // so rotating with the tracker open used to close it.
+                        // Ask the page to open the pane we were just reading.
+                        AppNavigator.shared.trackerStageRequest = game.id
                         dismiss()
                     }
             }

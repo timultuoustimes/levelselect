@@ -23,6 +23,13 @@ final class AppNavigator {
     /// Request to open the current "continue playing" game.
     var pendingContinue = false
 
+    /// A game whose pushed tracker page just dismissed itself because the
+    /// window became wide enough to show that tracker beside the page. The
+    /// detail page consumes this and opens the pane, so rotating with the
+    /// tracker open lands on the split rather than dropping you back to the
+    /// game page with the tracker closed.
+    var trackerStageRequest: UUID?
+
     /// A route value to push onto the Home stack (StatusListView,
     /// PlatformGamesView, CollectionDetailView…) — consumed by HomeTab.
     var pendingRoute: AnyHashable?
