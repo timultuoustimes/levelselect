@@ -27,6 +27,10 @@ struct LastTickedRow: View {
         let name: String
         let note: String?
         let at: Date
+        /// Named only when the game has more than one live playthrough —
+        /// with two runs listed directly beneath it, "where you left off"
+        /// with no run attached is a question, not an answer.
+        let playthrough: String?
     }
 
     private var recent: Recent? {
@@ -41,7 +45,9 @@ struct LastTickedRow: View {
             if let item = category.items.first(where: { $0.id == latest.itemID }) {
                 return Recent(name: item.name,
                               note: item.note?.isEmpty == false ? item.note : nil,
-                              at: latest.updatedAt)
+                              at: latest.updatedAt,
+                              playthrough: game.livePlaythroughs.count > 1
+                                  ? playthrough.name : nil)
             }
         }
         return nil
@@ -54,9 +60,11 @@ struct LastTickedRow: View {
                     Image(systemName: "arrow.uturn.left.circle.fill")
                         .font(.caption)
                         .foregroundStyle(LSTheme.accent)
-                    Text("Where you left off")
+                    Text(recent.playthrough.map { "Where you left off in \($0)" }
+                         ?? "Where you left off")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     Spacer(minLength: 0)
                     Text(recent.at.formatted(.relative(presentation: .named)))
                         .font(.caption2)
@@ -74,7 +82,9 @@ struct LastTickedRow: View {
             .padding(10)
             .background(.white.opacity(0.045), in: .rect(cornerRadius: 10))
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Where you left off: \(recent.name), \(recent.at.formatted(.relative(presentation: .named)))"
+            .accessibilityLabel("Where you left off"
+                                + (recent.playthrough.map { " in \($0)" } ?? "")
+                                + ": \(recent.name), \(recent.at.formatted(.relative(presentation: .named)))"
                                 + (recent.note.map { ". Your note: \($0)" } ?? ""))
         }
     }
