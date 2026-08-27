@@ -60,6 +60,28 @@ def shot(name, height):
     return im.resize((w, height), Image.LANCZOS)
 
 
+def devices(pair, height):
+    """The hero art: one phone, or the site's phone-in-front-of-iPad pairing.
+
+    `height` is the tallest device, so callers can budget vertical space and
+    keep text clear of the art — the square's URL used to land on top of the
+    phone because nothing was measuring this.
+    """
+    phone = shot("iphone-01-home-shelf.webp", height)
+    if not pair:
+        return phone
+
+    pad = shot("ipad-01-split-tracker.webp", round(height * 0.74))
+    phone = shot("iphone-01-home-shelf.webp", height)
+    overlap = round(phone.width * 0.46)
+    canvas = Image.new("RGBA", (phone.width + pad.width - overlap, height), (0, 0, 0, 0))
+    # iPad behind and slightly high, phone in front-left — the arrangement the
+    # homepage hero uses, so the two read as one product on several screens.
+    canvas.alpha_composite(pad, (phone.width - overlap, round(height * 0.10)))
+    canvas.alpha_composite(phone, (0, 0))
+    return canvas
+
+
 def wordmark(img, xy, size, anchor="lt"):
     """The site's wordmark, both shadows included.
 
@@ -101,12 +123,11 @@ def sans(size, weight=400):
 
 
 # ─────────────────────────── 1200x630 — link previews ───────────────────────
-def open_graph():
+def open_graph(pair):
     W, H = 1200, 630
     img = gradient((W, H))
     img = glow(img, (250, 250), 340, TORCH, 0.20)
     img = glow(img, (980, 430), 380, ACCENT, 0.16)
-    d = ImageDraw.Draw(img)
 
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((128, 128), Image.LANCZOS)
     img.paste(icon, (74, 92), icon)
@@ -120,19 +141,21 @@ def open_graph():
     d.text((74, 508), "iPhone · iPad · Mac · Watch", font=sans(22, 400), fill=MUTED)
     d.text((74, 560), "levelselect.app", font=sans(28, 600), fill=TORCH)
 
-    # One device, bled off the right edge so the crop can't behead it.
-    s = shot("iphone-01-home-shelf.webp", 700)
-    img.alpha_composite(s, (835, 92))
-    return img, "og.png"
+    # Bled off the right edge so a crop can't behead it. The pair starts
+    # further right and stands shorter: the wordmark runs to ~x756 at 62px
+    # (Press Start 2P is one em per character), and the phone was landing on
+    # its final letter.
+    art = devices(pair, 700 if not pair else 470)
+    img.alpha_composite(art, (835, 92) if not pair else (788, 84))
+    return img, f"og{'-2up' if pair else ''}.png"
 
 
 # ─────────────────────────── 1080x1920 — Instagram story ────────────────────
-def story():
+def story(pair):
     W, H = 1080, 1920
     img = gradient((W, H))
     img = glow(img, (540, 430), 520, TORCH, 0.20)
     img = glow(img, (540, 1500), 620, ACCENT, 0.16)
-    d = ImageDraw.Draw(img)
 
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((150, 150), Image.LANCZOS)
     img.paste(icon, (465, 300), icon)
@@ -142,37 +165,45 @@ def story():
     d.text((540, 610), "Every game you're playing,", font=sans(34, 400), fill=INK, anchor="mt")
     d.text((540, 656), "and exactly where you left off.", font=sans(34, 400), fill=INK, anchor="mt")
 
-    s = shot("iphone-01-home-shelf.webp", 900)
-    img.alpha_composite(s, ((W - s.width) // 2, 760))
+    # Art sits between the tagline and the footer, scaled to whatever room is
+    # left rather than a fixed height that could collide with either.
+    top, footer_top = 770, 1700
+    art = devices(pair, min(900, footer_top - top - 40))
+    if art.width > W - 80:
+        art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
+    img.alpha_composite(art, ((W - art.width) // 2, top))
 
-    d.text((540, 1712), "TestFlight beta", font=sans(30, 600), fill=MUTED, anchor="mt")
-    d.text((540, 1762), "levelselect.app", font=sans(46, 700), fill=TORCH, anchor="mt")
-    return img, "instagram-story.png"
+    d.text((540, footer_top + 12), "TestFlight beta", font=sans(30, 600), fill=MUTED, anchor="mt")
+    d.text((540, footer_top + 62), "levelselect.app", font=sans(46, 700), fill=TORCH, anchor="mt")
+    return img, f"instagram-story{'-2up' if pair else ''}.png"
 
 
 # ─────────────────────────── 1080x1080 — feed square ────────────────────────
-def square():
+def square(pair):
     W = H = 1080
     img = gradient((W, H))
     img = glow(img, (540, 300), 420, TORCH, 0.20)
-    d = ImageDraw.Draw(img)
 
     icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((120, 120), Image.LANCZOS)
-    img.paste(icon, (480, 118), icon)
+    img.paste(icon, (480, 104), icon)
 
-    img = wordmark(img, (540, 282), 54, anchor="mt")
+    img = wordmark(img, (540, 268), 54, anchor="mt")
     d = ImageDraw.Draw(img)
-    d.text((540, 378), "Every game you're playing,", font=sans(29, 400), fill=INK, anchor="mt")
-    d.text((540, 418), "and exactly where you left off.", font=sans(29, 400), fill=INK, anchor="mt")
+    d.text((540, 366), "Every game you're playing,", font=sans(29, 400), fill=INK, anchor="mt")
+    d.text((540, 406), "and exactly where you left off.", font=sans(29, 400), fill=INK, anchor="mt")
 
-    s = shot("iphone-01-home-shelf.webp", 560)
-    img.alpha_composite(s, ((W - s.width) // 2, 500))
+    top, footer_top = 486, 990
+    art = devices(pair, footer_top - top - 36)
+    if art.width > W - 80:
+        art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
+    img.alpha_composite(art, ((W - art.width) // 2, top))
 
-    d.text((540, 1000), "levelselect.app", font=sans(34, 700), fill=TORCH, anchor="mt")
-    return img, "instagram-square.png"
+    d.text((540, footer_top + 6), "levelselect.app", font=sans(34, 700), fill=TORCH, anchor="mt")
+    return img, f"instagram-square{'-2up' if pair else ''}.png"
 
 
 for build in (open_graph, story, square):
-    img, name = build()
-    img.convert("RGB").save(OUT / name, quality=94)
-    print(f"{name}  {img.size[0]}x{img.size[1]}")
+    for pair in (False, True):
+        img, name = build(pair)
+        img.convert("RGB").save(OUT / name, quality=94)
+        print(f"{name}  {img.size[0]}x{img.size[1]}")
