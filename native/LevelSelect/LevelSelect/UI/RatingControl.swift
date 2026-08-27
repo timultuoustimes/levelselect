@@ -3,6 +3,10 @@ import SwiftUI
 /// Netflix-style enjoyment rating: 1–5 stars named Hated it … Loved it, with a
 /// springy, haptic pick and a little sparkle when you hit "Loved it" (5 = a de
 /// facto favorite). Tap the current rating again to clear it.
+///
+/// The words are the user's when they've named them (Settings → Appearance):
+/// a rating that says "comfort game" instead of "Liked it" reads like the
+/// notebook's owner wrote it. Defaults below.
 struct RatingControl: View {
     @Binding var rating: Int?
     var showLabel = true
@@ -55,7 +59,7 @@ struct RatingControl: View {
     @ViewBuilder
     private var labelView: some View {
         if let r = rating {
-            Text(Self.labels[r - 1])
+            Text(ThemePalette.starLabel(for: r))
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(labelColor(r))
                 .id(r)   // new identity per rating → the transition re-fires
@@ -71,7 +75,7 @@ struct RatingControl: View {
 
     private var accessibilityValue: String {
         guard value > 0 else { return "Not rated" }
-        return "\(value) of 5, \(Self.labels[value - 1])"
+        return "\(value) of 5, \(ThemePalette.starLabel(for: value))"
     }
 
     private func star(_ i: Int) -> some View {

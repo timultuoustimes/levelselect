@@ -47,17 +47,32 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
+            DisclosureGroup("Star names") {
+                ForEach(1...5, id: \.self) { star in
+                    HStack {
+                        Text("\(star)★")
+                            .font(.callout.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, alignment: .leading)
+                        TextField(RatingControl.labels[star - 1], text: starNameBinding(star))
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            }
+
             Button("Reset to defaults", role: .destructive) {
                 let s = ensureSettings()
                 s.accentHex = nil
                 s.statusColorsData = nil
                 s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
+                s.starNamesData = nil
                 save(s)
             }
         } header: {
             Text("Appearance")
         } footer: {
-            Text("Colors sync to your other devices via iCloud. Achievement art comes from RetroAchievements and is shown only on imported sets. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location.")
+            Text("Colors and star names sync to your other devices via iCloud. A blank star name keeps the built-in word. Achievement art comes from RetroAchievements and is shown only on imported sets. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location.")
         }
     }
 
@@ -111,6 +126,23 @@ struct AppearanceSettingsSection: View {
                 var map = s.statusColors
                 map[status.rawValue] = color.hexString()
                 s.statusColors = map
+                save(s)
+            }
+        )
+    }
+
+    private func starNameBinding(_ star: Int) -> Binding<String> {
+        Binding(
+            get: {
+                let names = settings?.starNames ?? []
+                return star <= names.count ? names[star - 1] : ""
+            },
+            set: { text in
+                let s = ensureSettings()
+                var names = s.starNames
+                while names.count < 5 { names.append("") }
+                names[star - 1] = text
+                s.starNames = names
                 save(s)
             }
         )

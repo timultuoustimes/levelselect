@@ -7,7 +7,7 @@ struct CoverCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            CoverThumb(urlString: game.coverURLString)
+            CoverThumb(urlString: game.displayCoverURLString)
                 .frame(width: 108, height: 144)
                 .clipShape(.rect(cornerRadius: 12))
                 .overlay(alignment: .topTrailing) {
@@ -134,7 +134,7 @@ struct ContinueHeroCard: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            CoverThumb(urlString: game.coverURLString)
+            CoverThumb(urlString: game.displayCoverURLString)
                 .frame(width: 76, height: 101)
                 .overlay { CoverShine() }
                 .clipShape(.rect(cornerRadius: 10))

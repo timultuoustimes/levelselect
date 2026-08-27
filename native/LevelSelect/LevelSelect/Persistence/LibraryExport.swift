@@ -200,6 +200,8 @@ enum LibraryExport {
                 c["platform"] = event.platform
                 c["notes"] = event.notes
                 c["datePrecision"] = event.datePrecision
+                c["startedDate"] = event.startedDate.map(iso)
+                c["startedPrecision"] = event.startedPrecision
                 c["playthroughID"] = event.playthrough?.id.uuidString
                 c["playedWith"] = event.companions.map { ["name": $0.name, "handle": $0.handle] }
                 return c
@@ -319,7 +321,8 @@ enum LibraryExport {
                 "statusColors": theme.statusColors,
                 "pageBackground": theme.pageBackgroundRaw,
                 "defaultTrackerDisplay": theme.defaultTrackerDisplayRaw,
-            ] as [String: Any]).compactMapValues { $0 }
+                "starNames": theme.starNames.isEmpty ? nil : theme.starNames as Any,
+            ] as [String: Any?]).compactMapValues { $0 }
         }
         return try JSONSerialization.data(
             withJSONObject: root,

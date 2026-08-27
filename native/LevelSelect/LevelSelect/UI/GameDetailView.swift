@@ -7,6 +7,11 @@ struct GameDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
     @State private var fixingMatch = false
+    @State private var arrangingSections = false
+    @State private var pickingCover = false
+    /// Library-wide reading preference, device-local like the Stats cards.
+    @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
+    @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
     @State private var browserTarget: DekuLinkTarget?
     @State private var markingBeaten = false
     @State private var editingOutcomeNote = false
@@ -92,7 +97,7 @@ struct GameDetailView: View {
         .background { ambientBackdrop }
         .overlay {
             if showingCover {
-                CoverShowcase(urlString: game.coverURLString, isPresented: $showingCover)
+                CoverShowcase(urlString: game.displayCoverURLString, isPresented: $showingCover)
             }
         }
         .task(id: showCriticScores) {
@@ -296,6 +301,16 @@ struct GameDetailView: View {
                     }
                     Divider()
                     Button {
+                        arrangingSections = true
+                    } label: {
+                        Label("Arrange Sections…", systemImage: "arrow.up.arrow.down")
+                    }
+                    Button {
+                        pickingCover = true
+                    } label: {
+                        Label("Change Cover…", systemImage: "photo.on.rectangle.angled")
+                    }
+                    Button {
                         fixingMatch = true
                     } label: {
                         Label("Fix Match…", systemImage: "link.badge.plus")
@@ -313,6 +328,12 @@ struct GameDetailView: View {
         }
         .sheet(isPresented: $fixingMatch) {
             FixMatchView(game: game)
+        }
+        .sheet(isPresented: $arrangingSections) {
+            GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
+        }
+        .sheet(isPresented: $pickingCover) {
+            CoverPickerView(game: game)
         }
         .alert("New Playthrough", isPresented: $namingNewPlaythrough) {
             TextField("Name", text: $playthroughName)
@@ -465,6 +486,110 @@ struct GameDetailView: View {
 
     // MARK: Standard layout
 
+    /// Sections that render for THIS game right now: the arranged order,
+    /// minus hidden ones, minus sections that are absent anyway (Runs with
+    /// no template, About with no summary). Absence and hiding are different
+    /// problems — conflating them is the empty-menu bug pattern.
+    private var visibleSections: [GamePageSection] {
+        GamePageSection.resolveOrder(stored: sectionOrderRaw).filter { section in
+            if GamePageSection.hiddenSet(stored: hiddenSectionsRaw).contains(section) { return false }
+            switch section {
+            case .runs:  return runTemplate != nil
+            case .about: return !(game.summary ?? "").isEmpty
+            case .media: return game.igdbID != nil
+            default:     return true
+            }
+        }
+    }
+
+    private var runTemplate: RunTemplateDTO? {
+        game.trackerSchema.flatMap { TrackerSchemaJSON.runTemplate(from: $0.jsonData) }
+    }
+
+    /// One game-page section, collapse state scoped to this game — the
+    /// title-only key collapsed a section on every game at once.
+    @ViewBuilder
+    private func sectionView(_ section: GamePageSection, stageMode: Bool) -> some View {
+        let scope = game.id.uuidString
+        switch section {
+        case .sessions:
+            CollapsibleSection("Sessions", icon: "stopwatch", scope: scope) {
+                SessionControlsView(game: game)
+            }
+        case .beaten:
+            CollapsibleSection("Beaten", icon: "flag.checkered",
+                               defaultExpanded: false, scope: scope) {
+                CompletionSection(game: game)
+            }
+        case .runs:
+            // Runs render in BOTH display modes. A run is a play-logging
+            // action, the sibling of a session — and Sessions is right
+            // above in compact too. Only the tracker *checklist* moves to
+            // its own page in compact. Keeping Runs inside the inline-only
+            // branch meant turning on "Log Runs for This Game" in compact
+            // changed nothing you could see, so the menu item read as broken.
+            if let template = runTemplate {
+                CollapsibleSection("Runs", icon: "arrow.2.squarepath", scope: scope) {
+                    RunSectionView(game: game, template: template)
+                }
+            }
+        case .tracker:
+            CollapsibleSection("Tracker", icon: "checklist", scope: scope) {
+                // Above both display modes: the question "what was I
+                // doing?" is the same one whether the checklist is inline
+                // or behind a card.
+                LastTickedRow(game: game)
+                if game.resolvedTrackerDisplay == .compact {
+                    CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
+                } else {
+                    TrackerSectionView(game: game)
+                }
+            }
+        case .videos:
+            CollapsibleSection("Guides & Videos", icon: "play.rectangle",
+                               defaultExpanded: false, scope: scope) {
+                VideoListView(game: game, playing: $pagePlaying)
+            }
+        case .about:
+            CollapsibleSection("About", icon: "text.alignleft",
+                               defaultExpanded: false, scope: scope) {
+                Text(game.summary ?? "")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        case .media:
+            // Collapsed by default: the strip fetches only when rendered, so
+            // a closed section spends no proxy quota.
+            CollapsibleSection("Media", icon: "photo.stack",
+                               defaultExpanded: false, scope: scope) {
+                ScreenshotStrip(game: game)
+            }
+        case .info:
+            CollapsibleSection("Game Info", icon: "info.circle",
+                               defaultExpanded: false, scope: scope) {
+                gameInfo
+            }
+        case .connections:
+            CollapsibleSection("Connections", icon: "point.3.connected.trianglepath.dotted",
+                               defaultExpanded: false, scope: scope) {
+                RelatedGamesSection(game: game)
+            }
+        case .tags:
+            CollapsibleSection("Tags", icon: "tag", defaultExpanded: false, scope: scope) {
+                tagsEditor
+            }
+        case .review:
+            CollapsibleSection("Review", icon: "star.bubble",
+                               defaultExpanded: false, scope: scope) {
+                reviewEditor
+            }
+        case .notes:
+            CollapsibleSection("Notes", icon: "note.text", scope: scope) {
+                notesField
+            }
+        }
+    }
+
     private func standardScroll(stageMode: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -472,73 +597,9 @@ struct GameDetailView: View {
                 if game.livePlaythroughs.count > 1 {
                     playthroughPicker
                 }
-                Divider()
-                CollapsibleSection("Sessions", icon: "stopwatch") {
-                    SessionControlsView(game: game)
-                }
-                Divider()
-                CollapsibleSection("Beaten", icon: "flag.checkered",
-                                   defaultExpanded: false) {
-                    CompletionSection(game: game)
-                }
-                // Runs render in BOTH display modes. A run is a play-logging
-                // action, the sibling of a session — and Sessions is right
-                // above in compact too. Only the tracker *checklist* moves to
-                // its own page in compact. Keeping Runs inside the inline-only
-                // branch meant turning on "Log Runs for This Game" in compact
-                // changed nothing you could see, so the menu item read as broken.
-                if let template = game.trackerSchema.flatMap({
-                    TrackerSchemaJSON.runTemplate(from: $0.jsonData)
-                }) {
+                ForEach(visibleSections) { section in
                     Divider()
-                    CollapsibleSection("Runs", icon: "arrow.2.squarepath") {
-                        RunSectionView(game: game, template: template)
-                    }
-                }
-                Divider()
-                CollapsibleSection("Tracker", icon: "checklist") {
-                    // Above both display modes: the question "what was I
-                    // doing?" is the same one whether the checklist is inline
-                    // or behind a card.
-                    LastTickedRow(game: game)
-                    if game.resolvedTrackerDisplay == .compact {
-                        CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
-                    } else {
-                        TrackerSectionView(game: game)
-                    }
-                }
-                Divider()
-                CollapsibleSection("Guides & Videos", icon: "play.rectangle", defaultExpanded: false) {
-                    VideoListView(game: game, playing: $pagePlaying)
-                }
-                Divider()
-                if let summary = game.summary, !summary.isEmpty {
-                    CollapsibleSection("About", icon: "text.alignleft", defaultExpanded: false) {
-                        Text(summary)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    Divider()
-                }
-                CollapsibleSection("Game Info", icon: "info.circle", defaultExpanded: false) {
-                    gameInfo
-                }
-                Divider()
-                CollapsibleSection("Connections", icon: "point.3.connected.trianglepath.dotted",
-                                   defaultExpanded: false) {
-                    RelatedGamesSection(game: game)
-                }
-                Divider()
-                CollapsibleSection("Tags", icon: "tag", defaultExpanded: false) {
-                    tagsEditor
-                }
-                Divider()
-                CollapsibleSection("Review", icon: "star.bubble", defaultExpanded: false) {
-                    reviewEditor
-                }
-                Divider()
-                CollapsibleSection("Notes", icon: "note.text") {
-                    notesField
+                    sectionView(section, stageMode: stageMode)
                 }
             }
             .padding()
@@ -727,7 +788,11 @@ struct GameDetailView: View {
         ZStack(alignment: .top) {
             LSTheme.background
 
-            if ThemePalette.pageBackground == .status {
+            switch ThemePalette.pageBackground {
+            case .plain:
+                // Quiet page — some notebooks are ruled paper, not collage.
+                EmptyView()
+            case .status:
                 // Status-color gradient variant (user-selectable in Appearance).
                 LinearGradient(
                     colors: [game.status.color.opacity(0.45), .clear],
@@ -735,7 +800,23 @@ struct GameDetailView: View {
                 )
                 .frame(height: 420)
                 .frame(maxWidth: .infinity)
-            } else if let s = game.coverURLString, let url = URL(string: s) {
+            case .accent:
+                LinearGradient(
+                    colors: [LSTheme.accent.opacity(0.40), .clear],
+                    startPoint: .top, endPoint: .center
+                )
+                .frame(height: 420)
+                .frame(maxWidth: .infinity)
+            case .cover:
+                coverBackdrop
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var coverBackdrop: some View {
+        if let s = game.displayCoverURLString, let url = URL(string: s) {
                 AsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image
@@ -760,9 +841,7 @@ struct GameDetailView: View {
                     }
                 }
                 .allowsHitTesting(false)
-            }
         }
-        .ignoresSafeArea()
     }
 
     // MARK: Sections
@@ -774,7 +853,7 @@ struct GameDetailView: View {
             // one over-wide child drags the whole page's column offscreen with
             // it. Stack instead: cover above, text at full width.
             heroLayout {
-                CoverThumb(urlString: game.coverURLString)
+                CoverThumb(urlString: game.displayCoverURLString)
                     .frame(width: 138, height: 184)
                     .overlay { CoverShine(delay: 0.25) }
                     .clipShape(.rect(cornerRadius: 8))
@@ -1130,16 +1209,51 @@ struct GameDetailView: View {
             }
             TextField("Add a tag…", text: $newTag)
                 .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    let tag = newTag
-                        .trimmingCharacters(in: .whitespaces)
-                        .replacingOccurrences(of: "#", with: "")
-                    if !tag.isEmpty, !game.userTags.contains(tag) {
-                        repo.edit(game) { $0.userTags.append(tag) }
+                .onSubmit { addTag(newTag) }
+            // Suggest from the library's own vocabulary as you type. This is
+            // what keeps `roguelike` from fragmenting into `rogue-like` and
+            // `Roguelike` — the split that quietly kills tagging. No model,
+            // no network: just the words you've already used.
+            if !tagSuggestions.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(tagSuggestions, id: \.self) { tag in
+                        Button { addTag(tag) } label: {
+                            Chip(text: "#\(tag)", tint: .gray)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Add tag \(tag)")
                     }
-                    newTag = ""
                 }
+            }
         }
+    }
+
+    private var tagSuggestions: [String] {
+        let typed = newTag
+            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        guard !typed.isEmpty else { return [] }
+        return repo.tagCounts()
+            .map(\.tag)
+            .filter { candidate in
+                // A candidate differing only in case IS offered — tapping it
+                // adopts the existing spelling instead of minting a variant.
+                !game.userTags.contains(candidate)
+                && candidate != typed
+                && candidate.range(of: typed, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+            }
+            .prefix(6)
+            .map { $0 }
+    }
+
+    private func addTag(_ raw: String) {
+        let tag = raw
+            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        if !tag.isEmpty, !game.userTags.contains(tag) {
+            repo.edit(game) { $0.userTags.append(tag) }
+        }
+        newTag = ""
     }
 
     // MARK: Review

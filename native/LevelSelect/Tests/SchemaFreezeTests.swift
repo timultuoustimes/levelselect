@@ -139,9 +139,10 @@ struct SchemaFreezeTests {
         let expected = [
             // datePrecision + playthrough added 2026-08-26 (fuzzy beaten
             // dates; the run a beaten moment capped); playedWith added
-            // 2026-08-27 (who was on the couch). Seed-and-promote before any
-            // build that writes them ships.
-            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,updatedAt,userID",
+            // 2026-08-27 (who was on the couch); startedDate/startedPrecision
+            // added 2026-08-27 build 31 (spans — "Dec 2025 → Jan 2026").
+            // Seed-and-promote before any build that writes them ships.
+            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             "Game: addedAt,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
@@ -153,7 +154,9 @@ struct SchemaFreezeTests {
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playedWithData,playthrough,revision,startedAt,templateID,updatedAt,userID",
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playedWithData,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
-            "ThemeSettings: accentHex,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,statusColorsData,updatedAt",
+            // starNamesData added 2026-08-27 build 31 (your own words on the
+            // five stars).
+            "ThemeSettings: accentHex,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,starNamesData,statusColorsData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,updatedAt,userID",

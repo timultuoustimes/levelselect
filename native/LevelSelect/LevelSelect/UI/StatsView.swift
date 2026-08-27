@@ -237,7 +237,7 @@ struct StatsTab: View {
             ForEach(top, id: \.0.id) { game, time in
                 NavigationLink(value: game) {
                     HStack(spacing: 10) {
-                        CoverThumb(urlString: game.coverURLString)
+                        CoverThumb(urlString: game.displayCoverURLString)
                             .frame(width: 30, height: 40)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(game.name).font(.subheadline)
@@ -308,12 +308,22 @@ struct StatsTab: View {
             }
             let dist = ratingDistribution
             let maxCount = dist.map(\.1).max() ?? 1
+            // Named stars show the user's own word beside the count — the
+            // vocabulary they chose is the point of naming them.
+            let named = !ThemePalette.starNames.isEmpty
             ForEach(dist, id: \.0) { stars, count in
                 HStack(spacing: 10) {
                     Text("\(stars)★")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .frame(width: 26, alignment: .trailing)
+                    if named {
+                        Text(ThemePalette.starLabel(for: stars))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .frame(width: 92, alignment: .leading)
+                    }
                     bar(fraction: Double(count) / Double(max(maxCount, 1)), color: LSTheme.accent)
                     Text("\(count)")
                         .font(.caption.monospacedDigit())
@@ -827,7 +837,7 @@ struct CompletionYearView: View {
             ForEach(rows, id: \.event.id) { row in
                 NavigationLink(value: row.game) {
                     HStack(spacing: 12) {
-                        CoverThumb(urlString: row.game.coverURLString)
+                        CoverThumb(urlString: row.game.displayCoverURLString)
                             .frame(width: 40, height: 53)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(row.game.name)

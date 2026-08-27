@@ -34,7 +34,7 @@ struct CompletionSection: View {
             ForEach(events, id: \.id) { event in
                 CompletionRow(event: event)
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(event.labelText), \(event.dateText)"
+                .accessibilityLabel("\(event.labelText), \(event.spanText)"
                                     + (event.companions.isEmpty ? "" : ", with \(event.companions.sentence)"))
                 .accessibilityHint("Opens this record to edit")
                 .contentShape(.rect)
@@ -97,6 +97,12 @@ struct MarkCompletionSheet: View {
     @State private var date = Date.now
     @State private var year = Calendar.current.component(.year, from: .now)
     @State private var month = Calendar.current.component(.month, from: .now)
+    /// The start of the span. "none" = not recorded, which is the default —
+    /// most historical finishes have a remembered end and a vague beginning.
+    @State private var startPrecision = "none"
+    @State private var startDate = Date.now
+    @State private var startYear = Calendar.current.component(.year, from: .now)
+    @State private var startMonth = Calendar.current.component(.month, from: .now)
     @State private var platform = ""
     @State private var notes = ""
     @State private var playedWith: [Companion] = []
@@ -104,6 +110,35 @@ struct MarkCompletionSheet: View {
     @State private var playthroughID: UUID?
 
     private var repo: Repository { Repository(context) }
+
+    /// The date a precision + pickers compose to, floored the way it's stored.
+    private static func compose(precision: String, date: Date, year: Int, month: Int) -> Date {
+        switch precision {
+        case "month":
+            return Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) ?? .now
+        case "year":
+            return Calendar.current.date(from: DateComponents(year: year, month: 1, day: 1)) ?? .now
+        default:
+            return date
+        }
+    }
+
+    private var composedFinish: Date {
+        Self.compose(precision: precision, date: date, year: year, month: month)
+    }
+
+    private var composedStart: Date? {
+        guard startPrecision != "none" else { return nil }
+        return Self.compose(precision: startPrecision, date: startDate,
+                            year: startYear, month: startMonth)
+    }
+
+    /// Fuzzy dates floor to their period's first day, so "2026 → Jan 2026"
+    /// compares equal and passes; only a genuinely later start trips this.
+    private var startsAfterFinish: Bool {
+        guard let start = composedStart else { return false }
+        return start > composedFinish
+    }
 
     /// Release year → now, so "the year it came out" is one spin away.
     private var yearRange: [Int] {
@@ -132,7 +167,7 @@ struct MarkCompletionSheet: View {
                     }
                 }
 
-                Section("When") {
+                Section("Finished") {
                     Picker("How precisely do you know?", selection: $precision) {
                         Text("Exact day").tag("day")
                         Text("Month").tag("month")
@@ -157,6 +192,42 @@ struct MarkCompletionSheet: View {
                         Picker("Year", selection: $year) {
                             ForEach(yearRange, id: \.self) { Text(String($0)).tag($0) }
                         }
+                    }
+                }
+
+                Section {
+                    Picker("Started", selection: $startPrecision) {
+                        Text("Not recorded").tag("none")
+                        Text("Exact day").tag("day")
+                        Text("Month").tag("month")
+                        Text("Just the year").tag("year")
+                    }
+                    switch startPrecision {
+                    case "day":
+                        DatePicker("Date", selection: $startDate, in: ...Date.now,
+                                   displayedComponents: .date)
+                    case "month":
+                        Picker("Month", selection: $startMonth) {
+                            ForEach(1...12, id: \.self) {
+                                Text(Calendar.current.monthSymbols[$0 - 1]).tag($0)
+                            }
+                        }
+                        Picker("Year", selection: $startYear) {
+                            ForEach(yearRange, id: \.self) { Text(String($0)).tag($0) }
+                        }
+                    case "year":
+                        Picker("Year", selection: $startYear) {
+                            ForEach(yearRange, id: \.self) { Text(String($0)).tag($0) }
+                        }
+                    default:
+                        EmptyView()
+                    }
+                } footer: {
+                    if startsAfterFinish {
+                        Text("That start is after the finish.")
+                            .foregroundStyle(.red)
+                    } else if startPrecision != "none" {
+                        Text("A span reads like a diary line — \"Dec 2025 → Jan 2026\".")
                     }
                 }
 
@@ -191,8 +262,9 @@ struct MarkCompletionSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(editing == nil ? "Record" : "Save") { record() }
-                        .disabled(label == .custom
-                                  && customLabel.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled((label == .custom
+                                   && customLabel.trimmingCharacters(in: .whitespaces).isEmpty)
+                                  || startsAfterFinish)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -206,6 +278,12 @@ struct MarkCompletionSheet: View {
                     date = editing.date
                     year = Calendar.current.component(.year, from: editing.date)
                     month = Calendar.current.component(.month, from: editing.date)
+                    if let started = editing.startedDate {
+                        startPrecision = editing.startedPrecision ?? "day"
+                        startDate = started
+                        startYear = Calendar.current.component(.year, from: started)
+                        startMonth = Calendar.current.component(.month, from: started)
+                    }
                     platform = editing.platform ?? ""
                     notes = editing.notes ?? ""
                     playedWith = editing.companions
@@ -224,15 +302,9 @@ struct MarkCompletionSheet: View {
     }
 
     private func record() {
-        let stored: Date
-        switch precision {
-        case "month":
-            stored = Calendar.current.date(from: DateComponents(year: year, month: month, day: 1)) ?? .now
-        case "year":
-            stored = Calendar.current.date(from: DateComponents(year: year, month: 1, day: 1)) ?? .now
-        default:
-            stored = date
-        }
+        let stored = composedFinish
+        let start = composedStart
+        let startPrec: String? = start == nil || startPrecision == "day" ? nil : startPrecision
         if let editing {
             repo.updateCompletion(
                 editing,
@@ -242,7 +314,9 @@ struct MarkCompletionSheet: View {
                 platform: platform.isEmpty ? nil : platform,
                 customLabel: label == .custom ? customLabel : nil,
                 notes: notes.isEmpty ? nil : notes,
-                playedWith: playedWith)
+                playedWith: playedWith,
+                startedDate: start,
+                startedPrecision: startPrec)
         } else {
             repo.addCompletion(
                 to: game,
@@ -253,7 +327,9 @@ struct MarkCompletionSheet: View {
                 customLabel: label == .custom ? customLabel : nil,
                 notes: notes.isEmpty ? nil : notes,
                 playedWith: playedWith,
-                playthrough: game.livePlaythroughs.first { $0.id == playthroughID })
+                playthrough: game.livePlaythroughs.first { $0.id == playthroughID },
+                startedDate: start,
+                startedPrecision: startPrec)
         }
         dismiss()
     }
@@ -291,7 +367,7 @@ private struct CompletionRow: View {
                 CompanionLine(companions: event.companions)
             }
             Spacer(minLength: 4)
-            Text(event.dateText)
+            Text(event.spanText)
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
         }

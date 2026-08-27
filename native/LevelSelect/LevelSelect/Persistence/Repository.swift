@@ -1975,13 +1975,17 @@ struct Repository {
         customLabel: String? = nil,
         notes: String? = nil,
         playedWith: [Companion] = [],
-        playthrough: Playthrough? = nil
+        playthrough: Playthrough? = nil,
+        startedDate: Date? = nil,
+        startedPrecision: String? = nil
     ) -> CompletionEvent {
         let event = CompletionEvent(date: date, label: label, customLabel: customLabel)
         context.insert(event)
         event.game = game
         event.playthrough = playthrough
         event.datePrecision = precision
+        event.startedDate = startedDate
+        event.startedPrecision = startedPrecision
         event.platform = platform
         event.notes = notes
         event.companions = playedWith
@@ -2007,11 +2011,15 @@ struct Repository {
         platform: String?,
         customLabel: String?,
         notes: String?,
-        playedWith: [Companion]
+        playedWith: [Companion],
+        startedDate: Date? = nil,
+        startedPrecision: String? = nil
     ) {
         event.label = label
         event.date = date
         event.datePrecision = precision
+        event.startedDate = startedDate
+        event.startedPrecision = startedPrecision
         event.platform = platform
         event.customLabel = customLabel
         event.notes = notes
@@ -2020,6 +2028,56 @@ struct Repository {
         event.revision += 1
         if let game = event.game { touch(game, at: .now) }
         persist()
+    }
+
+    // MARK: Tags
+
+    /// Every tag in the library with how many games carry it, most-used
+    /// first. Derived, never stored — the tags live on the games.
+    func tagCounts() -> [(tag: String, count: Int)] {
+        var counts: [String: Int] = [:]
+        for game in (try? context.fetch(FetchDescriptor<Game>())) ?? []
+        where game.deletedAt == nil {
+            for tag in game.userTags { counts[tag, default: 0] += 1 }
+        }
+        return counts.map { (tag: $0.key, count: $0.value) }
+            .sorted { ($0.count, $1.tag) > ($1.count, $0.tag) }
+    }
+
+    /// Rename `old` to `new` on every game that carries it — which is also
+    /// the merge: renaming onto an existing tag folds the two vocabularies
+    /// together, and a game holding both ends with one copy, not a duplicate.
+    /// Returns how many games changed, so the UI can say the number BEFORE
+    /// calling this ("12 games will change" beats "this cannot be undone").
+    @discardableResult
+    func renameTag(_ old: String, to new: String) -> Int {
+        let trimmed = new.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, trimmed != old else { return 0 }
+        var changed = 0
+        for game in (try? context.fetch(FetchDescriptor<Game>())) ?? []
+        where game.deletedAt == nil && game.userTags.contains(old) {
+            var tags = game.userTags.filter { $0 != old }
+            if !tags.contains(trimmed) { tags.append(trimmed) }
+            game.userTags = tags
+            touch(game, at: .now)
+            changed += 1
+        }
+        if changed > 0 { persist() }
+        return changed
+    }
+
+    /// Remove a tag from every game that carries it. Returns the count.
+    @discardableResult
+    func removeTag(_ tag: String) -> Int {
+        var changed = 0
+        for game in (try? context.fetch(FetchDescriptor<Game>())) ?? []
+        where game.deletedAt == nil && game.userTags.contains(tag) {
+            game.userTags.removeAll { $0 == tag }
+            touch(game, at: .now)
+            changed += 1
+        }
+        if changed > 0 { persist() }
+        return changed
     }
 
     /// Everyone you've recorded playing with, most-used first.

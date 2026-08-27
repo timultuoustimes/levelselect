@@ -668,7 +668,7 @@ struct LibraryGridCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            CoverThumb(urlString: game.coverURLString)
+            CoverThumb(urlString: game.displayCoverURLString)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(.rect(cornerRadius: 10))

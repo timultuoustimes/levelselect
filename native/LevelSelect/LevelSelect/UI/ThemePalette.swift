@@ -13,6 +13,17 @@ enum ThemePalette {
     private(set) static var pageBackground: ThemePageBackground = .cover
     private(set) static var defaultTrackerDisplay: TrackerDisplay = .inline
     private static var statusOverrides: [GameStatus: Color] = [:]
+    /// Custom words on the five stars ([] = the built-in labels).
+    private(set) static var starNames: [String] = []
+
+    /// The label a rating wears: the user's word if set, the built-in if not.
+    static func starLabel(for rating: Int) -> String {
+        if rating >= 1, rating <= starNames.count,
+           !starNames[rating - 1].isEmpty {
+            return starNames[rating - 1]
+        }
+        return RatingControl.labels[max(1, min(rating, 5)) - 1]
+    }
 
     /// Built-in defaults (the palette shipped before theming existed).
     static func defaultColor(for status: GameStatus) -> Color {
@@ -46,6 +57,7 @@ enum ThemePalette {
             }
         }
         statusOverrides = overrides
+        starNames = settings?.starNames ?? []
     }
 
     /// The single settings record (created on first use). Duplicates from a

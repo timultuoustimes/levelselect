@@ -19,14 +19,21 @@ enum SessionState: String, Codable, Sendable {
 
 /// How you own a game. Multi-select (a game can be owned physically AND
 /// digitally); stored on `Game.ownership` as an array of raw values.
+///
+/// `previouslyOwned` records a copy that's gone — sold, traded, lent and
+/// never returned. A lifetime library holds games you no longer hold, and
+/// before this case the only honest options were pretending you still owned
+/// it or deleting the history. New case in a String-raw enum = no schema
+/// version, the same free path `wishlist` and `ongoing` took.
 enum Ownership: String, Codable, CaseIterable, Sendable {
-    case physical, digital, emulated
+    case physical, digital, emulated, previouslyOwned
 
     var label: String {
         switch self {
         case .physical: "Physical"
         case .digital:  "Digital"
         case .emulated: "Emulated"
+        case .previouslyOwned: "Previously Owned"
         }
     }
 
@@ -35,6 +42,7 @@ enum Ownership: String, Codable, CaseIterable, Sendable {
         case .physical: "opticaldisc"
         case .digital:  "arrow.down.circle"
         case .emulated: "cpu"
+        case .previouslyOwned: "shippingbox"
         }
     }
 }

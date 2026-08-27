@@ -59,7 +59,7 @@ struct RecentlyDeletedView: View {
                     ForEach(games) { game in
                         row(name: game.name,
                             detail: deletedLine(game.deletedAt),
-                            cover: game.coverURLString) {
+                            cover: game.displayCoverURLString) {
                             repo.restore(game)
                             reload()
                         } forever: {
@@ -73,7 +73,7 @@ struct RecentlyDeletedView: View {
                     ForEach(playthroughs) { pt in
                         row(name: pt.name,
                             detail: "\(pt.game?.name ?? "?") · \(deletedLine(pt.deletedAt))",
-                            cover: pt.game?.coverURLString) {
+                            cover: pt.game?.displayCoverURLString) {
                             repo.restore(pt)
                             reload()
                         } forever: {

@@ -108,6 +108,12 @@ struct DataSettingsSection: View {
             }
 
             NavigationLink {
+                ManageTagsView()
+            } label: {
+                Label("Manage Tags", systemImage: "tag")
+            }
+
+            NavigationLink {
                 RecentlyDeletedView()
             } label: {
                 Label("Recently Deleted", systemImage: "trash")

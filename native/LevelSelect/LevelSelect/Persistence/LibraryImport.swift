@@ -463,6 +463,8 @@ enum LibraryImport {
         event.platform = d["platform"] as? String
         event.notes = d["notes"] as? String
         event.datePrecision = d["datePrecision"] as? String
+        event.startedDate = date(d["startedDate"])
+        event.startedPrecision = d["startedPrecision"] as? String
         event.companions = companions(d["playedWith"])
         return event
     }

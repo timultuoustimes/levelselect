@@ -31,7 +31,7 @@ struct CoverMosaic: View {
     }
 
     private func tile(_ game: Game) -> some View {
-        AsyncImage(url: game.coverURLString.flatMap(URL.init(string:))) { phase in
+        AsyncImage(url: game.displayCoverURLString.flatMap(URL.init(string:))) { phase in
             switch phase {
             case .success(let img): img.resizable().scaledToFill()
             default: Rectangle().fill(.white.opacity(0.06))
@@ -291,7 +291,7 @@ struct CollectionMembersPicker: View {
     /// in the same look.
     private func cell(_ game: Game, selected: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            CoverThumb(urlString: game.coverURLString)
+            CoverThumb(urlString: game.displayCoverURLString)
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(.rect(cornerRadius: 10))

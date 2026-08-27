@@ -161,6 +161,8 @@ enum CloudKitSchemaSeeder {
         completion.platform = marker
         completion.notes = marker
         completion.datePrecision = "year"
+        completion.startedDate = now
+        completion.startedPrecision = "year"
         completion.companions = [Companion(name: marker, handle: marker)]
         context.insert(completion)
         completion.game = game
@@ -283,6 +285,7 @@ enum CloudKitSchemaSeeder {
             if existingTheme.overlappingTimerPolicyRaw == nil { existingTheme.overlappingTimerPolicyRaw = marker }
             if existingTheme.platformIconVariantsData == nil { existingTheme.platformIconVariantsData = stamp }
             if existingTheme.dekuWishlistURLString == nil { existingTheme.dekuWishlistURLString = marker }
+            if existingTheme.starNamesData == nil { existingTheme.starNamesData = stamp }
         } else {
             let theme = ThemeSettings()
             theme.accentHex = "#8A5CF6"
@@ -291,6 +294,7 @@ enum CloudKitSchemaSeeder {
             theme.overlappingTimerPolicyRaw = marker     // V2
             theme.platformIconVariantsData = stamp       // V2
             theme.dekuWishlistURLString = marker         // V2
+            theme.starNamesData = stamp                  // build 31
             context.insert(theme)
         }
 
@@ -340,6 +344,7 @@ enum CloudKitSchemaSeeder {
             if theme.overlappingTimerPolicyRaw == marker { theme.overlappingTimerPolicyRaw = nil }
             if theme.platformIconVariantsData == Data("{}".utf8) { theme.platformIconVariantsData = nil }
             if theme.dekuWishlistURLString == marker { theme.dekuWishlistURLString = nil }
+            if theme.starNamesData == Data("{}".utf8) { theme.starNamesData = nil }
             ThemePalette.refresh(from: theme)
         }
 

@@ -28,6 +28,14 @@ final class CompletionEvent {
     /// so records from before this field simply read as exact days (which
     /// they were).
     var datePrecision: String?
+    /// When the playthrough this finish caps BEGAN, with its own fuzzy
+    /// precision (same vocabulary as `datePrecision`). Optional twice over:
+    /// nil means "not recorded", which most historical finishes are. A span —
+    /// "Dec 2025 → Jan 2026" — is the diary sentence people actually want;
+    /// a finish alone is a timestamp, a span is a memory. Additive optionals,
+    /// promoted with the build-31 batch.
+    var startedDate: Date?
+    var startedPrecision: String?
 
     var game: Game?
     /// The run this moment capped, when there was one. Optional on purpose:
@@ -63,11 +71,27 @@ extension CompletionEvent {
 
     /// The date, said only as precisely as it's known.
     var dateText: String {
-        switch datePrecision {
+        Self.fuzzyText(date, precision: datePrecision)
+    }
+
+    /// The span, when a start was recorded: "Dec 2025 → Jan 2026". Without
+    /// one it's just the finish — never an invented start. Months abbreviate
+    /// inside a span (two wide months crowd a row); alone they stay wide.
+    var spanText: String {
+        guard let startedDate else { return dateText }
+        let start = Self.fuzzyText(startedDate, precision: startedPrecision, wideMonth: false)
+        let end = Self.fuzzyText(date, precision: datePrecision, wideMonth: false)
+        // "Jan 2026 → Jan 2026" says less than "Jan 2026" does.
+        guard start != end else { return dateText }
+        return "\(start) → \(end)"
+    }
+
+    static func fuzzyText(_ date: Date, precision: String?, wideMonth: Bool = true) -> String {
+        switch precision {
         case "year":
             return String(Calendar.current.component(.year, from: date))
         case "month":
-            return date.formatted(.dateTime.month(.wide).year())
+            return date.formatted(.dateTime.month(wideMonth ? .wide : .abbreviated).year())
         default:
             return date.formatted(date: .abbreviated, time: .omitted)
         }

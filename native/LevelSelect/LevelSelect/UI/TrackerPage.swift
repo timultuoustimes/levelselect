@@ -260,14 +260,16 @@ struct TrackerPageView: View {
     @ViewBuilder
     private var trackerContent: some View {
         if let template = runTemplate {
-            CollapsibleSection("Runs", icon: "arrow.2.squarepath") {
+            CollapsibleSection("Runs", icon: "arrow.2.squarepath",
+                               scope: game.id.uuidString) {
                 RunSectionView(game: game, template: template)
             }
             Divider()
         }
         TrackerSectionView(game: game)
         Divider()
-        CollapsibleSection("Videos", icon: "play.rectangle", defaultExpanded: false) {
+        CollapsibleSection("Videos", icon: "play.rectangle", defaultExpanded: false,
+                           scope: game.id.uuidString) {
             VideoListView(game: game, playing: $playing)
         }
     }

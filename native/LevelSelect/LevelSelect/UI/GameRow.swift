@@ -5,7 +5,7 @@ struct GameRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CoverThumb(urlString: game.coverURLString)
+            CoverThumb(urlString: game.displayCoverURLString)
                 .frame(width: 44, height: 58)
 
             VStack(alignment: .leading, spacing: 3) {

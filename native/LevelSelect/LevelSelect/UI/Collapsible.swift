@@ -1,7 +1,14 @@
 import SwiftUI
 
-/// Collapsible page section with a persisted (library-wide) expansion state —
-/// per Tim: sections collapsible so game pages stay scannable.
+/// Collapsible page section with a persisted expansion state — per Tim:
+/// sections collapsible so game pages stay scannable.
+///
+/// Pass `scope` (a game's id) to persist per game. Without it the key is
+/// shared library-wide — which was the original behaviour *by accident*:
+/// keying on the title alone meant collapsing Tracker on one game collapsed
+/// it on every game. A game with a huge tracker and a game with none want
+/// different defaults, so game pages pass their game; a genuinely global
+/// surface may omit the scope deliberately.
 struct CollapsibleSection<Content: View>: View {
     let title: String
     let icon: String
@@ -11,12 +18,14 @@ struct CollapsibleSection<Content: View>: View {
     @AppStorage private var expanded: Bool
 
     init(_ title: String, icon: String, defaultExpanded: Bool = true,
+         scope: String? = nil,
          @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.defaultExpanded = defaultExpanded
         self.content = content()
-        _expanded = AppStorage(wrappedValue: defaultExpanded, "section.\(title)")
+        let key = scope.map { "section.\($0).\(title)" } ?? "section.\(title)"
+        _expanded = AppStorage(wrappedValue: defaultExpanded, key)
     }
 
     var body: some View {

@@ -67,7 +67,7 @@ enum WidgetBridge {
         }
 
         func coverName(_ g: Game) -> String? {
-            guard let s = g.coverURLString, let url = URL(string: s) else { return nil }
+            guard let s = g.displayCoverURLString, let url = URL(string: s) else { return nil }
             let name = coverFileName(for: s)
             covers.append(CoverJob(url: url, name: name))
             return name
@@ -131,7 +131,7 @@ enum WidgetBridge {
             .map { g in
                 WidgetPoolGame(
                     id: g.id.uuidString, name: g.name,
-                    coverFileName: g.coverURLString.map { coverFileName(for: $0) },
+                    coverFileName: g.displayCoverURLString.map { coverFileName(for: $0) },
                     statusRaw: g.status.rawValue,
                     platform: PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other"))
             }
@@ -164,7 +164,7 @@ enum WidgetBridge {
                     count: collection.gameIDs.count,
                     memberIDs: members.map { $0.id.uuidString },
                     memberCovers: members.map { g in
-                        g.coverURLString.map { coverFileName(for: $0) }
+                        g.displayCoverURLString.map { coverFileName(for: $0) }
                     })
             }
             .sorted { $0.name < $1.name }

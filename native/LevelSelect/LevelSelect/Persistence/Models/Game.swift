@@ -28,8 +28,15 @@ final class Game {
     /// A cover the user chose in place of the fetched one (their own image, a
     /// different official release, community art). Schema V2 — the art the
     /// box had when THEY owned it is part of the memory. Wins over
-    /// `coverURLString` wherever a cover is drawn.
+    /// `coverURLString` wherever a cover is drawn — read `displayCoverURLString`,
+    /// never `coverURLString`, when rendering.
     var coverOverrideURLString: String?
+
+    /// The cover to DRAW: the user's choice when they've made one, the
+    /// fetched art otherwise. Fetch/refresh paths keep writing
+    /// `coverURLString`, so Fix Match and the fill pass can never overwrite a
+    /// chosen cover.
+    var displayCoverURLString: String? { coverOverrideURLString ?? coverURLString }
 
     // User state
     var status: GameStatus = GameStatus.backlog

@@ -563,6 +563,8 @@ struct HomeTab: View {
                     }
                 }
                 hiddenStatusesFooter
+                // After the shelves, not above them: an ask, never a nag.
+                BetaQuestionCard()
             }
             .padding(.vertical)
         }
