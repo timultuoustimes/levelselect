@@ -14,6 +14,14 @@ final class TrackerStateRecord {
 
     var itemID: String = ""          // stable id of the schema item
     var completed: Bool = false
+    /// When this item was ticked — set on completion, cleared on un-tick.
+    ///
+    /// Distinct from `updatedAt`, which moves for any change at all: adding a
+    /// note or un-ticking something from years ago would make that item look
+    /// like the most recent thing you did. "Where you left off" needs the
+    /// moment you finished it, not the moment the row last changed. Nil on
+    /// rows written before this field existed, which read as `updatedAt`.
+    var completedAt: Date?
     var count: Int?
     var rank: Int?
     var revealed: Bool = false
@@ -64,4 +72,10 @@ extension TrackerStateRecord {
     static func winner(of records: [TrackerStateRecord]) -> TrackerStateRecord? {
         records.max { $1.outranks($0) }
     }
+}
+
+extension TrackerStateRecord {
+    /// When this counts as ticked. Rows written before `completedAt` existed
+    /// fall back to `updatedAt`, which is the best they ever knew.
+    var tickedAt: Date { completedAt ?? updatedAt }
 }

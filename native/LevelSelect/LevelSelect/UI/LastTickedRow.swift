@@ -14,9 +14,9 @@ import SwiftData
 /// Seeing someone's own note surfaced here, next to the thing it belongs to,
 /// explains the field better than a docs paragraph can.
 ///
-/// **Honest limit:** the timestamp is the state record's `updatedAt`, which
-/// moves whenever that row changes — un-ticking an old item makes it look
-/// recent. Hence "Last ticked" rather than any claim to a real history.
+/// The timestamp is the record's own `completedAt` — the moment it was
+/// ticked, not the moment the row last changed — so editing a note or
+/// un-ticking something old can't push it to the front.
 struct LastTickedRow: View {
     let game: Game
     /// Home wants the same fact in one line, under a card that's already
@@ -40,7 +40,7 @@ struct LastTickedRow: View {
         guard let playthrough = game.activePlaythrough else { return nil }
         let done = (playthrough.trackerStates ?? [])
             .filter { $0.deletedAt == nil && $0.completed }
-        guard let latest = done.max(by: { $0.updatedAt < $1.updatedAt }) else { return nil }
+        guard let latest = done.max(by: { $0.tickedAt < $1.tickedAt }) else { return nil }
 
         // Names and notes come from the overlaid read, so a renamed item shows
         // the name its owner chose rather than the generated one.
@@ -48,7 +48,7 @@ struct LastTickedRow: View {
             if let item = category.items.first(where: { $0.id == latest.itemID }) {
                 return Recent(name: item.name,
                               note: item.note?.isEmpty == false ? item.note : nil,
-                              at: latest.updatedAt,
+                              at: latest.tickedAt,
                               playthrough: game.livePlaythroughs.count > 1
                                   ? playthrough.name : nil)
             }

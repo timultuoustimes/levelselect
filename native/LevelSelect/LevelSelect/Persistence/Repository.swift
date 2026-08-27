@@ -835,6 +835,9 @@ struct Repository {
     func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.completed = done
+        // The moment, not the edit: un-ticking clears it so an item you
+        // changed your mind about stops claiming to be where you left off.
+        record.completedAt = done ? .now : nil
         touch(record)
         touch(pt)
         recomputeProgress(pt)
@@ -845,7 +848,11 @@ struct Repository {
     func setTrackerRank(_ pt: Playthrough, itemID: String, rank: Int, maxRank: Int?) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.rank = max(0, rank)
-        if let maxRank { record.completed = rank >= maxRank }
+        if let maxRank {
+            let nowDone = rank >= maxRank
+            if nowDone != record.completed { record.completedAt = nowDone ? .now : nil }
+            record.completed = nowDone
+        }
         touch(record)
         touch(pt)
         recomputeProgress(pt)
@@ -1967,6 +1974,7 @@ struct Repository {
         platform: String? = nil,
         customLabel: String? = nil,
         notes: String? = nil,
+        playedWith: String? = nil,
         playthrough: Playthrough? = nil
     ) -> CompletionEvent {
         let event = CompletionEvent(date: date, label: label, customLabel: customLabel)
@@ -1976,6 +1984,7 @@ struct Repository {
         event.datePrecision = precision
         event.platform = platform
         event.notes = notes
+        event.playedWith = playedWith
         // Any finish-shaped label moves the game to Completed — but never
         // back: a historical "beat it in 2011" on a game you're replaying
         // shouldn't yank it off the Playing shelf.
@@ -1986,6 +1995,31 @@ struct Repository {
         touch(game, at: .now)
         persist()
         return event
+    }
+
+    /// Change a finish you already recorded — the date you now remember
+    /// better, the label you'd rather it wore, who was actually there.
+    func updateCompletion(
+        _ event: CompletionEvent,
+        label: CompletionLabel,
+        date: Date,
+        precision: String?,
+        platform: String?,
+        customLabel: String?,
+        notes: String?,
+        playedWith: String?
+    ) {
+        event.label = label
+        event.date = date
+        event.datePrecision = precision
+        event.platform = platform
+        event.customLabel = customLabel
+        event.notes = notes
+        event.playedWith = playedWith
+        event.updatedAt = .now
+        event.revision += 1
+        if let game = event.game { touch(game, at: .now) }
+        persist()
     }
 
     /// Soft, like every delete: the event lands in the same recoverable

@@ -56,7 +56,7 @@ enum WidgetBridge {
             guard let playthrough else { return nil }
             let done = (playthrough.trackerStates ?? [])
                 .filter { $0.deletedAt == nil && $0.completed }
-            guard let latest = done.max(by: { $0.updatedAt < $1.updatedAt }),
+            guard let latest = done.max(by: { $0.tickedAt < $1.tickedAt }),
                   let schema = game.trackerSchema else { return nil }
             for category in TrackerSchemaJSON.categories(from: schema.jsonData) {
                 if let item = category.items.first(where: { $0.id == latest.itemID }) {

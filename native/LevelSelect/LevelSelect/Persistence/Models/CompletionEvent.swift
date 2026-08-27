@@ -17,6 +17,11 @@ final class CompletionEvent {
     var customLabel: String?   // used when label == .custom
     var platform: String?
     var notes: String?
+    /// Who you played it with — free text, because the point is the memory,
+    /// not a contact list. The app has no social graph and isn't getting one;
+    /// this is the couch, the co-op partner, the friend on voice chat, written
+    /// down where the finish is recorded rather than lost in a general note.
+    var playedWith: String?
     /// How much of `date` is real: nil/"day" = the whole thing, "month" =
     /// month+year, "year" = year only. "I beat Skyrim the year it came out"
     /// is a true statement with a year in it — storing it as January 1st and
@@ -47,6 +52,9 @@ final class CompletionEvent {
         self.customLabel = customLabel
     }
 }
+
+/// `sheet(item:)` needs it; the id is already there.
+extension CompletionEvent: Identifiable {}
 
 extension CompletionEvent {
     /// The date, said only as precisely as it's known.

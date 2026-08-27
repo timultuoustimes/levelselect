@@ -14,6 +14,7 @@ struct CompletionSection: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var context
     @State private var marking = false
+    @State private var editing: CompletionEvent?
 
     private var repo: Repository { Repository(context) }
 
@@ -43,6 +44,12 @@ struct CompletionSection: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    if let with = event.playedWith, !with.isEmpty {
+                        Label(with, systemImage: "person.2.fill")
+                            .font(.caption)
+                            .foregroundStyle(LSTheme.accent.opacity(0.9))
+                            .lineLimit(1)
+                    }
                     if let run = event.playthrough {
                         Text("· \(run.name)")
                             .font(.caption)
@@ -55,8 +62,15 @@ struct CompletionSection: View {
                         .foregroundStyle(.secondary)
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(event.labelText), \(event.dateText)")
+                .accessibilityLabel("\(event.labelText), \(event.dateText)"
+                                    + (event.playedWith.map { ", with \($0)" } ?? ""))
+                .accessibilityHint("Opens this record to edit")
+                .contentShape(.rect)
+                .onTapGesture { editing = event }
                 .contextMenu {
+                    Button {
+                        editing = event
+                    } label: { Label("Edit", systemImage: "pencil") }
                     Button(role: .destructive) {
                         repo.removeCompletion(event)
                     } label: { Label("Remove", systemImage: "trash") }
@@ -81,6 +95,12 @@ struct CompletionSection: View {
                 .presentationDetents([.medium, .large])
                 #endif
         }
+        .sheet(item: $editing) { event in
+            MarkCompletionSheet(game: game, editing: event)
+                #if !os(macOS)
+                .presentationDetents([.medium, .large])
+                #endif
+        }
     }
 }
 
@@ -92,6 +112,10 @@ struct CompletionSection: View {
 /// and never pretends to know more.
 struct MarkCompletionSheet: View {
     let game: Game
+    /// When set, the sheet edits that record instead of writing a new one —
+    /// a finish you misremembered by a month shouldn't have to be deleted and
+    /// re-entered.
+    var editing: CompletionEvent? = nil
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
@@ -103,6 +127,7 @@ struct MarkCompletionSheet: View {
     @State private var month = Calendar.current.component(.month, from: .now)
     @State private var platform = ""
     @State private var notes = ""
+    @State private var playedWith = ""
     /// nil = "just the game" — a historical beat no tracked run ever saw.
     @State private var playthroughID: UUID?
 
@@ -163,7 +188,7 @@ struct MarkCompletionSheet: View {
                     }
                 }
 
-                Section("Details (optional)") {
+                Section {
                     if !game.livePlaythroughs.isEmpty {
                         Picker("Playthrough", selection: $playthroughID) {
                             Text("Just the game").tag(UUID?.none)
@@ -178,17 +203,25 @@ struct MarkCompletionSheet: View {
                             ForEach(game.platforms, id: \.self) { Text($0).tag($0) }
                         }
                     }
+                    TextField("Played with", text: $playedWith)
+                        #if !os(macOS)
+                        .textInputAutocapitalization(.words)
+                        #endif
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(2...)
+                } header: {
+                    Text("Details (optional)")
+                } footer: {
+                    Text("\"Played with\" is just written down — the app has no accounts and doesn't share anything. It's there so a co-op finish remembers who was on the couch.")
                 }
             }
-            .navigationTitle("Mark as Beaten")
+            .navigationTitle(editing == nil ? "Mark as Beaten" : "Edit")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Record") { record() }
+                    Button(editing == nil ? "Record" : "Save") { record() }
                         .disabled(label == .custom
                                   && customLabel.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -197,6 +230,18 @@ struct MarkCompletionSheet: View {
                 }
             }
             .onAppear {
+                if let editing {
+                    label = editing.label
+                    customLabel = editing.customLabel ?? ""
+                    precision = editing.datePrecision ?? "day"
+                    date = editing.date
+                    year = Calendar.current.component(.year, from: editing.date)
+                    month = Calendar.current.component(.month, from: editing.date)
+                    platform = editing.platform ?? ""
+                    notes = editing.notes ?? ""
+                    playedWith = editing.playedWith ?? ""
+                    return
+                }
                 if platform.isEmpty {
                     platform = PlatformPreference.owned(game.platforms) ?? ""
                 }
@@ -219,15 +264,28 @@ struct MarkCompletionSheet: View {
         default:
             stored = date
         }
-        repo.addCompletion(
-            to: game,
-            label: label,
-            date: stored,
-            precision: precision == "day" ? nil : precision,
-            platform: platform.isEmpty ? nil : platform,
-            customLabel: label == .custom ? customLabel : nil,
-            notes: notes.isEmpty ? nil : notes,
-            playthrough: game.livePlaythroughs.first { $0.id == playthroughID })
+        if let editing {
+            repo.updateCompletion(
+                editing,
+                label: label,
+                date: stored,
+                precision: precision == "day" ? nil : precision,
+                platform: platform.isEmpty ? nil : platform,
+                customLabel: label == .custom ? customLabel : nil,
+                notes: notes.isEmpty ? nil : notes,
+                playedWith: playedWith.isEmpty ? nil : playedWith)
+        } else {
+            repo.addCompletion(
+                to: game,
+                label: label,
+                date: stored,
+                precision: precision == "day" ? nil : precision,
+                platform: platform.isEmpty ? nil : platform,
+                customLabel: label == .custom ? customLabel : nil,
+                notes: notes.isEmpty ? nil : notes,
+                playedWith: playedWith.isEmpty ? nil : playedWith,
+                playthrough: game.livePlaythroughs.first { $0.id == playthroughID })
+        }
         dismiss()
     }
 }

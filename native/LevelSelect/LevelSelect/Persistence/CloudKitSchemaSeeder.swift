@@ -121,6 +121,7 @@ enum CloudKitSchemaSeeder {
         state.legacyID = marker
         state.itemID = marker
         state.completed = true
+        state.completedAt = now
         state.count = 1
         state.rank = 1
         state.revealed = true
@@ -155,6 +156,7 @@ enum CloudKitSchemaSeeder {
         completion.platform = marker
         completion.notes = marker
         completion.datePrecision = "year"
+        completion.playedWith = marker
         context.insert(completion)
         completion.game = game
         completion.playthrough = pt

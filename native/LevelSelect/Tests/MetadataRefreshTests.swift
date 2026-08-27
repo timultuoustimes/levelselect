@@ -1074,6 +1074,38 @@ struct StageLayoutTests {
 @Suite("Where you left off")
 struct LastTickedTests {
 
+    @Test("Ticking stamps the moment; un-ticking clears it")
+    @MainActor
+    func completedAtIsTheMoment() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "Mina the Hollower")
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        repo.setTrackerItem(pt, itemID: "boss-1", done: true)
+        let record = try #require((pt.trackerStates ?? []).first { $0.itemID == "boss-1" })
+        #expect(record.completedAt != nil)
+
+        // The bug this replaces: touching the row later must NOT make it look
+        // like the most recent thing you did.
+        let stamped = try #require(record.completedAt)
+        record.notes = "edited much later"
+        record.updatedAt = .now.addingTimeInterval(9_999)
+        #expect(record.tickedAt == stamped)
+
+        repo.setTrackerItem(pt, itemID: "boss-1", done: false)
+        #expect(record.completedAt == nil)
+    }
+
+    @Test("Rows from before completedAt existed fall back to updatedAt")
+    func fallsBackForOldRows() {
+        let old = TrackerStateRecord(itemID: "legacy")
+        old.completed = true
+        old.updatedAt = Date(timeIntervalSince1970: 1_500_000)
+        #expect(old.completedAt == nil)
+        #expect(old.tickedAt == old.updatedAt)
+    }
+
     @Test("The most recently ticked item wins, and un-ticked ones don't count")
     @MainActor
     func picksLatestCompleted() throws {
@@ -1085,10 +1117,10 @@ struct LastTickedTests {
 
         let older = TrackerStateRecord(itemID: "a")
         older.completed = true
-        older.updatedAt = Date(timeIntervalSince1970: 1_000_000)
+        older.completedAt = Date(timeIntervalSince1970: 1_000_000)
         let newer = TrackerStateRecord(itemID: "b")
         newer.completed = true
-        newer.updatedAt = Date(timeIntervalSince1970: 2_000_000)
+        newer.completedAt = Date(timeIntervalSince1970: 2_000_000)
         // Ticked most recently of all, but then un-ticked — not where you are.
         let undone = TrackerStateRecord(itemID: "c")
         undone.completed = false
@@ -1099,7 +1131,7 @@ struct LastTickedTests {
         }
 
         let done = (pt.trackerStates ?? []).filter { $0.deletedAt == nil && $0.completed }
-        let latest = done.max(by: { $0.updatedAt < $1.updatedAt })
+        let latest = done.max(by: { $0.tickedAt < $1.tickedAt })
         #expect(latest?.itemID == "b")
         #expect(done.count == 2)
     }
@@ -1113,5 +1145,49 @@ struct LastTickedTests {
         let pt = repo.ensureDefaultPlaythrough(for: game)
         let done = (pt.trackerStates ?? []).filter { $0.deletedAt == nil && $0.completed }
         #expect(done.isEmpty)
+    }
+}
+
+@Suite("Editing a beaten record")
+struct CompletionEditTests {
+
+    @Test("A finish can be corrected in place, companions included")
+    @MainActor
+    func editInPlace() throws {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(container.mainContext)
+        let game = repo.addGame(name: "It Takes Two")
+        let event = repo.addCompletion(to: game, label: .cleared,
+                                       date: Date(timeIntervalSince1970: 1_700_000_000),
+                                       playedWith: "Rosalie")
+        #expect(event.playedWith == "Rosalie")
+
+        // Misremembered the year; also want the label to say 100%.
+        let corrected = Calendar.current.date(from: DateComponents(year: 2024, month: 1, day: 1))!
+        repo.updateCompletion(event, label: .hundredPercent, date: corrected,
+                              precision: "year", platform: "PC",
+                              customLabel: nil, notes: "co-op", playedWith: "Rosalie")
+        #expect(event.label == .hundredPercent)
+        #expect(event.dateText == "2024")
+        #expect(event.platform == "PC")
+        #expect(event.playedWith == "Rosalie")
+        // Same record, not a second one.
+        #expect((game.completionEvents ?? []).filter { $0.deletedAt == nil }.count == 1)
+    }
+
+    @Test("Companions survive the export/import round trip")
+    @MainActor
+    func companionsRoundTrip() throws {
+        let source = LevelSelectStore.makeContainer(inMemory: true)
+        let repo = Repository(source.mainContext)
+        let game = repo.addGame(name: "Overcooked 2")
+        _ = repo.addCompletion(to: game, label: .cleared, playedWith: "Kenny and Cate")
+        let data = try LibraryExport.makeJSON(context: source.mainContext)
+
+        let dest = LevelSelectStore.makeContainer(inMemory: true)
+        _ = try LibraryImport.apply(data: data, context: dest.mainContext)
+        let games = try dest.mainContext.fetch(FetchDescriptor<Game>())
+        let restored = try #require(games.first?.completionEvents?.first)
+        #expect(restored.playedWith == "Kenny and Cate")
     }
 }
