@@ -216,3 +216,47 @@ struct ArtworkTests {
         #expect(BackdropIntensity.off.opacity == 0)
     }
 }
+
+/// The backdrop's source preference and the blur scale — the two things that
+/// made "prefers a 16:9 artwork" untrue in the first cut of build 32.
+@MainActor
+struct BackdropSourceTests {
+
+    /// Key art and screenshots are new cases on an EXISTING String-raw field,
+    /// so the library-wide preference costs no schema change and no promote.
+    @Test func artworkBackgroundsDecodeAndNameTheirEndpoint() {
+        #expect(ThemePageBackground(rawValue: "keyArt") == .keyArt)
+        #expect(ThemePageBackground(rawValue: "screenshot") == .screenshot)
+        #expect(ThemePageBackground.keyArt.igdbEndpoint == "artworks")
+        #expect(ThemePageBackground.screenshot.igdbEndpoint == "screenshots")
+        // Flat colours need no lookup at all.
+        #expect(ThemePageBackground.plain.igdbEndpoint == nil)
+        #expect(ThemePageBackground.status.igdbEndpoint == nil)
+        // The cover draws art but needs no fetch — it's already on the game.
+        #expect(ThemePageBackground.cover.igdbEndpoint == nil)
+        #expect(ThemePageBackground.cover.usesArtwork)
+        #expect(!ThemePageBackground.accent.usesArtwork)
+    }
+
+    /// An older build reading a value it doesn't know falls back to `.cover`
+    /// through ThemePalette's nil-coalesce, rather than failing to draw.
+    @Test func unknownBackgroundValuesDecodeToNil() {
+        #expect(ThemePageBackground(rawValue: "somethingNewer") == nil)
+    }
+
+    /// The first pass used 60/44/22pt, which destroys the image before
+    /// opacity matters. Tim's own mockup uses 3pt. Every setting must now sit
+    /// in a range where the art is still legible AS art.
+    @Test func blurIsSmallEnoughToSeeTheArt() {
+        for intensity in BackdropIntensity.allCases {
+            #expect(intensity.blurRadius <= 8,
+                    "\(intensity.label) blurs \(intensity.blurRadius)pt — the art stops being readable well below this")
+        }
+        // Bold means "show me the art", so it doesn't blur at all.
+        #expect(BackdropIntensity.bold.blurRadius == 0)
+        #expect(BackdropIntensity.bold.opacity == 1.0)
+        // …and still descends monotonically as strength rises.
+        #expect(BackdropIntensity.subtle.blurRadius > BackdropIntensity.standard.blurRadius)
+        #expect(BackdropIntensity.standard.blurRadius > BackdropIntensity.bold.blurRadius)
+    }
+}

@@ -41,7 +41,7 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
-            if pageBackgroundBinding.wrappedValue == .cover {
+            if pageBackgroundBinding.wrappedValue.usesArtwork {
                 Picker("Backdrop strength", selection: backdropIntensityBinding) {
                     ForEach(BackdropIntensity.allCases) { choice in
                         Text(choice.label).tag(choice)

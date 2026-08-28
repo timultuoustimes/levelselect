@@ -146,3 +146,12 @@ struct GameArrangeSheet: View {
             })
     }
 }
+
+/// Identity for the backdrop lookup task: the game AND the library-wide
+/// background preference, so changing either re-resolves. A plain `game.id`
+/// would leave an open page showing key art after the user switched the
+/// preference to screenshots.
+struct BackdropRequest: Equatable {
+    let gameID: UUID
+    let background: ThemePageBackground
+}

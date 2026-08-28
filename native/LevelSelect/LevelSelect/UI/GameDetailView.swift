@@ -10,6 +10,10 @@ struct GameDetailView: View {
     @State private var arrangingSections = false
     /// Which artwork role the picker is open for, if any.
     @State private var pickingArtwork: ArtworkRole?
+    /// Key art / screenshot for the header, resolved asynchronously. Nil
+    /// until a lookup finishes (or when the library preference wants no
+    /// fetched art at all), and the cover stands in meanwhile.
+    @State private var backdropArt: URL?
     /// Library-wide reading preference, device-local like the Stats cards.
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
     @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
@@ -109,6 +113,17 @@ struct GameDetailView: View {
             if showingCover {
                 CoverShowcase(urlString: game.displayCoverURLString, isPresented: $showingCover)
             }
+        }
+        // Re-resolves when the game changes AND when the library preference
+        // does, so switching between key art and screenshots in Settings
+        // updates an open page rather than waiting for a revisit.
+        .task(id: BackdropRequest(gameID: game.id, background: ThemePalette.pageBackground)) {
+            guard ThemePalette.pageBackground.igdbEndpoint != nil else {
+                backdropArt = nil
+                return
+            }
+            backdropArt = await BackdropArt.url(for: game,
+                                                preference: ThemePalette.pageBackground)
         }
         .task(id: showCriticScores) {
             // Only for people who asked to see it — which also means the
@@ -825,7 +840,9 @@ struct GameDetailView: View {
                 )
                 .frame(height: 420)
                 .frame(maxWidth: .infinity)
-            case .cover:
+            case .cover, .keyArt, .screenshot:
+                // All three draw the same view; which IMAGE it resolves to is
+                // decided by `backdropArtwork`, which honours the preference.
                 coverBackdrop
             }
         }
@@ -841,23 +858,46 @@ struct GameDetailView: View {
     /// characteristic part of it. Artworks are 16:9 and drawn to be
     /// backgrounds, and the app was already fetching them and doing nothing
     /// with them.
+    /// What the backdrop should actually draw.
+    ///
+    /// A per-game choice (local bytes or an explicit URL) wins outright.
+    /// Otherwise it's the fetched key art or screenshot once `backdropArt`
+    /// resolves, and the cover until then — so the header is never empty
+    /// while a lookup is in flight, it just improves when the art lands.
+    private var backdropArtwork: ResolvedArtwork {
+        if game.pointer(for: .backdrop) != nil {
+            return game.resolvedArtwork(.backdrop)
+        }
+        if let fetched = backdropArt { return .remote(fetched) }
+        return game.resolvedArtwork(.cover)
+    }
+
     @ViewBuilder
     private var coverBackdrop: some View {
         let intensity = ThemePalette.backdropIntensity
         if intensity != .off {
-            ArtworkView(game.resolvedArtwork(.backdrop))
+            ArtworkView(backdropArtwork)
                 .frame(height: 420)
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .blur(radius: intensity.blurRadius, opaque: true)
                 .saturation(intensity.saturation)
                 .opacity(intensity.opacity)
+                // Falls off FAST. With the art barely blurred it is legible —
+                // and so is everything behind it, which means the hero text
+                // has to fight key art for contrast. Full strength at the top
+                // where only the glass chrome sits, gone by the time the
+                // platform name and stars begin. The proper fix is the header
+                // redesign (art at the top, text on a material card rather
+                // than directly on the art); this keeps the page readable in
+                // the meantime.
                 .mask(
                     LinearGradient(
                         stops: [
                             .init(color: .black, location: 0),
-                            .init(color: .black.opacity(0.6), location: 0.55),
-                            .init(color: .clear, location: 1),
+                            .init(color: .black.opacity(0.75), location: 0.18),
+                            .init(color: .black.opacity(0.22), location: 0.45),
+                            .init(color: .clear, location: 0.7),
                         ],
                         startPoint: .top, endPoint: .bottom
                     )

@@ -125,20 +125,23 @@ enum BackdropIntensity: String, CaseIterable, Identifiable {
     var opacity: Double {
         switch self {
         case .off:      0
-        case .subtle:   0.40
-        case .standard: 0.70
-        case .bold:     0.92
+        case .subtle:   0.55
+        case .standard: 0.80
+        case .bold:     1.0
         }
     }
 
-    /// Bold blurs LESS, not more — at full strength the point is to see the
-    /// art, not a smear of its average colour.
+    /// SMALL numbers. The first pass at this used 60/44/22pt, which destroys
+    /// the image before opacity ever matters — Tim's own mockup uses a 3pt
+    /// gaussian, and it reads as artwork rather than a coloured smear. The
+    /// job of the blur is to stop the art competing with the text on top of
+    /// it, not to hide what the art is.
     var blurRadius: CGFloat {
         switch self {
         case .off:      0
-        case .subtle:   60
-        case .standard: 44
-        case .bold:     22
+        case .subtle:   8
+        case .standard: 3
+        case .bold:     0
         }
     }
 
@@ -155,14 +158,37 @@ enum BackdropIntensity: String, CaseIterable, Identifiable {
 }
 
 enum ThemePageBackground: String, CaseIterable {
-    case cover, status, accent, plain
+    /// Key art first, because it's authored to BE art — but a screenshot is
+    /// often the better header, since in-engine shots are natively wide where
+    /// key art is composed for a poster crop. Hence the choice.
+    case keyArt, screenshot, cover, status, accent, plain
 
     var label: String {
         switch self {
-        case .cover:  "Cover art"
-        case .status: "Status color"
-        case .accent: "Accent color"
-        case .plain:  "Plain"
+        case .keyArt:     "Key art"
+        case .screenshot: "Screenshot"
+        case .cover:      "Cover art"
+        case .status:     "Status color"
+        case .accent:     "Accent color"
+        case .plain:      "Plain"
         }
     }
+
+    /// Which IGDB art this background wants fetched, if any. Nil means the
+    /// backdrop needs no lookup — it's the cover, a flat colour, or nothing.
+    var igdbEndpoint: String? {
+        switch self {
+        case .keyArt:     "artworks"
+        case .screenshot: "screenshots"
+        default:          nil
+        }
+    }
+
+    /// The size slug for that endpoint's images.
+    var igdbSize: String {
+        self == .screenshot ? "t_screenshot_huge" : "t_1080p"
+    }
+
+    /// Whether this background draws a game's own artwork at all.
+    var usesArtwork: Bool { igdbEndpoint != nil || self == .cover }
 }
