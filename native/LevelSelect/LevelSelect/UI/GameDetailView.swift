@@ -654,7 +654,7 @@ struct GameDetailView: View {
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top
         } action: { _, offset in
-            let handedOver = offset > Self.coverLift + 64
+            let handedOver = offset > Self.heroTopSpace + Self.coverHeight + Self.titleBand
             guard handedOver != titleInBar else { return }
             // Reduce Motion gets the same handoff without the crossfade — the
             // information is the point, the fade is decoration.
@@ -955,44 +955,13 @@ struct GameDetailView: View {
 
     // MARK: Sections
 
-    /// The game's name — as its logo when one is set, as text otherwise.
-    ///
-    /// Text is not a degraded fallback here, it's the default, and it comes
-    /// BACK at accessibility type sizes: a logo is an image of text, it can't
-    /// grow with Dynamic Type, and a fixed 44pt wordmark beside 60pt body
-    /// copy reads as broken. The navigation title stays real text regardless,
-    /// so VoiceOver, the back button and the Mac window title are unaffected.
-    @ViewBuilder
-    private var gameTitle: some View {
-        let artwork = game.resolvedArtwork(.logo)
-        if !artwork.isEmpty, !typeSize.isAccessibilitySize {
-            // No size cap here. The caller's frame is the cap, and it knows
-            // the real width available — a hardcoded 260x76 was both too wide
-            // for a narrow phone and far smaller than an iPad could carry, so
-            // the logo was cropped on one and lost on the other.
-            ArtworkView(artwork, contentMode: .fit)
-                .accessibilityLabel(game.name)
-        } else {
-            Text(game.name)
-                .font(.title2.bold())
-        }
-    }
-
-    /// How far the cover and the logo rise out of the info card and into the
-    /// art above it.
-    ///
-    /// The first pass lifted the cover 44pt and nudged it 14pt left, which left
-    /// a sliver of card showing past its edge and read as a misalignment
-    /// rather than a decision — while the logo sat politely inside the card,
-    /// so the frame was broken by exactly one element, timidly. Both break it
-    /// now, from the same line, and the cover sits flush to the card's left
-    /// edge so the only overhang is the deliberate one.
-    private static let coverLift: CGFloat = 112
     private static let coverWidth: CGFloat = 132
-    /// The band the logo occupies above the card. It bottom-aligns inside
-    /// this, so a short wide wordmark and a tall square one both sit on the
-    /// same line rather than floating at different heights.
-    private static let logoBand: CGFloat = 104
+    private static var coverHeight: CGFloat { coverWidth * 4 / 3 }
+    /// Bare art above the cover, so the header opens on the image rather than
+    /// on a box.
+    private static let heroTopSpace: CGFloat = 18
+    /// The band the title occupies, below the cover and the facts panel.
+    private static let titleBand: CGFloat = 120
 
     /// The header.
     ///
@@ -1002,21 +971,30 @@ struct GameDetailView: View {
     /// the art by 45% down the page. You could change the image and not be
     /// able to tell.
     ///
-    /// Now the art gets to be art, everything that has to be READ sits on a
-    /// translucent card in front of it, and the two pieces of artwork — the
-    /// cover and the logo — rise out of that card into the art. The card is a
-    /// plinth, not a box things are trapped in.
+    /// The shape is Tim's: the cover and a narrow facts panel sit side by side
+    /// in the art, and the game's name runs underneath them both, centred and
+    /// large. An earlier pass had the name beside the cover on a full-width
+    /// card it half-overlapped, which gave the title only the column left over
+    /// after a 132pt cover — so a wordmark that is the most recognisable thing
+    /// about a game got the smallest space on the page. Below, it gets the
+    /// whole width.
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Bare art above the card. Not a Spacer — a Spacer in a VStack
-            // inside a ScrollView has no height to distribute.
-            Color.clear.frame(height: stacksCover ? 24 : Self.coverLift + 26)
+        VStack(alignment: .leading, spacing: 14) {
+            Color.clear.frame(height: Self.heroTopSpace)
 
-            heroCard
+            heroLayout {
+                coverThumb(width: Self.coverWidth)
+                factsPanel
+                    // Dropped slightly so the panel reads as sitting against
+                    // the cover rather than being ruled off level with it.
+                    .padding(.top, stacksCover ? 0 : 26)
+            }
 
-            // Full-width, below the card: four chips and a stats row both
-            // want the whole column, and neither is something you read at a
-            // glance the way the title is.
+            heroTitle
+
+            // Full-width, below the art: four chips and a stats row both want
+            // the whole column, and neither is something you read at a glance
+            // the way the title is.
             OwnershipControl(ownership: $game.ownership)
 
             if showGameStats {
@@ -1025,66 +1003,19 @@ struct GameDetailView: View {
         }
     }
 
-    @ViewBuilder
-    private var heroCard: some View {
-        if stacksCover {
-            // At accessibility sizes nothing overhangs. A 132pt cover and five
-            // stars can't share a line, the logo has already given way to text
-            // that needs to grow, and art poking out of a card is decoration —
-            // the first thing to go when the words need the room.
-            VStack(alignment: .leading, spacing: 10) {
-                coverThumb(width: 168)
-                gameTitle
-                heroFacts
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(14)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 20))
-            .overlay {
-                RoundedRectangle(cornerRadius: 20)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 8) {
-                // A logo is art and can sit on art. The text fallback is
-                // text, and moving text off the backdrop is the entire reason
-                // this card exists — so when there's no logo the name stays
-                // inside it, and only the cover breaks the frame.
-                if !hasLogo { gameTitle }
-                heroFacts
-            }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                // Room for the cover beside the facts.
-                .padding(.leading, Self.coverWidth + 12)
-                .background(.ultraThinMaterial, in: .rect(cornerRadius: 20))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 20)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                }
-                // Overlays, not offsets in a ZStack: an overlay is measured
-                // against the card, so the logo gets a real width to fit
-                // itself into — everything from the cover's right edge to the
-                // card's — instead of a guessed constant that runs off a
-                // narrow phone and looks stingy on an iPad.
-                .overlay(alignment: .topLeading) {
-                    coverThumb(width: Self.coverWidth)
-                        .offset(y: -Self.coverLift)
-                }
-                .overlay(alignment: .topLeading) {
-                    if hasLogo {
-                        gameTitle
-                            .frame(maxWidth: .infinity, maxHeight: Self.logoBand,
-                                   alignment: .bottomLeading)
-                            .padding(.leading, Self.coverWidth + 12)
-                            .offset(y: -(Self.logoBand + 8))
-                    }
-                }
-        }
+    /// At accessibility text sizes a fixed 132pt cover and a panel holding
+    /// five stars can't share a line, and one over-wide child drags the whole
+    /// page's column offscreen with it.
+    private var heroLayout: AnyLayout {
+        stacksCover
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
     }
 
-    /// Everything on the card that is words: what this game is to you.
-    private var heroFacts: some View {
+    /// What this game is to you: where it sits, what you scored it, what the
+    /// critics said. Everything here is words, which is why it's on a panel
+    /// and not on the art.
+    private var factsPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: game.status.systemImage)
@@ -1111,6 +1042,41 @@ struct GameDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+        }
+    }
+
+    /// The game's name across the full width — as its logo when one is set, as
+    /// large text otherwise.
+    ///
+    /// Text is not a degraded fallback here, it's the default, and it comes
+    /// BACK at accessibility type sizes: a logo is an image of text, it can't
+    /// grow with Dynamic Type, and a fixed wordmark beside 60pt body copy
+    /// reads as broken. The navigation title stays real text regardless, so
+    /// VoiceOver, the back button and the Mac window title are unaffected.
+    @ViewBuilder
+    private var heroTitle: some View {
+        let artwork = game.resolvedArtwork(.logo)
+        if !artwork.isEmpty, !typeSize.isAccessibilitySize {
+            ArtworkView(artwork, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: Self.titleBand)
+                .accessibilityLabel(game.name)
+        } else {
+            Text(game.name)
+                .font(.largeTitle.bold())
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                // Unlike the panel's copy, this sits directly on the art. It
+                // survives there because it's large and heavy — but a bright
+                // screenshot can still swallow white text, so it carries its
+                // own shadow rather than trusting the backdrop to be dark.
+                .shadow(color: .black.opacity(0.55), radius: 8, y: 2)
+        }
     }
 
     private func coverThumb(width: CGFloat) -> some View {
@@ -1123,12 +1089,6 @@ struct GameDetailView: View {
             .onTapGesture { showingCover = true }
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel("Enlarge cover")
-    }
-
-    /// Whether the header will draw a logo rather than the game's name as
-    /// text — which decides whether anything but the cover leaves the card.
-    private var hasLogo: Bool {
-        !game.resolvedArtwork(.logo).isEmpty && !typeSize.isAccessibilitySize
     }
 
     /// At accessibility text sizes the cover-beside-text row can't fit its own

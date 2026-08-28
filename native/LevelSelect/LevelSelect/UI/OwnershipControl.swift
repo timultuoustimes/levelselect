@@ -6,19 +6,39 @@ import SwiftUI
 struct OwnershipControl: View {
     /// Bound to `Game.ownership` (array of raw `Ownership` values).
     @Binding var ownership: [String]
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        // Wraps rather than squeezing: three labelled chips do not fit one
-        // line at accessibility text sizes, and a chip that hyphenates
-        // "Emu-lated" is worse than one on a second row.
-        FlowLayout(spacing: 6) {
-            ForEach(Ownership.allCases, id: \.self) { kind in
-                chip(kind)
+        if typeSize.isAccessibilitySize {
+            // Wrapping is right here and shrinking is not: someone who asked
+            // for larger text should get larger text, on a second row.
+            FlowLayout(spacing: 6) { chips(font: .caption, hPad: 8) }
+        } else {
+            // `ViewThatFits` measures instead of guessing. Four labelled chips
+            // fit one line on a 430pt Max and don't on a 393pt phone, so this
+            // row broke on some hardware and not others — and the previous fix
+            // (a minimum scale factor) couldn't help, because the layout
+            // decides whether to WRAP before any text is scaled. Each rung is
+            // tried in order and the first that genuinely fits wins, so the
+            // comfortable size still gets used wherever there's room and no
+            // screen width is hardcoded anywhere.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 6) { chips(font: .caption,  hPad: 8) }
+                HStack(spacing: 5) { chips(font: .caption2, hPad: 7) }
+                HStack(spacing: 4) { chips(font: .caption2, hPad: 5) }
+                FlowLayout(spacing: 6) { chips(font: .caption, hPad: 8) }
             }
         }
     }
 
-    private func chip(_ kind: Ownership) -> some View {
+    @ViewBuilder
+    private func chips(font: Font, hPad: CGFloat) -> some View {
+        ForEach(Ownership.allCases, id: \.self) { kind in
+            chip(kind, font: font, hPad: hPad)
+        }
+    }
+
+    private func chip(_ kind: Ownership, font: Font, hPad: CGFloat) -> some View {
         let on = ownership.contains(kind.rawValue)
         return Button {
             toggle(kind)
@@ -28,17 +48,13 @@ struct OwnershipControl: View {
                     .symbolVariant(on ? .fill : .none)
                 Text(kind.label)
             }
-            // Compress before wrapping. A fourth chip arrived in build 31
-            // ("Previously Owned") and four labelled chips no longer fit one
-            // line on a 393pt phone, though they do on a 430pt one — so the
-            // row broke on some devices and not others. Shrinking slightly is
-            // less disruptive than a second row appearing on half the
-            // hardware. It still wraps at accessibility sizes, which is
-            // correct and deliberate.
+            // No `minimumScaleFactor`: it would let a candidate row claim it
+            // fits by silently shrinking its own text, which is exactly the
+            // measurement `ViewThatFits` exists to make honestly.
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 8)
+            .fixedSize(horizontal: true, vertical: false)
+            .font(font.weight(.medium))
+            .padding(.horizontal, hPad)
             .padding(.vertical, 5)
             .background(on ? AnyShapeStyle(LSTheme.accent.opacity(0.20))
                            : AnyShapeStyle(.white.opacity(0.06)),
