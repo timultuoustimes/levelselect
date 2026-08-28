@@ -57,6 +57,20 @@ enum BackdropArt {
         return nil
     }
 
+    /// Key art without a logo, then key art with one, then anything else
+    /// that is actually scenery.
+    private static func bestBackdrop(from rows: [[String: Any]]) -> String? {
+        let usable = rows.filter {
+            !IGDBImageType.notScenery.contains($0["image_type"] as? Int ?? 0)
+        }
+        for preferred in [IGDBImageType.keyArtWithoutLogo, IGDBImageType.keyArtWithLogo] {
+            if let hit = usable.first(where: { $0["image_type"] as? Int == preferred }) {
+                return hit["image_id"] as? String
+            }
+        }
+        return usable.first?["image_id"] as? String
+    }
+
     // MARK: Lookup + cache
 
     private static func imageIDs(for igdbID: Int) async -> [String: String] {
@@ -69,13 +83,20 @@ enum BackdropArt {
         // One request per endpoint, both in flight together. `limit 1` because
         // only the first is ever drawn — picking a different one is what the
         // artwork picker is for.
+        // Ask for the type too, and take a few rather than one: the header
+        // draws the game's logo itself now, so key art WITHOUT a logo baked
+        // into it is strictly better behind it — otherwise the name appears
+        // twice, once at whatever size the publisher chose. Wordmarks, icons
+        // and infographics are excluded outright; none of them is a picture
+        // of the game.
         async let art = IGDBService.raw(
-            endpoint: "artworks", query: "fields image_id; where game = \(igdbID); limit 1;")
+            endpoint: "artworks",
+            query: "fields image_id,image_type; where game = \(igdbID); limit 20;")
         async let shots = IGDBService.raw(
             endpoint: "screenshots", query: "fields image_id; where game = \(igdbID); limit 1;")
 
         var found: [String: String] = [:]
-        if let id = (await art).first?["image_id"] as? String { found["artworks"] = id }
+        if let id = bestBackdrop(from: await art) { found["artworks"] = id }
         if let id = (await shots).first?["image_id"] as? String { found["screenshots"] = id }
 
         // Cached even when EMPTY. A game with no art on IGDB is the case most

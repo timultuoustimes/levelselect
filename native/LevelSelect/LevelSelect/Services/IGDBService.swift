@@ -243,14 +243,37 @@ enum IGDBService {
 ///
 /// In August 2026 IGDB split covers and logos out of artworks into their own
 /// contributable data and introduced `image_type` to classify them; the older
-/// `artwork_type` field is deprecated at the end of the year. Only the one
-/// value this app has to recognise is named here.
+/// `artwork_type` field is deprecated at the end of the year.
 ///
-/// Verified rather than assumed, because the app previously shipped copy
-/// asserting IGDB had no logos at all: across 25 games every `image_type = 7`
-/// artwork was wide (aspect 1.5–4.2) and 22 of 25 carried an alpha channel,
-/// and for Super Metroid the single `image_type = 7` row is exactly the one
-/// image IGDB's own media page files under "Logos".
+/// The full table, read from the `image_types` endpoint rather than guessed:
+///
+///  1 Artwork                 9 Historical cover
+///  2 Key art without logo   10 Alternative cover
+///  3 Key art with logo      11 Square cover
+///  4 Concept art            12 Infographic
+///  5 Game logo (white)      13 Icon
+///  6 Game logo (black)      14 Historical logo
+///  7 Game logo (color)      15 Historical icon
+///  8 Main cover             16 Historical artwork
 enum IGDBImageType {
-    static let logo = 7
+    /// Behind a header that draws the logo itself, key art WITHOUT the logo
+    /// is the one to want — otherwise the game's name appears twice, once
+    /// baked into the backdrop at whatever size the publisher chose.
+    static let keyArtWithoutLogo = 2
+    static let keyArtWithLogo = 3
+
+    /// Colour first — it's the cut a game is recognised by. White and black
+    /// are the same wordmark drawn for a light or dark ground, and they earn
+    /// their place: the header lays the logo over artwork, where a white cut
+    /// often reads better than the colour one.
+    ///
+    /// An earlier pass shipped only `7`, inferred from one game's aspect
+    /// ratio and alpha channel before this lookup was reachable. The
+    /// inference was right about 7 and silently hid 5, 6 and 14 from every
+    /// game that has them.
+    static let logos = [7, 5, 6, 14]
+
+    /// Never offered as a cover or a backdrop: a wordmark, an icon or an
+    /// infographic is not a picture of the game.
+    static let notScenery: Set<Int> = [5, 6, 7, 14, 12, 13, 15]
 }
