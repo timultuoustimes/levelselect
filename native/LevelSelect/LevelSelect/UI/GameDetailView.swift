@@ -72,6 +72,16 @@ struct GameDetailView: View {
                     }
                 }
             }
+            // ORDER IS LOAD-BEARING. `ignoresSafeArea` lives HERE, inside the
+            // GeometryReader, not on it. Applied outside, it consumed the
+            // safe area before `geo` measured anything, so
+            // `geo.safeAreaInsets.bottom` read 0 and the margin below added
+            // nothing — the compensation this comment block describes has
+            // never actually run. The last section (Notes) sat under the tab
+            // bar with no way to scroll it clear, so its text field could not
+            // be tapped at all. Measuring first, then ignoring, gives a real
+            // inset to hand back.
+            .ignoresSafeArea(.container, edges: .bottom)
             .contentMargins(.bottom, geo.safeAreaInsets.bottom, for: .scrollContent)
             // Watching `pagePlaying != nil` alone missed the rotation case
             // entirely: turn an iPad to landscape with a video ALREADY
@@ -93,7 +103,6 @@ struct GameDetailView: View {
                 stage = pagePlaying == nil ? 2 : 3
             }
         }
-        .ignoresSafeArea(.container, edges: .bottom)
         .background { ambientBackdrop }
         .overlay {
             if showingCover {
