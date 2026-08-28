@@ -30,13 +30,100 @@ final class Game {
     /// box had when THEY owned it is part of the memory. Wins over
     /// `coverURLString` wherever a cover is drawn — read `displayCoverURLString`,
     /// never `coverURLString`, when rendering.
+    ///
+    /// Since V3 this is an `ArtworkPointer`: still a plain http(s) URL in the
+    /// usual case, but it may instead name a local `GameImage`.
     var coverOverrideURLString: String?
+
+    // MARK: Artwork roles (Schema V3)
+    //
+    // One pointer per role, each an `ArtworkPointer` — a remote URL or a
+    // local image reference. Nil means "fall back", and every fallback is
+    // defined by `ArtworkRole.fallbackNote`.
+
+    /// The header wordmark. Nil renders the game's name as text, which is
+    /// also what happens at accessibility type sizes regardless.
+    var logoURLString: String?
+    /// The band behind the header. Nil falls back to the cover, blurred.
+    var backdropURLString: String?
 
     /// The cover to DRAW: the user's choice when they've made one, the
     /// fetched art otherwise. Fetch/refresh paths keep writing
     /// `coverURLString`, so Fix Match and the fill pass can never overwrite a
     /// chosen cover.
-    var displayCoverURLString: String? { coverOverrideURLString ?? coverURLString }
+    ///
+    /// Returns nil for a LOCAL chosen cover — bytes have no URL. Grid-shaped
+    /// surfaces should read `resolvedArtwork(.cover)` instead; this stays for
+    /// the many call sites that only ever want a URL, and for the widget
+    /// bridge, which can't carry a SwiftData object across the process line.
+    var displayCoverURLString: String? {
+        if let remote = ArtworkPointer.remoteURL(coverOverrideURLString) {
+            return remote.absoluteString
+        }
+        // A local override deliberately does NOT fall through to the fetched
+        // cover: the user picked a picture, and quietly showing a different
+        // one because this accessor can't express theirs would be a lie.
+        if ArtworkPointer.localID(coverOverrideURLString) != nil { return nil }
+        return coverURLString
+    }
+
+    /// The pointer for a role, or nil when nothing is chosen.
+    func pointer(for role: ArtworkRole) -> String? {
+        switch role {
+        case .cover:    coverOverrideURLString
+        case .logo:     logoURLString
+        case .backdrop: backdropURLString
+        case .gallery:  nil
+        }
+    }
+
+    func setPointer(_ pointer: String?, for role: ArtworkRole) {
+        switch role {
+        case .cover:    coverOverrideURLString = pointer
+        case .logo:     logoURLString = pointer
+        case .backdrop: backdropURLString = pointer
+        case .gallery:  break   // a pile, not a slot
+        }
+    }
+
+    /// What actually fills a role right now, including its fallback.
+    ///
+    /// The ONE place this question is answered. Every render site calls here
+    /// rather than reasoning about pointers, so a change to a fallback rule
+    /// lands everywhere at once.
+    func resolvedArtwork(_ role: ArtworkRole) -> ResolvedArtwork {
+        let pointer = pointer(for: role)
+        if let localID = ArtworkPointer.localID(pointer),
+           let image = liveImages.first(where: { $0.id == localID }),
+           let data = image.data {
+            return .local(data)
+        }
+        if let remote = ArtworkPointer.remoteURL(pointer) {
+            return .remote(remote)
+        }
+        switch role {
+        case .cover:
+            return coverURLString.flatMap(URL.init(string:)).map { .remote($0) } ?? .none
+        case .backdrop:
+            // Falls back to whatever the cover resolves to, blurred by the
+            // view. Recursion is safe: `.cover` never falls back to a role.
+            return resolvedArtwork(.cover)
+        case .logo, .gallery:
+            // A logo has no image fallback ON PURPOSE — the name in text is
+            // the fallback, and that belongs to the view.
+            return .none
+        }
+    }
+
+    /// Images that haven't been soft-deleted, newest first.
+    var liveImages: [GameImage] {
+        (images ?? []).filter { $0.deletedAt == nil }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
+    func liveImages(role: ArtworkRole) -> [GameImage] {
+        liveImages.filter { $0.role == role }
+    }
 
     // User state
     var status: GameStatus = GameStatus.backlog
@@ -80,6 +167,12 @@ final class Game {
     /// TrackerItemDetail. Schema V2.
     @Relationship(deleteRule: .cascade, inverse: \TrackerItemDetail.game)
     var trackerItemDetails: [TrackerItemDetail]?
+    /// Images the user added. Schema V3. Cascade so a permanent delete takes
+    /// the bytes with it. A SOFT delete stamps only the game — its images
+    /// stay untouched and come back with it, which is why Recently Deleted
+    /// restores a game with its pictures rather than holes.
+    @Relationship(deleteRule: .cascade, inverse: \GameImage.game)
+    var images: [GameImage]?
 
     init(
         id: UUID = UUID(),

@@ -47,6 +47,11 @@ final class ThemeSettings {
 
     // MARK: Build 31 (promote with the batch)
 
+    /// How strongly the game-page backdrop reads: nil = the built-in default.
+    /// See `BackdropIntensity`. Schema V3, and synced with the rest of the
+    /// appearance choices because it's a look, not a device preference.
+    var backdropIntensityRaw: String?
+
     /// Your own words on the five stars — JSON array of exactly five strings,
     /// index 0 = one star. Nil = plain stars. Vocabulary, not modelling: a
     /// rating that says "comfort game" instead of "3" reads like the
@@ -96,6 +101,59 @@ final class ThemeSettings {
 /// New cases are free (String-raw, stored in `pageBackgroundRaw`); an old
 /// build reading an unknown value falls back to `.cover` via the
 /// `ThemePalette.refresh` nil-coalesce.
+/// How hard the backdrop pushes.
+///
+/// The old single setting was a 60pt blur at 0.55 opacity over a near-black
+/// background — which, on the dark cover most games have, was very nearly
+/// invisible. Tim: "it's very subtle. Can we make it more obvious, or let
+/// users choose the blur level?" Both: `standard` is stronger than what
+/// shipped, and the choice exists.
+enum BackdropIntensity: String, CaseIterable, Identifiable {
+    case off, subtle, standard, bold
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .off:      "Off"
+        case .subtle:   "Subtle"
+        case .standard: "Standard"
+        case .bold:     "Bold"
+        }
+    }
+
+    var opacity: Double {
+        switch self {
+        case .off:      0
+        case .subtle:   0.40
+        case .standard: 0.70
+        case .bold:     0.92
+        }
+    }
+
+    /// Bold blurs LESS, not more — at full strength the point is to see the
+    /// art, not a smear of its average colour.
+    var blurRadius: CGFloat {
+        switch self {
+        case .off:      0
+        case .subtle:   60
+        case .standard: 44
+        case .bold:     22
+        }
+    }
+
+    /// The saturation boost fights the opacity, so it eases off as opacity
+    /// rises; a bold backdrop is already vivid enough.
+    var saturation: Double {
+        switch self {
+        case .off:      1
+        case .subtle:   1.5
+        case .standard: 1.3
+        case .bold:     1.1
+        }
+    }
+}
+
 enum ThemePageBackground: String, CaseIterable {
     case cover, status, accent, plain
 

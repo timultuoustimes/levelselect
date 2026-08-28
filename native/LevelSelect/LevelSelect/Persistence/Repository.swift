@@ -2030,6 +2030,69 @@ struct Repository {
         persist()
     }
 
+    // MARK: Artwork
+
+    /// Store an image the user picked, downscaled for sync and export.
+    ///
+    /// Throws rather than failing quietly: an image that silently didn't save
+    /// is the worst outcome here, because the user watched themselves add it.
+    @discardableResult
+    func addImage(to game: Game, data: Data, role: ArtworkRole,
+                  caption: String? = nil) throws -> GameImage {
+        let prepared = try ImageIngest.prepare(data, role: role)
+        let image = GameImage(role: role, data: prepared.data)
+        context.insert(image)
+        image.game = game
+        image.caption = caption
+        image.pixelWidth = prepared.pixelWidth
+        image.pixelHeight = prepared.pixelHeight
+        image.byteCount = prepared.data.count
+        touch(game, at: .now)
+        persist()
+        return image
+    }
+
+    /// Point a role at something — a local image, a remote URL, or nothing.
+    func setArtwork(_ pointer: String?, role: ArtworkRole, on game: Game) {
+        guard role != .gallery else { return }
+        game.setPointer(pointer, for: role)
+        touch(game, at: .now)
+        persist()
+    }
+
+    /// Remove an image. Soft, like everything else, so Recently Deleted can
+    /// bring it back — and any role pointing at it is cleared, because a role
+    /// aimed at a deleted picture would render its fallback while still
+    /// claiming to be set.
+    func softDelete(_ image: GameImage, at date: Date = .now) {
+        image.deletedAt = date
+        image.updatedAt = date
+        image.revision += 1
+        if let game = image.game {
+            for role in ArtworkRole.assignable
+            where ArtworkPointer.localID(game.pointer(for: role)) == image.id {
+                game.setPointer(nil, for: role)
+            }
+            touch(game, at: date)
+        }
+        persist()
+    }
+
+    func restore(_ image: GameImage) {
+        image.deletedAt = nil
+        image.updatedAt = .now
+        image.revision += 1
+        persist()
+    }
+
+    /// Every live image in the library, with what it costs. Used by Settings
+    /// to answer "what are my pictures taking up?" without decoding any.
+    func imageFootprint() -> (count: Int, bytes: Int) {
+        let all = ((try? context.fetch(FetchDescriptor<GameImage>())) ?? [])
+            .filter { $0.deletedAt == nil }
+        return (all.count, all.reduce(0) { $0 + $1.byteCount })
+    }
+
     // MARK: Tags
 
     /// Every tag in the library with how many games carry it, most-used

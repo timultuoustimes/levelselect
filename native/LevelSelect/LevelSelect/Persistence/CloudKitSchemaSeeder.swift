@@ -30,6 +30,11 @@ enum CloudKitSchemaSeeder {
     /// the field. Reverted by purge() unless the user has since changed it.
     static let seededAccent = "#8A5CF6"
 
+    /// A 1x1 transparent PNG — the smallest byte sequence CloudKit will
+    /// recognise as a real image asset when materializing `GameImage.data`.
+    static let onePixelPNG = Data(base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")!
+
     /// Insert one fully-populated instance of every model in SchemaV1.
     /// Returns a short report for the UI.
     @discardableResult
@@ -52,6 +57,8 @@ enum CloudKitSchemaSeeder {
         game.coverURLString = marker
         game.coverImageID = marker
         game.coverOverrideURLString = marker    // V2
+        game.logoURLString = marker            // V3
+        game.backdropURLString = marker        // V3
         game.status = .playing
         game.pinned = true
         game.rating = 5
@@ -239,6 +246,25 @@ enum CloudKitSchemaSeeder {
         badge.legacyID = marker
         context.insert(badge)
 
+        // --- GameImage (V3) ---
+        //
+        // `data` carries real bytes rather than the empty `stamp`: CloudKit
+        // decides a binary field is a CKAsset from what it actually sees, and
+        // a zero-length value is not a reliable way to declare one. A 1x1 PNG
+        // is the smallest thing that is unambiguously an image.
+        let image = GameImage(role: .gallery, data: Self.onePixelPNG)
+        image.userID = UUID()
+        image.deletedAt = now
+        image.legacyID = marker
+        image.caption = marker
+        image.roleRaw = ArtworkRole.gallery.rawValue
+        image.pixelWidth = 1
+        image.pixelHeight = 1
+        image.byteCount = Self.onePixelPNG.count
+        image.addedAt = now
+        context.insert(image)
+        image.game = game
+
         // --- GameCollection ---
         let collection = GameCollection(name: marker, isBundle: true, sortIndex: 1)
         collection.userID = UUID()
@@ -286,6 +312,7 @@ enum CloudKitSchemaSeeder {
             if existingTheme.platformIconVariantsData == nil { existingTheme.platformIconVariantsData = stamp }
             if existingTheme.dekuWishlistURLString == nil { existingTheme.dekuWishlistURLString = marker }
             if existingTheme.starNamesData == nil { existingTheme.starNamesData = stamp }
+            if existingTheme.backdropIntensityRaw == nil { existingTheme.backdropIntensityRaw = marker }
         } else {
             let theme = ThemeSettings()
             theme.accentHex = "#8A5CF6"
@@ -295,6 +322,7 @@ enum CloudKitSchemaSeeder {
             theme.platformIconVariantsData = stamp       // V2
             theme.dekuWishlistURLString = marker         // V2
             theme.starNamesData = stamp                  // build 31
+            theme.backdropIntensityRaw = marker           // build 32
             context.insert(theme)
         }
 
@@ -327,6 +355,7 @@ enum CloudKitSchemaSeeder {
         purgeAll(GameCollection.self) { $0.legacyID == marker }
         purgeAll(TrackerItemDetail.self) { $0.legacyID == marker }
         purgeAll(EarnedBadge.self) { $0.legacyID == marker }
+        purgeAll(GameImage.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
 
@@ -345,6 +374,7 @@ enum CloudKitSchemaSeeder {
             if theme.platformIconVariantsData == Data("{}".utf8) { theme.platformIconVariantsData = nil }
             if theme.dekuWishlistURLString == marker { theme.dekuWishlistURLString = nil }
             if theme.starNamesData == Data("{}".utf8) { theme.starNamesData = nil }
+            if theme.backdropIntensityRaw == marker { theme.backdropIntensityRaw = nil }
             ThemePalette.refresh(from: theme)
         }
 

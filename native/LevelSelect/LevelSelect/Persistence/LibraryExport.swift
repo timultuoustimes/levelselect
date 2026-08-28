@@ -38,6 +38,11 @@ enum LibraryExport {
         var maps: Int
         var markers: Int
         var collections: Int
+        /// User-added images, and what they weigh. The byte figure is
+        /// reported so someone reading the manifest can see why the file is
+        /// the size it is, without decoding anything.
+        var images: Int
+        var imageBytes: Int
         /// Sum of every record count above — a cheap integrity check that an
         /// importer (or a person) can verify without parsing the whole file.
         var totalRecords: Int
@@ -59,7 +64,7 @@ enum LibraryExport {
 
         var counts = (playthroughs: 0, sessions: 0, runs: 0,
                       states: 0, schemas: 0, completions: 0, videos: 0,
-                      maps: 0, markers: 0)
+                      maps: 0, markers: 0, images: 0, imageBytes: 0)
 
         var gameObjects: [[String: Any]] = []
         for game in games {
@@ -83,6 +88,14 @@ enum LibraryExport {
             dict["igdbSlug"] = game.igdbSlug
             dict["coverImageID"] = game.coverImageID
             dict["coverURL"] = game.coverURLString
+            // The artwork the USER chose, which the fetched fields above
+            // cannot reconstruct. `coverOverrideURL` shipped in build 31 and
+            // was missing from this file until V3 — a chosen cover did not
+            // survive a round trip, which for an export that calls itself the
+            // backup is a data-loss bug rather than an omission.
+            dict["coverOverrideURL"] = game.coverOverrideURLString
+            dict["logoURL"] = game.logoURLString
+            dict["backdropURL"] = game.backdropURLString
             dict["franchise"] = game.franchise
             dict["firstReleaseDate"] = game.firstReleaseDate.map(iso)
             dict["developers"] = game.developers
@@ -207,6 +220,35 @@ enum LibraryExport {
                 return c
             }
 
+            // Images the user added, bytes and all.
+            //
+            // Base64 inside the JSON rather than a sidecar or a zip, because
+            // "your library exports to a readable file you can keep anywhere"
+            // is a promise on the site and in the beta notes, and a single
+            // file is what makes it true. It costs size — roughly a third
+            // more than the bytes themselves — which is precisely why ingest
+            // downscales before anything is stored (`ImageIngest`).
+            //
+            // Maps remain links rather than bytes. That gap stays documented
+            // and is a different thing: map images are FETCHED, and a photo
+            // the user took exists nowhere else.
+            let images = (game.images ?? []).filter { $0.deletedAt == nil }
+            counts.images += images.count
+            counts.imageBytes += images.reduce(0) { $0 + $1.byteCount }
+            dict["images"] = images.sorted { $0.addedAt < $1.addedAt }.map { image -> [String: Any] in
+                var i: [String: Any] = [
+                    "id": image.id.uuidString,
+                    "role": image.roleRaw,
+                    "addedAt": iso(image.addedAt),
+                    "pixelWidth": image.pixelWidth,
+                    "pixelHeight": image.pixelHeight,
+                    "byteCount": image.byteCount,
+                ]
+                i["caption"] = image.caption
+                i["data"] = image.data?.base64EncodedString()
+                return i
+            }
+
             let videos = (game.videos ?? []).filter { $0.deletedAt == nil }
             counts.videos += videos.count
             dict["videos"] = videos.sorted { $0.orderIndex < $1.orderIndex }.map { video -> [String: Any] in
@@ -287,7 +329,7 @@ enum LibraryExport {
 
         let total = games.count + counts.playthroughs + counts.sessions + counts.runs
             + counts.states + counts.schemas + counts.completions + counts.videos
-            + counts.maps + counts.markers + collectionObjects.count
+            + counts.maps + counts.markers + counts.images + collectionObjects.count
 
         let manifest = Manifest(
             formatVersion: formatVersion,
@@ -304,6 +346,8 @@ enum LibraryExport {
             maps: counts.maps,
             markers: counts.markers,
             collections: collectionObjects.count,
+            images: counts.images,
+            imageBytes: counts.imageBytes,
             totalRecords: total
         )
 
@@ -322,6 +366,7 @@ enum LibraryExport {
                 "pageBackground": theme.pageBackgroundRaw,
                 "defaultTrackerDisplay": theme.defaultTrackerDisplayRaw,
                 "starNames": theme.starNames.isEmpty ? nil : theme.starNames as Any,
+                "backdropIntensity": theme.backdropIntensityRaw as Any,
             ] as [String: Any?]).compactMapValues { $0 }
         }
         return try JSONSerialization.data(

@@ -121,6 +121,7 @@ enum LibraryImport {
         var runs = Set<UUID>(), states = Set<UUID>(), schemas = Set<UUID>()
         var completions = Set<UUID>(), videos = Set<UUID>(), maps = Set<UUID>()
         var markers = Set<UUID>(), collections = Set<UUID>()
+        var images = Set<UUID>()
 
         init(context: ModelContext) throws {
             games = Set(try context.fetch(FetchDescriptor<Game>()).map(\.id))
@@ -134,6 +135,7 @@ enum LibraryImport {
             maps = Set(try context.fetch(FetchDescriptor<GameMap>()).map(\.id))
             markers = Set(try context.fetch(FetchDescriptor<Marker>()).map(\.id))
             collections = Set(try context.fetch(FetchDescriptor<GameCollection>()).map(\.id))
+            images = Set(try context.fetch(FetchDescriptor<GameImage>()).map(\.id))
         }
     }
 
@@ -169,6 +171,9 @@ enum LibraryImport {
             }
             for v in (game["videos"] as? [[String: Any]]) ?? [] {
                 visit("videos", v, in: existing.videos)
+            }
+            for i in (game["images"] as? [[String: Any]]) ?? [] {
+                visit("images", i, in: existing.images)
             }
             for m in (game["maps"] as? [[String: Any]]) ?? [] {
                 visit("maps", m, in: existing.maps)
@@ -289,6 +294,22 @@ enum LibraryImport {
                 }
                 outcome.created["completions", default: 0] += 1
             }
+            for iDict in (gameDict["images"] as? [[String: Any]]) ?? [] {
+                guard let iID = uuid(iDict["id"]) else { continue }
+                if existing.images.contains(iID) {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                // An image row with no bytes is skipped rather than created.
+                // A picture record that renders nothing is worse than an
+                // absent one: it occupies a gallery slot and a role pointer
+                // while showing a fallback.
+                guard let image = makeImage(iDict, id: iID) else {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                context.insert(image)
+                image.game = game
+                outcome.created["images", default: 0] += 1
+            }
             for vDict in (gameDict["videos"] as? [[String: Any]]) ?? [] {
                 guard let vID = uuid(vDict["id"]) else { continue }
                 if existing.videos.contains(vID) {
@@ -369,6 +390,9 @@ enum LibraryImport {
         game.igdbSlug = d["igdbSlug"] as? String
         game.coverImageID = d["coverImageID"] as? String
         game.coverURLString = d["coverURL"] as? String
+        game.coverOverrideURLString = d["coverOverrideURL"] as? String
+        game.logoURLString = d["logoURL"] as? String
+        game.backdropURLString = d["backdropURL"] as? String
         game.franchise = d["franchise"] as? String
         game.firstReleaseDate = date(d["firstReleaseDate"])
         game.developers = (d["developers"] as? [String]) ?? []
@@ -467,6 +491,30 @@ enum LibraryImport {
         event.startedPrecision = d["startedPrecision"] as? String
         event.companions = companions(d["playedWith"])
         return event
+    }
+
+    /// nil when the record carries no decodable bytes — see the call site.
+    private static func makeImage(_ d: [String: Any], id: UUID) -> GameImage? {
+        guard let encoded = d["data"] as? String,
+              let bytes = Data(base64Encoded: encoded), !bytes.isEmpty
+        else { return nil }
+        let image = GameImage(
+            id: id,
+            role: ArtworkRole(rawValue: (d["role"] as? String) ?? "") ?? .gallery,
+            data: bytes)
+        image.caption = d["caption"] as? String
+        image.addedAt = date(d["addedAt"]) ?? .now
+        // Trust the file's dimensions when present, but never the file's byte
+        // count — that is a property of the bytes we actually hold.
+        image.pixelWidth = (d["pixelWidth"] as? Int) ?? 0
+        image.pixelHeight = (d["pixelHeight"] as? Int) ?? 0
+        image.byteCount = bytes.count
+        if image.pixelWidth == 0 || image.pixelHeight == 0,
+           let size = ImageIngest.pixelSize(of: bytes) {
+            image.pixelWidth = size.width
+            image.pixelHeight = size.height
+        }
+        return image
     }
 
     private static func makeVideo(_ d: [String: Any], id: UUID) -> GameVideo {

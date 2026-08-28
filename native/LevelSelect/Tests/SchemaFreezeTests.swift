@@ -69,7 +69,8 @@ struct SchemaFreezeTests {
     @Test func schemaVersionsAreDeclared() {
         #expect(LevelSelectSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
         #expect(LevelSelectSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
-        #expect(LevelSelectMigrationPlan.schemas.count == 2,
+        #expect(LevelSelectSchemaV3.versionIdentifier == Schema.Version(3, 0, 0))
+        #expect(LevelSelectMigrationPlan.schemas.count == 3,
                 "Adding V3? Record it here too — this list is the written history of the shape.")
     }
 
@@ -88,7 +89,7 @@ struct SchemaFreezeTests {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
         let url = dir.appending(path: "reopen.store")
-        let schema = Schema(versionedSchema: LevelSelectSchemaV2.self)
+        let schema = Schema(versionedSchema: LevelSelectSchemaV3.self)
 
         let first = try ModelContainer(
             for: schema,
@@ -110,7 +111,7 @@ struct SchemaFreezeTests {
     /// people's existing libraries keep opening.
     @Test func schemaOnlyEverGrows() {
         var current: [String: Set<String>] = [:]
-        for line in Self.fingerprint(LevelSelectSchemaV2.self) {
+        for line in Self.fingerprint(LevelSelectSchemaV3.self) {
             let parts = line.split(separator: ":", maxSplits: 1).map(String.init)
             current[parts[0]] = Set(parts[1].split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces)
@@ -135,7 +136,7 @@ struct SchemaFreezeTests {
 
     /// The current shape, pinned exactly. Changing it means changing this list
     /// deliberately — and promoting the CloudKit schema before shipping.
-    @Test func schemaV2ShapeIsPinned() {
+    @Test func currentSchemaShapeIsPinned() {
         let expected = [
             // datePrecision + playthrough added 2026-08-26 (fuzzy beaten
             // dates; the run a beaten moment capped); playedWith added
@@ -144,8 +145,11 @@ struct SchemaFreezeTests {
             // Seed-and-promote before any build that writes them ships.
             "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
-            "Game: addedAt,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,legacyID,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
+            // backdropURLString/logoURLString/images added 2026-08-28 build 32
+            // (artwork roles + user-added images).
+            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
+            "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
             "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
@@ -156,12 +160,12 @@ struct SchemaFreezeTests {
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playedWithData,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
             // starNamesData added 2026-08-27 build 31 (your own words on the
             // five stars).
-            "ThemeSettings: accentHex,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,starNamesData,statusColorsData,updatedAt",
+            "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,starNamesData,statusColorsData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,updatedAt,userID",
         ]
-        #expect(Self.fingerprint(LevelSelectSchemaV2.self) == expected,
-                "Schema V2 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
+        #expect(Self.fingerprint(LevelSelectSchemaV3.self) == expected,
+                "Schema V3 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
     }
 }
