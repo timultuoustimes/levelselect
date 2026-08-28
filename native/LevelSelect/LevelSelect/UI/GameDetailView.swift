@@ -982,12 +982,28 @@ struct GameDetailView: View {
         VStack(alignment: .leading, spacing: 14) {
             Color.clear.frame(height: Self.heroTopSpace)
 
-            heroLayout {
-                coverThumb(width: Self.coverWidth)
-                factsPanel
-                    // Dropped slightly so the panel reads as sitting against
-                    // the cover rather than being ruled off level with it.
-                    .padding(.top, stacksCover ? 0 : 26)
+            if stacksCover {
+                VStack(alignment: .leading, spacing: 12) {
+                    coverThumb(width: Self.coverWidth)
+                    factsPanel(fills: true)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 10) {
+                    coverThumb(width: Self.coverWidth)
+                    factsPanel(fills: false)
+                        // Dropped slightly so the panel reads as sitting
+                        // against the cover rather than being ruled off level
+                        // with it.
+                        .padding(.top, 26)
+                    // The panel takes the width its words need; this absorbs
+                    // whatever is left. Without it the panel stretched to the
+                    // page margin and carried a stripe of empty haze past the
+                    // end of its own longest line — which made the header read
+                    // as edge-to-edge furniture rather than a composed object.
+                    // It collapses to nothing when space is tight, so a long
+                    // platform name still gets the room.
+                    Spacer(minLength: 0)
+                }
             }
 
             heroTitle
@@ -1003,19 +1019,12 @@ struct GameDetailView: View {
         }
     }
 
-    /// At accessibility text sizes a fixed 132pt cover and a panel holding
-    /// five stars can't share a line, and one over-wide child drags the whole
-    /// page's column offscreen with it.
-    private var heroLayout: AnyLayout {
-        stacksCover
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
-    }
-
     /// What this game is to you: where it sits, what you scored it, what the
     /// critics said. Everything here is words, which is why it's on a panel
     /// and not on the art.
-    private var factsPanel: some View {
+    /// `fills` is true only where the panel is alone on its row (accessibility
+    /// sizes), where hugging its content would leave it stranded mid-page.
+    private func factsPanel(fills: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: game.status.systemImage)
@@ -1042,7 +1051,7 @@ struct GameDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
         .padding(12)
         .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
         .overlay {
