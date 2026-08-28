@@ -20,6 +20,17 @@ struct ManageTagsView: View {
 
     private var repo: Repository { Repository(context) }
 
+    @ViewBuilder
+    private func tagActions(_ tag: String) -> some View {
+        Button {
+            renameText = tag
+            renaming = tag
+        } label: { Label("Rename or Merge…", systemImage: "pencil") }
+        Button(role: .destructive) {
+            removing = tag
+        } label: { Label("Remove from all games", systemImage: "trash") }
+    }
+
     var body: some View {
         List {
             if counts.isEmpty {
@@ -34,20 +45,23 @@ struct ManageTagsView: View {
                             Text("\(row.count)")
                                 .font(.caption.monospacedDigit())
                                 .foregroundStyle(.secondary)
+                            // Every route into tag management used to be a long
+                            // press, which is why the footer had to teach the
+                            // gesture. A hidden gesture can be a shortcut; it
+                            // can't be the only door.
+                            Menu {
+                                tagActions(row.tag)
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .accessibilityLabel("Actions for #\(row.tag)")
                         }
                         .contentShape(.rect)
-                        .contextMenu {
-                            Button {
-                                renameText = row.tag
-                                renaming = row.tag
-                            } label: { Label("Rename or Merge…", systemImage: "pencil") }
-                            Button(role: .destructive) {
-                                removing = row.tag
-                            } label: { Label("Remove from all games", systemImage: "trash") }
-                        }
+                        .contextMenu { tagActions(row.tag) }
                     }
                 } footer: {
-                    Text("Rename a tag to an existing name to merge them — games holding both end up with one. Long-press a tag for options.")
+                    Text("Rename a tag to an existing name to merge them — games holding both end up with one.")
                 }
             }
         }

@@ -34,7 +34,13 @@ enum Format {
 }
 
 extension GameStatus {
-    var label: String { rawValue.capitalized }
+    /// The app has exactly one public vocabulary for status, and this is it.
+    /// It used to be `rawValue.capitalized`, which meant one menu said
+    /// "Playing / Queued / Ongoing" while every shelf, filter and setting
+    /// beside it said "Now Playing / Up Next / Always Around". Status is a
+    /// central idea in this app; it does not get to change names depending on
+    /// which surface was written first.
+    var label: String { sectionTitle }
 
     /// Themed status color (user override → default palette).
     @MainActor

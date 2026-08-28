@@ -7,7 +7,6 @@ struct GameDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
     @State private var fixingMatch = false
-    @State private var arrangingSections = false
     /// Which artwork role the picker is open for, if any.
     @State private var pickingArtwork: ArtworkRole?
     /// Key art / screenshot for the header, resolved asynchronously. Nil
@@ -24,6 +23,9 @@ struct GameDetailView: View {
 
     @State private var pagePlaying: GameVideo?
     @State private var showingCover = false
+    /// Whether the game's name has scrolled up behind the navigation bar.
+    @State private var titleInBar = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var didAutoRefresh = false
     @State private var entryFingerprint: Int?
 
@@ -67,13 +69,13 @@ struct GameDetailView: View {
             let stageMode = isStage(geo.size)
             Group {
                 if stageMode {
-                    stageLayout(width: geo.size.width)
+                    stageLayout(width: geo.size.width, topInset: geo.safeAreaInsets.top)
                 } else {
                     VStack(spacing: 0) {
                         if let video = pagePlaying {
                             VideoPlayerDock(video: video) { pagePlaying = nil }
                         }
-                        standardScroll(stageMode: false)
+                        standardScroll(stageMode: false, topInset: geo.safeAreaInsets.top)
                     }
                 }
             }
@@ -201,31 +203,65 @@ struct GameDetailView: View {
         } message: {
             Text("Adds “\(game.name)” to a new collection.")
         }
+        // Still set, and still the real text: it names this screen for
+        // VoiceOver, titles the Mac window, and labels the previous screen's
+        // back button. Only the DRAWN title is swapped for the fading one
+        // below.
         .navigationTitle(game.name)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            #if !os(macOS)
+            ToolbarItem(placement: .principal) {
+                // The game's name is already enormous in the header, as a logo
+                // where one is set. Printing it again two inches above was
+                // just noise; it earns its place in the bar only once the
+                // header's copy has gone.
+                Text(game.name)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(titleInBar ? 1 : 0)
+                    // The bar title is redundant while the header shows the
+                    // name, so it's hidden from VoiceOver too rather than
+                    // being an invisible duplicate in the rotor.
+                    .accessibilityHidden(!titleInBar)
+            }
+            #endif
             ToolbarItem(placement: .primaryAction) {
+                // Seven stable rows. This menu had grown to fifteen — library
+                // classification, a completion workflow, metadata repair,
+                // playthrough CRUD, a capability toggle, two per-game display
+                // overrides, a device-wide layout preference, artwork and
+                // deletion — ordered by the build each one landed in, and long
+                // enough to scroll at standard text. Opening it no longer
+                // answered a stable question.
+                //
+                // The rule now: this menu is about the GAME as an object. A
+                // per-game display override lives in the section it affects;
+                // a library-wide default lives in Settings; fetched metadata
+                // lives under Game information.
                 Menu {
                     Button {
                         repo.edit(game) { $0.pinned.toggle() }
                     } label: {
                         Label(game.pinned ? "Unpin" : "Pin", systemImage: game.pinned ? "pin.slash" : "pin")
                     }
-                    Menu("Status") {
-                        ForEach(GameStatus.allCases, id: \.self) { s in
-                            Button {
-                                repo.edit(game) { $0.status = s }
-                            } label: {
-                                Label(s.label, systemImage: game.status == s ? "checkmark" : s.systemImage)
+                    // A Picker, not nine Buttons with a hand-drawn checkmark.
+                    // Completed's own glyph is `checkmark.circle.fill`, which
+                    // VoiceOver read as a second selected row — so the current
+                    // status was ambiguous to anyone not looking at it. The
+                    // value goes in the label too: "Status" alone made you open
+                    // the menu to find out what the status was.
+                    Menu {
+                        Picker("Status", selection: statusBinding) {
+                            ForEach(GameStatus.displayOrder, id: \.self) { s in
+                                Label(s.label, systemImage: s.systemImage).tag(s)
                             }
                         }
-                    }
-                    Button {
-                        markingBeaten = true
+                        .pickerStyle(.inline)
                     } label: {
-                        Label("Mark as Beaten…", systemImage: "flag.checkered")
+                        Label("Status: \(game.status.label)", systemImage: game.status.systemImage)
                     }
                     Menu {
                         ForEach(collections) { collection in
@@ -241,96 +277,18 @@ struct GameDetailView: View {
                             newCollectionName = ""; newCollection = true
                         } label: { Label("New Collection…", systemImage: "plus") }
                     } label: {
-                        Label("Add to Collection", systemImage: "square.stack")
-                    }
-                    if game.igdbID != nil {
-                        Button {
-                            Task { await repo.refreshFromIGDB(game) }
-                        } label: {
-                            Label("Refresh from IGDB", systemImage: "arrow.clockwise")
-                        }
+                        // Not "Add to Collection": tapping a checked row REMOVES
+                        // the game, and the last row creates a collection. The
+                        // label is the promise made before the tap.
+                        Label("Collections", systemImage: "square.stack")
                     }
                     Divider()
-                    Button {
-                        playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
-                        namingNewPlaythrough = true
+                    Menu {
+                        playthroughActions(includeNew: true)
                     } label: {
-                        Label("New Playthrough…", systemImage: "plus.square.on.square")
+                        Label("Playthrough", systemImage: "person.crop.square.on.square.angled")
                     }
-                    // Rename/Delete used to live ONLY in the playthrough picker,
-                    // which appears at 2+ playthroughs — so with one, they were
-                    // unreachable. Delete still needs a second one to fall back
-                    // to, but Rename shouldn't have been hidden at all.
-                    if game.activePlaythrough != nil {
-                        Button {
-                            playthroughName = game.activePlaythrough?.name ?? ""
-                            renamingPlaythrough = true
-                        } label: {
-                            Label("Rename Playthrough…", systemImage: "pencil")
-                        }
-                    }
-                    if game.livePlaythroughs.count > 1 {
-                        Button(role: .destructive) {
-                            confirmingPlaythroughDelete = true
-                        } label: {
-                            Label("Delete Playthrough…", systemImage: "trash.slash")
-                        }
-                    }
-                    // Runs are a capability you switch on, not something the
-                    // genre decides. Turning it off leaves existing runs in
-                    // place, so it's never destructive.
-                    Button {
-                        let enabled = repo.runTrackingEnabled(for: game)
-                        repo.setRunTracking(!enabled, for: game)
-                    } label: {
-                        Label(repo.runTrackingEnabled(for: game)
-                                ? "Turn Off Run Logging" : "Log Runs for This Game",
-                              systemImage: repo.runTrackingEnabled(for: game)
-                                ? "flag.slash" : "flag.checkered")
-                    }
-                    Menu("Item Hints") {
-                        Button {
-                            repo.edit(game) { $0.showItemHintsOverride = nil }
-                        } label: {
-                            Label("Follow Default", systemImage:
-                                    game.showItemHintsOverride == nil ? "checkmark" : "gear")
-                        }
-                        Button {
-                            repo.edit(game) { $0.showItemHintsOverride = true }
-                        } label: {
-                            Label("Show Hints", systemImage:
-                                    game.showItemHintsOverride == true ? "checkmark" : "eye")
-                        }
-                        Button {
-                            repo.edit(game) { $0.showItemHintsOverride = false }
-                        } label: {
-                            Label("Hide Hints (play blind)", systemImage:
-                                    game.showItemHintsOverride == false ? "checkmark" : "eye.slash")
-                        }
-                    }
-                    Menu("Tracker Display") {
-                        Button {
-                            repo.edit(game) { $0.trackerDisplayRaw = nil }
-                        } label: {
-                            Label("Follow Default (\(ThemePalette.defaultTrackerDisplay.label))",
-                                  systemImage: game.trackerDisplayRaw == nil ? "checkmark" : "circle.dashed")
-                        }
-                        ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
-                            Button {
-                                repo.edit(game) { $0.trackerDisplayRaw = choice.rawValue }
-                            } label: {
-                                Label(choice.label, systemImage:
-                                      game.trackerDisplayRaw == choice.rawValue ? "checkmark" : "circle")
-                            }
-                        }
-                    }
-                    Divider()
-                    Button {
-                        arrangingSections = true
-                    } label: {
-                        Label("Arrange Sections…", systemImage: "arrow.up.arrow.down")
-                    }
-                    Menu("Artwork") {
+                    Menu {
                         ForEach(ArtworkRole.assignable) { role in
                             Button {
                                 pickingArtwork = role
@@ -342,28 +300,40 @@ struct GameDetailView: View {
                                       ? "photo.on.rectangle.angled" : "checkmark")
                             }
                         }
-                    }
-                    Button {
-                        fixingMatch = true
                     } label: {
-                        Label("Fix Match…", systemImage: "link.badge.plus")
+                        Label("Artwork", systemImage: "photo.on.rectangle.angled")
+                    }
+                    Menu {
+                        if game.igdbID != nil {
+                            Button {
+                                Task { await repo.refreshFromIGDB(game) }
+                            } label: {
+                                Label("Refresh from IGDB", systemImage: "arrow.clockwise")
+                            }
+                        }
+                        Button {
+                            fixingMatch = true
+                        } label: {
+                            // "Fix Match" was our word for it, not the user's.
+                            Label("Correct game match…", systemImage: "link.badge.plus")
+                        }
+                    } label: {
+                        Label("Game information", systemImage: "info.circle")
                     }
                     Divider()
                     Button(role: .destructive) {
                         confirmingDelete = true
                     } label: {
-                        Label("Delete", systemImage: "trash")
+                        Label("Delete Game…", systemImage: "trash")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Game actions")
             }
         }
         .sheet(isPresented: $fixingMatch) {
             FixMatchView(game: game)
-        }
-        .sheet(isPresented: $arrangingSections) {
-            GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
         }
         .sheet(item: $pickingArtwork) { role in
             ArtworkPickerView(game: game, role: role)
@@ -413,6 +383,77 @@ struct GameDetailView: View {
 
     // MARK: Playthrough picker (appears only with 2+)
 
+    private var statusBinding: Binding<GameStatus> {
+        Binding(
+            get: { game.status },
+            set: { newValue in repo.edit(game) { $0.status = newValue } }
+        )
+    }
+
+    /// The one description of what you can do to a playthrough, rendered in
+    /// both the `⋯` menu and the switcher capsule.
+    ///
+    /// These used to be two separate lists, which meant the action model
+    /// changed shape with the data: with one playthrough the switcher didn't
+    /// exist, so **How it ended** — the most notebook-like field here, the
+    /// place you say a run was dropped or a save was lost — was unreachable.
+    /// With two, New/Rename/Delete appeared in both menus at once. A person
+    /// could learn one route, start a second playthrough, and find a second
+    /// competing surface.
+    ///
+    /// `includeNew` is false only where the caller has already promoted
+    /// **New Playthrough…** above the list.
+    @ViewBuilder
+    private func playthroughActions(includeNew: Bool) -> some View {
+        if includeNew {
+            Button {
+                playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
+                namingNewPlaythrough = true
+            } label: {
+                Label("New Playthrough…", systemImage: "plus")
+            }
+        }
+        if let active = game.activePlaythrough {
+            Button {
+                playthroughName = active.name
+                renamingPlaythrough = true
+            } label: {
+                // Naming the playthrough saves you opening the sheet to find
+                // out which one you're about to rename.
+                Label("Rename “\(active.name)”…", systemImage: "pencil")
+            }
+            Menu {
+                Button {
+                    repo.setPlaythroughOutcome(active, outcome: nil, note: nil)
+                } label: {
+                    Label("Still going", systemImage: active.outcome == nil
+                          ? "checkmark" : "play.circle")
+                }
+                ForEach(PlaythroughOutcome.allCases, id: \.self) { choice in
+                    Button {
+                        repo.setPlaythroughOutcome(active, outcome: choice, note: active.outcomeNote)
+                        outcomeNoteDraft = active.outcomeNote ?? ""
+                        editingOutcomeNote = true
+                    } label: {
+                        Label(choice.label, systemImage: active.outcome == choice
+                              ? "checkmark" : choice.systemImage)
+                    }
+                }
+            } label: {
+                Label("How it ended", systemImage: "flag.checkered")
+            }
+        }
+        // Deleting the only playthrough would leave the game's sessions and
+        // tracker progress with nowhere to live, so it stays conditional.
+        if game.livePlaythroughs.count > 1 {
+            Button(role: .destructive) {
+                confirmingPlaythroughDelete = true
+            } label: {
+                Label("Delete Playthrough…", systemImage: "trash")
+            }
+        }
+    }
+
     private var playthroughPicker: some View {
         // Same overflow rule as the hero: capsule plus caption can outgrow
         // the screen at accessibility sizes, so they stack instead.
@@ -423,7 +464,10 @@ struct GameDetailView: View {
         return layout {
             Menu {
                 // A finished run shouldn't be the path of least resistance:
-                // when the current one is done, starting fresh leads.
+                // when the current one is done, starting fresh leads. It moves
+                // ABOVE the list rather than appearing a second time — this
+                // menu used to render "New Playthrough…" twice whenever the
+                // active one was finished.
                 if activeFinished {
                     Button {
                         playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
@@ -448,46 +492,7 @@ struct GameDetailView: View {
                     }
                 }
                 Divider()
-                Button {
-                    playthroughName = "Playthrough \(game.livePlaythroughs.count + 1)"
-                    namingNewPlaythrough = true
-                } label: {
-                    Label("New Playthrough…", systemImage: "plus")
-                }
-                Button {
-                    playthroughName = game.activePlaythrough?.name ?? ""
-                    renamingPlaythrough = true
-                } label: {
-                    Label("Rename…", systemImage: "pencil")
-                }
-                Menu("How it ended") {
-                    Button {
-                        if let pt = game.activePlaythrough {
-                            repo.setPlaythroughOutcome(pt, outcome: nil, note: nil)
-                        }
-                    } label: {
-                        Label("Still going", systemImage: game.activePlaythrough?.outcome == nil
-                              ? "checkmark" : "play.circle")
-                    }
-                    ForEach(PlaythroughOutcome.allCases, id: \.self) { choice in
-                        Button {
-                            if let pt = game.activePlaythrough {
-                                repo.setPlaythroughOutcome(pt, outcome: choice, note: pt.outcomeNote)
-                                outcomeNoteDraft = pt.outcomeNote ?? ""
-                                editingOutcomeNote = true
-                            }
-                        } label: {
-                            Label(choice.label,
-                                  systemImage: game.activePlaythrough?.outcome == choice
-                                  ? "checkmark" : choice.systemImage)
-                        }
-                    }
-                }
-                Button(role: .destructive) {
-                    confirmingPlaythroughDelete = true
-                } label: {
-                    Label("Delete…", systemImage: "trash")
-                }
+                playthroughActions(includeNew: !activeFinished)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "person.crop.square.on.square.angled")
@@ -623,7 +628,7 @@ struct GameDetailView: View {
         }
     }
 
-    private func standardScroll(stageMode: Bool) -> some View {
+    private func standardScroll(stageMode: Bool, topInset: CGFloat) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
@@ -637,16 +642,55 @@ struct GameDetailView: View {
             }
             .padding()
             .frame(maxWidth: 640, alignment: .leading)
+            // The backdrop hangs off the FULL-width frame, not the 640pt
+            // reading column, so it reaches both screen edges on iPad and Mac
+            // while the text stays in its column.
             .frame(maxWidth: .infinity)
+            .background(alignment: .top) { scrollingBackdrop(topInset: topInset) }
         }
         .scrollIndicators(.hidden)
+        // The handoff point is the header card's own title. Below it the name
+        // is on screen in full; above it, the bar takes over.
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top
+        } action: { _, offset in
+            let handedOver = offset > Self.coverLift + 64
+            guard handedOver != titleInBar else { return }
+            // Reduce Motion gets the same handoff without the crossfade — the
+            // information is the point, the fade is decoration.
+            if reduceMotion {
+                titleInBar = handedOver
+            } else {
+                withAnimation(.easeInOut(duration: 0.18)) { titleInBar = handedOver }
+            }
+        }
+    }
+
+    /// The header art, drawn inside the scroll so it scrolls away with the
+    /// header, and pulled up under the navigation bar so the page reads as one
+    /// image with glass chrome floating on it.
+    @ViewBuilder
+    private func scrollingBackdrop(topInset: CGFloat) -> some View {
+        switch ThemePalette.pageBackground {
+        case .cover, .keyArt, .screenshot:
+            // Grown upward by the safe-area inset and pulled up by the same
+            // amount, so at rest the art fills the space behind the status bar
+            // and the glass chrome — `ignoresSafeArea` can't do this from
+            // inside a ScrollView, whose content origin already sits below the
+            // bar. It stays scroll content, so it still travels away with the
+            // header instead of sitting under the sections.
+            coverBackdrop(extraTop: topInset)
+                .padding(.top, -topInset)
+        case .plain, .accent, .status:
+            EmptyView()
+        }
     }
 
     // MARK: Sliding stage (iPad landscape / macOS, compact display)
 
-    private func stageLayout(width: CGFloat) -> some View {
+    private func stageLayout(width: CGFloat, topInset: CGFloat) -> some View {
         ZStack(alignment: .topLeading) {
-            standardScroll(stageMode: true)
+            standardScroll(stageMode: true, topInset: topInset)
                 .frame(width: stage == 1 ? width : width * 0.58)
                 .offset(x: stage == 3 ? -width * 0.58 : 0)
 
@@ -841,9 +885,14 @@ struct GameDetailView: View {
                 .frame(height: 420)
                 .frame(maxWidth: .infinity)
             case .cover, .keyArt, .screenshot:
-                // All three draw the same view; which IMAGE it resolves to is
-                // decided by `backdropArtwork`, which honours the preference.
-                coverBackdrop
+                // Nothing here. The art moved INTO the scroll (see
+                // `standardScroll`) so it travels with the header it belongs
+                // to. Pinned behind the whole page, it used to sit under the
+                // section list — survivable while the art was faded to 22%
+                // by mid-page, unreadable once the header redesign let it
+                // hold full strength. A backdrop is part of the header, not
+                // wallpaper for the document.
+                EmptyView()
             }
         }
         .ignoresSafeArea()
@@ -873,31 +922,29 @@ struct GameDetailView: View {
     }
 
     @ViewBuilder
-    private var coverBackdrop: some View {
+    private func coverBackdrop(extraTop: CGFloat = 0) -> some View {
         let intensity = ThemePalette.backdropIntensity
         if intensity != .off {
             ArtworkView(backdropArtwork)
-                .frame(height: 420)
+                .frame(height: 420 + extraTop)
                 .frame(maxWidth: .infinity)
                 .clipped()
                 .blur(radius: intensity.blurRadius, opaque: true)
                 .saturation(intensity.saturation)
                 .opacity(intensity.opacity)
-                // Falls off FAST. With the art barely blurred it is legible —
-                // and so is everything behind it, which means the hero text
-                // has to fight key art for contrast. Full strength at the top
-                // where only the glass chrome sits, gone by the time the
-                // platform name and stars begin. The proper fix is the header
-                // redesign (art at the top, text on a material card rather
-                // than directly on the art); this keeps the page readable in
-                // the meantime.
+                // The falloff used to be brutal — 22% left by 45% down the
+                // page — because the hero's text sat directly on this image
+                // and had to stay readable over key art. It doesn't any more:
+                // the text moved onto a material card in front. So the art
+                // holds full strength through the band you actually see it
+                // in, and fades where the page's own sections take over.
                 .mask(
                     LinearGradient(
                         stops: [
                             .init(color: .black, location: 0),
-                            .init(color: .black.opacity(0.75), location: 0.18),
-                            .init(color: .black.opacity(0.22), location: 0.45),
-                            .init(color: .clear, location: 0.7),
+                            .init(color: .black, location: 0.42),
+                            .init(color: .black.opacity(0.55), location: 0.62),
+                            .init(color: .clear, location: 0.92),
                         ],
                         startPoint: .top, endPoint: .bottom
                     )
@@ -928,64 +975,104 @@ struct GameDetailView: View {
         }
     }
 
+    /// How far the cover lifts out of the info card and into the art above it.
+    private static let coverLift: CGFloat = 44
+    private static let coverWidth: CGFloat = 132
+
+    /// The header.
+    ///
+    /// The old one laid the game's name, status, rating and chips directly on
+    /// the backdrop, which is why the backdrop had to be beaten into
+    /// illegibility to keep them readable — a 60pt blur and a mask that killed
+    /// the art by 45% down the page. You could change the image and not be
+    /// able to tell.
+    ///
+    /// Now the art gets to be art, and everything that has to be read sits on
+    /// a translucent card in front of it. The cover straddles the card's top
+    /// edge so the two layers are visibly one object rather than a picture
+    /// with a box under it.
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // At accessibility text sizes the cover-beside-text row can't fit
-            // its own minimums (fixed cover + five stars beat the screen), and
-            // one over-wide child drags the whole page's column offscreen with
-            // it. Stack instead: cover above, text at full width.
-            heroLayout {
-                CoverThumb(urlString: game.displayCoverURLString)
-                    .frame(width: 138, height: 184)
-                    .overlay { CoverShine(delay: 0.25) }
-                    .clipShape(.rect(cornerRadius: 8))
-                    .shadow(color: .black.opacity(0.5), radius: 8, y: 4)
-                    .contentShape(.rect)
-                    .onTapGesture { showingCover = true }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("Enlarge cover")
+            // Bare art above the card. Not a Spacer — a Spacer in a VStack
+            // inside a ScrollView has no height to distribute.
+            Color.clear.frame(height: Self.coverLift + 28)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    gameTitle
+            heroCard
 
-                    HStack(spacing: 6) {
-                        Image(systemName: game.status.systemImage)
-                            .foregroundStyle(game.status.color)
-                        Text(game.status.label)
-                        if let platform = PlatformPreference.owned(game.platforms) {
-                            Text("·").foregroundStyle(.tertiary)
-                            PlatformIconView(platform: platform, size: 20)
-                            Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
-                        }
-                    }
-                    .font(.subheadline)
-
-                    RatingControl(rating: $game.rating)
-
-                    // Directly under your own verdict, because the comparison
-                    // is the entire point — a critic score parked elsewhere on
-                    // the page is just trivia.
-                    referenceRow
-
-                    if let franchise = game.franchise, !franchise.isEmpty {
-                        Text(franchise)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-
-            // Full-width so the three chips never wrap.
+            // Full-width, below the card: four chips and a stats row both
+            // want the whole column, and neither is something you read at a
+            // glance the way the title is.
             OwnershipControl(ownership: $game.ownership)
+
+            if showGameStats {
+                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
+            }
         }
     }
 
-    private var heroLayout: AnyLayout {
-        typeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+    private var heroCard: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(alignment: .leading, spacing: 8) {
+                gameTitle
+
+                HStack(spacing: 6) {
+                    Image(systemName: game.status.systemImage)
+                        .foregroundStyle(game.status.color)
+                    Text(game.status.label)
+                    if let platform = PlatformPreference.owned(game.platforms) {
+                        Text("·").foregroundStyle(.tertiary)
+                        PlatformIconView(platform: platform, size: 20)
+                        Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
+                    }
+                }
+                .font(.subheadline)
+
+                RatingControl(rating: $game.rating)
+
+                // Directly under your own verdict, because the comparison
+                // is the entire point — a critic score parked elsewhere on
+                // the page is just trivia.
+                referenceRow
+
+                if let franchise = game.franchise, !franchise.isEmpty {
+                    Text(franchise)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            // Room for the cover beside the text — except at accessibility
+            // sizes, where a fixed 132pt cover plus five stars can't share a
+            // line and the cover moves above the text instead.
+            .padding(.leading, stacksCover ? 0 : Self.coverWidth + 12)
+            .padding(.top, stacksCover ? Self.coverLift + 8 : 0)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 20))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+            }
+
+            CoverThumb(urlString: game.displayCoverURLString)
+                .frame(width: Self.coverWidth, height: Self.coverWidth * 4 / 3)
+                .overlay { CoverShine(delay: 0.25) }
+                .clipShape(.rect(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
+                .contentShape(.rect)
+                .onTapGesture { showingCover = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Enlarge cover")
+                // `offset`, not padding: the cover has to leave the card's
+                // bounds to overlap the art, and it must not reserve the
+                // space it vacates.
+                .offset(x: stacksCover ? 0 : 14, y: -Self.coverLift)
+        }
     }
+
+    /// At accessibility text sizes the cover-beside-text row can't fit its own
+    /// minimums, and one over-wide child drags the whole page's column
+    /// offscreen with it.
+    private var stacksCover: Bool { typeSize.isAccessibilitySize }
 
     private var notesField: some View {
         TextField("Where you left off, thoughts, …", text: $game.notes, axis: .vertical)
@@ -1000,6 +1087,14 @@ struct GameDetailView: View {
     /// critic's number sitting next to their own opinion. Device-local — it's
     /// a display preference, and storing it would be a Schema V3 for a toggle.
     @AppStorage("showCriticScores") private var showCriticScores = false
+    /// Whether the game stats cards appear at the top of every game page.
+    ///
+    /// Timing your play is opt-in in this app, and plenty of people log a
+    /// library without ever starting a timer. A permanent "0s played / 0
+    /// sessions" card is a reproach to those people on every game they own,
+    /// so the row can be switched off — device-local, like the rest of the
+    /// game page's layout preferences.
+    @AppStorage("gamePageShowStats") private var showGameStats = true
     @State private var reference: GameReferenceService.Reference?
 
     private var gameInfo: some View {

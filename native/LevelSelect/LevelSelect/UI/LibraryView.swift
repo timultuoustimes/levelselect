@@ -381,6 +381,7 @@ struct LibraryTab: View {
                 Button { sheet = .addGame } label: {
                     Label("Add Game", systemImage: "gamecontroller")
                 }
+                Divider()
                 // "Start from a Template" never says a template of WHAT.
                 // Both of these now name the thing they make.
                 Button { sheet = .collectionTemplates } label: {

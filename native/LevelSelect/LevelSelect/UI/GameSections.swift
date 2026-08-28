@@ -86,6 +86,7 @@ struct GameArrangeSheet: View {
     @Binding var orderRaw: String
     @Binding var hiddenRaw: String
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("gamePageShowStats") private var showGameStats = true
 
     private var order: [GamePageSection] { GamePageSection.resolveOrder(stored: orderRaw) }
     private var hidden: Set<GamePageSection> { GamePageSection.hiddenSet(stored: hiddenRaw) }
@@ -93,6 +94,22 @@ struct GameArrangeSheet: View {
     var body: some View {
         NavigationStack {
             List {
+                // The header isn't a reorderable section — it's always first,
+                // it's the thing the page is — but it is the one part of the
+                // page a non-timer wants gone, so it gets its own switch above
+                // the list rather than a row that can be dragged into the
+                // middle of the document.
+                Section {
+                    Toggle(isOn: $showGameStats) {
+                        Label("Game stats", systemImage: "clock")
+                    }
+                    .tint(LSTheme.accent)
+                } header: {
+                    Text("Header")
+                } footer: {
+                    Text("Played, sessions, beaten, and runs, across every playthrough. Turn it off if you don't time your play.")
+                }
+
                 Section {
                     ForEach(order) { section in
                         Toggle(isOn: visibilityBinding(section)) {
@@ -105,8 +122,10 @@ struct GameArrangeSheet: View {
                         sections.move(fromOffsets: from, toOffset: to)
                         orderRaw = sections.map(\.rawValue).joined(separator: ",")
                     }
+                } header: {
+                    Text("Sections")
                 } footer: {
-                    Text("Applies to every game page. Hidden sections keep their contents — nothing is deleted.")
+                    Text("Applies to every game page on this device. Hidden sections keep their contents — nothing is deleted.")
                 }
             }
             #if !os(macOS)
@@ -114,15 +133,21 @@ struct GameArrangeSheet: View {
             // has no editMode and reorders List rows natively.
             .environment(\.editMode, .constant(.active))
             #endif
-            .navigationTitle("Arrange Sections")
+            // Not "Arrange Sections". This sheet opens from ONE game's menu
+            // and changes every game page on the device, which read as a
+            // per-game action to everyone who found it there.
+            .navigationTitle("All Game Pages")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Reset") {
+                    // Not Cancel — it applies immediately, like everything
+                    // else in this sheet.
+                    Button("Reset Layout") {
                         orderRaw = ""
                         hiddenRaw = ""
+                        showGameStats = true
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {

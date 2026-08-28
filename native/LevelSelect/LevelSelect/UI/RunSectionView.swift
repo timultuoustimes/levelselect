@@ -120,6 +120,21 @@ struct RunSectionView: View {
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(wins > 0 ? AnyShapeStyle(.green) : AnyShapeStyle(.secondary))
             }
+            // Turning run logging off was buried in the game's ⋯ menu, three
+            // rows below things that had nothing to do with runs. It belongs
+            // here, where the runs are and where the wording can promise that
+            // they survive it.
+            Menu {
+                Button {
+                    repo.setRunTracking(false, for: game)
+                } label: {
+                    Label("Turn Off Run Logging", systemImage: "flag.slash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.subheadline)
+            }
+            .accessibilityLabel("Run actions")
         }
     }
 

@@ -11,8 +11,14 @@ struct GameContextMenuModifier: ViewModifier {
     private var collections: [GameCollection]
     @State private var newCollection = false
     @State private var newCollectionName = ""
+    @State private var confirmingDelete = false
 
     private var repo: Repository { Repository(context) }
+
+    private var statusBinding: Binding<GameStatus> {
+        Binding(get: { game.status },
+                set: { newValue in repo.edit(game) { $0.status = newValue } })
+    }
     private var playthrough: Playthrough? {
         game.activePlaythrough
     }
@@ -45,16 +51,14 @@ struct GameContextMenuModifier: ViewModifier {
 
             // Status
             Menu {
-                ForEach(GameStatus.allCases, id: \.self) { s in
-                    Button {
-                        repo.edit(game) { $0.status = s }
-                    } label: {
-                        Label(s.sectionTitle,
-                              systemImage: game.status == s ? "checkmark" : s.systemImage)
+                Picker("Status", selection: statusBinding) {
+                    ForEach(GameStatus.displayOrder, id: \.self) { s in
+                        Label(s.label, systemImage: s.systemImage).tag(s)
                     }
                 }
+                .pickerStyle(.inline)
             } label: {
-                Label("Status", systemImage: game.status.systemImage)
+                Label("Status: \(game.status.label)", systemImage: game.status.systemImage)
             }
 
             // Ownership (multi-select toggles)
@@ -105,16 +109,28 @@ struct GameContextMenuModifier: ViewModifier {
                     newCollectionName = ""; newCollection = true
                 } label: { Label("New Collection…", systemImage: "plus") }
             } label: {
-                Label("Add to Collection", systemImage: "square.stack")
+                Label("Collections", systemImage: "square.stack")
             }
 
             Divider()
 
+            // The identical delete was confirmed and explained as recoverable
+            // from the game page and instant from here, so what "Delete" meant
+            // depended on where you happened to be holding. One contract: name
+            // the game, say where it goes.
             Button(role: .destructive) {
-                repo.softDelete(game)
+                confirmingDelete = true
             } label: {
-                Label("Delete", systemImage: "trash")
+                Label("Delete Game…", systemImage: "trash")
             }
+        }
+        .confirmationDialog("Delete “\(game.name)”?",
+                            isPresented: $confirmingDelete,
+                            titleVisibility: .visible) {
+            Button("Delete Game", role: .destructive) { repo.softDelete(game) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It moves to Recently Deleted in Settings, with its sessions and progress. You can put it back.")
         }
         .alert("New Collection", isPresented: $newCollection) {
             TextField("Name", text: $newCollectionName)

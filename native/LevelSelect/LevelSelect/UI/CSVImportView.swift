@@ -368,6 +368,7 @@ private struct CandidateRow: View {
                     Image(systemName: "arrow.triangle.2.circlepath")
                         .font(.caption)
                 }
+                .accessibilityLabel("Change match")
             }
         }
         .listRowBackground(Color.clear)

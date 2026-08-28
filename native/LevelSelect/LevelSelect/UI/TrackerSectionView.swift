@@ -131,6 +131,19 @@ struct TrackerSectionView: View {
 
     private var repo: Repository { Repository(context) }
 
+    /// `nil` means "follow the Settings default" — a real third state, not an
+    /// absent value, which is why these are Pickers over Optionals rather than
+    /// a toggle.
+    private var trackerLayoutBinding: Binding<String?> {
+        Binding(get: { game.trackerDisplayRaw },
+                set: { v in repo.edit(game) { $0.trackerDisplayRaw = v } })
+    }
+
+    private var trackerHintsBinding: Binding<Bool?> {
+        Binding(get: { game.showItemHintsOverride },
+                set: { v in repo.edit(game) { $0.showItemHintsOverride = v } })
+    }
+
     private var playthrough: Playthrough? {
         game.activePlaythrough
     }
@@ -301,7 +314,11 @@ struct TrackerSectionView: View {
             // both ways of building the thing, and which menu held which was
             // arbitrary. More could also open completely empty, since all three
             // of its items needed something to act on.
-            HStack(spacing: 18) {
+            // Wraps whole buttons rather than hyphenating their words. With
+            // RetroAchievements promoted this row carries four controls, and
+            // an HStack squeezed them into "Gener-ate with AI" and
+            // "Retro-Achieve-ments".
+            FlowLayout(spacing: 18) {
                 // The button says what it will do, and the menu lets you run it
                 // differently just this once without changing the default —
                 // "this tracker is terrible, replace the lot" shouldn't mean a
@@ -382,6 +399,17 @@ struct TrackerSectionView: View {
                     } label: { Label(applicability.isEmpty ? "Set What This Applies To…"
                                                           : "Edit What This Applies To…",
                                      systemImage: "scope") }
+                    // Switching runs ON writes a run template into this game's
+                    // tracker schema, so it belongs with the other things that
+                    // add to the tracker. Switching it OFF lives in the Runs
+                    // section itself, beside the runs it affects — it can't
+                    // live there in both directions, because that section only
+                    // exists once a run template does.
+                    if !repo.runTrackingEnabled(for: game) {
+                        Button {
+                            repo.setRunTracking(true, for: game)
+                        } label: { Label("Log Runs for This Game", systemImage: "flag.checkered") }
+                    }
                     if builtinAvailable && !usingBuiltin {
                         Divider()
                         Button {
@@ -409,6 +437,35 @@ struct TrackerSectionView: View {
                     Label("Build", systemImage: "hammer")
                         .font(.subheadline)
                 }
+                // How this tracker looks and whether it spoils itself are
+                // per-game overrides of a Settings default. They used to sit
+                // in the game's ⋯ menu, where nothing else was about the
+                // tracker — so the section you were adjusting was on screen
+                // and the adjustment wasn't. Placement declares scope: the
+                // override lives on the thing it overrides, the default stays
+                // in Settings → Game pages & trackers.
+                Menu {
+                    Picker("Tracker layout", selection: trackerLayoutBinding) {
+                        Text("Follow default (\(ThemePalette.defaultTrackerDisplay.label))")
+                            .tag(String?.none)
+                        ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
+                            Text(choice.label).tag(String?.some(choice.rawValue))
+                        }
+                    }
+                    Picker("Tracker hints", selection: trackerHintsBinding) {
+                        Text("Follow default").tag(Bool?.none)
+                        Text("Show hints").tag(Bool?.some(true))
+                        Text("Hide hints (play blind)").tag(Bool?.some(false))
+                    }
+                } label: {
+                    // Icon only. "Generate with AI" and "Build" are already a
+                    // wide pair, and a promoted RetroAchievements button makes
+                    // three — a fourth worded button hyphenated the whole row
+                    // into "Gener-ate with AI" / "Op-tions".
+                    Image(systemName: "slider.horizontal.3")
+                        .font(.subheadline)
+                }
+                .accessibilityLabel("Tracker options")
             }
             .buttonStyle(.borderless)
             .tint(LSTheme.accent)
@@ -1223,21 +1280,18 @@ struct TrackerSectionView: View {
             // anyone a per-item note existed — the feature was documented as a
             // promise ("regenerating won't touch your note") and hidden behind
             // a generic verb. Naming it is what makes it findable.
+            // One destination, one row. These were two labels opening the
+            // identical sheet — a menu that offers you a choice and then
+            // ignores it teaches you not to read it.
             Button {
                 sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
                                              name: item.name, location: item.location ?? "",
                                              note: item.note ?? "",
                                              countTarget: item.countTarget))
             } label: {
-                Label(item.note?.isEmpty == false ? "Edit Your Note" : "Add a Note",
-                      systemImage: "pencil.line")
+                Label(item.note?.isEmpty == false ? "Edit item & note…" : "Edit item…",
+                      systemImage: "pencil")
             }
-            Button {
-                sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
-                                             name: item.name, location: item.location ?? "",
-                                             note: item.note ?? "",
-                                             countTarget: item.countTarget))
-            } label: { Label("Rename, Location & Note…", systemImage: "pencil") }
         } preview: {
             // The press-and-hold peek: with hints off this is where the
             // description and location live — one row at a time, on purpose,

@@ -15,6 +15,10 @@ struct AppearanceSettingsSection: View {
     /// closes or a field is submitted.
     @State private var starDrafts = Array(repeating: "", count: 5)
     @State private var starNamesExpanded = false
+    @State private var arrangingPages = false
+    // Same keys the game page reads — this sheet is the one editor for them.
+    @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
+    @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
 
     private var settings: ThemeSettings? { themeSettings.first }
 
@@ -29,6 +33,9 @@ struct AppearanceSettingsSection: View {
         // Split per the 2026-08-28 settings audit.
         personalization
         gamePagesAndTrackers
+            .sheet(isPresented: $arrangingPages) {
+                GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
+            }
     }
 
     private var personalization: some View {
@@ -103,8 +110,8 @@ struct AppearanceSettingsSection: View {
     }
 
     /// What shows up ON game and tracker surfaces — as opposed to what the app
-    /// looks like. Both defaults here are overridden per game from the game's
-    /// own ⋯ menu.
+    /// looks like. Both defaults here are overridden per game from that game's
+    /// Tracker section.
     private var gamePagesAndTrackers: some View {
         Section {
             Picker("Default tracker layout", selection: trackerDisplayBinding) {
@@ -123,6 +130,16 @@ struct AppearanceSettingsSection: View {
             ))
 
             Toggle("Show achievement badges", isOn: $showRAArt)
+
+            // This used to open from a single game's ⋯ menu while changing
+            // every game page on the device. Placement declares scope: a
+            // library-wide, device-local layout preference belongs beside the
+            // other library-wide defaults, not anchored to Super Metroid.
+            Button {
+                arrangingPages = true
+            } label: {
+                Label("Arrange game pages…", systemImage: "arrow.up.arrow.down")
+            }
         } header: {
             Text("Game pages & trackers")
         } footer: {
@@ -130,7 +147,7 @@ struct AppearanceSettingsSection: View {
             // leaving someone to infer storage from section membership — a
             // preference that changes on one device and not another otherwise
             // looks like broken iCloud sync.
-            Text("These are library-wide defaults; a game's ⋯ menu overrides them for that game. Layout and hints sync through iCloud. Achievement badges are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
+            Text("These are library-wide defaults; a game's own Tracker section overrides them for that game. Layout and hints sync through iCloud. Achievement badges and page arrangement are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
         }
     }
 

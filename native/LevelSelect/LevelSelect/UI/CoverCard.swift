@@ -82,7 +82,11 @@ struct StatusCarousel: View {
                     // still sortable and filterable by this status — "I don't
                     // want to look at 60 backlog games every time I open the
                     // app" is not the same wish as "forget I own them".
-                    Button(role: .destructive) {
+                    // Not `.destructive`. Red is reserved for losing data;
+                    // this shelf comes back from Hidden from Home at the
+                    // bottom of this very screen, and nothing about the games
+                    // in it changes.
+                    Button {
                         withAnimation(.easeInOut(duration: 0.25)) { onHide() }
                     } label: { Label("Hide from Home", systemImage: "eye.slash") }
                 }

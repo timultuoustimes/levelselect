@@ -109,12 +109,14 @@ struct CollectionShelf: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(LSTheme.accent)
+                    .accessibilityLabel("Add collection")
                 } else {
                     Button { onNew() } label: {
                         Image(systemName: "plus").font(.subheadline.weight(.semibold))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(LSTheme.accent)
+                    .accessibilityLabel("Add collection")
                 }
             }
             .padding(.horizontal)
@@ -211,6 +213,7 @@ struct CollectionDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel("Collection actions")
             }
         }
         .sheet(isPresented: $pickingMembers) {

@@ -2719,6 +2719,31 @@ extension Game {
             .sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
     }
 
+    /// Everything you have ever put into this game, across every playthrough.
+    ///
+    /// The game page has always been able to show the ACTIVE playthrough's
+    /// time, inside the Sessions section — which meant collapsing Sessions
+    /// made a game's total playtime unreachable, and a second playthrough
+    /// made the number on screen smaller than the truth. A lifetime total is
+    /// the thing people actually ask ("how long have I spent on this?"), so
+    /// it counts every live playthrough, finished ones included.
+    func lifetimePlaytime(asOf now: Date = .now) -> TimeInterval {
+        livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime(asOf: now) }
+    }
+
+    var liveCompletionEvents: [CompletionEvent] {
+        (completionEvents ?? []).filter { $0.deletedAt == nil }
+    }
+
+    /// Runs across every playthrough, for the same reason the time is.
+    var lifetimeRunCount: Int {
+        livePlaythroughs.reduce(0) { $0 + $1.liveRuns.count }
+    }
+
+    var lifetimeSessionCount: Int {
+        livePlaythroughs.reduce(0) { $0 + ($1.sessions ?? []).filter { $0.deletedAt == nil }.count }
+    }
+
     /// The playthrough all per-playthrough UI reads: the current selection,
     /// falling back to the oldest live one.
     var activePlaythrough: Playthrough? {

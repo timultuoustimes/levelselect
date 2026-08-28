@@ -308,7 +308,10 @@ struct WishlistTab: View {
                     Button {
                         sheet = .addGame(item.name)
                     } label: {
-                        Label("Add to Wishlist", systemImage: "plus.square.on.square")
+                        // This row is already on a wishlist — the user's, on
+                        // Deku Deals. The action is bringing it into
+                        // LevelSelect, so that's what it says.
+                        Label("Add to LevelSelect", systemImage: "plus.square.on.square")
                     }
                     Button {
                         if let url = item.url { openDeku(url) }
