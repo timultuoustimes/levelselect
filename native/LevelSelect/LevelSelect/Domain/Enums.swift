@@ -33,7 +33,7 @@ enum Ownership: String, Codable, CaseIterable, Sendable {
         case .physical: "Physical"
         case .digital:  "Digital"
         case .emulated: "Emulated"
-        case .previouslyOwned: "Previously Owned"
+        case .previouslyOwned: "Previously owned"
         }
     }
 

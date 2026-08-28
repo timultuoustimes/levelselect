@@ -11,7 +11,7 @@ struct OwnershipControl: View {
         // Wraps rather than squeezing: three labelled chips do not fit one
         // line at accessibility text sizes, and a chip that hyphenates
         // "Emu-lated" is worse than one on a second row.
-        FlowLayout(spacing: 7) {
+        FlowLayout(spacing: 6) {
             ForEach(Ownership.allCases, id: \.self) { kind in
                 chip(kind)
             }
@@ -28,8 +28,17 @@ struct OwnershipControl: View {
                     .symbolVariant(on ? .fill : .none)
                 Text(kind.label)
             }
+            // Compress before wrapping. A fourth chip arrived in build 31
+            // ("Previously Owned") and four labelled chips no longer fit one
+            // line on a 393pt phone, though they do on a 430pt one — so the
+            // row broke on some devices and not others. Shrinking slightly is
+            // less disruptive than a second row appearing on half the
+            // hardware. It still wraps at accessibility sizes, which is
+            // correct and deliberate.
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
             .font(.caption.weight(.medium))
-            .padding(.horizontal, 9)
+            .padding(.horizontal, 8)
             .padding(.vertical, 5)
             .background(on ? AnyShapeStyle(LSTheme.accent.opacity(0.20))
                            : AnyShapeStyle(.white.opacity(0.06)),

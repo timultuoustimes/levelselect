@@ -106,6 +106,21 @@ enum ImageIngest {
                       passedThrough: false)
     }
 
+    /// Whether the image carries an alpha channel at all.
+    ///
+    /// Matters only for logos, and it matters a lot: a wordmark without
+    /// transparency renders as a block of its own background — usually black
+    /// — sitting on the page. Nothing downstream can fix that, because the
+    /// transparency was never in the file. JPEG never has alpha; a PNG
+    /// saved through the photo library is frequently re-encoded to JPEG on
+    /// the way in, which is exactly how a "logo PNG" arrives opaque.
+    static func hasAlpha(_ data: Data) -> Bool {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return false }
+        return (properties[kCGImagePropertyHasAlpha] as? Bool) ?? false
+    }
+
     /// Pixel dimensions without decoding the image.
     static func pixelSize(of data: Data) -> (width: Int, height: Int)? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),

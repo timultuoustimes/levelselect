@@ -97,7 +97,7 @@ struct Build31Tests {
     /// exist, and the raw value round-trips.
     @Test func previouslyOwnedIsARealOwnership() {
         #expect(Ownership(rawValue: "previouslyOwned") == .previouslyOwned)
-        #expect(Ownership.previouslyOwned.label == "Previously Owned")
+        #expect(Ownership.previouslyOwned.label == "Previously owned")
         #expect(Ownership.allCases.contains(.previouslyOwned))
     }
 

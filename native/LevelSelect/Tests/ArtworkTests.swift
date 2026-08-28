@@ -302,3 +302,40 @@ struct SeedImageSizeTests {
                 "logos are small; the schema needs the inline BYTES field for them")
     }
 }
+
+/// Platform naming — IGDB's formal names are far too long for a hero row.
+@MainActor
+struct PlatformShortNameTests {
+
+    /// The retro half of the library had NO mappings, so every console older
+    /// than the Wii printed its full legal name. "Super Nintendo
+    /// Entertainment System" stacked across four lines beside a cover.
+    @Test func retroConsolesGetTheNamesPeopleActuallyUse() {
+        #expect(PlatformShort.name("Super Nintendo Entertainment System") == "SNES")
+        #expect(PlatformShort.name("Nintendo Entertainment System") == "NES")
+        #expect(PlatformShort.name("Nintendo 64") == "N64")
+        #expect(PlatformShort.name("Game Boy Advance") == "GBA")
+        #expect(PlatformShort.name("Sega Mega Drive/Genesis") == "Genesis")
+        #expect(PlatformShort.name("Sega Master System/Mark III") == "Master System")
+        #expect(PlatformShort.name("PlayStation") == "PS1")
+        #expect(PlatformShort.name("PlayStation Portable") == "PSP")
+    }
+
+    /// Variants of one console must collapse to a single name, or the
+    /// library's system filter shows two identically-labelled rows filtering
+    /// different sets — the bug `PlatformShort.systems(in:)` exists to avoid.
+    @Test func variantsOfOneConsoleCollapseTogether() {
+        for spelling in ["Sega Mega Drive/Genesis", "Sega Genesis", "Genesis", "Mega Drive"] {
+            #expect(PlatformShort.name(spelling) == "Genesis", "\(spelling) should read as Genesis")
+        }
+        for spelling in ["Super Nintendo Entertainment System", "SNES", "Super NES"] {
+            #expect(PlatformShort.name(spelling) == "SNES", "\(spelling) should read as SNES")
+        }
+    }
+
+    /// Anything unmapped passes through unchanged rather than being mangled —
+    /// a new console should print its real name until someone shortens it.
+    @Test func unmappedPlatformsPassThroughUnchanged() {
+        #expect(PlatformShort.name("Bandai WonderSwan") == "Bandai WonderSwan")
+    }
+}

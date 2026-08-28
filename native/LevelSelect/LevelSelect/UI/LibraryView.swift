@@ -552,6 +552,11 @@ enum PlatformIcon {
 /// filters). Placeholder icons for now — swappable for the soft-3D console
 /// icons later.
 enum PlatformShort {
+    /// IGDB's platform names are formal and long — "Super Nintendo
+    /// Entertainment System" stacks across four lines beside a cover. These
+    /// are the names people actually use. Anything unmapped falls through
+    /// unchanged, which is why the retro half of this list matters: without
+    /// it every console older than the Wii printed its full legal name.
     static func name(_ p: String) -> String {
         switch p {
         case "PC (Microsoft Windows)": "PC"
@@ -560,11 +565,34 @@ enum PlatformShort {
         case "PlayStation 5": "PS5"
         case "PlayStation 4": "PS4"
         case "PlayStation 3": "PS3"
+        case "PlayStation 2": "PS2"
+        // IGDB calls the original console simply "PlayStation"; PS1 is
+        // clearer beside PS2/PS3 and is what everyone says anyway.
+        case "PlayStation": "PS1"
+        case "PlayStation Portable": "PSP"
+        case "PlayStation Vita", "PlayStation Vita (PS Vita)": "Vita"
         case "Xbox Series X|S", "Xbox Series X/S", "Xbox Series X", "Xbox Series": "Xbox Series"
         case "Xbox One": "Xbox One"
         case "Xbox 360": "Xbox 360"
         case "Nintendo 3DS", "New Nintendo 3DS": "3DS"
+        case "Nintendo DS", "Nintendo DSi": "DS"
         case "Wii U": "Wii U"
+        case "Nintendo Wii", "Wii": "Wii"
+        case "Super Nintendo Entertainment System", "SNES", "Super NES": "SNES"
+        case "Nintendo Entertainment System", "NES": "NES"
+        case "Family Computer", "Famicom", "Family Computer Disk System": "Famicom"
+        case "Super Famicom": "Super Famicom"
+        case "Nintendo 64": "N64"
+        case "Nintendo GameCube", "GameCube": "GameCube"
+        case "Game Boy Advance": "GBA"
+        case "Game Boy Color": "GBC"
+        case "Sega Mega Drive/Genesis", "Sega Genesis", "Genesis", "Mega Drive": "Genesis"
+        case "Sega Master System/Mark III", "Sega Master System": "Master System"
+        case "Sega Dreamcast", "Dreamcast": "Dreamcast"
+        case "Sega Saturn": "Saturn"
+        case "Sega Game Gear", "Game Gear": "Game Gear"
+        case "Sega 32X", "Sega Mega-CD", "Sega CD": p
+        case "TurboGrafx-16/PC Engine", "TurboGrafx-16": "TurboGrafx-16"
         case "Other", "": "Other"
         default: p
         }

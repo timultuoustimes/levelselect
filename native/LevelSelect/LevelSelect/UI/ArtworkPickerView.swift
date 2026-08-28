@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// Choose what fills one artwork role — cover, logo, or backdrop.
 ///
@@ -33,6 +34,8 @@ struct ArtworkPickerView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var importing = false
     @State private var importError: String?
+    @State private var importNote: String?
+    @State private var choosingFile = false
 
     private var repo: Repository { Repository(context) }
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: 12)]
@@ -92,6 +95,16 @@ struct ArtworkPickerView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
+            if let importNote {
+                // Not an error — the image was added and is being used. It
+                // just won't look the way a logo should, and saying nothing
+                // would leave the user staring at a black box wondering
+                // which part of the app broke.
+                Label(importNote, systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -123,16 +136,44 @@ struct ArtworkPickerView: View {
         }
     }
 
+    @ViewBuilder
     private var addPhoto: some View {
-        PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
-            if importing {
-                HStack { ProgressView(); Text("Adding…") }
-            } else {
-                Label("Add a photo", systemImage: "photo.badge.plus")
+        HStack(spacing: 10) {
+            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                if importing {
+                    HStack { ProgressView(); Text("Adding…") }
+                } else {
+                    Label("Photos", systemImage: "photo.badge.plus")
+                }
             }
+            .buttonStyle(.borderedProminent)
+            .disabled(importing)
+
+            // A FILE, not a photo — and for logos this is the one that works.
+            // Saving a PNG to the photo library commonly re-encodes it to
+            // JPEG, and JPEG has no alpha channel, so a transparent wordmark
+            // arrives opaque and renders as a black block. Reading the file
+            // directly preserves the original bytes.
+            Button {
+                choosingFile = true
+            } label: {
+                Label("Files", systemImage: "folder")
+            }
+            .buttonStyle(.bordered)
+            .disabled(importing)
         }
-        .buttonStyle(.borderedProminent)
-        .disabled(importing)
+        .fileImporter(isPresented: $choosingFile,
+                      allowedContentTypes: [.png, .jpeg, .heic, .image],
+                      allowsMultipleSelection: false) { result in
+            Task { await ingestPickedFile(result) }
+        }
+
+        if role == .logo {
+            Text("Logos need a transparent background. Pick the PNG from Files — saving one to Photos usually converts it to JPEG, which has no transparency.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     @ViewBuilder
@@ -242,17 +283,60 @@ struct ArtworkPickerView: View {
                 importError = "That photo couldn't be read."
                 return
             }
-            // Added AND selected: someone who picks a photo while choosing a
-            // cover means "use this one." Leaving it merely added would be a
-            // second step nobody asked for.
-            let image = try repo.addImage(to: game, data: raw, role: role)
-            repo.setArtwork(image.pointer, role: role, on: game)
-            dismiss()
+            try await store(raw, dismissOnSuccess: !warnsAboutTransparency(raw))
         } catch ImageIngest.Failure.unreadable {
             importError = "That file isn't an image this device can read."
         } catch {
             importError = "Couldn't add that image."
         }
+    }
+
+    private func ingestPickedFile(_ result: Result<[URL], Error>) async {
+        importing = true
+        importError = nil
+        defer { importing = false }
+        do {
+            guard let url = try result.get().first else { return }
+            // A document picked from Files lives outside the sandbox until
+            // asked for; without this the read fails with a permission error
+            // that reads like a corrupt file.
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            let raw = try Data(contentsOf: url)
+            try await store(raw, dismissOnSuccess: !warnsAboutTransparency(raw))
+        } catch ImageIngest.Failure.unreadable {
+            importError = "That file isn't an image this device can read."
+        } catch {
+            importError = "Couldn't read that file."
+        }
+    }
+
+    /// Added AND selected: someone who picks an image while choosing a cover
+    /// means "use this one." Leaving it merely added would be a second step
+    /// nobody asked for.
+    ///
+    /// Stays open when there's something to say — see the transparency note.
+    private func store(_ raw: Data, dismissOnSuccess: Bool) async throws {
+        let image = try repo.addImage(to: game, data: raw, role: role)
+        repo.setArtwork(image.pointer, role: role, on: game)
+        if dismissOnSuccess { dismiss() }
+    }
+
+    /// Sets the transparency warning for a logo without alpha, and reports
+    /// whether it said anything.
+    ///
+    /// A wordmark with no alpha channel renders as a block of its own
+    /// background — usually black — and nothing downstream can fix it,
+    /// because the transparency was never in the file. The image is still
+    /// added and used; the user is simply told why it looks the way it does,
+    /// rather than being left to assume the app is broken.
+    private func warnsAboutTransparency(_ raw: Data) -> Bool {
+        guard role == .logo, !ImageIngest.hasAlpha(raw) else {
+            importNote = nil
+            return false
+        }
+        importNote = "That image has no transparent background, so it shows as a block. Logos need a PNG with transparency — try picking it from Files rather than Photos."
+        return true
     }
 
     private func loadIGDB() async {
