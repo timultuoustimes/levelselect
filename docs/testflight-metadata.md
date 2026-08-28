@@ -72,6 +72,56 @@ that need styling; hyphens are fine as literal characters).
 >
 > Thank you — it makes a real difference to a beta this small.
 
+## What to Test — build 32 (0.1.0)
+
+> (standing header above, then:)
+>
+> This is a big one - the game page has been rebuilt. Roughly in order of
+> how much I'd like eyes on it:
+>
+> - THE GAME PAGE HEADER. Open a few games, ideally ones with very
+>   different art. The background should fill the top of the screen, run
+>   under the buttons, and scroll away with the header. The game's name
+>   sits under the cover, and hands over to the title bar once you scroll
+>   past it. Tell me about any game where the art sits oddly, gets cut off,
+>   or leaves an empty band - and please say which game, because this
+>   depends on what art exists for it.
+> - THE STATS ROW, under the ownership chips: played, sessions, beaten, and
+>   runs on games that log them. These are LIFETIME totals across every
+>   playthrough, so if you have more than one playthrough on a game, check
+>   the number matches what you'd expect. If you don't time your play,
+>   switch the whole row off: Settings > Game pages & trackers > Arrange
+>   game pages > Header.
+> - LOGOS. Game page ... menu > Artwork > Choose Logo. Logos now come from
+>   IGDB and SteamGridDB automatically - no hunting for a PNG. Not every
+>   game has one, and it says so when it doesn't. You can still add your
+>   own or paste a link. Also worth trying Choose Cover and Choose
+>   Backdrop, which have a lot more to choose from now.
+> - THE ... MENU IS SHORTER. It went from fifteen items to seven, and
+>   several things moved to the section they actually affect: run logging
+>   is in the Runs section, tracker layout and hints are in the Tracker
+>   section (the sliders button), and arranging game pages moved to
+>   Settings. If you go looking for something and can't find it, that is
+>   exactly the bug I want to hear about - please tell me what you were
+>   trying to do.
+> - Status names are now the same everywhere. The game menu used to say
+>   "Playing" and "Queued" while everything else said "Now Playing" and
+>   "Up Next". If you spot any surface still using the old words, shout.
+> - Deleting a game asks first, wherever you do it from - the ... menu or
+>   pressing and holding a cover. It goes to Recently Deleted in Settings
+>   either way.
+> - Settings has been reorganised, and the reset buttons are now separate
+>   (colours, background, and rating labels reset independently, under
+>   "Reset"). They only appear when you have actually changed something.
+> - ON IPAD: please try a game page in landscape, especially if your
+>   tracker layout is set to Compact. The art at the top was sitting in the
+>   wrong place there and was fixed very late - I would like a second pair
+>   of eyes on it.
+> - A note on the Mac app: it is the least developed of the four and it
+>   shows - it has not caught up with the new system look, and Settings is
+>   rougher there. Bug reports are still welcome, but you are not imagining
+>   it, and it is on the list.
+
 ## What to Test — build 31 (0.1.0)
 
 > (standing header above, then:)
