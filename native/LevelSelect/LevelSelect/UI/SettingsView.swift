@@ -4,6 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
 
@@ -33,9 +34,20 @@ struct SettingsView: View {
                 Section {
                     // Live type rather than the baked lockup PNG: stays crisp
                     // at any size and follows the user's accent color.
-                    Wordmark(size: 22, showsIcon: true)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
+                    //
+                    // Pinned to one line and dropped entirely at accessibility
+                    // sizes: unconstrained, it wrapped mid-word — "LevelSe /
+                    // lect" across two oversized lines, which is a broken
+                    // logo rather than a large one. A decorative banner is
+                    // also the first thing that should give up its space when
+                    // every control below it needs more.
+                    if !typeSize.isAccessibilitySize {
+                        Wordmark(size: 22, showsIcon: true)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 18)
+                    }
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())

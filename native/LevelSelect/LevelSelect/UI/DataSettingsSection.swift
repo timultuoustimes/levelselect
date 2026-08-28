@@ -101,22 +101,11 @@ struct DataSettingsSection: View {
                 Label("Import LevelSelect export", systemImage: "arrow.uturn.backward.circle")
             }
 
-            Button {
-                sheet = .metadataFill
-            } label: {
-                Label("Fill in missing game info", systemImage: "sparkle.magnifyingglass")
-            }
 
             NavigationLink {
-                ManageTagsView()
+                ImageStorageView()
             } label: {
-                Label("Manage Tags", systemImage: "tag")
-            }
-
-            NavigationLink {
-                RecentlyDeletedView()
-            } label: {
-                Label("Recently Deleted", systemImage: "trash")
+                Label("Game images", systemImage: "photo.stack")
             }
             // The sheet hangs off THIS ROW, not off the Section.
             //
@@ -140,9 +129,41 @@ struct DataSettingsSection: View {
                 }
             }
         } header: {
-            Text("Your data")
+            Text("Storage & backup")
         } footer: {
-            Text("Export writes your library's content — games, playthroughs, sessions, runs, tracker progress and notes, maps and markers, videos, collections, and appearance settings — to a readable JSON file you can keep anywhere. Import LevelSelect export reads that same file back, restoring anything that's missing and never touching what's already here — so an old export plus a current library merge safely. One honest limit: map images are saved as links rather than embedded. iCloud keeps your devices in sync, but it isn't a backup; the export is. Import from CSV brings a library in from another app or a spreadsheet. Fill in missing game info looks up everything your games are missing — release dates, genres, developers, cover art — and adds only what's blank, so nothing you've corrected by hand is touched.")
+            // The load-bearing sentence stays. The rest moved into the
+            // workflows, which already explain themselves — a footer is read
+            // after a row has been found, so it can't repair a wrong guess,
+            // and this one ran longer than a phone screen.
+            Text("iCloud keeps your devices in sync, but it isn't a backup — the export is. It writes your library to a readable JSON file, pictures you've added included. Map images are still saved as links rather than embedded.")
+        }
+
+        Section {
+            Button {
+                sheet = .metadataFill
+            } label: {
+                Label("Update missing game details", systemImage: "sparkle.magnifyingglass")
+            }
+
+            NavigationLink {
+                ManageTagsView()
+            } label: {
+                Label("Manage tags", systemImage: "tag")
+            }
+
+            NavigationLink {
+                RecentlyDeletedView()
+            } label: {
+                Label("Recently deleted", systemImage: "trash")
+            }
+        } header: {
+            Text("Library tools")
+        } footer: {
+            // Maintenance is not backup. These three answer "repair or tidy
+            // what's in my library", which is a different question from "get
+            // my data in or out" — filing them under a data/export heading
+            // made a wrong first guess rational.
+            Text("Update missing game details fills only what's blank, so nothing you've corrected by hand is touched.")
         }
 
         Section {

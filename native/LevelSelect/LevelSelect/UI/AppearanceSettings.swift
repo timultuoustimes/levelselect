@@ -19,14 +19,21 @@ struct AppearanceSettingsSection: View {
     private var settings: ThemeSettings? { themeSettings.first }
 
     var body: some View {
+        // TWO sections, not one.
+        //
+        // "Appearance" was doing three jobs at once: personal theming, tracker
+        // layout, and third-party content toggles. Someone looking for colours
+        // has no reason to expect "do tracker descriptions appear" to live
+        // beside them — and the theming half is the part the notebook
+        // direction expects to keep growing, so it needs room of its own.
+        // Split per the 2026-08-28 settings audit.
+        personalization
+        gamePagesAndTrackers
+    }
+
+    private var personalization: some View {
         Section {
             ColorPicker("Accent color", selection: accentBinding, supportsOpacity: false)
-
-            Picker("Tracker display", selection: trackerDisplayBinding) {
-                ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
-                    Text(choice.label).tag(choice)
-                }
-            }
 
             Picker("Game page background", selection: pageBackgroundBinding) {
                 ForEach(ThemePageBackground.allCases, id: \.rawValue) { choice in
@@ -41,17 +48,6 @@ struct AppearanceSettingsSection: View {
                     }
                 }
             }
-
-            Toggle("Show RetroAchievements art", isOn: $showRAArt)
-
-            Toggle("Show item hints", isOn: Binding(
-                get: { settings?.showItemHints ?? true },
-                set: { newValue in
-                    let s = ensureSettings()
-                    s.showItemHints = newValue
-                    save(s)
-                }
-            ))
 
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
@@ -68,7 +64,7 @@ struct AppearanceSettingsSection: View {
             // inside a binding setter, and trimmed whitespace mid-word so a
             // space could never be typed. Same rule the game page follows for
             // its notes and review fields.
-            DisclosureGroup("Star names", isExpanded: $starNamesExpanded) {
+            DisclosureGroup("Rating labels", isExpanded: $starNamesExpanded) {
                 ForEach(1...5, id: \.self) { star in
                     HStack {
                         Text("\(star)★")
@@ -87,7 +83,10 @@ struct AppearanceSettingsSection: View {
                 if open { loadStarDrafts() } else { commitStarNames() }
             }
 
-            Button("Reset to defaults", role: .destructive) {
+            // Names exactly what it resets. It was "Reset to defaults" while
+            // resetting four of the seven preference families in the old
+            // section — a label that promised more than it did.
+            Button("Reset colors, background & rating labels", role: .destructive) {
                 let s = ensureSettings()
                 s.accentHex = nil
                 s.statusColorsData = nil
@@ -97,9 +96,41 @@ struct AppearanceSettingsSection: View {
                 save(s)
             }
         } header: {
-            Text("Appearance")
+            Text("Personalization")
         } footer: {
-            Text("Colors and star names sync to your other devices via iCloud. A blank star name keeps the built-in word. Achievement art comes from RetroAchievements and is shown only on imported sets. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location.")
+            Text("Everything here syncs to your other devices through iCloud. A blank rating label keeps the built-in word.")
+        }
+    }
+
+    /// What shows up ON game and tracker surfaces — as opposed to what the app
+    /// looks like. Both defaults here are overridden per game from the game's
+    /// own ⋯ menu.
+    private var gamePagesAndTrackers: some View {
+        Section {
+            Picker("Default tracker layout", selection: trackerDisplayBinding) {
+                ForEach(TrackerDisplay.allCases, id: \.rawValue) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+
+            Toggle("Show tracker hints", isOn: Binding(
+                get: { settings?.showItemHints ?? true },
+                set: { newValue in
+                    let s = ensureSettings()
+                    s.showItemHints = newValue
+                    save(s)
+                }
+            ))
+
+            Toggle("Show achievement badges", isOn: $showRAArt)
+        } header: {
+            Text("Game pages & trackers")
+        } footer: {
+            // States the sync rule once, and names the exception, rather than
+            // leaving someone to infer storage from section membership — a
+            // preference that changes on one device and not another otherwise
+            // looks like broken iCloud sync.
+            Text("These are library-wide defaults; a game's ⋯ menu overrides them for that game. Layout and hints sync through iCloud. Achievement badges are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
         }
     }
 
