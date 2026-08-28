@@ -28,6 +28,10 @@ TORCH_DEEP  = (138, 74, 18)
 INK         = (239, 234, 251)
 MUTED       = (153, 144, 184)
 
+# Keep these in step with the hero in src/pages/index.astro.
+PHONE_SHOT = "iphone-02-game-page-hollow.webp"
+IPAD_SHOT  = "ipad-01-split-tracker.webp"
+
 PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
 SANS  = "/System/Library/Fonts/SFNS.ttf"
 
@@ -67,12 +71,15 @@ def devices(pair, height):
     keep text clear of the art — the square's URL used to land on top of the
     phone because nothing was measuring this.
     """
-    phone = shot("iphone-01-home-shelf.webp", height)
+    # Tracks the homepage hero deliberately — the point of this pairing is
+    # that a link preview looks like the page it links to. The phone was the
+    # Home shelf until build 32 rebuilt the game page around its own art;
+    # the header is what the app looks like now, so it leads here too.
+    phone = shot(PHONE_SHOT, height)
     if not pair:
         return phone
 
-    pad = shot("ipad-01-split-tracker.webp", round(height * 0.74))
-    phone = shot("iphone-01-home-shelf.webp", height)
+    pad = shot(IPAD_SHOT, round(height * 0.74))
     overlap = round(phone.width * 0.46)
     canvas = Image.new("RGBA", (phone.width + pad.width - overlap, height), (0, 0, 0, 0))
     # iPad behind and slightly high, phone in front-left — the arrangement the
