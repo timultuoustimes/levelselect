@@ -74,6 +74,15 @@ struct Build31Tests {
         #expect(theme.starName(for: 5) == nil)   // blank → built-in label
     }
 
+    /// Only the ends are trimmed — a name is words, and "comfort game" has a
+    /// space in the middle. (The editor also stopped trimming mid-keystroke,
+    /// which made a space impossible to type at all.)
+    @Test func starNamesKeepInternalSpaces() {
+        let theme = ThemeSettings()
+        theme.starNames = ["", "", "  comfort game  ", "", ""]
+        #expect(theme.starName(for: 3) == "comfort game")
+    }
+
     @Test func allBlankStarNamesStoreNothing() {
         let theme = ThemeSettings()
         theme.starNames = ["A"]

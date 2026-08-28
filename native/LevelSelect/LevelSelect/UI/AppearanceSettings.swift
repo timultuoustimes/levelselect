@@ -10,6 +10,12 @@ struct AppearanceSettingsSection: View {
     /// Device-local, not synced: it's a display preference, like stats order.
     @AppStorage("levelselect.showRAArt") private var showRAArt = true
 
+    /// Star-name editing buffer. Always exactly five entries so the fields can
+    /// index it directly; loaded when the group opens, written back when it
+    /// closes or a field is submitted.
+    @State private var starDrafts = Array(repeating: "", count: 5)
+    @State private var starNamesExpanded = false
+
     private var settings: ThemeSettings? { themeSettings.first }
 
     var body: some View {
@@ -47,18 +53,30 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
-            DisclosureGroup("Star names") {
+            // Typing edits LOCAL state and commits at a boundary (submit, or
+            // closing the group), never per keystroke. A binding that wrote
+            // straight through committed the context on every character —
+            // which republished the @Query, re-ran ThemePalette.refresh from
+            // inside a binding setter, and trimmed whitespace mid-word so a
+            // space could never be typed. Same rule the game page follows for
+            // its notes and review fields.
+            DisclosureGroup("Star names", isExpanded: $starNamesExpanded) {
                 ForEach(1...5, id: \.self) { star in
                     HStack {
                         Text("\(star)★")
                             .font(.callout.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .frame(width: 32, alignment: .leading)
-                        TextField(RatingControl.labels[star - 1], text: starNameBinding(star))
+                        TextField(RatingControl.labels[star - 1], text: $starDrafts[star - 1])
                             .textFieldStyle(.plain)
                             .multilineTextAlignment(.trailing)
+                            .submitLabel(.done)
+                            .onSubmit { commitStarNames() }
                     }
                 }
+            }
+            .onChange(of: starNamesExpanded) { _, open in
+                if open { loadStarDrafts() } else { commitStarNames() }
             }
 
             Button("Reset to defaults", role: .destructive) {
@@ -67,6 +85,7 @@ struct AppearanceSettingsSection: View {
                 s.statusColorsData = nil
                 s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
                 s.starNamesData = nil
+                starDrafts = Array(repeating: "", count: 5)
                 save(s)
             }
         } header: {
@@ -131,21 +150,24 @@ struct AppearanceSettingsSection: View {
         )
     }
 
-    private func starNameBinding(_ star: Int) -> Binding<String> {
-        Binding(
-            get: {
-                let names = settings?.starNames ?? []
-                return star <= names.count ? names[star - 1] : ""
-            },
-            set: { text in
-                let s = ensureSettings()
-                var names = s.starNames
-                while names.count < 5 { names.append("") }
-                names[star - 1] = text
-                s.starNames = names
-                save(s)
-            }
-        )
+    /// Stored names → the five-slot buffer.
+    private func loadStarDrafts() {
+        let names = settings?.starNames ?? []
+        starDrafts = (0..<5).map { $0 < names.count ? names[$0] : "" }
+    }
+
+    /// Buffer → stored names, once, and only when something actually changed.
+    /// (The group can close for reasons other than an edit — a scroll that
+    /// recycles the row, leaving the screen — and a no-op write would still
+    /// stamp sync metadata on the theme record.)
+    private func commitStarNames() {
+        let trimmed = starDrafts.map { $0.trimmingCharacters(in: .whitespaces) }
+        let stored = settings?.starNames ?? []
+        let current = (0..<5).map { $0 < stored.count ? stored[$0] : "" }
+        guard trimmed != current else { return }
+        let s = ensureSettings()
+        s.starNames = trimmed
+        save(s)
     }
 
     private func ensureSettings() -> ThemeSettings {
