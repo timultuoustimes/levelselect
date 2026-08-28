@@ -34,6 +34,14 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
+            if pageBackgroundBinding.wrappedValue == .cover {
+                Picker("Backdrop strength", selection: backdropIntensityBinding) {
+                    ForEach(BackdropIntensity.allCases) { choice in
+                        Text(choice.label).tag(choice)
+                    }
+                }
+            }
+
             Toggle("Show RetroAchievements art", isOn: $showRAArt)
 
             Toggle("Show item hints", isOn: Binding(
@@ -145,6 +153,20 @@ struct AppearanceSettingsSection: View {
                 var map = s.statusColors
                 map[status.rawValue] = color.hexString()
                 s.statusColors = map
+                save(s)
+            }
+        )
+    }
+
+    private var backdropIntensityBinding: Binding<BackdropIntensity> {
+        Binding(
+            get: {
+                settings?.backdropIntensityRaw
+                    .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard
+            },
+            set: { choice in
+                let s = ensureSettings()
+                s.backdropIntensityRaw = choice.rawValue
                 save(s)
             }
         )

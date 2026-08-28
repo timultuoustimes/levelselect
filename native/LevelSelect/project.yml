@@ -172,6 +172,10 @@ targets:
       # lookups just come back empty there — harmless, same fallback path as
       # a corrupt/missing bundle resource on the phone.
       - path: LevelSelect/Services/BuiltinTrackers.swift
+      # Repository.addImage downscales through this (Foundation + ImageIO
+      # only, no UI). The watch never adds an image itself, but it shares
+      # Repository wholesale, so it has to be able to compile the call.
+      - path: LevelSelect/Services/ImageIngest.swift
       - path: Watch
     settings:
       base:

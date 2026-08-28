@@ -8,7 +8,8 @@ struct GameDetailView: View {
     @State private var confirmingDelete = false
     @State private var fixingMatch = false
     @State private var arrangingSections = false
-    @State private var pickingCover = false
+    /// Which artwork role the picker is open for, if any.
+    @State private var pickingArtwork: ArtworkRole?
     /// Library-wide reading preference, device-local like the Stats cards.
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
     @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
@@ -314,10 +315,18 @@ struct GameDetailView: View {
                     } label: {
                         Label("Arrange Sections…", systemImage: "arrow.up.arrow.down")
                     }
-                    Button {
-                        pickingCover = true
-                    } label: {
-                        Label("Change Cover…", systemImage: "photo.on.rectangle.angled")
+                    Menu("Artwork") {
+                        ForEach(ArtworkRole.assignable) { role in
+                            Button {
+                                pickingArtwork = role
+                            } label: {
+                                Label(game.pointer(for: role) == nil
+                                      ? "Choose \(role.label)…"
+                                      : "Change \(role.label)…",
+                                      systemImage: game.pointer(for: role) == nil
+                                      ? "photo.on.rectangle.angled" : "checkmark")
+                            }
+                        }
                     }
                     Button {
                         fixingMatch = true
@@ -341,8 +350,8 @@ struct GameDetailView: View {
         .sheet(isPresented: $arrangingSections) {
             GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
         }
-        .sheet(isPresented: $pickingCover) {
-            CoverPickerView(game: game)
+        .sheet(item: $pickingArtwork) { role in
+            ArtworkPickerView(game: game, role: role)
         }
         .alert("New Playthrough", isPresented: $namingNewPlaythrough) {
             TextField("Name", text: $playthroughName)
@@ -823,37 +832,61 @@ struct GameDetailView: View {
         .ignoresSafeArea()
     }
 
+    /// The art behind the header.
+    ///
+    /// Prefers whatever the backdrop role resolves to — which is a chosen
+    /// image, else an IGDB artwork, else the cover. That order matters more
+    /// than the blur does: a 3:4 cover scaled to fill a 420pt band gets
+    /// cropped to a narrow horizontal slice of its middle, usually the least
+    /// characteristic part of it. Artworks are 16:9 and drawn to be
+    /// backgrounds, and the app was already fetching them and doing nothing
+    /// with them.
     @ViewBuilder
     private var coverBackdrop: some View {
-        if let s = game.displayCoverURLString, let url = URL(string: s) {
-                AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 420)
-                            .frame(maxWidth: .infinity)
-                            .clipped()
-                            .blur(radius: 60, opaque: true)
-                            .saturation(1.5)
-                            .opacity(0.55)
-                            .mask(
-                                LinearGradient(
-                                    stops: [
-                                        .init(color: .black, location: 0),
-                                        .init(color: .black.opacity(0.6), location: 0.55),
-                                        .init(color: .clear, location: 1),
-                                    ],
-                                    startPoint: .top, endPoint: .bottom
-                                )
-                            )
-                    }
-                }
+        let intensity = ThemePalette.backdropIntensity
+        if intensity != .off {
+            ArtworkView(game.resolvedArtwork(.backdrop))
+                .frame(height: 420)
+                .frame(maxWidth: .infinity)
+                .clipped()
+                .blur(radius: intensity.blurRadius, opaque: true)
+                .saturation(intensity.saturation)
+                .opacity(intensity.opacity)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black.opacity(0.6), location: 0.55),
+                            .init(color: .clear, location: 1),
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
                 .allowsHitTesting(false)
         }
     }
 
     // MARK: Sections
+
+    /// The game's name — as its logo when one is set, as text otherwise.
+    ///
+    /// Text is not a degraded fallback here, it's the default, and it comes
+    /// BACK at accessibility type sizes: a logo is an image of text, it can't
+    /// grow with Dynamic Type, and a fixed 44pt wordmark beside 60pt body
+    /// copy reads as broken. The navigation title stays real text regardless,
+    /// so VoiceOver, the back button and the Mac window title are unaffected.
+    @ViewBuilder
+    private var gameTitle: some View {
+        let artwork = game.resolvedArtwork(.logo)
+        if !artwork.isEmpty, !typeSize.isAccessibilitySize {
+            ArtworkView(artwork, contentMode: .fit)
+                .frame(maxWidth: 260, maxHeight: 76, alignment: .leading)
+                .accessibilityLabel(game.name)
+        } else {
+            Text(game.name)
+                .font(.title2.bold())
+        }
+    }
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -873,8 +906,7 @@ struct GameDetailView: View {
                     .accessibilityLabel("Enlarge cover")
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(game.name)
-                        .font(.title2.bold())
+                    gameTitle
 
                     HStack(spacing: 6) {
                         Image(systemName: game.status.systemImage)

@@ -15,6 +15,8 @@ enum ThemePalette {
     private static var statusOverrides: [GameStatus: Color] = [:]
     /// Custom words on the five stars ([] = the built-in labels).
     private(set) static var starNames: [String] = []
+    /// How hard the game-page backdrop reads.
+    private(set) static var backdropIntensity: BackdropIntensity = .standard
 
     /// The label a rating wears: the user's word if set, the built-in if not.
     static func starLabel(for rating: Int) -> String {
@@ -58,6 +60,8 @@ enum ThemePalette {
         }
         statusOverrides = overrides
         starNames = settings?.starNames ?? []
+        backdropIntensity = settings?.backdropIntensityRaw
+            .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard
     }
 
     /// The single settings record (created on first use). Duplicates from a
