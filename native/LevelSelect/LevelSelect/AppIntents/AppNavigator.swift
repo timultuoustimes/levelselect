@@ -17,6 +17,21 @@ final class AppNavigator {
     /// Currently selected tab (bound to the RootView TabView).
     var selectedTab: LSTab = .home
 
+    /// Bumped when the theme has finished changing, to force the tab tree to
+    /// re-read `ThemePalette`'s statics.
+    ///
+    /// It lives here, and is bumped only when Settings CLOSES, because the
+    /// tree is keyed off it — and re-keying a view destroys it. Bumping this
+    /// on every theme edit tore down the whole TabView mid-edit, which reset
+    /// HomeTab's `@State` and slammed the Settings sheet shut. Tapping any
+    /// colour, or moving any slider in the colour picker, threw you back to
+    /// Home before you could choose: the first touch was the last one.
+    ///
+    /// The real fix is making `ThemePalette` observable so views re-render
+    /// where they read it, rather than the tree being rebuilt wholesale. That
+    /// is 156 call sites and a separate job.
+    var themeRevision = 0
+
     /// A game to push onto the Home stack (consumed by HomeTab).
     var pendingGameID: UUID?
 

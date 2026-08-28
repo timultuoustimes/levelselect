@@ -16,6 +16,8 @@ struct AppearanceSettingsSection: View {
     @State private var starDrafts = Array(repeating: "", count: 5)
     @State private var starNamesExpanded = false
     @State private var arrangingPages = false
+    /// Pending debounced write for the colour pickers. See `scheduleSave`.
+    @State private var themeCommit: Task<Void, Never>?
     // Same keys the game page reads — this sheet is the one editor for them.
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
     @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
@@ -32,6 +34,7 @@ struct AppearanceSettingsSection: View {
         // direction expects to keep growing, so it needs room of its own.
         // Split per the 2026-08-28 settings audit.
         personalization
+            .onDisappear { flushThemeCommit() }
         gamePagesAndTrackers
             .sheet(isPresented: $arrangingPages) {
                 GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
@@ -56,24 +59,6 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
-            // Each family resets on its own now. One "Reset colors, background
-            // & rating labels" button meant that fixing a backdrop you'd
-            // wandered too far from also threw away five rating labels you'd
-            // written by hand — and the labels are authored personal content,
-            // not a setting. The old button also silently skipped backdrop
-            // strength, so "reset background" didn't.
-            //
-            // Each appears only when there is something to undo. Three
-            // permanent red buttons that mostly do nothing are their own kind
-            // of noise.
-            if backgroundIsCustomised {
-                Button("Reset background", role: .destructive) {
-                    let s = ensureSettings()
-                    s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
-                    s.backdropIntensityRaw = nil
-                    save(s)
-                }
-            }
 
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
@@ -83,14 +68,6 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
-            if colorsAreCustomised {
-                Button("Reset colors", role: .destructive) {
-                    let s = ensureSettings()
-                    s.accentHex = nil
-                    s.statusColorsData = nil
-                    save(s)
-                }
-            }
 
             // Typing edits LOCAL state and commits at a boundary (submit, or
             // closing the group), never per keystroke. A binding that wrote
@@ -113,19 +90,44 @@ struct AppearanceSettingsSection: View {
                             .onSubmit { commitStarNames() }
                     }
                 }
-                // Inside the group, because these are five things you wrote
-                // and this is the only thing that unwrites them.
-                if settings?.starNamesData != nil {
-                    Button("Reset rating labels", role: .destructive) {
-                        let s = ensureSettings()
-                        s.starNamesData = nil
-                        starDrafts = Array(repeating: "", count: 5)
-                        save(s)
-                    }
-                }
             }
             .onChange(of: starNamesExpanded) { _, open in
                 if open { loadStarDrafts() } else { commitStarNames() }
+            }
+
+            // Collapsed, and only present when something can actually be
+            // undone. Three loose red rows interleaved with the controls they
+            // undid put the section straight back to the clutter the settings
+            // audit was about — a destructive action shouting between two
+            // ordinary ones. Folded away, they're still one tap from where
+            // they apply, and invisible on a library nobody has themed.
+            if colorsAreCustomised || backgroundIsCustomised || settings?.starNamesData != nil {
+                DisclosureGroup("Reset") {
+                    if colorsAreCustomised {
+                        Button("Reset colors", role: .destructive) {
+                            let s = ensureSettings()
+                            s.accentHex = nil
+                            s.statusColorsData = nil
+                            save(s)
+                        }
+                    }
+                    if backgroundIsCustomised {
+                        Button("Reset background", role: .destructive) {
+                            let s = ensureSettings()
+                            s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
+                            s.backdropIntensityRaw = nil
+                            save(s)
+                        }
+                    }
+                    if settings?.starNamesData != nil {
+                        Button("Reset rating labels", role: .destructive) {
+                            let s = ensureSettings()
+                            s.starNamesData = nil
+                            starDrafts = Array(repeating: "", count: 5)
+                            save(s)
+                        }
+                    }
+                }
             }
 
         } header: {
@@ -198,7 +200,7 @@ struct AppearanceSettingsSection: View {
             set: { color in
                 let s = ensureSettings()
                 s.accentHex = color.hexString()
-                save(s)
+                scheduleSave(s)
             }
         )
     }
@@ -240,7 +242,7 @@ struct AppearanceSettingsSection: View {
                 var map = s.statusColors
                 map[status.rawValue] = color.hexString()
                 s.statusColors = map
-                save(s)
+                scheduleSave(s)
             }
         )
     }
@@ -281,6 +283,38 @@ struct AppearanceSettingsSection: View {
 
     private func ensureSettings() -> ThemeSettings {
         ThemePalette.fetchOrCreate(in: context)
+    }
+
+    /// A colour picker reports EVERY value as you drag through the spectrum,
+    /// and `save` commits the context and re-runs `ThemePalette.refresh` —
+    /// which writes observable statics the whole app watches. Doing that from
+    /// inside a binding setter re-rendered this sheet's ancestors mid-gesture,
+    /// so the sheet closed on the first touch and a colour could never be
+    /// adjusted, only stabbed at.
+    ///
+    /// Same disease as the rating-label fields, same cure: keep the cheap
+    /// in-memory write immediate so the picker stays coherent under your
+    /// finger, and commit at a boundary. The boundary for a continuous control
+    /// is "you stopped moving it".
+    private func scheduleSave(_ s: ThemeSettings) {
+        s.updatedAt = .now
+        themeCommit?.cancel()
+        themeCommit = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            PersistenceMonitor.shared.commit(context)
+            ThemePalette.refresh(from: s)
+        }
+    }
+
+    /// Closing the sheet mid-debounce must not lose the colour.
+    private func flushThemeCommit() {
+        guard themeCommit != nil else { return }
+        themeCommit?.cancel()
+        themeCommit = nil
+        guard let s = settings else { return }
+        PersistenceMonitor.shared.commit(context)
+        ThemePalette.refresh(from: s)
     }
 
     private func save(_ s: ThemeSettings) {

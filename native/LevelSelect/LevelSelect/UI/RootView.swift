@@ -11,7 +11,6 @@ struct RootView: View {
     @State private var generation = TrackerGenerationStore.shared
     @State private var syncStatus = SyncStatusMonitor.shared
     // Palette version bump forces dependent views to re-read theme colors.
-    @State private var themeVersion = 0
     @State private var showingSplash = true
     @State private var nav = AppNavigator.shared
 
@@ -35,7 +34,7 @@ struct RootView: View {
             .tint(LSTheme.accent)
             .staleSessionGuard()
             .overlappingTimerGuard()
-            .id(themeVersion)
+            .id(nav.themeRevision)
 
             if showingSplash {
                 SplashView()
@@ -111,8 +110,9 @@ struct RootView: View {
             ThemePalette.refresh(from: themeSettings.first)
         }
         .onChange(of: themeSettings.first?.updatedAt) { _, _ in
+            // Refresh the values, but do NOT re-key the tree here — see
+            // `AppNavigator.themeRevision`. Settings bumps that on close.
             ThemePalette.refresh(from: themeSettings.first)
-            themeVersion += 1
         }
         .onChange(of: scenePhase) { _, phase in
             // Backgrounding is the last reliable moment to persist — commit

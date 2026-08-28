@@ -194,6 +194,11 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            // The tab tree is keyed off this, so bumping it destroys and
+            // rebuilds every tab. That is fine here — this sheet is on its way
+            // out — and was NOT fine on every theme edit, which is what shut
+            // this sheet the moment you touched a colour.
+            .onDisappear { AppNavigator.shared.themeRevision += 1 }
         }
     }
 
