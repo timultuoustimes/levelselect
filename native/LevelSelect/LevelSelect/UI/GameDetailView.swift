@@ -988,20 +988,37 @@ struct GameDetailView: View {
                     factsPanel(fills: true)
                 }
             } else {
+                // Two spacers, so the pair is CENTRED rather than left-flush.
+                //
+                // The panel takes the width its words need — without that it
+                // stretched to the page margin and carried a stripe of empty
+                // haze past the end of its own longest line. But hugging on
+                // the right alone left the pair ending short of the margin
+                // while the title beneath it was centred, so the header held
+                // two different alignments at once and the artwork looked
+                // shunted to one side.
+                //
+                // The art band is its own zone: cover, panel and title all
+                // centre in it. The chips and stats below sit on the page and
+                // stay left-aligned, which is a different register, not an
+                // inconsistency.
+                //
+                // Both spacers collapse to nothing when space is tight, so a
+                // long platform name still gets the room.
                 HStack(alignment: .top, spacing: 10) {
+                    Spacer(minLength: 0)
                     coverThumb(width: Self.coverWidth)
                     factsPanel(fills: false)
                         // Dropped slightly so the panel reads as sitting
                         // against the cover rather than being ruled off level
                         // with it.
                         .padding(.top, 26)
-                    // The panel takes the width its words need; this absorbs
-                    // whatever is left. Without it the panel stretched to the
-                    // page margin and carried a stripe of empty haze past the
-                    // end of its own longest line — which made the header read
-                    // as edge-to-edge furniture rather than a composed object.
-                    // It collapses to nothing when space is tight, so a long
-                    // platform name still gets the room.
+                        // Spacers are greedy and text is compressible, so
+                        // without this the two of them split the row with the
+                        // panel and wrapped "Now Playing" onto a second line.
+                        // The panel is measured first; the spacers divide
+                        // what's actually left.
+                        .layoutPriority(1)
                     Spacer(minLength: 0)
                 }
             }
@@ -1037,6 +1054,21 @@ struct GameDetailView: View {
                 }
             }
             .font(.subheadline)
+            // This line sets the panel's width, so it must not be willing to
+            // wrap: a wrapping Text answers a narrow proposal by growing
+            // taller instead of asking for more room, so the panel settled
+            // small and the centring spacers pocketed the difference — which
+            // is how "Now Playing" ended up on two lines inside a panel with
+            // space to spare. One line makes its ideal width honest, which is
+            // what `layoutPriority` on the panel then acts on.
+            //
+            // NOT `fixedSize`: that makes the width a demand rather than a
+            // preference, and the panel pushed the whole page column wider
+            // than the screen — every section divider below ran off the right
+            // edge. Scaling is the give of last resort, for the rare platform
+            // `PlatformShort` has no abbreviation for.
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
 
             RatingControl(rating: $game.rating)
 
