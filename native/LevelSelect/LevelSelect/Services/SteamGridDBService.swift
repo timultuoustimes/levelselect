@@ -68,15 +68,43 @@ enum SteamGridDBService {
         return id
     }
 
-    /// Image URLs for one role, best-scored first (SteamGridDB's own order).
-    static func artwork(for game: Game, role: ArtworkRole) async -> [String] {
-        guard let kind = Kind(role: role),
-              let id = await gameID(named: game.name)
-        else { return [] }
+    /// One candidate image: what the picker draws, and what it stores.
+    ///
+    /// These are NOT the same URL and the difference is not cosmetic. Street
+    /// Fighter 6 has fifty heroes; at full size that is roughly 110 MB of
+    /// 1920x620 art fetched at once to fill a grid of 96pt tiles, which is
+    /// why the picker sat there spinning. SteamGridDB ships a thumbnail for
+    /// every asset — 146 KB against 2.2 MB for the same hero, about fifteen
+    /// times smaller — and it is the only thing the grid ever needed.
+    struct Artwork: Identifiable, Hashable {
+        /// Small preview, for the grid.
+        let thumb: String
+        /// Full resolution, stored on the game when chosen.
+        let full: String
+        var id: String { full }
+    }
+
+    /// Artwork for one role, best-scored first (SteamGridDB's own order).
+    ///
+    /// `nil` means the lookup FAILED; `[]` means it succeeded and this game
+    /// has none. The picker says different things for the two, because
+    /// "SteamGridDB has no logo for this game" and "we couldn't reach
+    /// SteamGridDB" send a user to very different places — and collapsing
+    /// them meant a request that timed out looked exactly like a game nobody
+    /// had drawn a logo for.
+    static func artwork(for game: Game, role: ArtworkRole) async -> [Artwork]? {
+        guard let kind = Kind(role: role) else { return [] }
+        guard let id = await gameID(named: game.name) else { return nil }
 
         let rows = await post(["action": "assets", "kind": kind.rawValue, "gameID": id])
-        guard let data = rows?["data"] as? [[String: Any]] else { return [] }
-        return data.compactMap { $0["url"] as? String }
+        guard let rows else { return nil }
+        guard let data = rows["data"] as? [[String: Any]] else { return [] }
+        return data.compactMap { row in
+            guard let full = row["url"] as? String else { return nil }
+            // Fall back to the full image if a row somehow has no thumbnail —
+            // one heavy tile is better than a hole in the grid.
+            return Artwork(thumb: row["thumb"] as? String ?? full, full: full)
+        }
     }
 
     // MARK: Transport

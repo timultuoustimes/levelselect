@@ -30,7 +30,12 @@ struct ArtworkPickerView: View {
     @State private var igdbArtworks: [String] = []
     @State private var igdbShots: [String] = []
     @State private var igdbLogos: [String] = []
-    @State private var sgdbArt: [String] = []
+    @State private var sgdbArt: [SteamGridDBService.Artwork] = []
+    /// How many SteamGridDB tiles are on screen. Even at thumbnail size, fifty
+    /// images arriving together is a stall you can watch; a first page loads
+    /// immediately and the rest come when asked for.
+    @State private var sgdbShown = 24
+    @State private var sgdbFailed = false
     @State private var loadingIGDB = true
     @State private var customURL = ""
     @State private var photoItem: PhotosPickerItem?
@@ -207,7 +212,9 @@ struct ArtworkPickerView: View {
                     aspect: 2.2, transparent: true)
             steamGridGallery("Logos from SteamGridDB", aspect: 2.2)
             if igdbLogos.isEmpty, sgdbArt.isEmpty, !loadingIGDB {
-                Text("No logo on IGDB for this game. Add your own image above, or paste a URL below — the game's name shows as text until you do.")
+                Text(sgdbFailed
+                     ? "Couldn't reach the artwork services just now. Add your own image above, or paste a URL below — the game's name shows as text until you do."
+                     : "No logo on IGDB or SteamGridDB for this game. Add your own image above, or paste a URL below — the game's name shows as text until you do.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -248,16 +255,26 @@ struct ArtworkPickerView: View {
         if !sgdbArt.isEmpty {
             section(title) {
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(sgdbArt, id: \.self) { url in
-                        Button { choose(url) } label: {
-                            CoverThumb(urlString: url)
+                    ForEach(sgdbArt.prefix(sgdbShown)) { art in
+                        Button { choose(art.full) } label: {
+                            // The THUMBNAIL is drawn; the full-size URL is what
+                            // gets stored. See `SteamGridDBService.Artwork`.
+                            CoverThumb(urlString: art.thumb)
                                 .frame(width: 96, height: 96 / aspect)
                                 .clipShape(.rect(cornerRadius: 8))
-                                .overlay { selectionBorder(pointer: url) }
+                                .overlay { selectionBorder(pointer: art.full) }
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel("\(title) option")
                     }
+                }
+                if sgdbArt.count > sgdbShown {
+                    Button("Show \(min(24, sgdbArt.count - sgdbShown)) more") {
+                        sgdbShown += 24
+                    }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
+                    .tint(LSTheme.accent)
                 }
             }
         }
@@ -465,7 +482,9 @@ struct ArtworkPickerView: View {
         // After IGDB, and never instead of it: IGDB is the app's source of
         // record for what a game IS, and its art is the publisher's. This
         // fills the gap, which for logos is most of the catalogue.
-        sgdbArt = await SteamGridDBService.artwork(for: game, role: role)
+        let found = await SteamGridDBService.artwork(for: game, role: role)
+        sgdbFailed = found == nil
+        sgdbArt = found ?? []
     }
 }
 
