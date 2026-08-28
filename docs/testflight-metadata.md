@@ -72,6 +72,43 @@ that need styling; hyphens are fine as literal characters).
 >
 > Thank you — it makes a real difference to a beta this small.
 
+## Framing screenshots (the `frames` CLI)
+
+The site's screenshots are device-framed. Apple Frames (the Shortcut) is
+installed on Tim's Mac and **cannot run there**: its frame images live in
+iCloud Drive, iCloud Drive is not syncing to that machine, and the shortcut
+fails with a bare "The file doesn't exist". `shortcuts run "Apple Frames"`
+hits the same wall.
+
+MacStories publishes a CLI that does not depend on the Shortcut or on iCloud
+Drive — it downloads its own assets. Installed 2026-08-28:
+
+```
+git clone https://github.com/viticci/frames-cli.git ~/Dev/tools/frames-cli
+ln -sf ~/Dev/tools/frames-cli/frames ~/.local/bin/frames
+curl -L -o /tmp/f.zip https://cdn.macstories.net/AppleFrames401.zip
+unzip -d ~/.local/share/apple-frames /tmp/f.zip
+frames setup ~/.local/share/apple-frames/Frames
+```
+
+`frames setup` with no path does a guided download, but it refuses to run
+non-interactively — hence fetching the zip directly and pointing at it.
+
+Usage:
+
+```
+frames info shot.png                       # which device did this come from
+frames frame -c "Cosmic Orange" *.PNG      # writes shot_framed.png beside each
+frames list                                # 55 devices, 252 frames
+frames doctor                              # when it stops working
+```
+
+Output is **1470x3000** for a 6.9" iPhone and matches the Shortcut's output
+exactly, so it is a drop-in for how the existing site shots were made. Resize
+to the site's sizes afterwards: 686x1400 iPhone, 1600x1226 iPad, webp.
+
+Video framing needs `brew install ffmpeg`; not installed, not needed yet.
+
 ## What to Test — build 32 (0.1.0)
 
 > (standing header above, then:)
