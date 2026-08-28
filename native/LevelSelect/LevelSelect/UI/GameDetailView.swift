@@ -707,8 +707,15 @@ struct GameDetailView: View {
         // — otherwise offset panels land outside the clip and vanish.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .animation(.spring(response: 0.5, dampingFraction: 0.85), value: stage)
-        .clipped()
-
+        // Clips HORIZONTALLY only. The panes slide in and out sideways and
+        // must not leak past the trailing edge — but the header art
+        // deliberately draws ABOVE this container, pulled up by the safe-area
+        // inset so it reaches under the navigation bar. A plain `.clipped()`
+        // cut off exactly that overhang, so on iPad in landscape with a
+        // compact tracker — the only combination that uses this layout — the
+        // backdrop started below the bars with a band of empty page above it,
+        // while the same page in portrait was fine.
+        .mask(Rectangle().padding(.vertical, -4_000))
     }
 
     private var trackerPanel: some View {
