@@ -1028,7 +1028,7 @@ struct GameDetailView: View {
             // Full-width, below the art: four chips and a stats row both want
             // the whole column, and neither is something you read at a glance
             // the way the title is.
-            OwnershipControl(ownership: $game.ownership)
+            OwnershipControl(ownership: $game.ownership, centered: true)
 
             if showGameStats {
                 GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))

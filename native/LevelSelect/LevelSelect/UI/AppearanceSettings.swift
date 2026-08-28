@@ -56,11 +56,39 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
+            // Each family resets on its own now. One "Reset colors, background
+            // & rating labels" button meant that fixing a backdrop you'd
+            // wandered too far from also threw away five rating labels you'd
+            // written by hand — and the labels are authored personal content,
+            // not a setting. The old button also silently skipped backdrop
+            // strength, so "reset background" didn't.
+            //
+            // Each appears only when there is something to undo. Three
+            // permanent red buttons that mostly do nothing are their own kind
+            // of noise.
+            if backgroundIsCustomised {
+                Button("Reset background", role: .destructive) {
+                    let s = ensureSettings()
+                    s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
+                    s.backdropIntensityRaw = nil
+                    save(s)
+                }
+            }
+
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     ColorPicker(selection: statusBinding(status), supportsOpacity: false) {
                         Label(status.sectionTitle, systemImage: status.systemImage)
                     }
+                }
+            }
+
+            if colorsAreCustomised {
+                Button("Reset colors", role: .destructive) {
+                    let s = ensureSettings()
+                    s.accentHex = nil
+                    s.statusColorsData = nil
+                    save(s)
                 }
             }
 
@@ -85,23 +113,21 @@ struct AppearanceSettingsSection: View {
                             .onSubmit { commitStarNames() }
                     }
                 }
+                // Inside the group, because these are five things you wrote
+                // and this is the only thing that unwrites them.
+                if settings?.starNamesData != nil {
+                    Button("Reset rating labels", role: .destructive) {
+                        let s = ensureSettings()
+                        s.starNamesData = nil
+                        starDrafts = Array(repeating: "", count: 5)
+                        save(s)
+                    }
+                }
             }
             .onChange(of: starNamesExpanded) { _, open in
                 if open { loadStarDrafts() } else { commitStarNames() }
             }
 
-            // Names exactly what it resets. It was "Reset to defaults" while
-            // resetting four of the seven preference families in the old
-            // section — a label that promised more than it did.
-            Button("Reset colors, background & rating labels", role: .destructive) {
-                let s = ensureSettings()
-                s.accentHex = nil
-                s.statusColorsData = nil
-                s.pageBackgroundRaw = ThemePageBackground.cover.rawValue
-                s.starNamesData = nil
-                starDrafts = Array(repeating: "", count: 5)
-                save(s)
-            }
         } header: {
             Text("Personalization")
         } footer: {
@@ -149,6 +175,19 @@ struct AppearanceSettingsSection: View {
             // looks like broken iCloud sync.
             Text("These are library-wide defaults; a game's own Tracker section overrides them for that game. Layout and hints sync through iCloud. Achievement badges and page arrangement are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
         }
+    }
+
+    private var colorsAreCustomised: Bool {
+        settings?.accentHex != nil || settings?.statusColorsData != nil
+    }
+
+    /// `backdropIntensityRaw` counts even though the strength picker is hidden
+    /// unless the background uses artwork — a stored value the UI isn't
+    /// currently showing is exactly the kind that gets stranded.
+    private var backgroundIsCustomised: Bool {
+        (settings?.pageBackgroundRaw ?? ThemePageBackground.cover.rawValue)
+            != ThemePageBackground.cover.rawValue
+            || settings?.backdropIntensityRaw != nil
     }
 
     // MARK: Bindings

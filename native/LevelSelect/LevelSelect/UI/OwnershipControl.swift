@@ -6,9 +6,24 @@ import SwiftUI
 struct OwnershipControl: View {
     /// Bound to `Game.ownership` (array of raw `Ownership` values).
     @Binding var ownership: [String]
+    /// Centred on the game page, where the header above it is centred too.
+    /// Left-aligned everywhere else — in the Add Game form these are one field
+    /// among many, and a centred row of chips in a column of left-aligned
+    /// labels reads as a mistake.
+    var centered = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
+        content
+            // Outside `ViewThatFits`, deliberately. Inside, a
+            // `maxWidth: .infinity` frame would make every candidate row
+            // "fit" and the measurement below would always pick the first.
+            .frame(maxWidth: .infinity,
+                   alignment: centered ? .center : .leading)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if typeSize.isAccessibilitySize {
             // Wrapping is right here and shrinking is not: someone who asked
             // for larger text should get larger text, on a second row.
