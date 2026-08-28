@@ -260,3 +260,45 @@ struct BackdropSourceTests {
         #expect(BackdropIntensity.standard.blurRadius > BackdropIntensity.bold.blurRadius)
     }
 }
+
+/// The seed images, whose SIZES are the whole point.
+///
+/// `@Attribute(.externalStorage)` picks a CloudKit field per value, by size:
+/// a small blob stays inline and mirrors as `CD_data` (BYTES), a large one
+/// goes to external storage and mirrors as `CD_data_ckAsset` (ASSET). Both
+/// are ordinary outputs of this app, so the schema must carry both fields —
+/// which means the seeder must write both sizes. Seeding only one is what
+/// made every small image fail to sync on 2026-08-28.
+@MainActor
+struct SeedImageSizeTests {
+
+    /// Core Data's external-storage threshold sits near 100KB. These assert
+    /// the seeds are unambiguously either side of it, not merely different.
+    @Test func seedImagesStraddleTheExternalStorageThreshold() throws {
+        #if LEGACY_IMPORT
+        let large = CloudKitSchemaSeeder.largeSeedImage
+        let small = CloudKitSchemaSeeder.smallSeedImage
+
+        #expect(large.count > 1_000_000,
+                "the large seed must be far above the threshold so it mirrors as an ASSET")
+        #expect(small.count < 10_000,
+                "the small seed must be far below the threshold so it mirrors as BYTES")
+
+        // Both must still be real, decodable images — CloudKit doesn't care,
+        // but a seed that isn't an image would mask a genuine ingest failure.
+        #expect(ImageIngest.pixelSize(of: large)?.width == 900)
+        #expect(ImageIngest.pixelSize(of: small)?.width == 8)
+        #endif
+    }
+
+    /// A logo-sized PNG — the case that actually broke — sits BELOW the
+    /// threshold, which is why the BYTES field is not optional.
+    @Test func realisticLogoSizeIsBelowTheThreshold() {
+        // Tim's Skate Story logo measured 121,056 bytes and Core Data still
+        // stored it inline (`length(ZDATA)` in the row, `_EXTERNAL_DATA`
+        // empty). Encoded here as the regression's own record.
+        let observedLogoBytes = 121_056
+        #expect(observedLogoBytes < 1_000_000,
+                "logos are small; the schema needs the inline BYTES field for them")
+    }
+}

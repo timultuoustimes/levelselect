@@ -89,6 +89,45 @@ enum CloudKitSchemaSeeder {
         UInt8(truncatingIfNeeded: value)
     }
 
+    /// A DELIBERATELY TINY image — the other half of the pair.
+    ///
+    /// Core Data keeps a small binary value inline rather than moving it to
+    /// external storage, and CloudKit then mirrors it as `CD_data` (BYTES)
+    /// instead of `CD_data_ckAsset` (ASSET). Real logos land here: a
+    /// wordmark PNG is a few tens of KB, and Tim's was 121KB and still
+    /// inline. Without this row, Production has no BYTES field and every
+    /// small image fails to sync forever.
+    ///
+    /// 8x8 flat colour, a few hundred bytes — far below any plausible
+    /// threshold, in the way `largeSeedImage` is far above one. The point of
+    /// both is to be unambiguous.
+    static var smallSeedImage: Data {
+        let side = 8
+        let bytesPerPixel = 4
+        var pixels = [UInt8](repeating: 0, count: side * side * bytesPerPixel)
+        for index in stride(from: 0, to: pixels.count, by: bytesPerPixel) {
+            pixels[index] = 0x8A       // R
+            pixels[index + 1] = 0x5C   // G
+            pixels[index + 2] = 0xFA   // B
+            pixels[index + 3] = 0xFF   // A
+        }
+        let provider = CGDataProvider(data: Data(pixels) as CFData)!
+        let image = CGImage(
+            width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: side * bytesPerPixel,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent)!
+
+        let out = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(
+            out, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
+        return out as Data
+    }
+
     /// Insert one fully-populated instance of every model in SchemaV1.
     /// Returns a short report for the UI.
     @discardableResult
@@ -300,25 +339,53 @@ enum CloudKitSchemaSeeder {
         badge.legacyID = marker
         context.insert(badge)
 
-        // --- GameImage (V3) ---
+        // --- GameImage (V3) — TWO of them, and the pair is the whole point ---
         //
-        // `data` carries a LARGE image on purpose — see `largeSeedImage`.
-        // CloudKit types this field from what it observes, and only an
-        // externally-stored value becomes an ASSET. A small one becomes
-        // BYTES, which caps the record at ~1MB and would break real photos.
-        let seedBytes = Self.largeSeedImage
-        let image = GameImage(role: .gallery, data: seedBytes)
-        image.userID = UUID()
-        image.deletedAt = now
-        image.legacyID = marker
-        image.caption = marker
-        image.roleRaw = ArtworkRole.gallery.rawValue
-        image.pixelWidth = 900
-        image.pixelHeight = 900
-        image.byteCount = seedBytes.count
-        image.addedAt = now
-        context.insert(image)
-        image.game = game
+        // `@Attribute(.externalStorage)` does not choose one CloudKit field.
+        // It chooses PER VALUE, by size: Core Data keeps a small blob inline
+        // and moves a large one to external storage, and the CloudKit mirror
+        // names them differently — `CD_data` (BYTES) versus
+        // `CD_data_ckAsset` (ASSET). Both are ordinary outputs of this app,
+        // so PRODUCTION MUST CONTAIN BOTH FIELDS.
+        //
+        // Seeding only a large image (the first fix, which corrected a real
+        // ASSET problem) left the BYTES field missing — and logos are exactly
+        // the small case, because wordmark PNGs compress tiny. Tim's 121KB
+        // Skate Story logo stayed inline, CloudKit reached for a `CD_data`
+        // that Production didn't have, and every sync failed with
+        // CKErrorDomain error 2, permanently and silently. Verified by
+        // pulling the store off the device: `length(ZDATA) = 121056` in the
+        // row, `_EXTERNAL_DATA` empty.
+        //
+        // So: one image comfortably OVER the threshold and one comfortably
+        // UNDER it. Never reduce this to a single row.
+        let largeBytes = Self.largeSeedImage
+        let largeImage = GameImage(role: .gallery, data: largeBytes)
+        largeImage.userID = UUID()
+        largeImage.deletedAt = now
+        largeImage.legacyID = marker
+        largeImage.caption = marker
+        largeImage.roleRaw = ArtworkRole.gallery.rawValue
+        largeImage.pixelWidth = 900
+        largeImage.pixelHeight = 900
+        largeImage.byteCount = largeBytes.count
+        largeImage.addedAt = now
+        context.insert(largeImage)
+        largeImage.game = game
+
+        let smallBytes = Self.smallSeedImage
+        let smallImage = GameImage(role: .logo, data: smallBytes)
+        smallImage.userID = UUID()
+        smallImage.deletedAt = now
+        smallImage.legacyID = marker
+        smallImage.caption = marker
+        smallImage.roleRaw = ArtworkRole.logo.rawValue
+        smallImage.pixelWidth = 8
+        smallImage.pixelHeight = 8
+        smallImage.byteCount = smallBytes.count
+        smallImage.addedAt = now
+        context.insert(smallImage)
+        smallImage.game = game
 
         // --- GameCollection ---
         let collection = GameCollection(name: marker, isBundle: true, sortIndex: 1)
@@ -382,7 +449,9 @@ enum CloudKitSchemaSeeder {
         }
 
         PersistenceMonitor.shared.commit(context)
-        return "Seeded 16 record types with all fields populated. Wait for Settings → iCloud to show Synced, verify in CloudKit Console (Development), then Deploy Schema Changes to Production. Purge afterwards."
+        return """
+        Seeded 16 record types with all fields populated, including TWO         GameImages — one large, one small — so the schema carries both         CD_data (BYTES) and CD_data_ckAsset (ASSET). Wait for Settings →         iCloud to show Synced, then verify in CloudKit Console         (Development). CHECK BOTH image fields are present before deploying:         a missing one means every image of that size fails to sync forever.         Then Deploy Schema Changes to Production, and Purge.
+        """
     }
 
     /// Hard-delete every seeded row. Schema changes are permanent once created,
