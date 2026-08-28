@@ -25,13 +25,14 @@ LevelSelect talks to a small backend (Supabase Edge Functions) for four features
 | **Game search & metadata** | The search text or game id you look up | Our proxy → [IGDB](https://www.igdb.com) (a Twitch service) to fetch titles, cover art, release dates, and genres |
 | **AI tracker generation** | The game's name, its public IGDB metadata, and (optionally) guide text or a guide URL you provide | Our generator → [Anthropic](https://www.anthropic.com)'s Claude API, which may also perform a web search for a game guide |
 | **RetroAchievements lookup** | A game name and system, or a RetroAchievements game id | Our proxy → [RetroAchievements](https://retroachievements.org) to find a game and fetch its published achievement list. These requests use **our** API key, not yours, and say nothing about who you are |
+| **Artwork lookup** | The game's name, then a SteamGridDB game id | Our proxy → [SteamGridDB](https://www.steamgriddb.com) to fetch covers, backdrops and logos. These requests use **our** API key, not yours, and say nothing about who you are |
 | **Map search** *(future feature)* | The game's name and optionally a wiki page URL | Our finder → Anthropic's Claude API with web search |
 
 Additionally, entirely from your device:
 
 - **Your RetroAchievements account** *(optional)*: if you connect one, your RetroAchievements username and Web API key are stored in your device's **Keychain** and are sent **directly from your device to retroachievements.org** to read what you've earned. They never pass through our backend, and they are deliberately not synced between your devices — you enter them on each device, or not at all. Removing them in Settings deletes them from the Keychain. See "Why your RetroAchievements key skips our servers" below.
 - **Deku Deals wishlist**: if you configure a wishlist, the app fetches your **public** Deku Deals wishlist JSON directly from dekudeals.com. Nothing about you is sent beyond that public URL request.
-- **Cover art and video metadata**: images load directly from IGDB's image CDN, and YouTube video titles/thumbnails load via YouTube's public oEmbed endpoint for links you add.
+- **Cover art and video metadata**: images load directly from IGDB's and SteamGridDB's image CDNs, and YouTube video titles/thumbnails load via YouTube's public oEmbed endpoint for links you add.
 
 Requests to our backend include a **random per-install identifier** (a UUID the app generates on first launch) used only to enforce fair-use rate limits. It is not derived from your device's hardware, not connected to your identity or iCloud account, and resets if you delete and reinstall the app.
 

@@ -22,3 +22,6 @@ verify_jwt = false
 
 [functions.map-finder]
 verify_jwt = false
+
+[functions.steamgriddb-proxy]
+verify_jwt = false

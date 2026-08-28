@@ -30,6 +30,7 @@ struct ArtworkPickerView: View {
     @State private var igdbArtworks: [String] = []
     @State private var igdbShots: [String] = []
     @State private var igdbLogos: [String] = []
+    @State private var sgdbArt: [String] = []
     @State private var loadingIGDB = true
     @State private var customURL = ""
     @State private var photoItem: PhotosPickerItem?
@@ -191,9 +192,11 @@ struct ArtworkPickerView: View {
         case .cover:
             gallery("Covers from IGDB", ids: igdbCovers, size: "t_cover_big", aspect: 0.75)
             gallery("Artwork", ids: igdbArtworks, size: "t_720p", aspect: 1.78)
+            steamGridGallery("Covers from SteamGridDB", aspect: 0.75)
         case .backdrop:
             gallery("Artwork", ids: igdbArtworks, size: "t_720p", aspect: 1.78)
             gallery("Screenshots", ids: igdbShots, size: "t_screenshot_med", aspect: 1.78)
+            steamGridGallery("Backdrops from SteamGridDB", aspect: 3.1)
         case .logo:
             // This used to say "IGDB doesn't publish logos", which was simply
             // wrong — and wrong in user-facing copy, which is worse. IGDB has
@@ -202,7 +205,8 @@ struct ArtworkPickerView: View {
             // black. See `loadIGDB` and `igdbURL`.
             gallery("Logos from IGDB", ids: igdbLogos, size: "t_720p",
                     aspect: 2.2, transparent: true)
-            if igdbLogos.isEmpty, !loadingIGDB {
+            steamGridGallery("Logos from SteamGridDB", aspect: 2.2)
+            if igdbLogos.isEmpty, sgdbArt.isEmpty, !loadingIGDB {
                 Text("No logo on IGDB for this game. Add your own image above, or paste a URL below — the game's name shows as text until you do.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
@@ -233,6 +237,29 @@ struct ArtworkPickerView: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// SteamGridDB hands back finished URLs rather than image IDs, so it needs
+    /// its own grid — and its images are already the right format, PNG where
+    /// they have transparency, without us choosing an extension.
+    @ViewBuilder
+    private func steamGridGallery(_ title: String, aspect: CGFloat) -> some View {
+        if !sgdbArt.isEmpty {
+            section(title) {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(sgdbArt, id: \.self) { url in
+                        Button { choose(url) } label: {
+                            CoverThumb(urlString: url)
+                                .frame(width: 96, height: 96 / aspect)
+                                .clipShape(.rect(cornerRadius: 8))
+                                .overlay { selectionBorder(pointer: url) }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(title) option")
+                    }
+                }
+            }
         }
     }
 
@@ -434,6 +461,11 @@ struct ArtworkPickerView: View {
         igdbArtworks = art
             .filter { !IGDBImageType.notScenery.contains($0["image_type"] as? Int ?? 0) }
             .compactMap { $0["image_id"] as? String }
+
+        // After IGDB, and never instead of it: IGDB is the app's source of
+        // record for what a game IS, and its art is the publisher's. This
+        // fills the gap, which for logos is most of the catalogue.
+        sgdbArt = await SteamGridDBService.artwork(for: game, role: role)
     }
 }
 
