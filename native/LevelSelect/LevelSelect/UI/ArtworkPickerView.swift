@@ -29,6 +29,7 @@ struct ArtworkPickerView: View {
     @State private var igdbCovers: [String] = []
     @State private var igdbArtworks: [String] = []
     @State private var igdbShots: [String] = []
+    @State private var igdbLogos: [String] = []
     @State private var loadingIGDB = true
     @State private var customURL = ""
     @State private var photoItem: PhotosPickerItem?
@@ -188,12 +189,19 @@ struct ArtworkPickerView: View {
             gallery("Artwork", ids: igdbArtworks, size: "t_720p", aspect: 1.78)
             gallery("Screenshots", ids: igdbShots, size: "t_screenshot_med", aspect: 1.78)
         case .logo:
-            // IGDB has no logo type at all — the honest answer is to say so
-            // rather than offer covers as if they'd do.
-            Text("IGDB doesn't publish logos. Add your own image above, or paste a URL below — the game's name shows as text until you do.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            // This used to say "IGDB doesn't publish logos", which was simply
+            // wrong — and wrong in user-facing copy, which is worse. IGDB has
+            // logos, we were already fetching them as ordinary artwork, and we
+            // were asking for them as .jpg so they arrived flattened onto
+            // black. See `loadIGDB` and `igdbURL`.
+            gallery("Logos from IGDB", ids: igdbLogos, size: "t_720p",
+                    aspect: 2.2, transparent: true)
+            if igdbLogos.isEmpty, !loadingIGDB {
+                Text("No logo on IGDB for this game. Add your own image above, or paste a URL below — the game's name shows as text until you do.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         case .gallery:
             EmptyView()
         }
@@ -223,13 +231,13 @@ struct ArtworkPickerView: View {
     }
 
     private func gallery(_ title: String, ids: [String], size: String,
-                         aspect: CGFloat) -> some View {
+                         aspect: CGFloat, transparent: Bool = false) -> some View {
         Group {
             if !ids.isEmpty {
                 section(title) {
                     LazyVGrid(columns: columns, spacing: 12) {
                         ForEach(ids, id: \.self) { imageID in
-                            let url = igdbURL(imageID, size: size)
+                            let url = igdbURL(imageID, size: size, transparent: transparent)
                             Button { choose(url) } label: {
                                 CoverThumb(urlString: url)
                                     .frame(width: 96, height: 96 / aspect)
@@ -263,8 +271,13 @@ struct ArtworkPickerView: View {
 
     // MARK: Actions
 
-    private func igdbURL(_ imageID: String, size: String) -> String {
-        "https://images.igdb.com/igdb/image/upload/\(size)/\(imageID).jpg"
+    /// IGDB serves the same image under either extension, and the extension
+    /// decides whether transparency survives: `.jpg` flattens alpha onto
+    /// black, `.png` keeps it. Everything else here wants the smaller JPEG —
+    /// a logo is the one thing that must not lose its background.
+    private func igdbURL(_ imageID: String, size: String,
+                         transparent: Bool = false) -> String {
+        "https://images.igdb.com/igdb/image/upload/\(size)/\(imageID).\(transparent ? "png" : "jpg")"
     }
 
     private func isUsableURL(_ raw: String) -> Bool {
@@ -388,16 +401,27 @@ struct ArtworkPickerView: View {
 
     private func loadIGDB() async {
         defer { loadingIGDB = false }
-        guard let igdbID = game.igdbID, role != .logo else { return }
+        guard let igdbID = game.igdbID else { return }
         async let covers = IGDBService.raw(
             endpoint: "covers", query: "fields image_id; where game = \(igdbID); limit 50;")
+        // `image_type` comes back with the artwork so one request serves both
+        // galleries: the logos, and everything that ISN'T a logo. A wordmark
+        // is a bad backdrop and a worse cover, so it belongs in exactly one
+        // place rather than in the general pile as well.
         async let artworks = IGDBService.raw(
-            endpoint: "artworks", query: "fields image_id; where game = \(igdbID); limit 50;")
+            endpoint: "artworks",
+            query: "fields image_id,image_type; where game = \(igdbID); limit 50;")
         async let shots = IGDBService.raw(
             endpoint: "screenshots", query: "fields image_id; where game = \(igdbID); limit 30;")
+
         igdbCovers = (await covers).compactMap { $0["image_id"] as? String }
-        igdbArtworks = (await artworks).compactMap { $0["image_id"] as? String }
         igdbShots = (await shots).compactMap { $0["image_id"] as? String }
+
+        let art = await artworks
+        igdbLogos = art.filter { $0["image_type"] as? Int == IGDBImageType.logo }
+            .compactMap { $0["image_id"] as? String }
+        igdbArtworks = art.filter { $0["image_type"] as? Int != IGDBImageType.logo }
+            .compactMap { $0["image_id"] as? String }
     }
 }
 

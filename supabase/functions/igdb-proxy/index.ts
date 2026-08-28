@@ -18,6 +18,15 @@ const ALLOWED_ENDPOINTS = new Set([
   'genres',
   'screenshots',
   'artworks',
+  // IGDB split covers and logos out of artworks into their own contributable
+  // data in Aug 2026, and `artwork_type` is deprecated at the end of the year
+  // in favour of `image_type`. This is the lookup that says which numeric type
+  // means "logo" rather than us hardcoding a magic number we can't verify.
+  'image_types',
+  // Regional cover variants — the Japanese Super Metroid box, which carries
+  // the logo and is a different painting, is a localization rather than an
+  // extra cover, so it never appeared in the cover picker.
+  'game_localizations',
   // Average completion times, contributed by IGDB's community. The licensed
   // answer to "how long is this?" — HowLongToBeat has no public API, disallows
   // /api in robots.txt by name, and bans commercial use outright.

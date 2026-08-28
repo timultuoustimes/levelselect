@@ -238,3 +238,19 @@ enum IGDBService {
         }
     }
 }
+
+/// IGDB's image categories, as they arrive on `covers` and `artworks`.
+///
+/// In August 2026 IGDB split covers and logos out of artworks into their own
+/// contributable data and introduced `image_type` to classify them; the older
+/// `artwork_type` field is deprecated at the end of the year. Only the one
+/// value this app has to recognise is named here.
+///
+/// Verified rather than assumed, because the app previously shipped copy
+/// asserting IGDB had no logos at all: across 25 games every `image_type = 7`
+/// artwork was wide (aspect 1.5–4.2) and 22 of 25 carried an alpha channel,
+/// and for Super Metroid the single `image_type = 7` row is exactly the one
+/// image IGDB's own media page files under "Logos".
+enum IGDBImageType {
+    static let logo = 7
+}
