@@ -966,8 +966,11 @@ struct GameDetailView: View {
     private var gameTitle: some View {
         let artwork = game.resolvedArtwork(.logo)
         if !artwork.isEmpty, !typeSize.isAccessibilitySize {
+            // No size cap here. The caller's frame is the cap, and it knows
+            // the real width available — a hardcoded 260x76 was both too wide
+            // for a narrow phone and far smaller than an iPad could carry, so
+            // the logo was cropped on one and lost on the other.
             ArtworkView(artwork, contentMode: .fit)
-                .frame(maxWidth: 260, maxHeight: 76, alignment: .leading)
                 .accessibilityLabel(game.name)
         } else {
             Text(game.name)
@@ -975,9 +978,21 @@ struct GameDetailView: View {
         }
     }
 
-    /// How far the cover lifts out of the info card and into the art above it.
-    private static let coverLift: CGFloat = 44
+    /// How far the cover and the logo rise out of the info card and into the
+    /// art above it.
+    ///
+    /// The first pass lifted the cover 44pt and nudged it 14pt left, which left
+    /// a sliver of card showing past its edge and read as a misalignment
+    /// rather than a decision — while the logo sat politely inside the card,
+    /// so the frame was broken by exactly one element, timidly. Both break it
+    /// now, from the same line, and the cover sits flush to the card's left
+    /// edge so the only overhang is the deliberate one.
+    private static let coverLift: CGFloat = 112
     private static let coverWidth: CGFloat = 132
+    /// The band the logo occupies above the card. It bottom-aligns inside
+    /// this, so a short wide wordmark and a tall square one both sit on the
+    /// same line rather than floating at different heights.
+    private static let logoBand: CGFloat = 104
 
     /// The header.
     ///
@@ -987,15 +1002,15 @@ struct GameDetailView: View {
     /// the art by 45% down the page. You could change the image and not be
     /// able to tell.
     ///
-    /// Now the art gets to be art, and everything that has to be read sits on
-    /// a translucent card in front of it. The cover straddles the card's top
-    /// edge so the two layers are visibly one object rather than a picture
-    /// with a box under it.
+    /// Now the art gets to be art, everything that has to be READ sits on a
+    /// translucent card in front of it, and the two pieces of artwork — the
+    /// cover and the logo — rise out of that card into the art. The card is a
+    /// plinth, not a box things are trapped in.
     private var hero: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Bare art above the card. Not a Spacer — a Spacer in a VStack
             // inside a ScrollView has no height to distribute.
-            Color.clear.frame(height: Self.coverLift + 28)
+            Color.clear.frame(height: stacksCover ? 24 : Self.coverLift + 26)
 
             heroCard
 
@@ -1010,63 +1025,110 @@ struct GameDetailView: View {
         }
     }
 
+    @ViewBuilder
     private var heroCard: some View {
-        ZStack(alignment: .topLeading) {
-            VStack(alignment: .leading, spacing: 8) {
+        if stacksCover {
+            // At accessibility sizes nothing overhangs. A 132pt cover and five
+            // stars can't share a line, the logo has already given way to text
+            // that needs to grow, and art poking out of a card is decoration —
+            // the first thing to go when the words need the room.
+            VStack(alignment: .leading, spacing: 10) {
+                coverThumb(width: 168)
                 gameTitle
-
-                HStack(spacing: 6) {
-                    Image(systemName: game.status.systemImage)
-                        .foregroundStyle(game.status.color)
-                    Text(game.status.label)
-                    if let platform = PlatformPreference.owned(game.platforms) {
-                        Text("·").foregroundStyle(.tertiary)
-                        PlatformIconView(platform: platform, size: 20)
-                        Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
-                    }
-                }
-                .font(.subheadline)
-
-                RatingControl(rating: $game.rating)
-
-                // Directly under your own verdict, because the comparison
-                // is the entire point — a critic score parked elsewhere on
-                // the page is just trivia.
-                referenceRow
-
-                if let franchise = game.franchise, !franchise.isEmpty {
-                    Text(franchise)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                heroFacts
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
-            // Room for the cover beside the text — except at accessibility
-            // sizes, where a fixed 132pt cover plus five stars can't share a
-            // line and the cover moves above the text instead.
-            .padding(.leading, stacksCover ? 0 : Self.coverWidth + 12)
-            .padding(.top, stacksCover ? Self.coverLift + 8 : 0)
             .background(.ultraThinMaterial, in: .rect(cornerRadius: 20))
             .overlay {
                 RoundedRectangle(cornerRadius: 20)
                     .strokeBorder(.white.opacity(0.12), lineWidth: 1)
             }
-
-            CoverThumb(urlString: game.displayCoverURLString)
-                .frame(width: Self.coverWidth, height: Self.coverWidth * 4 / 3)
-                .overlay { CoverShine(delay: 0.25) }
-                .clipShape(.rect(cornerRadius: 10))
-                .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
-                .contentShape(.rect)
-                .onTapGesture { showingCover = true }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Enlarge cover")
-                // `offset`, not padding: the cover has to leave the card's
-                // bounds to overlap the art, and it must not reserve the
-                // space it vacates.
-                .offset(x: stacksCover ? 0 : 14, y: -Self.coverLift)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                // A logo is art and can sit on art. The text fallback is
+                // text, and moving text off the backdrop is the entire reason
+                // this card exists — so when there's no logo the name stays
+                // inside it, and only the cover breaks the frame.
+                if !hasLogo { gameTitle }
+                heroFacts
+            }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                // Room for the cover beside the facts.
+                .padding(.leading, Self.coverWidth + 12)
+                .background(.ultraThinMaterial, in: .rect(cornerRadius: 20))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 20)
+                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+                }
+                // Overlays, not offsets in a ZStack: an overlay is measured
+                // against the card, so the logo gets a real width to fit
+                // itself into — everything from the cover's right edge to the
+                // card's — instead of a guessed constant that runs off a
+                // narrow phone and looks stingy on an iPad.
+                .overlay(alignment: .topLeading) {
+                    coverThumb(width: Self.coverWidth)
+                        .offset(y: -Self.coverLift)
+                }
+                .overlay(alignment: .topLeading) {
+                    if hasLogo {
+                        gameTitle
+                            .frame(maxWidth: .infinity, maxHeight: Self.logoBand,
+                                   alignment: .bottomLeading)
+                            .padding(.leading, Self.coverWidth + 12)
+                            .offset(y: -(Self.logoBand + 8))
+                    }
+                }
         }
+    }
+
+    /// Everything on the card that is words: what this game is to you.
+    private var heroFacts: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: game.status.systemImage)
+                    .foregroundStyle(game.status.color)
+                Text(game.status.label)
+                if let platform = PlatformPreference.owned(game.platforms) {
+                    Text("·").foregroundStyle(.tertiary)
+                    PlatformIconView(platform: platform, size: 20)
+                    Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline)
+
+            RatingControl(rating: $game.rating)
+
+            // Directly under your own verdict, because the comparison is the
+            // entire point — a critic score parked elsewhere on the page is
+            // just trivia.
+            referenceRow
+
+            if let franchise = game.franchise, !franchise.isEmpty {
+                Text(franchise)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func coverThumb(width: CGFloat) -> some View {
+        CoverThumb(urlString: game.displayCoverURLString)
+            .frame(width: width, height: width * 4 / 3)
+            .overlay { CoverShine(delay: 0.25) }
+            .clipShape(.rect(cornerRadius: 10))
+            .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
+            .contentShape(.rect)
+            .onTapGesture { showingCover = true }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Enlarge cover")
+    }
+
+    /// Whether the header will draw a logo rather than the game's name as
+    /// text — which decides whether anything but the cover leaves the card.
+    private var hasLogo: Bool {
+        !game.resolvedArtwork(.logo).isEmpty && !typeSize.isAccessibilitySize
     }
 
     /// At accessibility text sizes the cover-beside-text row can't fit its own
