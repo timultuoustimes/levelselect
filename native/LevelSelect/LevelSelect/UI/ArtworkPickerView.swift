@@ -211,10 +211,14 @@ struct ArtworkPickerView: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     #endif
-                Button("Use") { choose(customURL.trimmingCharacters(in: .whitespaces)) }
+                Button("Use") { Task { await useTypedURL() } }
                     .buttonStyle(.bordered)
-                    .disabled(!isUsableURL(customURL))
+                    .disabled(!isUsableURL(customURL) || importing)
             }
+            Text("Needs a link to the image itself, not to the page it's on. On a web page, press and hold the image and copy its address.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -271,6 +275,49 @@ struct ArtworkPickerView: View {
     private func choose(_ pointer: String?) {
         repo.setArtwork(pointer?.isEmpty == true ? nil : pointer, role: role, on: game)
         dismiss()
+    }
+
+    /// Accept a pasted link only after proving it IS an image.
+    ///
+    /// The first version accepted anything beginning with `http`, so a link
+    /// to the *page* an image sits on — a PlayStation Store product page, a
+    /// SteamGridDB listing — was taken happily and then rendered as nothing,
+    /// because AsyncImage can't decode HTML. The app accepted something it
+    /// had no business accepting and said nothing about it.
+    ///
+    /// Fetching once here costs a moment and turns a silent blank into a
+    /// sentence that says what to do instead.
+    private func useTypedURL() async {
+        let trimmed = customURL.trimmingCharacters(in: .whitespaces)
+        guard let url = URL(string: trimmed) else { return }
+        importing = true
+        importError = nil
+        importNote = nil
+        defer { importing = false }
+
+        do {
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 15
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                importError = "That link returned an error (\(http.statusCode))."
+                return
+            }
+            // The bytes decide, not the file extension or the MIME type — a
+            // CDN can serve an image from an extensionless path, and a page
+            // can be served as `image/*` by an over-eager server.
+            guard ImageIngest.pixelSize(of: data) != nil else {
+                importError = "That link isn't an image — it looks like a web page. Open the image itself, then copy its address."
+                return
+            }
+            if role == .logo, !ImageIngest.hasAlpha(data) {
+                importNote = "That image has no transparent background, so it shows as a block. Logos want a PNG with transparency."
+            }
+            repo.setArtwork(trimmed, role: role, on: game)
+            if importNote == nil { dismiss() }
+        } catch {
+            importError = "Couldn't load that link. Check the address and your connection."
+        }
     }
 
     private func ingestPickedPhoto() async {
