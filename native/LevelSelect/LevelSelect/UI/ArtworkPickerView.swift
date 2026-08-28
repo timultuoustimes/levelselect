@@ -124,8 +124,12 @@ struct ArtworkPickerView: View {
                     ForEach(mine) { image in
                         if let data = image.data {
                             Button { choose(image.pointer) } label: {
-                                LocalArtworkThumb(data: data)
-                                    .frame(width: 96, height: 128)
+                                // Your own logo is a wordmark too — Tim's
+                                // Splintered Fate PNG was cropped to
+                                // "URTLE / LINTERED FA" in this very grid.
+                                LocalArtworkThumb(data: data,
+                                                  contentMode: role == .logo ? .fit : .fill)
+                                    .frame(width: 96, height: role == .logo ? 96 / 2.2 : 128)
                                     .clipShape(.rect(cornerRadius: 8))
                                     .overlay { selectionBorder(pointer: image.pointer) }
                             }
@@ -259,7 +263,8 @@ struct ArtworkPickerView: View {
                         Button { choose(art.full) } label: {
                             // The THUMBNAIL is drawn; the full-size URL is what
                             // gets stored. See `SteamGridDBService.Artwork`.
-                            CoverThumb(urlString: art.thumb)
+                            CoverThumb(urlString: art.thumb,
+                                       contentMode: role == .logo ? .fit : .fill)
                                 .frame(width: 96, height: 96 / aspect)
                                 .clipShape(.rect(cornerRadius: 8))
                                 .overlay { selectionBorder(pointer: art.full) }

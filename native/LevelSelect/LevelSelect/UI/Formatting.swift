@@ -134,12 +134,17 @@ enum PlatformPreference {
 /// Async cover art with a themed placeholder. Box-art aspect ratio.
 struct CoverThumb: View {
     let urlString: String?
+    /// Fill is right for box art, which is meant to be cropped to a shelf
+    /// tile. It is wrong for a wordmark: a wide logo in a 2.2 tile gets its
+    /// ends cut off, so the picker offered a row of "T FIGHT" and "ET FIGHTE"
+    /// with no way to tell which logo you were choosing.
+    var contentMode: ContentMode = .fill
     var body: some View {
         Group {
             if let s = urlString, let url = URL(string: s) {
                 AsyncImage(url: url) { phase in
                     switch phase {
-                    case .success(let img): img.resizable().scaledToFill()
+                    case .success(let img): img.resizable().aspectRatio(contentMode: contentMode)
                     case .empty: ProgressView()
                     default: placeholder
                     }
