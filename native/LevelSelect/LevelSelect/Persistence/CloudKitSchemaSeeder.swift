@@ -1,6 +1,9 @@
 #if LEGACY_IMPORT   // developer-only, same gate as the legacy import
 import Foundation
 import SwiftData
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Forces the CloudKit **Development** schema to contain every record type and
 /// every field in Schema V1, so `Deploy Schema Changes` promotes a COMPLETE
@@ -30,10 +33,61 @@ enum CloudKitSchemaSeeder {
     /// the field. Reverted by purge() unless the user has since changed it.
     static let seededAccent = "#8A5CF6"
 
-    /// A 1x1 transparent PNG — the smallest byte sequence CloudKit will
-    /// recognise as a real image asset when materializing `GameImage.data`.
-    static let onePixelPNG = Data(base64Encoded:
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")!
+    /// A DELIBERATELY LARGE image, for seeding `GameImage.data`.
+    ///
+    /// Size is the entire point, and getting it wrong cost a promote.
+    ///
+    /// `@Attribute(.externalStorage)` does not make Core Data store every
+    /// value externally — it stores values externally **above a size
+    /// threshold** (~100KB). CloudKit then derives the field's type from what
+    /// it actually observes: an inline value materializes as **BYTES**, an
+    /// externally-stored one as an **ASSET**. Seeded with a 1x1 PNG (70
+    /// bytes), `CD_GameImage.data` came through as BYTES — which caps the
+    /// whole record at CloudKit's ~1MB limit and inlines every photo into the
+    /// record instead of streaming it. Real images routinely exceed that, so
+    /// they would have failed to sync, silently and permanently.
+    ///
+    /// CloudKit will not retype an existing field, so fixing it meant
+    /// resetting the Development environment. Hence: seed something big
+    /// enough that external storage is certain to engage.
+    ///
+    /// Generated rather than embedded as a base64 literal, because a
+    /// multi-megabyte constant in source is its own problem. Noise, not a
+    /// gradient — a smooth image compresses back under the threshold and
+    /// puts us right back where we started.
+    static var largeSeedImage: Data {
+        let side = 900
+        let bytesPerPixel = 4
+        var pixels = [UInt8](repeating: 0, count: side * side * bytesPerPixel)
+        // Deterministic, high-entropy fill: a cheap LCG, so the PNG can't be
+        // compressed away and the seed is identical on every run.
+        var state: UInt64 = 0x9E3779B97F4A7C15
+        for index in pixels.indices {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            pixels[index] = UInt8truncating(state >> 33)
+        }
+        let provider = CGDataProvider(data: Data(pixels) as CFData)!
+        let image = CGImage(
+            width: side, height: side, bitsPerComponent: 8, bitsPerPixel: 32,
+            bytesPerRow: side * bytesPerPixel,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+            provider: provider, decode: nil, shouldInterpolate: false,
+            intent: .defaultIntent)!
+
+        let out = NSMutableData()
+        let destination = CGImageDestinationCreateWithData(
+            out, UTType.png.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImage(destination, image, nil)
+        CGImageDestinationFinalize(destination)
+        return out as Data
+    }
+
+    /// `UInt8(truncatingIfNeeded:)` spelled as a function so the fill loop
+    /// above stays readable.
+    private static func UInt8truncating(_ value: UInt64) -> UInt8 {
+        UInt8(truncatingIfNeeded: value)
+    }
 
     /// Insert one fully-populated instance of every model in SchemaV1.
     /// Returns a short report for the UI.
@@ -248,19 +302,20 @@ enum CloudKitSchemaSeeder {
 
         // --- GameImage (V3) ---
         //
-        // `data` carries real bytes rather than the empty `stamp`: CloudKit
-        // decides a binary field is a CKAsset from what it actually sees, and
-        // a zero-length value is not a reliable way to declare one. A 1x1 PNG
-        // is the smallest thing that is unambiguously an image.
-        let image = GameImage(role: .gallery, data: Self.onePixelPNG)
+        // `data` carries a LARGE image on purpose — see `largeSeedImage`.
+        // CloudKit types this field from what it observes, and only an
+        // externally-stored value becomes an ASSET. A small one becomes
+        // BYTES, which caps the record at ~1MB and would break real photos.
+        let seedBytes = Self.largeSeedImage
+        let image = GameImage(role: .gallery, data: seedBytes)
         image.userID = UUID()
         image.deletedAt = now
         image.legacyID = marker
         image.caption = marker
         image.roleRaw = ArtworkRole.gallery.rawValue
-        image.pixelWidth = 1
-        image.pixelHeight = 1
-        image.byteCount = Self.onePixelPNG.count
+        image.pixelWidth = 900
+        image.pixelHeight = 900
+        image.byteCount = seedBytes.count
         image.addedAt = now
         context.insert(image)
         image.game = game
