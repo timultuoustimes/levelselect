@@ -38,3 +38,9 @@ deno.lock
 
 # Claude Code session files (local worktrees, launch config)
 .claude/
+
+# Supabase CLI scratch state — rewritten by the CLI on almost every command
+# (cli-latest is a version-check stamp, linked-project.json is the local link).
+# cli-latest was tracked, so every `supabase` invocation dirtied the tree and
+# release-gate.sh refused to run. Untracked 2026-08-28.
+supabase/.temp/
