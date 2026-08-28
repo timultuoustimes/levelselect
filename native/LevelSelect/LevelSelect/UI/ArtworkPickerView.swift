@@ -170,7 +170,13 @@ struct ArtworkPickerView: View {
         }
 
         if role == .logo {
-            Text("Logos need a transparent background. Pick the PNG from Files — saving one to Photos usually converts it to JPEG, which has no transparency.")
+            // "Sometimes", not "usually". Plenty of PNGs come out of Photos
+            // with their transparency intact — Tim's Mina the Hollower logo
+            // saved straight from the web and worked first time. The Skate
+            // Story case that prompted this warning was one path through
+            // Photos, not the rule, and overstating it sends people to Files
+            // for no reason.
+            Text("Logos need a transparent background. Photos sometimes converts a PNG to JPEG, which has none — if the logo shows as a solid block, try picking it from Files instead.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
