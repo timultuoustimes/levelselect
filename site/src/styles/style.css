@@ -172,9 +172,15 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   /* The portrait phone is the tall child: at 44% width it is ~.9× the
      container width in height, so the ratio must drop to ~1.05 or the phone
      pokes out the top into the hero text. */
-  .composite--hero { width: 108%; margin-inline: -4%; aspect-ratio: 1.05; }
-  .composite--hero .c-ipad { width: 92%; top: 12%; }
-  .composite--hero .c-phone { width: 44%; left: 0; }
+  /* On a phone the two can't sit side by side — there isn't the width — so
+     they separate VERTICALLY instead. The iPad goes to the very top and the
+     container gets taller, which leaves the iPad's whole upper third visible
+     across its full width above the phone. Before this it sat level with the
+     phone and lost its left 39% behind it, which on an actual iPhone meant
+     you could not tell there was an iPad there at all. */
+  .composite--hero { width: 108%; margin-inline: -4%; aspect-ratio: .92; }
+  .composite--hero .c-ipad { width: 96%; top: 0; }
+  .composite--hero .c-phone { width: 42%; left: 0; }
 }
 
 .showcase { padding: var(--step) 0 calc(var(--step) * .5); }
@@ -186,14 +192,19 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 .story .shot img { max-width: min(280px, 60vw); }
 /* Sessions pair: Lock Screen front-left, widgets behind-right. Both stay
    larger than the old side-by-side ever allowed, at every width. */
-.composite--pair { width: 100%; max-width: 460px; aspect-ratio: .76; }
+/* 55%, not 62%. At 62 the two phones overlapped by a quarter of the frame,
+   which hid the back one's left 39% — and a game page's logo is centred, so
+   what got cut was exactly the thing that identifies it. Hades read as
+   "ADES". The container widens to compensate, so the phones are the same
+   size as before and simply sit further apart. */
+.composite--pair { width: 100%; max-width: 500px; aspect-ratio: .82; }
 .composite--pair .c-back {
-  right: 0; top: 0; width: 62%;
+  right: 0; top: 0; width: 55%;
   transform: rotate(2deg);
   filter: drop-shadow(0 24px 36px rgba(0, 0, 0, .5));
 }
 .composite--pair .c-front {
-  left: 0; bottom: 0; width: 62%; z-index: 2;
+  left: 0; bottom: 0; width: 55%; z-index: 2;
   transform: rotate(-2deg);
   filter: drop-shadow(0 30px 44px rgba(0, 0, 0, .62));
 }
@@ -229,6 +240,11 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   .step .shot img { max-width: 100%; filter: drop-shadow(0 26px 38px rgba(0, 0, 0, .55)); }
   .step p { display: none; }
   .step .shot { position: relative; }
+  /* Card 2 is the one in front (z-index 2), and card 3 starts at 62% — so
+     card 3's badge, pinned 8% in from ITS left, landed at about 65% and sat
+     underneath card 2. It mirrors to its own right edge instead; raising its
+     z-index would have put the whole card in front and broken the cascade. */
+  .step:nth-child(3) .shot::after { left: auto; right: 8%; }
   .step .shot::after {
     content: counter(step);
     position: absolute; top: 4%; left: 8%;
