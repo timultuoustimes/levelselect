@@ -28,7 +28,12 @@ TORCH_DEEP  = (138, 74, 18)
 INK         = (239, 234, 251)
 MUTED       = (153, 144, 184)
 
-# Keep these in step with the hero in src/pages/index.astro.
+# NOT necessarily the hero's shot — these are chosen for legibility at
+# thumbnail size, which is the only job a link preview has. The Home shelf is a
+# dense grid of small covers: fine on the site, mush in a Reddit unfurl. A game
+# page carries one big logo that survives being shrunk. The hero went back to
+# Home when the site turned out to have no picture of the app's front door
+# anywhere; this stayed put on purpose.
 PHONE_SHOT = "iphone-02-game-page-hollow.webp"
 IPAD_SHOT  = "ipad-01-split-tracker.webp"
 
@@ -71,10 +76,9 @@ def devices(pair, height):
     keep text clear of the art — the square's URL used to land on top of the
     phone because nothing was measuring this.
     """
-    # Tracks the homepage hero deliberately — the point of this pairing is
-    # that a link preview looks like the page it links to. The phone was the
-    # Home shelf until build 32 rebuilt the game page around its own art;
-    # the header is what the app looks like now, so it leads here too.
+    # The pairing mirrors the hero's arrangement — phone in front of iPad —
+    # so a preview reads as the same product. The individual shots are picked
+    # for thumbnail legibility instead; see PHONE_SHOT.
     phone = shot(PHONE_SHOT, height)
     if not pair:
         return phone

@@ -98,10 +98,28 @@ const steps = [
     <Reveal class="composite composite--hero">
       <img class="c-ipad" src="/assets/shots/ipad-01-split-tracker.webp" width="1600" height="1226"
            alt="LevelSelect on iPad: the Hollow Knight game page, key art running the width of the screen, beside its tracker panel in landscape split view." />
-      <img class="c-phone" src="/assets/shots/iphone-02-game-page-hollow.webp" width="686" height="1400"
-           alt="The Hollow Knight game page on iPhone: the game's own key art filling the header, its logo where the title would be, and a row reading 44 hours 37 minutes played across 7 sessions." />
+      <img class="c-phone" src="/assets/shots/iphone-01-home-shelf.webp" width="686" height="1400"
+           alt="LevelSelect home screen on iPhone: Hollow Knight in Continue Playing with 41 hours logged and \u201cleft off: Grubsong\u201d, a timer still running on another device below it, console shelves, and Now Playing and Paused rows." />
     </Reveal>
   </div>
+
+  <!-- The build-32 header is the app's biggest visual change and it had no
+       section — it was a cameo in the hero, which the front door needed back.
+       Two games rather than one because the whole point is that the page
+       looks like the GAME: nothing here is LevelSelect's art. -->
+  <section class="wrap story story--flip" id="gamepage">
+    <Reveal class="story__text">
+      <h2>A page that looks like the game</h2>
+      <p class="lede">Every game gets its own key art across the top and its own logo where a title would be, so the page you open looks like the thing you played rather than like a database row.</p>
+      <p class="lede">Underneath: what you scored it, what the critics said, and how long you have actually spent on it — across every playthrough, not just the current one. Turn that row off if you don't time your play.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-02-game-page-hollow.webp" width="686" height="1400" loading="lazy"
+           alt="The Hollow Knight game page: its own key art filling the header, the game's logo where the title would be, five stars, and a row reading 44 hours 37 minutes played across 7 sessions." />
+      <img class="c-back" src="/assets/shots/iphone-16-hades-header.webp" width="686" height="1400" loading="lazy"
+           alt="The Hades game page, its logo over the game's own art, showing 28 hours 36 minutes played, 6 sessions and 7 runs logged." />
+    </Reveal>
+  </section>
 
   <section class="wrap story" id="trackers">
     <Reveal class="story__text">
