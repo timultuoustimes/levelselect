@@ -160,7 +160,17 @@ struct SchemaFreezeTests {
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playedWithData,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
             // starNamesData added 2026-08-27 build 31 (your own words on the
             // five stars).
-            "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showItemHints,starNamesData,statusColorsData,updatedAt",
+            //
+            // gamePageLayoutRaw + showGameLogos added 2026-08-29 build 33:
+            // which header arrangement game pages use, and whether a game's
+            // logo stands in for its name. Both are looks rather than device
+            // preferences, which is why they sync — same reasoning as
+            // backdropIntensityRaw.
+            //
+            // ⚠️ NOT YET PROMOTED to the Production CloudKit schema. Do that
+            // before build 33 ships, or these two fields fail to write on
+            // every device with CKErrorDomain error 2.
+            "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,gamePageLayoutRaw,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showGameLogos,showItemHints,starNamesData,statusColorsData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,updatedAt,userID",

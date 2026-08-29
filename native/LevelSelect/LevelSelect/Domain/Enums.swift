@@ -96,3 +96,40 @@ enum TrackerDisplay: String, Codable, CaseIterable, Sendable {
         }
     }
 }
+
+/// How a game page arranges its header.
+///
+/// Build 32 rebuilt the header around each game's own art, which is the right
+/// default and is not what everyone wants on every game. The layout it
+/// replaced was compact and quiet, and quiet is a legitimate preference
+/// rather than a worse one — a shelf of four hundred games read at speed is a
+/// different job from admiring one.
+///
+/// String-raw, so a future case costs no schema version. The FIELD holding it
+/// on `ThemeSettings` did cost one; the cases won't.
+enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
+    /// Build 32: art at full strength, cover and facts panel centred in it,
+    /// the game's logo across the full width underneath.
+    case showcase
+    /// What the app had before: cover on the left, the facts beside it, the
+    /// name as text, and the art faded well back because the words sit on it.
+    case classic
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .showcase: "Showcase"
+        case .classic:  "Classic"
+        }
+    }
+
+    /// Shown under the picker, because "Showcase" and "Classic" describe
+    /// nothing on their own.
+    var blurb: String {
+        switch self {
+        case .showcase: "The game's art fills the top, with its logo underneath."
+        case .classic:  "Cover beside the details, name as text, art kept well back."
+        }
+    }
+}

@@ -342,6 +342,12 @@ struct ArtworkPickerView: View {
 
     private func choose(_ pointer: String?) {
         repo.setArtwork(pointer?.isEmpty == true ? nil : pointer, role: role, on: game)
+        // Logos resolve automatically when nothing is chosen, and that answer
+        // is cached per install. Clearing a choice has to drop the cache too,
+        // or "Use the default" would restore whatever was found BEFORE — and
+        // on a game whose automatic logo the user rejected, that is the one
+        // thing they were trying to get rid of.
+        if role == .logo { LogoArt.forget(game) }
         dismiss()
     }
 

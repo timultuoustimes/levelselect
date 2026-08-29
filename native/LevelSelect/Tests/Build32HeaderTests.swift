@@ -99,3 +99,47 @@ struct Build32HeaderTests {
         #expect(GameStatus.displayOrder.count == GameStatus.allCases.count)
     }
 }
+
+/// Build 33 — the game page header became a choice rather than a decree.
+@MainActor
+struct GamePageLayoutTests {
+
+    @Test func defaultsToShowcaseWhenNothingIsStored() {
+        let theme = ThemeSettings()
+        #expect(theme.gamePageLayoutRaw == nil)
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .showcase)
+    }
+
+    @Test func aStoredChoiceIsHonoured() {
+        let theme = ThemeSettings()
+        theme.gamePageLayoutRaw = GamePageLayout.classic.rawValue
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .classic)
+    }
+
+    /// An OLD build writing a value this one has never heard of, or a value
+    /// corrupted in transit, must not blank the page — it falls back to the
+    /// default the same way `ThemePageBackground` does.
+    @Test func anUnknownStoredValueFallsBackRatherThanFailing() {
+        let theme = ThemeSettings()
+        theme.gamePageLayoutRaw = "somethingNewer"
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .showcase)
+    }
+
+    /// The seeder writes a marker into every optional so CloudKit creates the
+    /// field; purge puts it back to nil. A marker left behind would otherwise
+    /// silently become the user's stored preference.
+    @Test func theSeedMarkerIsNotAValidLayout() {
+        #expect(GamePageLayout(rawValue: "levelselect-schema-seed") == nil)
+    }
+
+    @Test func everyLayoutSaysWhatItIsAndWhatItDoes() {
+        for layout in GamePageLayout.allCases {
+            #expect(!layout.label.isEmpty)
+            // The blurb exists because "Showcase" and "Classic" name nothing.
+            #expect(layout.blurb.count > 20)
+        }
+    }
+}

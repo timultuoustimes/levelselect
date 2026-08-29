@@ -51,6 +51,28 @@ struct AppearanceSettingsSection: View {
                 }
             }
 
+            Picker("Game page layout", selection: gamePageLayoutBinding) {
+                ForEach(GamePageLayout.allCases) { choice in
+                    Text(choice.label).tag(choice)
+                }
+            }
+            // "Showcase" and "Classic" name nothing on their own, so the
+            // choice says what it does rather than making you try both.
+            Text(gamePageLayoutBinding.wrappedValue.blurb)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .listRowSeparator(.hidden)
+
+            Toggle("Use game logos", isOn: Binding(
+                get: { ThemePalette.showGameLogos },
+                set: { on in
+                    let s = ensureSettings()
+                    s.showGameLogos = on
+                    save(s)
+                }
+            ))
+            .tint(LSTheme.accent)
+
             if pageBackgroundBinding.wrappedValue.usesArtwork {
                 Picker("Backdrop strength", selection: backdropIntensityBinding) {
                     ForEach(BackdropIntensity.allCases) { choice in
@@ -177,6 +199,17 @@ struct AppearanceSettingsSection: View {
             // looks like broken iCloud sync.
             Text("These are library-wide defaults; a game's own Tracker section overrides them for that game. Layout and hints sync through iCloud. Achievement badges and page arrangement are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
         }
+    }
+
+    private var gamePageLayoutBinding: Binding<GamePageLayout> {
+        Binding(
+            get: { ThemePalette.gamePageLayout },
+            set: { choice in
+                let s = ensureSettings()
+                s.gamePageLayoutRaw = choice.rawValue
+                save(s)
+            }
+        )
     }
 
     private var colorsAreCustomised: Bool {

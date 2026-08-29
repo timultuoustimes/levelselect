@@ -17,6 +17,10 @@ enum ThemePalette {
     private(set) static var starNames: [String] = []
     /// How hard the game-page backdrop reads.
     private(set) static var backdropIntensity: BackdropIntensity = .standard
+    /// How game pages arrange their header.
+    private(set) static var gamePageLayout: GamePageLayout = .showcase
+    /// Whether a game's logo stands in for its name.
+    private(set) static var showGameLogos = true
 
     /// The label a rating wears: the user's word if set, the built-in if not.
     static func starLabel(for rating: Int) -> String {
@@ -62,6 +66,9 @@ enum ThemePalette {
         starNames = settings?.starNames ?? []
         backdropIntensity = settings?.backdropIntensityRaw
             .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard
+        gamePageLayout = settings?.gamePageLayoutRaw
+            .flatMap(GamePageLayout.init(rawValue:)) ?? .showcase
+        showGameLogos = settings?.showGameLogos ?? true
     }
 
     /// The single settings record (created on first use). Duplicates from a

@@ -52,6 +52,22 @@ final class ThemeSettings {
     /// appearance choices because it's a look, not a device preference.
     var backdropIntensityRaw: String?
 
+    /// Whether game pages show a game's logo where its name would be.
+    ///
+    /// Separate from `gamePageLayoutRaw` on purpose: which arrangement you
+    /// like and whether you want wordmarks at all are different preferences,
+    /// and folding them together would mean the quiet layout could never show
+    /// a logo and the bold one could never be turned down to plain text.
+    var showGameLogos: Bool = true
+
+    /// Which header arrangement game pages use. Nil = `showcase`, the build
+    /// 32 default. See `GamePageLayout`.
+    ///
+    /// Synced, for the same reason `backdropIntensityRaw` is: it is a look,
+    /// not a device preference. Someone who prefers the quiet header prefers
+    /// it on the iPad too.
+    var gamePageLayoutRaw: String?
+
     /// Your own words on the five stars — JSON array of exactly five strings,
     /// index 0 = one star. Nil = plain stars. Vocabulary, not modelling: a
     /// rating that says "comfort game" instead of "3" reads like the

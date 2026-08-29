@@ -435,6 +435,7 @@ enum CloudKitSchemaSeeder {
             if existingTheme.dekuWishlistURLString == nil { existingTheme.dekuWishlistURLString = marker }
             if existingTheme.starNamesData == nil { existingTheme.starNamesData = stamp }
             if existingTheme.backdropIntensityRaw == nil { existingTheme.backdropIntensityRaw = marker }
+            if existingTheme.gamePageLayoutRaw == nil { existingTheme.gamePageLayoutRaw = marker }
         } else {
             let theme = ThemeSettings()
             theme.accentHex = "#8A5CF6"
@@ -445,6 +446,7 @@ enum CloudKitSchemaSeeder {
             theme.dekuWishlistURLString = marker         // V2
             theme.starNamesData = stamp                  // build 31
             theme.backdropIntensityRaw = marker           // build 32
+            theme.gamePageLayoutRaw = marker              // build 33
             context.insert(theme)
         }
 
@@ -499,6 +501,7 @@ enum CloudKitSchemaSeeder {
             if theme.dekuWishlistURLString == marker { theme.dekuWishlistURLString = nil }
             if theme.starNamesData == Data("{}".utf8) { theme.starNamesData = nil }
             if theme.backdropIntensityRaw == marker { theme.backdropIntensityRaw = nil }
+            if theme.gamePageLayoutRaw == marker { theme.gamePageLayoutRaw = nil }
             ThemePalette.refresh(from: theme)
         }
 

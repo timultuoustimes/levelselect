@@ -13,6 +13,8 @@ struct GameDetailView: View {
     /// until a lookup finishes (or when the library preference wants no
     /// fetched art at all), and the cover stands in meanwhile.
     @State private var backdropArt: URL?
+    /// Automatically-found wordmark, when the user hasn't chosen one.
+    @State private var fetchedLogo: URL?
     /// Library-wide reading preference, device-local like the Stats cards.
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
     @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
@@ -119,6 +121,12 @@ struct GameDetailView: View {
         // Re-resolves when the game changes AND when the library preference
         // does, so switching between key art and screenshots in Settings
         // updates an open page rather than waiting for a revisit.
+        .task(id: game.id) {
+            // Only ever consulted when there's no explicit choice, and it
+            // caches misses, so a game with no logo anywhere costs one lookup
+            // for the life of the install.
+            fetchedLogo = await LogoArt.url(for: game)
+        }
         .task(id: BackdropRequest(gameID: game.id, background: ThemePalette.pageBackground)) {
             guard ThemePalette.pageBackground.igdbEndpoint != nil else {
                 backdropArt = nil
@@ -654,7 +662,13 @@ struct GameDetailView: View {
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
             geometry.contentOffset.y + geometry.contentInsets.top
         } action: { _, offset in
-            let handedOver = offset > Self.heroTopSpace + Self.coverHeight + Self.titleBand
+            // Classic's name sits at the very top beside the cover, so it
+            // leaves the screen far sooner than showcase's, which is below a
+            // cover and a panel. One threshold for both would hand over while
+            // the name was still on screen in one of them.
+            let handedOver = offset > (layout == .showcase
+                ? Self.heroTopSpace + Self.coverHeight + Self.titleBand
+                : 96)
             guard handedOver != titleInBar else { return }
             // Reduce Motion gets the same handoff without the crossfade — the
             // information is the point, the fade is decoration.
@@ -905,7 +919,41 @@ struct GameDetailView: View {
         .ignoresSafeArea()
     }
 
-    /// The art behind the header.
+    private var maskStops: [Gradient.Stop] {
+        switch layout {
+        case .showcase:
+            [.init(color: .black, location: 0),
+             .init(color: .black, location: 0.42),
+             .init(color: .black.opacity(0.55), location: 0.62),
+             .init(color: .clear, location: 0.92)]
+        case .classic:
+            [.init(color: .black, location: 0),
+             .init(color: .black.opacity(0.75), location: 0.18),
+             .init(color: .black.opacity(0.22), location: 0.45),
+             .init(color: .clear, location: 0.7)]
+        }
+    }
+
+        /// The wordmark to draw, if any: the user's choice, else whatever was
+    /// found automatically, else nothing and the name renders as text.
+    ///
+    /// Mirrors `backdropArtwork` deliberately — an explicit per-game pick
+    /// beats a fetched one, and a fetched one beats going without.
+    private var resolvedLogo: ResolvedArtwork {
+        let chosen = game.resolvedArtwork(.logo)
+        if !chosen.isEmpty { return chosen }
+        if let fetchedLogo { return .remote(fetchedLogo) }
+        return .none
+    }
+
+    /// Logos are off, the type is huge, or nothing was found — all three mean
+    /// the same thing to the header: draw the name.
+    private var headerLogo: ResolvedArtwork {
+        guard ThemePalette.showGameLogos, !typeSize.isAccessibilitySize else { return .none }
+        return resolvedLogo
+    }
+
+        /// The art behind the header.
     ///
     /// Prefers whatever the backdrop role resolves to — which is a chosen
     /// image, else an IGDB artwork, else the cover. That order matters more
@@ -939,22 +987,19 @@ struct GameDetailView: View {
                 .blur(radius: intensity.blurRadius, opaque: true)
                 .saturation(intensity.saturation)
                 .opacity(intensity.opacity)
-                // The falloff used to be brutal — 22% left by 45% down the
-                // page — because the hero's text sat directly on this image
-                // and had to stay readable over key art. It doesn't any more:
-                // the text moved onto a material card in front. So the art
-                // holds full strength through the band you actually see it
-                // in, and fades where the page's own sections take over.
+                // The falloff belongs to the LAYOUT, not to taste.
+                //
+                // Showcase puts every word on a material panel, so nothing has
+                // to be read off the art and it can hold full strength through
+                // the band you actually see it in.
+                //
+                // Classic sets the name, status and stars directly on the
+                // backdrop. There the art has to get out of the way by the
+                // time the text starts, which is the brutal 22%-by-45% curve
+                // the showcase header was built to escape. Serving both from
+                // one gradient would mean picking which layout renders badly.
                 .mask(
-                    LinearGradient(
-                        stops: [
-                            .init(color: .black, location: 0),
-                            .init(color: .black, location: 0.42),
-                            .init(color: .black.opacity(0.55), location: 0.62),
-                            .init(color: .clear, location: 0.92),
-                        ],
-                        startPoint: .top, endPoint: .bottom
-                    )
+                    LinearGradient(stops: maskStops, startPoint: .top, endPoint: .bottom)
                 )
                 .allowsHitTesting(false)
         }
@@ -985,7 +1030,20 @@ struct GameDetailView: View {
     /// after a 132pt cover — so a wordmark that is the most recognisable thing
     /// about a game got the smallest space on the page. Below, it gets the
     /// whole width.
+    private var layout: GamePageLayout { ThemePalette.gamePageLayout }
+
     private var hero: some View {
+        Group {
+            switch layout {
+            case .showcase: showcaseHero
+            case .classic:  classicHero
+            }
+        }
+    }
+
+    /// Build 32's header: the art leads, and everything that has to be read
+    /// sits on a panel in front of it.
+    private var showcaseHero: some View {
         VStack(alignment: .leading, spacing: 14) {
             Color.clear.frame(height: Self.heroTopSpace)
 
@@ -996,35 +1054,22 @@ struct GameDetailView: View {
                 }
             } else {
                 // Two spacers, so the pair is CENTRED rather than left-flush.
-                //
-                // The panel takes the width its words need — without that it
+                // The panel takes the width its words need; without that it
                 // stretched to the page margin and carried a stripe of empty
-                // haze past the end of its own longest line. But hugging on
-                // the right alone left the pair ending short of the margin
-                // while the title beneath it was centred, so the header held
-                // two different alignments at once and the artwork looked
-                // shunted to one side.
+                // haze past the end of its own longest line. Hugging on the
+                // right alone then left the pair ending short while the title
+                // beneath it was centred — two alignments at once.
                 //
-                // The art band is its own zone: cover, panel and title all
-                // centre in it. The chips and stats below sit on the page and
-                // stay left-aligned, which is a different register, not an
-                // inconsistency.
-                //
-                // Both spacers collapse to nothing when space is tight, so a
-                // long platform name still gets the room.
+                // Both spacers collapse when space is tight, so a long
+                // platform name still gets the room.
                 HStack(alignment: .top, spacing: 10) {
                     Spacer(minLength: 0)
                     coverThumb(width: Self.coverWidth)
                     factsPanel(fills: false)
-                        // Dropped slightly so the panel reads as sitting
-                        // against the cover rather than being ruled off level
-                        // with it.
                         .padding(.top, 26)
                         // Spacers are greedy and text is compressible, so
                         // without this the two of them split the row with the
                         // panel and wrapped "Now Playing" onto a second line.
-                        // The panel is measured first; the spacers divide
-                        // what's actually left.
                         .layoutPriority(1)
                     Spacer(minLength: 0)
                 }
@@ -1032,9 +1077,6 @@ struct GameDetailView: View {
 
             heroTitle
 
-            // Full-width, below the art: four chips and a stats row both want
-            // the whole column, and neither is something you read at a glance
-            // the way the title is.
             OwnershipControl(ownership: $game.ownership, centered: true)
 
             if showGameStats {
@@ -1043,12 +1085,58 @@ struct GameDetailView: View {
         }
     }
 
+    /// What the app had before build 32, kept as a choice rather than a
+    /// fallback. Cover on the left, the facts beside it, the name as text.
+    ///
+    /// The words sit directly on the backdrop here — there is no panel — which
+    /// is exactly why `coverBackdrop` fades the art much harder in this
+    /// layout. That is not a lesser backdrop, it is the one this arrangement
+    /// requires; the showcase header can afford a bold image precisely because
+    /// nothing has to be read off it.
+    private var classicHero: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            classicLayout {
+                coverThumb(width: 138)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    // Honours the same "Use game logos" switch as showcase, at
+                    // the size this column can actually carry. A wordmark
+                    // needs width to read and there isn't much beside a 138pt
+                    // cover, so it gets a modest band rather than the full
+                    // one — and anyone who finds that busy has a switch.
+                    if !headerLogo.isEmpty {
+                        ArtworkView(headerLogo, contentMode: .fit)
+                            .frame(maxWidth: .infinity, maxHeight: 54, alignment: .leading)
+                            .accessibilityLabel(game.name)
+                    } else {
+                        Text(game.name)
+                            .font(.title2.bold())
+                    }
+                    heroFacts
+                }
+                Spacer(minLength: 0)
+            }
+
+            OwnershipControl(ownership: $game.ownership)
+
+            if showGameStats {
+                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
+            }
+        }
+    }
+
+    /// At accessibility text sizes a fixed cover and five stars cannot share a
+    /// line, and one over-wide child drags the whole page's column offscreen.
+    private var classicLayout: AnyLayout {
+        typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: 16))
+    }
+
     /// What this game is to you: where it sits, what you scored it, what the
-    /// critics said. Everything here is words, which is why it's on a panel
-    /// and not on the art.
-    /// `fills` is true only where the panel is alone on its row (accessibility
-    /// sizes), where hugging its content would leave it stranded mid-page.
-    private func factsPanel(fills: Bool) -> some View {
+    /// critics said. Shared by both layouts — showcase puts it on a panel,
+    /// classic sets it directly beside the cover.
+    var heroFacts: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: game.status.systemImage)
@@ -1090,13 +1178,22 @@ struct GameDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
-        .padding(12)
-        .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(.white.opacity(0.10), lineWidth: 1)
-        }
+    }
+
+    /// The showcase header's panel: `heroFacts` on translucent material, which
+    /// is what lets the art behind it stay at full strength.
+    ///
+    /// `fills` is true only where the panel is alone on its row (accessibility
+    /// sizes), where hugging its content would leave it stranded mid-page.
+    private func factsPanel(fills: Bool) -> some View {
+        heroFacts
+            .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
+            .padding(12)
+            .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+            }
     }
 
     /// The game's name across the full width — as its logo when one is set, as
@@ -1109,8 +1206,8 @@ struct GameDetailView: View {
     /// VoiceOver, the back button and the Mac window title are unaffected.
     @ViewBuilder
     private var heroTitle: some View {
-        let artwork = game.resolvedArtwork(.logo)
-        if !artwork.isEmpty, !typeSize.isAccessibilitySize {
+        let artwork = headerLogo
+        if !artwork.isEmpty {
             ArtworkView(artwork, contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: Self.titleBand)
                 .accessibilityLabel(game.name)
