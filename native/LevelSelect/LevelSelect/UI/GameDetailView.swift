@@ -673,7 +673,6 @@ struct GameDetailView: View {
             // survives far longer than either.
             case .classic:  96
             case .coverLed: 8 + 190 * 4 / 3 + 40
-            case .banner:   130
             // Compact's name is the first thing on the page and the smallest
             // of the five, so it clears almost immediately.
             case .compact:  56
@@ -936,12 +935,6 @@ struct GameDetailView: View {
              .init(color: .black, location: 0.42),
              .init(color: .black.opacity(0.55), location: 0.62),
              .init(color: .clear, location: 0.92)]
-        case .banner:
-            // Same generosity as showcase: only the logo sits on this.
-            [.init(color: .black, location: 0),
-             .init(color: .black, location: 0.40),
-             .init(color: .black.opacity(0.50), location: 0.60),
-             .init(color: .clear, location: 0.90)]
         case .compact:
             // Almost nothing. A tint at the very top so the page isn't flat,
             // gone before the cover starts — the height an art band would
@@ -1061,7 +1054,6 @@ struct GameDetailView: View {
             case .showcase: showcaseHero
             case .classic:  classicHero
             case .coverLed: coverLedHero
-            case .banner:   bannerHero
             case .compact:  compactHero
             }
         }
@@ -1140,45 +1132,6 @@ struct GameDetailView: View {
                     }
                     heroFacts
                 }
-                Spacer(minLength: 0)
-            }
-
-            OwnershipControl(ownership: $game.ownership)
-
-            if showGameStats {
-                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
-            }
-        }
-    }
-
-    /// The logo laid across the art, with the cover and facts beneath it.
-    ///
-    /// Showcase's boldness with the weight moved: there the logo sits under
-    /// the cover and panel, here it leads. The art can stay strong for the
-    /// same reason showcase's can — the only thing on it is the logo, and a
-    /// logo is art, not something anyone has to read.
-    private var bannerHero: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Group {
-                if !headerLogo.isEmpty {
-                    ArtworkView(headerLogo, contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: 96)
-                        .accessibilityLabel(game.name)
-                } else {
-                    // Text on unfaded art needs the same shadow the showcase
-                    // title carries — a bright screenshot swallows it.
-                    Text(game.name)
-                        .font(.largeTitle.bold())
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
-                        .shadow(color: .black.opacity(0.55), radius: 8, y: 2)
-                }
-            }
-            .padding(.top, 26)
-
-            classicLayout {
-                coverThumb(width: 124)
-                heroFacts
                 Spacer(minLength: 0)
             }
 

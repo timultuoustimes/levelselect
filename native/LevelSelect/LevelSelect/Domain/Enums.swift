@@ -119,9 +119,6 @@ enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
     /// classic — the words sit on it — and because a backdrop competing with
     /// a 190pt cover of the same game is the one thing this layout must not do.
     case coverLed
-    /// The logo sits ON the art at the top, with the cover and facts in a row
-    /// beneath it. Showcase's boldness with a different centre of gravity.
-    case banner
     /// No art band at all. A small cover, the facts inline beside it, and the
     /// sections starting almost immediately — for a library read at speed
     /// rather than admired.
@@ -134,7 +131,6 @@ enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
         case .showcase: "Showcase"
         case .classic:  "Classic"
         case .coverLed: "Cover"
-        case .banner:   "Banner"
         case .compact:  "Compact"
         }
     }
@@ -146,7 +142,6 @@ enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
         case .showcase: "The game's art fills the top, with its logo underneath."
         case .classic:  "Cover beside the details, name as text, art kept well back."
         case .coverLed: "One large cover, centred, with everything else beneath it."
-        case .banner:   "The logo across the art, cover and details below it."
         case .compact:  "No art. Small cover, and the sections start right away."
         }
     }
