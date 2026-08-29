@@ -666,9 +666,19 @@ struct GameDetailView: View {
             // leaves the screen far sooner than showcase's, which is below a
             // cover and a panel. One threshold for both would hand over while
             // the name was still on screen in one of them.
-            let handedOver = offset > (layout == .showcase
-                ? Self.heroTopSpace + Self.coverHeight + Self.titleBand
-                : 96)
+            let threshold: CGFloat = switch layout {
+            case .showcase: Self.heroTopSpace + Self.coverHeight + Self.titleBand
+            // Classic's name is at the very top beside the cover and leaves
+            // almost immediately; cover-led's sits UNDER a 190pt cover, so it
+            // survives far longer than either.
+            case .classic:  96
+            case .coverLed: 8 + 190 * 4 / 3 + 40
+            case .banner:   130
+            // Compact's name is the first thing on the page and the smallest
+            // of the five, so it clears almost immediately.
+            case .compact:  56
+            }
+            let handedOver = offset > threshold
             guard handedOver != titleInBar else { return }
             // Reduce Motion gets the same handoff without the crossfade — the
             // information is the point, the fade is decoration.
@@ -926,7 +936,20 @@ struct GameDetailView: View {
              .init(color: .black, location: 0.42),
              .init(color: .black.opacity(0.55), location: 0.62),
              .init(color: .clear, location: 0.92)]
-        case .classic:
+        case .banner:
+            // Same generosity as showcase: only the logo sits on this.
+            [.init(color: .black, location: 0),
+             .init(color: .black, location: 0.40),
+             .init(color: .black.opacity(0.50), location: 0.60),
+             .init(color: .clear, location: 0.90)]
+        case .compact:
+            // Almost nothing. A tint at the very top so the page isn't flat,
+            // gone before the cover starts — the height an art band would
+            // take is the whole point of this layout.
+            [.init(color: .black.opacity(0.55), location: 0),
+             .init(color: .black.opacity(0.18), location: 0.10),
+             .init(color: .clear, location: 0.26)]
+        case .classic, .coverLed:
             [.init(color: .black, location: 0),
              .init(color: .black.opacity(0.75), location: 0.18),
              .init(color: .black.opacity(0.22), location: 0.45),
@@ -1037,6 +1060,9 @@ struct GameDetailView: View {
             switch layout {
             case .showcase: showcaseHero
             case .classic:  classicHero
+            case .coverLed: coverLedHero
+            case .banner:   bannerHero
+            case .compact:  compactHero
             }
         }
     }
@@ -1125,6 +1151,109 @@ struct GameDetailView: View {
         }
     }
 
+    /// The logo laid across the art, with the cover and facts beneath it.
+    ///
+    /// Showcase's boldness with the weight moved: there the logo sits under
+    /// the cover and panel, here it leads. The art can stay strong for the
+    /// same reason showcase's can — the only thing on it is the logo, and a
+    /// logo is art, not something anyone has to read.
+    private var bannerHero: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Group {
+                if !headerLogo.isEmpty {
+                    ArtworkView(headerLogo, contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 96)
+                        .accessibilityLabel(game.name)
+                } else {
+                    // Text on unfaded art needs the same shadow the showcase
+                    // title carries — a bright screenshot swallows it.
+                    Text(game.name)
+                        .font(.largeTitle.bold())
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .shadow(color: .black.opacity(0.55), radius: 8, y: 2)
+                }
+            }
+            .padding(.top, 26)
+
+            classicLayout {
+                coverThumb(width: 124)
+                heroFacts
+                Spacer(minLength: 0)
+            }
+
+            OwnershipControl(ownership: $game.ownership)
+
+            if showGameStats {
+                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
+            }
+        }
+    }
+
+    /// For a library read at speed. No art band, a small cover, the facts
+    /// beside it, and the sections beginning almost at once.
+    ///
+    /// This is the one layout where the backdrop is deliberately almost gone
+    /// even when the library preference asks for cover art — a tall band of
+    /// image is exactly the thing being traded away for reaching the tracker
+    /// without scrolling. See `maskStops`.
+    private var compactHero: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            classicLayout {
+                coverThumb(width: 96)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(game.name)
+                        .font(.title3.bold())
+                        .lineLimit(2)
+                    heroFacts
+                }
+                Spacer(minLength: 0)
+            }
+
+            OwnershipControl(ownership: $game.ownership)
+
+            if showGameStats {
+                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
+            }
+        }
+        .padding(.top, 4)
+    }
+
+    /// The box on a shelf. One large cover, centred, and everything else
+    /// beneath it — the arrangement a physical game has when you pick it up.
+    ///
+    /// Nothing sits beside the cover, which is what lets it be this big: at
+    /// 190pt there is no column left for facts, and trying to keep one is how
+    /// the other two layouts ended up capping their covers at 132 and 138.
+    private var coverLedHero: some View {
+        VStack(spacing: 12) {
+            Color.clear.frame(height: 8)
+
+            coverThumb(width: min(190, Self.coverWidth * 1.45))
+
+            if !headerLogo.isEmpty {
+                ArtworkView(headerLogo, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 78)
+                    .accessibilityLabel(game.name)
+            } else {
+                Text(game.name)
+                    .font(.title.bold())
+                    .multilineTextAlignment(.center)
+            }
+
+            heroFacts(alignment: .center)
+                .frame(maxWidth: .infinity)
+
+            OwnershipControl(ownership: $game.ownership, centered: true)
+
+            if showGameStats {
+                GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     /// At accessibility text sizes a fixed cover and five stars cannot share a
     /// line, and one over-wide child drags the whole page's column offscreen.
     private var classicLayout: AnyLayout {
@@ -1136,8 +1265,10 @@ struct GameDetailView: View {
     /// What this game is to you: where it sits, what you scored it, what the
     /// critics said. Shared by both layouts — showcase puts it on a panel,
     /// classic sets it directly beside the cover.
-    var heroFacts: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    var heroFacts: some View { heroFacts(alignment: .leading) }
+
+    func heroFacts(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: game.status.systemImage)
                     .foregroundStyle(game.status.color)
