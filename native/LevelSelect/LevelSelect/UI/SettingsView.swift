@@ -185,6 +185,17 @@ struct SettingsView: View {
 
                 AboutSection()
             }
+            // macOS renders a bare `Form` in its old left-label style: labels
+            // in a right-aligned gutter, controls crammed into what's left,
+            // and every footer truncated to one line with an ellipsis. It is
+            // why the Developer section at the bottom of this screen was
+            // unreachable — the content did not fit and had nowhere to go.
+            //
+            // `.grouped` is the same style the iPhone gets: full-width rows,
+            // footers that wrap, sections that read as sections.
+            #if os(macOS)
+            .formStyle(.grouped)
+            #endif
             .navigationTitle("Settings")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -200,6 +211,13 @@ struct SettingsView: View {
             // this sheet the moment you touched a colour.
             .onDisappear { AppNavigator.shared.themeRevision += 1 }
         }
+        // A sheet with no size on macOS gets whatever the system guesses,
+        // which was too short for a screen with eight sections — the last of
+        // them could not be scrolled to at all. Sized to fit the longest
+        // section, and resizable past it.
+        #if os(macOS)
+        .frame(minWidth: 540, idealWidth: 620, minHeight: 560, idealHeight: 780)
+        #endif
     }
 
     #if LEGACY_IMPORT
