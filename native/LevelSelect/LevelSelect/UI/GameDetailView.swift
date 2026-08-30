@@ -1273,7 +1273,7 @@ struct GameDetailView: View {
         heroFacts
             .frame(maxWidth: fills ? .infinity : nil, alignment: .leading)
             .padding(12)
-            .background(.ultraThinMaterial, in: .rect(cornerRadius: 14))
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
                     .strokeBorder(.white.opacity(0.10), lineWidth: 1)

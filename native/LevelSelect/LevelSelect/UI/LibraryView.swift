@@ -758,7 +758,7 @@ struct LibraryGridCell: View {
                         }
                         .padding(.horizontal, 7)
                         .padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: .capsule)
+                        .glassEffect(.regular, in: .capsule)
                         .padding(6)
                     }
                 }
@@ -767,7 +767,7 @@ struct LibraryGridCell: View {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 8))
                             .padding(4)
-                            .background(.ultraThinMaterial, in: .circle)
+                            .glassEffect(.regular, in: .circle)
                             .padding(5)
                     }
                 }
@@ -775,7 +775,7 @@ struct LibraryGridCell: View {
                     if size != .small && !game.ownership.isEmpty {
                         OwnershipBadges(ownership: game.ownership, size: 9, tint: .primary)
                             .padding(.horizontal, 6).padding(.vertical, 4)
-                            .background(.ultraThinMaterial, in: .capsule)
+                            .glassEffect(.regular, in: .capsule)
                             .padding(5)
                     }
                 }

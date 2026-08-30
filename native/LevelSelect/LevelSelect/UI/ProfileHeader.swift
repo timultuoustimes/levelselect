@@ -115,18 +115,22 @@ struct ProfileHeader: View {
     /// which is a composition rather than a gap.
     @ViewBuilder
     private var backdrop: some View {
-        Group {
-            if summary.usesRibbon {
-                ribbon
-            } else if let art = summary.fallbackBackdrop {
-                CoverThumb(urlString: art)
-                    .blur(radius: 3)
-                    .opacity(0.55)
+        GeometryReader { geo in
+            Group {
+                if summary.usesRibbon {
+                    ribbon(width: geo.size.width)
+                } else if let art = summary.fallbackBackdrop {
+                    CoverThumb(urlString: art)
+                        .frame(width: geo.size.width, height: Self.artHeight * 1.7)
+                        .clipped()
+                        .blur(radius: 3)
+                        .opacity(0.55)
+                }
             }
+            .frame(width: geo.size.width, height: Self.artHeight)
+            .clipped()
         }
         .frame(height: Self.artHeight)
-        .frame(maxWidth: .infinity)
-        .clipped()
         // A MASK, not a colour overlay — the same technique the game page
         // uses. Painting the page colour on top would be wrong the moment
         // someone changes their page background, since the header would then
@@ -147,18 +151,36 @@ struct ProfileHeader: View {
         .accessibilityHidden(true)
     }
 
-    private var ribbon: some View {
-        HStack(spacing: 5) {
-            ForEach(Array(summary.recentCovers.prefix(9).enumerated()), id: \.offset) { _, art in
+    /// The week's covers, sized to whatever screen they land on.
+    ///
+    /// Two things were wrong on iPad and both are visible in one shot.
+    ///
+    /// The tile was a fixed 104pt, so the ribbon's width was decided by how
+    /// many games you played rather than by the screen: three covers make
+    /// 327pt, which fills an iPhone and floats as a narrow block in the middle
+    /// of a 1032pt iPad. The tile is now derived from the available width, so
+    /// the same three covers span the iPad as three big soft panels and nine
+    /// covers pack an iPhone.
+    ///
+    /// And `.frame(width:)` set no height, so each cover was only as tall as
+    /// its own 3:4 aspect at that width — 139pt inside a 247pt row. That short
+    /// fall is the hard horizontal cut across the top of the art. The height
+    /// is now explicit and deliberately TALLER than the band, so every cover
+    /// overshoots and the crop happens off-screen.
+    private func ribbon(width: CGFloat) -> some View {
+        let covers = Array(summary.recentCovers.prefix(12))
+        // 1.3 of the width, because the row is rotated: the corners have to
+        // come from somewhere or they cut in as diagonal notches.
+        let tile = max(96, (width * 1.3) / CGFloat(max(covers.count, 1)))
+        return HStack(spacing: 4) {
+            ForEach(Array(covers.enumerated()), id: \.offset) { _, art in
                 CoverThumb(urlString: art)
-                    .frame(width: 104)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .frame(width: tile, height: Self.artHeight * 1.7)
+                    .clipped()
             }
         }
-        .frame(height: Self.artHeight * 1.3)
         .rotationEffect(.degrees(-4))
-        .scaleEffect(1.12)
-        .blur(radius: 1.5)
+        .blur(radius: 2)
         .opacity(0.5)
     }
 
@@ -221,7 +243,7 @@ struct ProfileHeader: View {
                 .lineLimit(2)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(.white.opacity(0.09), in: .capsule)
+                .glassEffect(.regular, in: .capsule)
 
                 if grouped.count > 1 {
                     Text("+\(grouped.count - 1)")
@@ -229,7 +251,7 @@ struct ProfileHeader: View {
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
-                        .background(.white.opacity(0.06), in: .capsule)
+                        .glassEffect(.regular, in: .capsule)
                 }
             }
         }
@@ -249,11 +271,10 @@ struct ProfileHeader: View {
             divider
             stat(Format.duration(summary.totalSeconds), "Total")
         }
-        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 13))
-        .overlay {
-            RoundedRectangle(cornerRadius: 13)
-                .strokeBorder(.white.opacity(0.09), lineWidth: 1)
-        }
+        // Liquid Glass rather than a flat white wash. The band sits directly
+        // under the art, so it should pick up what is behind it instead of
+        // laying an opaque grey slab over the bottom of the ribbon.
+        .glassEffect(.regular, in: .rect(cornerRadius: 13))
         .padding(.horizontal, 16)
     }
 

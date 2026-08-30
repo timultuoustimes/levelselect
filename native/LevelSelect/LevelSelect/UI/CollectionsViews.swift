@@ -57,7 +57,7 @@ struct CollectionCard: View {
                         Image(systemName: "shippingbox.fill")
                             .font(.system(size: 9))
                             .padding(5)
-                            .background(.ultraThinMaterial, in: .circle)
+                            .glassEffect(.regular, in: .circle)
                             .padding(5)
                     }
                 }

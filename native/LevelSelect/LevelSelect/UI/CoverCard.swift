@@ -16,7 +16,7 @@ struct CoverCard: View {
                         Image(systemName: "pin.fill")
                             .font(.caption2)
                             .padding(5)
-                            .background(.ultraThinMaterial, in: .circle)
+                            .glassEffect(.regular, in: .circle)
                             .padding(5)
                     }
                 }
