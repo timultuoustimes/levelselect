@@ -242,21 +242,21 @@ struct ProfileHeader: View {
                 options: .caseInsensitive) == .orderedSame
 
             HStack(spacing: 6) {
-                HStack(spacing: 5) {
-                    Text(main.services.map(\.label).joined(separator: " · "))
-                        .foregroundStyle(echoesName ? .secondary : .tertiary)
-                    if !echoesName {
-                        Text(main.handle)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                // `ViewThatFits` MEASURES rather than guessing a cutoff.
+                //
+                // Six services wrapped to a second line and left a separator
+                // dangling at the end of the first — "… Discord ·" — inside a
+                // capsule that then went ragged. A fixed cap would be wrong on
+                // the other side: three services have room to spare on an
+                // iPhone and eleven do not fit an iPad. This tries the whole
+                // list first and drops one service at a time until a version
+                // fits on ONE line, folding the remainder into a count.
+                ViewThatFits(in: .horizontal) {
+                    ForEach(Array(stride(from: main.services.count, through: 1, by: -1)),
+                            id: \.self) { shown in
+                        chip(main, showing: shown, echoesName: echoesName)
                     }
                 }
-                .font(.caption2)
-                .lineLimit(2)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .glassEffect(.regular, in: .capsule)
 
                 if grouped.count > 1 {
                     Text("+\(grouped.count - 1)")
@@ -268,6 +268,33 @@ struct ProfileHeader: View {
                 }
             }
         }
+    }
+
+    /// One capsule showing `showing` services, with any remainder as "+N".
+    private func chip(_ row: (handle: String, services: [HandleService]),
+                      showing: Int, echoesName: Bool) -> some View {
+        let visible = row.services.prefix(showing).map(\.label)
+        let hidden = row.services.count - showing
+        // The count joins the list as another item, so the separator rhythm
+        // never breaks and no "·" is ever left hanging at the end.
+        let text = (visible + (hidden > 0 ? ["+\(hidden)"] : []))
+            .joined(separator: " · ")
+
+        return HStack(spacing: 5) {
+            Text(text)
+                .foregroundStyle(echoesName ? .secondary : .tertiary)
+            if !echoesName {
+                Text(row.handle)
+                    .foregroundStyle(.secondary)
+                    .truncationMode(.tail)
+            }
+        }
+        .font(.caption2)
+        .lineLimit(1)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .glassEffect(.regular, in: .capsule)
     }
 
     /// Three numbers that all move.
