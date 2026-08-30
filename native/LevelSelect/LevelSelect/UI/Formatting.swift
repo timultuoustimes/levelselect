@@ -72,6 +72,20 @@ extension GameStatus {
          .completed, .shelved, .abandoned]
     }
 
+    /// The statuses Home carries: what is live and what is next.
+    ///
+    /// Home and Library had drifted into the same screen with different
+    /// spacing — both listed every status, so the two tabs answered one
+    /// question twice. Tim's split: **Home is you right now, Library is the
+    /// collection.** A backlog, a finished pile and an abandoned shelf are
+    /// facts about a collection; they are not what you opened the app to do.
+    ///
+    /// Wishlist is absent for a different reason — it has its own tab, and it
+    /// is the one status that isn't part of the library at all.
+    static var homeOrder: [GameStatus] {
+        [.playing, .ongoing, .paused, .queued]
+    }
+
     var sectionTitle: String {
         switch self {
         case .playing:   "Now Playing"

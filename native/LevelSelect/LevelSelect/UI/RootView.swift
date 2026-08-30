@@ -550,17 +550,11 @@ struct HomeTab: View {
                     path.append(game)
                 }
 
-                if platformGroups.count > 1 {
-                    SystemsRow(groups: platformGroups) { platform in
-                        path.append(PlatformRoute(platform: platform))
-                    }
-                }
-
-                // Wishlist is a TAB, not a shelf. It was both, which meant the
-                // same games had two homes on the same screen — and a wishlist
-                // is the one status that isn't part of your library at all.
-                // Tim: "it should be in the tab only."
-                ForEach(GameStatus.displayOrder.filter { $0 != .wishlist }, id: \.self) { status in
+                // `homeOrder`, not `displayOrder`. Home carries what is live
+                // and what is next; the backlog, the finished pile, the
+                // shelved and the abandoned are facts about a collection and
+                // live in Library. Wishlist has its own tab.
+                ForEach(GameStatus.homeOrder, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty, !hiddenStatuses.contains(status.rawValue) {
                         StatusCarousel(
@@ -635,13 +629,12 @@ struct HomeTab: View {
     /// is a bug from the user's side, however deliberate the tap was.
     @ViewBuilder
     private var hiddenStatusesFooter: some View {
-        // Same wishlist exclusion as the shelves above. Anyone who had hidden
-        // the wishlist shelf before it was removed would otherwise be offered
-        // a button that restores a shelf which no longer exists.
-        let hidden = GameStatus.displayOrder.filter {
-            $0 != .wishlist
-                && hiddenStatuses.contains($0.rawValue)
-                && !(grouped[$0] ?? []).isEmpty
+        // Only shelves Home actually draws can be restored here. Anyone who
+        // had hidden Completed or Wishlist before they moved to Library would
+        // otherwise be offered a button restoring a shelf that no longer
+        // exists on this screen.
+        let hidden = GameStatus.homeOrder.filter {
+            hiddenStatuses.contains($0.rawValue) && !(grouped[$0] ?? []).isEmpty
         }
         if !hidden.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
@@ -672,14 +665,6 @@ struct HomeTab: View {
         if set.contains(status.rawValue) { set.remove(status.rawValue) }
         else { set.insert(status.rawValue) }
         collapsedRaw = set.sorted().joined(separator: ",")
-    }
-
-    /// Platforms across the library (by leading platform) with counts, biggest
-    /// first — the Home "Systems" shelf.
-    private var platformGroups: [(platform: String, count: Int)] {
-        Dictionary(grouping: games) { PlatformPreference.owned($0.platforms) ?? "Other" }
-            .map { (platform: $0.key, count: $0.value.count) }
-            .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
     }
 
     private var continueGame: Game? {

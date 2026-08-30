@@ -125,6 +125,32 @@ struct LibraryTab: View {
         }
     }
 
+    /// Systems moved here from Home.
+    ///
+    /// It was Home's second block, which put a hardware index above the games
+    /// themselves — you saw a way to browse the same games by console before
+    /// you saw the games. Browsing is Library's job, and here it sits beside
+    /// Collections as one of several ways into the shelf rather than as a peer
+    /// of "what am I playing".
+    @ViewBuilder
+    private var systemsShelf: some View {
+        if platformGroups.count > 1 {
+            SystemsRow(groups: platformGroups) { platform in
+                path.append(PlatformRoute(platform: platform))
+            }
+        }
+    }
+
+    /// Same grouping Home used: by the game's most-preferred owned platform,
+    /// largest groups first. Counts follow the CURRENT filters, unlike Home's
+    /// which always counted the whole library — here the shelf sits inside a
+    /// filtered view and should agree with what's on screen.
+    private var platformGroups: [(platform: String, count: Int)] {
+        Dictionary(grouping: visible) { PlatformPreference.owned($0.platforms) ?? "Other" }
+            .map { (platform: $0.key, count: $0.value.count) }
+            .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
+    }
+
     @ViewBuilder
     private var collectionShelf: some View {
         if !collections.isEmpty {
@@ -138,6 +164,7 @@ struct LibraryTab: View {
     private var gridView: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
+                systemsShelf
                 collectionShelf
                 if let groups = sectionGroups {
                     ForEach(groups.indices, id: \.self) { i in
