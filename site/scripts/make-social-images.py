@@ -34,7 +34,13 @@ MUTED       = (153, 144, 184)
 # page carries one big logo that survives being shrunk. The hero went back to
 # Home when the site turned out to have no picture of the app's front door
 # anywhere; this stayed put on purpose.
-PHONE_SHOT = "iphone-02-game-page-hollow.webp"
+#
+# Updated to the build-33 shot 2026-08-30. Same composition and the same
+# reasoning — a game page, not Home — just the current app. Build 33's Home
+# does now carry a big pixel name that would survive a thumbnail, but a
+# wordmark over key art still beats it, and the unfurl should look like the
+# thing people are shown first when they open a game.
+PHONE_SHOT = "iphone-33-layout-showcase.webp"
 IPAD_SHOT  = "ipad-01-split-tracker.webp"
 
 PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
