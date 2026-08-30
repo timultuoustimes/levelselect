@@ -77,27 +77,38 @@ def shot(name, height):
     return im.resize((w, height), Image.LANCZOS)
 
 
-def devices(pair, height):
+def devices(pair, height, max_width=None):
     """The hero art: one phone, or the site's phone-in-front-of-iPad pairing.
 
     `height` is the tallest device, so callers can budget vertical space and
     keep text clear of the art — the square's URL used to land on top of the
     phone because nothing was measuring this.
+
+    `max_width` scales the finished pair down to fit. Without it, making the
+    iPad bigger simply pushed it off the canvas: the story and square center
+    the art, so a wider pair loses the same amount off BOTH devices.
     """
-    # The pairing mirrors the hero's arrangement — phone in front of iPad —
-    # so a preview reads as the same product. The individual shots are picked
-    # for thumbnail legibility instead; see PHONE_SHOT.
     phone = shot(PHONE_SHOT, height)
     if not pair:
         return phone
 
-    pad = shot(IPAD_SHOT, round(height * 0.74))
-    overlap = round(phone.width * 0.46)
+    # 0.90, up from 0.74. An iPad 13 is about three and a half times the width
+    # of an iPhone; at 0.74 the pair read as a phone beside a small tablet,
+    # which is neither true nor useful — you could not see what was on the
+    # iPad. This is closer to life and closer to the website hero, where the
+    # iPad ends up slightly shorter than the phone rather than dwarfed by it.
+    pad = shot(IPAD_SHOT, round(height * 0.90))
+    overlap = round(phone.width * 0.42)
     canvas = Image.new("RGBA", (phone.width + pad.width - overlap, height), (0, 0, 0, 0))
     # iPad behind and slightly high, phone in front-left — the arrangement the
     # homepage hero uses, so the two read as one product on several screens.
     canvas.alpha_composite(pad, (phone.width - overlap, round(height * 0.10)))
     canvas.alpha_composite(phone, (0, 0))
+
+    if max_width and canvas.width > max_width:
+        scale = max_width / canvas.width
+        canvas = canvas.resize(
+            (max_width, round(canvas.height * scale)), Image.LANCZOS)
     return canvas
 
 
@@ -164,8 +175,8 @@ def open_graph(pair):
     # further right and stands shorter: the wordmark runs to ~x756 at 62px
     # (Press Start 2P is one em per character), and the phone was landing on
     # its final letter.
-    art = devices(pair, 700 if not pair else 470)
-    img.alpha_composite(art, (835, 92) if not pair else (788, 84))
+    art = devices(pair, 700 if not pair else 440)
+    img.alpha_composite(art, (835, 92) if not pair else (772, 96))
     return img, f"og{'-2up' if pair else ''}.png"
 
 
@@ -187,7 +198,7 @@ def story(pair):
     # Art sits between the tagline and the footer, scaled to whatever room is
     # left rather than a fixed height that could collide with either.
     top, footer_top = 770, 1700
-    art = devices(pair, min(900, footer_top - top - 40))
+    art = devices(pair, min(900, footer_top - top - 40), max_width=W - 120)
     if art.width > W - 80:
         art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
     img.alpha_composite(art, ((W - art.width) // 2, top))
@@ -212,7 +223,7 @@ def square(pair):
     d.text((540, 406), "and exactly where you left off.", font=sans(29, 400), fill=INK, anchor="mt")
 
     top, footer_top = 486, 990
-    art = devices(pair, footer_top - top - 36)
+    art = devices(pair, footer_top - top - 36, max_width=W - 120)
     if art.width > W - 80:
         art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
     img.alpha_composite(art, ((W - art.width) // 2, top))
