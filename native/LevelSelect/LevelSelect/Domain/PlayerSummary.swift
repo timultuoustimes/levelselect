@@ -61,12 +61,21 @@ struct PlayerSummary {
             .sorted { $0.at > $1.at }
             .compactMap { $0.game.displayCoverURLString }
 
-        // The current game first, then whatever was played most recently — so
-        // the fallback is never empty for anyone who has played anything.
+        // Whatever is being played that HAS art — not merely whatever is
+        // being played.
+        //
+        // `first(where: status == .playing)` looked right and was wrong: it
+        // took the first playing game even when that game had no artwork at
+        // all, so the header rendered empty while a shelf full of covers sat
+        // underneath it. Anyone whose current game was added by hand saw a
+        // blank header and no reason why.
+        let playing = games.filter { $0.status == .playing }
+        let mostRecent = recent.max(by: { $0.at < $1.at })?.game
         summary.fallbackBackdrop =
-            games.first(where: { $0.status == .playing })?.backdropURLString
-            ?? recent.max(by: { $0.at < $1.at })?.game.backdropURLString
-            ?? recent.max(by: { $0.at < $1.at })?.game.displayCoverURLString
+            playing.compactMap(\.backdropURLString).first
+            ?? mostRecent?.backdropURLString
+            ?? playing.compactMap(\.displayCoverURLString).first
+            ?? mostRecent?.displayCoverURLString
 
         return summary
     }

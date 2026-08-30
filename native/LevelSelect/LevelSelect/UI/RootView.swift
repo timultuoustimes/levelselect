@@ -526,11 +526,15 @@ struct HomeTab: View {
         let summary = PlayerSummary.make(from: games)
         let headerBleeds = ProfileHeader.drawsArt(profile: profiles.first, summary: summary)
 
-        return ScrollView {
+        // The GeometryReader is here for one number: the top safe-area inset,
+        // which is how far the art has to reach up to sit under the toolbar.
+        return GeometryReader { outer in
+            ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
                 // Whose shelf this is, before what is on it. Draws nothing
                 // until someone has actually put something in it.
-                ProfileHeader(profile: profiles.first, summary: summary) {
+                ProfileHeader(profile: profiles.first, summary: summary,
+                              topOverscan: headerBleeds ? outer.safeAreaInsets.top : 0) {
                     editingProfile = true
                 }
 
@@ -594,12 +598,17 @@ struct HomeTab: View {
                 // After the shelves, not above them: an ask, never a nag.
                 BetaQuestionCard()
             }
-            .padding(.bottom)
-            // The art runs to the top edge, under the toolbar. Everything else
-            // keeps the ordinary inset.
-            .padding(.top, headerBleeds ? 0 : 16)
+                .padding(.bottom)
+                // The art runs to the top edge, under the toolbar. Everything
+                // else keeps the ordinary inset.
+                .padding(.top, headerBleeds ? 0 : 16)
+            }
+            .scrollIndicators(.hidden)
+            // ONLY when the header paints art. Without a header, letting
+            // content start under the bar would put Continue Playing behind
+            // the toolbar at rest, which is a bug rather than an effect.
+            .ignoresSafeArea(.container, edges: headerBleeds ? .top : [])
         }
-        .scrollIndicators(.hidden)
     }
 
     /// First thing a new person sees, and the app's only onboarding — there is

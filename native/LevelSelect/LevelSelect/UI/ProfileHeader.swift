@@ -15,6 +15,9 @@ import PhotosUI
 struct ProfileHeader: View {
     let profile: PlayerProfile?
     let summary: PlayerSummary
+    /// Extra art drawn ABOVE the header's own top edge, so it reaches up
+    /// behind the toolbar. Home passes the top safe-area inset.
+    var topOverscan: CGFloat = 0
     var onEdit: () -> Void
 
     private var hasAnything: Bool {
@@ -61,6 +64,12 @@ struct ProfileHeader: View {
                         identity(profile)
                             .padding(.bottom, 10)
                     }
+                    // The art already sits under the toolbar rather than
+                    // starting below it. The glass bar then has something to
+                    // refract from the first frame, instead of the header
+                    // looking flat until you scroll art up into it — and the
+                    // hard top edge at the bar has nowhere to be.
+                    .padding(.top, -topOverscan)
                 } else {
                     identity(profile)
                         .padding(.top, 4)
@@ -121,16 +130,16 @@ struct ProfileHeader: View {
                     ribbon(width: geo.size.width)
                 } else if let art = summary.fallbackBackdrop {
                     CoverThumb(urlString: art)
-                        .frame(width: geo.size.width, height: Self.artHeight * 1.7)
+                        .frame(width: geo.size.width, height: (Self.artHeight + topOverscan) * 1.7)
                         .clipped()
                         .blur(radius: 3)
                         .opacity(0.55)
                 }
             }
-            .frame(width: geo.size.width, height: Self.artHeight)
+            .frame(width: geo.size.width, height: Self.artHeight + topOverscan)
             .clipped()
         }
-        .frame(height: Self.artHeight)
+        .frame(height: Self.artHeight + topOverscan)
         // A MASK, not a colour overlay — the same technique the game page
         // uses. Painting the page colour on top would be wrong the moment
         // someone changes their page background, since the header would then
@@ -175,7 +184,7 @@ struct ProfileHeader: View {
         return HStack(spacing: 4) {
             ForEach(Array(covers.enumerated()), id: \.offset) { _, art in
                 CoverThumb(urlString: art)
-                    .frame(width: tile, height: Self.artHeight * 1.7)
+                    .frame(width: tile, height: (Self.artHeight + topOverscan) * 1.7)
                     .clipped()
             }
         }

@@ -426,3 +426,31 @@ struct ProfileNameColorTests {
         #expect(ProfileNameColor.resolve("not a colour") == .primary)
     }
 }
+
+extension PlayerSummaryTests {
+    /// The fallback has to pick a game that HAS art, not merely the first one
+    /// being played. Taking the first playing game left the header blank for
+    /// anyone whose current game was added by hand — while a shelf full of
+    /// covers sat directly underneath it.
+    @Test func theFallbackSkipsGamesWithNoArt() {
+        let bare = Game(name: "Hand-added")
+        bare.status = .playing
+
+        let withArt = Game(name: "Has a cover")
+        withArt.status = .playing
+        withArt.coverURLString = "https://example.com/cover.jpg"
+
+        let s = PlayerSummary.make(from: [bare, withArt])
+        #expect(s.fallbackBackdrop == "https://example.com/cover.jpg")
+    }
+
+    /// And a backdrop beats a cover when both exist — a cover in a wide band
+    /// is a portrait stretched sideways.
+    @Test func aBackdropBeatsACover() {
+        let g = Game(name: "Both")
+        g.status = .playing
+        g.coverURLString = "https://example.com/cover.jpg"
+        g.backdropURLString = "https://example.com/backdrop.jpg"
+        #expect(PlayerSummary.make(from: [g]).fallbackBackdrop == "https://example.com/backdrop.jpg")
+    }
+}
