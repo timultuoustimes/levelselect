@@ -101,17 +101,23 @@ def devices(pair, height, max_width=None):
     # and the phone is smaller, hanging low-left in front of it. Earlier
     # versions had them near enough the same height with the phone leading,
     # which reads as two devices competing rather than one product seen twice.
-    pad = shot(IPAD_SHOT, height)
-    phone = shot(PHONE_SHOT, round(height * 0.88))
-    overlap = round(phone.width * 0.42)
+    pad = shot(IPAD_SHOT, round(height * 0.94))
+    phone = shot(PHONE_SHOT, round(height * 0.84))
 
+    # A slight tilt, and NOT bottom-aligned. Tim likes the phone askew, and
+    # flush-to-the-baseline read as two devices standing on a shelf rather
+    # than an arrangement. `expand=True` grows the bitmap to fit the rotated
+    # corners, so the widths below are measured after rotating, not before.
+    pad = pad.rotate(1.2, resample=Image.BICUBIC, expand=True)
+    phone = phone.rotate(-2.4, resample=Image.BICUBIC, expand=True)
+
+    overlap = round(phone.width * 0.44)
     canvas = Image.new("RGBA",
                        (phone.width + pad.width - overlap, height), (0, 0, 0, 0))
-    # iPad top-right, phone bottom-left and in front — the offset is vertical,
-    # so the phone hangs below the iPad's bottom edge exactly as it does on the
-    # site rather than sitting level with it.
+    # iPad high, phone low and in front, each clear of the edges so the tilt
+    # has somewhere to live.
     canvas.alpha_composite(pad, (phone.width - overlap, 0))
-    canvas.alpha_composite(phone, (0, height - phone.height))
+    canvas.alpha_composite(phone, (0, height - phone.height - round(height * 0.03)))
 
     if max_width and canvas.width > max_width:
         scale = max_width / canvas.width
