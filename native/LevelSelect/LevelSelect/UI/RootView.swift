@@ -561,7 +561,10 @@ struct HomeTab: View {
                             status: status, games: items,
                             collapsed: collapsedStatuses.contains(status.rawValue),
                             onOpen: { path.append($0) },
-                            onSeeAll: { path.append(status) },
+                            onSeeAll: {
+                                nav.pendingLibraryStatus = status
+                                nav.selectedTab = .library
+                            },
                             onToggleCollapse: { toggleCollapse(status) },
                             onHide: { setHidden(status, true) }
                         )

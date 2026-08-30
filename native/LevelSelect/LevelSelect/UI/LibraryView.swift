@@ -13,6 +13,7 @@ struct LibraryTab: View {
 
     @State private var searchText = ""
     @State private var statusFilter: GameStatus?
+    @State private var nav = AppNavigator.shared
     @State private var tagFilter: String?
     @State private var platformFilter: String?
     @State private var ownershipFilter: String?
@@ -49,6 +50,15 @@ struct LibraryTab: View {
                 content
             }
             .lsBackground()
+            // "See all" on a Home shelf lands here, filtered, rather than
+            // pushing a list onto Home's own stack. Consumed on arrival so
+            // returning to Library later doesn't silently re-apply it.
+            .onChange(of: nav.pendingLibraryStatus) { _, status in
+                guard let status else { return }
+                path = NavigationPath()
+                statusFilter = status
+                nav.pendingLibraryStatus = nil
+            }
             .navigationTitle("Library")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
@@ -269,7 +279,7 @@ struct LibraryTab: View {
     private var sectionGroups: [LibGroup]? {
         switch sort {
         case .status:
-            return GameStatus.displayOrder.compactMap { s in
+            return GameStatus.displayOrder.filter { $0 != .wishlist }.compactMap { s in
                 let items = grouped[s] ?? []
                 return items.isEmpty ? nil : LibGroup(title: s.sectionTitle, status: s, items: items)
             }
@@ -338,8 +348,12 @@ struct LibraryTab: View {
         ToolbarItem {
             Menu {
                 Picker("Status", selection: $statusFilter) {
-                    Label("All (\(games.count))", systemImage: "circle.grid.2x2").tag(GameStatus?.none)
-                    ForEach(GameStatus.displayOrder, id: \.self) { s in
+                    // Counts exclude the wishlist, like the shelves do. "All"
+                    // that quietly included six games you don't own would not
+                    // reconcile with anything else on the screen.
+                    Label("All (\(games.filter { $0.status != .wishlist }.count))",
+                          systemImage: "circle.grid.2x2").tag(GameStatus?.none)
+                    ForEach(GameStatus.displayOrder.filter { $0 != .wishlist }, id: \.self) { s in
                         let count = statusCounts[s] ?? 0
                         if count > 0 {
                             Label("\(s.sectionTitle) (\(count))", systemImage: s.systemImage)
@@ -451,7 +465,12 @@ struct LibraryTab: View {
     private var visible: [Game] {
         let hidden = bundledGameIDs
         return games.filter { g in
-            (statusFilter == nil || g.status == statusFilter)
+            // A wishlisted game is not in your library — you don't own it. It
+            // has its own tab, and appearing here as well is the same
+            // duplication Home had, one tab over. This also makes "All" mean
+            // what it says: everything you actually have.
+            g.status != .wishlist
+            && (statusFilter == nil || g.status == statusFilter)
             && (tagFilter == nil || g.userTags.contains(tagFilter!))
             // Matched by displayed name, so picking "Switch 2" finds the games
             // stored as "Nintendo Switch 2" too.

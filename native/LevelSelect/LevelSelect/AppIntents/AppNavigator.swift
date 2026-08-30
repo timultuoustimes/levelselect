@@ -32,6 +32,14 @@ final class AppNavigator {
     /// is 156 call sites and a separate job.
     var themeRevision = 0
 
+    /// A status to show in Library, set by "See all" on a Home shelf.
+    ///
+    /// Home stops at what is live and what is next; seeing all of a status is
+    /// browsing, and browsing is Library's job. Sending it here rather than
+    /// pushing `StatusListView` onto Home's own stack keeps Home from growing
+    /// a second browsing surface beside the one it just handed over.
+    var pendingLibraryStatus: GameStatus?
+
     /// A game to push onto the Home stack (consumed by HomeTab).
     var pendingGameID: UUID?
 
