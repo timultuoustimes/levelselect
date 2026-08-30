@@ -358,15 +358,35 @@ struct ProfileEditor: View {
                 }
 
                 Section {
-                    ForEach(GamerService.allCases, id: \.rawValue) { service in
-                        handleField(service)
+                    ForEach(groupedDrafts, id: \.handle) { group in
+                        NavigationLink {
+                            HandleEditor(handles: $handles, existing: group.handle)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(group.handle)
+                                Text(group.services.map(\.label).joined(separator: " · "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    // Offered only while something is still unassigned. Once
+                    // one handle covers every service there is nothing left to
+                    // add, and a button that leads to an empty choice is just
+                    // a dead end wearing a plus sign.
+                    if hasUnassignedServices {
+                        NavigationLink {
+                            HandleEditor(handles: $handles, existing: nil)
+                        } label: {
+                            Label(groupedDrafts.isEmpty ? "Add a handle" : "Add another handle",
+                                  systemImage: "plus")
+                        }
                     }
                 } header: {
                     Text("Handles")
                 } footer: {
-                    // Says the two rules rather than making anyone discover
-                    // them, and says plainly that these do nothing.
-                    Text("Only the ones you fill in are shown. Use the same handle on several services and it appears once, with each service beside it. These are decoration — nothing signs in and nothing is shared.")
+                    Text("Add a handle once and tick everywhere you use it. Signing up somewhere new later means opening that handle and adding the service — not typing it again. These are decoration: nothing signs in and nothing is shared.")
                 }
 
                 if let importError {
@@ -398,7 +418,7 @@ struct ProfileEditor: View {
                 Button("Choose a photo") { pickingPhoto = true }
                 Button("Choose game art") { sheet = .artwork }
                 #if os(iOS)
-                Button("Choose a Memoji") { sheet = .memoji }
+                Button("Choose a sticker or Memoji") { sheet = .memoji }
                 #endif
                 if avatar != nil {
                     Button("Remove picture", role: .destructive) { avatar = nil }
@@ -412,10 +432,10 @@ struct ProfileEditor: View {
                     AvatarArtworkPicker { take($0) }
                 case .memoji:
                     #if os(iOS)
-                    // Memoji arrive as transparent HEIC, so `take` sends them
-                    // straight through with no crop step — which is right: a
-                    // Memoji is already a cut-out of exactly one thing.
-                    NavigationStack { MemojiPicker { take($0) } }
+                    // Stickers arrive as transparent HEIC, so `take` sends
+                    // them straight through with no crop step — which is
+                    // right: a sticker is already a cut-out of one thing.
+                    NavigationStack { StickerPicker { take($0) } }
                     #else
                     EmptyView()
                     #endif
@@ -429,31 +449,26 @@ struct ProfileEditor: View {
         #endif
     }
 
-    private func handleField(_ service: GamerService) -> some View {
-        HStack {
-            Text(service.label)
-            Spacer()
-            TextField("handle", text: binding(for: service))
-                .multilineTextAlignment(.trailing)
-                #if !os(macOS)
-                .textInputAutocapitalization(.never)
-                #endif
-                .autocorrectionDisabled()
+    /// The drafts as they will be DRAWN — one row per distinct handle.
+    private var groupedDrafts: [(handle: String, services: [HandleService])] {
+        Dictionary(grouping: handles.keys.compactMap(HandleService.init(key:))) {
+            handles[$0.key] ?? ""
         }
+        .filter { !$0.key.isEmpty }
+        .map { (handle: $0.key, services: $0.value.sorted { $0.order < $1.order }) }
+        .sorted { ($0.services.first?.order ?? 0) < ($1.services.first?.order ?? 0) }
     }
 
-    private func binding(for service: GamerService) -> Binding<String> {
-        Binding(
-            get: { handles[service.rawValue] ?? "" },
-            set: { handles[service.rawValue] = $0 }
-        )
+    private var hasUnassignedServices: Bool {
+        let used = Set(handles.keys)
+        return HandleService.builtins.contains { !used.contains($0.key) }
     }
 
     /// The one rule that decides how an avatar behaves, applied in one place.
     ///
-    /// **Transparency present** — a cut-out PNG, whether from Photos or from
-    /// game art — goes straight in and is drawn whole, unframed, the way a
-    /// logo sits on a game page. There is nothing to crop: the image is
+    /// **Transparency present** — a cut-out PNG, a Memoji, a logo-shaped piece
+    /// of game art — goes straight in and is drawn whole and unframed, the way
+    /// a logo sits on a game page. There is nothing to crop: the image is
     /// already the subject and nothing else.
     ///
     /// **Opaque** — a photo, or a wide painting of a whole scene — gets the
@@ -464,7 +479,7 @@ struct ProfileEditor: View {
     /// Nobody is asked which of these they want. The image already knows.
     private func take(_ raw: Data, alreadyCropped: Bool = false) {
         if !alreadyCropped && !ImageIngest.hasAlpha(raw) {
-            // Replacing the artwork sheet with the crop sheet, not stacking
+            // Replacing the source sheet with the crop sheet, not stacking
             // one on the other.
             sheet = .crop(raw)
             return

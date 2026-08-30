@@ -164,10 +164,10 @@ struct PlayerProfileTests {
 
         let shared = try! #require(rows.first { $0.handle == "timultuoustimes" })
         #expect(shared.services.count == 3)
-        #expect(Set(shared.services) == [.steam, .xbox, .playstation])
+        #expect(Set(shared.services) == [.builtin(.steam), .builtin(.xbox), .builtin(.playstation)])
 
         let solo = try! #require(rows.first { $0.handle == "TimM" })
-        #expect(solo.services == [.nintendo])
+        #expect(solo.services == [.builtin(.nintendo)])
     }
 
     /// "There shouldn't be blank spaces if they don't put any." A service
@@ -181,7 +181,7 @@ struct PlayerProfileTests {
         ]
         #expect(p.handles.count == 1)
         #expect(p.groupedHandles.count == 1)
-        #expect(p.groupedHandles.first?.services == [.steam])
+        #expect(p.groupedHandles.first?.services == [.builtin(.steam)])
     }
 
     /// A profile nobody has filled in stores nothing at all, rather than an
@@ -251,6 +251,46 @@ struct HeaderHandleTests {
             GamerService.steam.rawValue: "timtultuoustimes",
         ]
         #expect(p.groupedHandles.count == 2)
+    }
+}
+
+@Suite("Custom services")
+struct CustomServiceTests {
+
+    /// A service the app never heard of has to survive a round trip through
+    /// the same JSON blob as the built-ins — that is the whole reason custom
+    /// services cost no schema change.
+    @Test func aNamedServiceRoundTrips() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "timultuoustimes",
+            HandleService.custom("Apple Arcade").key: "timultuoustimes",
+        ]
+        let groups = p.groupedHandles
+        #expect(groups.count == 1)                     // one handle, two services
+        #expect(groups.first?.services.count == 2)
+        #expect(groups.first?.services.map(\.label).contains("Apple Arcade") == true)
+    }
+
+    /// Built-ins keep their BARE raw value as the storage key. If that ever
+    /// changed, every profile already in iCloud would lose its handles.
+    @Test func builtinKeysAreUnprefixed() {
+        #expect(HandleService.builtin(.steam).key == "steam")
+        #expect(HandleService(key: "steam") == .builtin(.steam))
+        #expect(HandleService(key: "custom:Apple Arcade") == .custom("Apple Arcade"))
+        #expect(HandleService(key: "custom:") == nil)
+        #expect(HandleService(key: "nonsense") == nil)
+    }
+
+    /// One handle across every built-in service is the case that should stop
+    /// offering "add another" — there is nothing left to assign.
+    @Test func oneHandleCanCoverEverything() {
+        let p = PlayerProfile()
+        var map: [String: String] = [:]
+        for service in GamerService.allCases { map[service.rawValue] = "sameName" }
+        p.handles = map
+        #expect(p.groupedHandles.count == 1)
+        #expect(p.groupedHandles.first?.services.count == GamerService.allCases.count)
     }
 }
 

@@ -2,17 +2,22 @@
 import SwiftUI
 import UIKit
 
-/// Pick a Memoji as a profile picture.
+/// Pick a sticker as a profile picture — Memoji, Genmoji, or any other.
 ///
 /// There is no Memoji *library* API — Memoji aren't files and aren't in
 /// Photos. The one supported route is `NSAdaptiveImageGlyph`: a text view that
-/// opts in gets Memoji stickers from the emoji keyboard's sticker drawer, and
-/// each one carries its own image data.
+/// opts in receives stickers from the emoji keyboard's drawer, each carrying
+/// its own image data.
 ///
-/// So this is a text field the user never types into. It exists to receive one
-/// sticker, take the image out of it, and close. The keyboard opens straight
-/// onto the sticker drawer.
-struct MemojiPicker: View {
+/// Which turned out to be worth more than the feature asked for. That drawer
+/// is not only Memoji: it serves Genmoji, Live Stickers someone cut out of
+/// their own photos, and sticker packs from other apps. Anything that inserts
+/// as an adaptive image glyph arrives here, so a request for "Memoji" bought
+/// every sticker on the device.
+///
+/// So this is a text field nobody types into. It exists to receive one
+/// sticker, take the image out of it, and close.
+struct StickerPicker: View {
     var onPick: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -33,11 +38,11 @@ struct MemojiPicker: View {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 44))
                     .foregroundStyle(LSTheme.accent)
-                Text("Choose a Memoji")
+                Text("Choose a sticker")
                     .font(.headline)
                 // Says where the control is rather than assuming anyone knows
                 // the sticker drawer exists — it is two taps into a keyboard.
-                Text("On the keyboard, tap the emoji or globe key, open the sticker drawer, then pick a Memoji. It becomes your picture straight away.")
+                Text("On the keyboard, tap the emoji or globe key, then the sticker drawer. Memoji, Genmoji and your own stickers all work. Pick one and it becomes your picture straight away.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -51,7 +56,7 @@ struct MemojiPicker: View {
             .allowsHitTesting(false)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .navigationTitle("Memoji")
+        .navigationTitle("Stickers")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
