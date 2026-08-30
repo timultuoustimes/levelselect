@@ -28,19 +28,21 @@ TORCH_DEEP  = (138, 74, 18)
 INK         = (239, 234, 251)
 MUTED       = (153, 144, 184)
 
-# NOT necessarily the hero's shot — these are chosen for legibility at
-# thumbnail size, which is the only job a link preview has. The Home shelf is a
-# dense grid of small covers: fine on the site, mush in a Reddit unfurl. A game
-# page carries one big logo that survives being shrunk. The hero went back to
-# Home when the site turned out to have no picture of the app's front door
-# anywhere; this stayed put on purpose.
+# Home on the phone, a game page on the iPad — so a preview shows both the
+# front door and what's behind it.
 #
-# Updated to the build-33 shot 2026-08-30. Same composition and the same
-# reasoning — a game page, not Home — just the current app. Build 33's Home
-# does now carry a big pixel name that would survive a thumbnail, but a
-# wordmark over key art still beats it, and the unfurl should look like the
-# thing people are shown first when they open a game.
-PHONE_SHOT = "iphone-33-layout-showcase.webp"
+# This reverses the original rule, and the rule said why it would need
+# reversing. It read: "The Home shelf is a dense grid of small covers: fine on
+# the site, mush in a Reddit unfurl. A game page carries one big logo that
+# survives being shrunk." True when it was written. Build 33 rebuilt Home
+# around a profile — a portrait, a name in the pixel face, and a three-number
+# band — so the thing that made it unreadable at thumbnail size is gone. It is
+# now the most recognisable screen in the app and the one that says what the
+# app is for.
+#
+# The iPad shot is a game page with its tracker open, which keeps the pairing
+# honest: the unfurl shows where you land and where you end up.
+PHONE_SHOT = "iphone-33-home-profile.webp"
 IPAD_SHOT  = "ipad-01-split-tracker.webp"
 
 PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
