@@ -295,15 +295,29 @@ struct CustomServiceTests {
 }
 
 @Suite("Player summary")
+@MainActor
 struct PlayerSummaryTests {
 
-    private func makeGame(_ name: String, status: GameStatus, sessions: [(Date, TimeInterval)]) -> Game {
+    /// A real in-memory container, because `PlayerSummary` reads relationships
+    /// and the app now treats a context-less model as dead — which is correct
+    /// for production, where every Game comes from a @Query, and means these
+    /// tests have to stop building loose objects.
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func makeGame(_ name: String, status: GameStatus,
+                          sessions: [(Date, TimeInterval)],
+                          in context: ModelContext) -> Game {
         let game = Game(name: name)
+        context.insert(game)
         game.status = status
         let pt = Playthrough()
         pt.game = game
+        context.insert(pt)
         pt.sessions = sessions.map { start, seconds in
             let s = Session()
+            context.insert(s)
             s.startDate = start
             s.endDate = start.addingTimeInterval(seconds)
             s.accumulatedDuration = seconds
@@ -323,10 +337,11 @@ struct PlayerSummaryTests {
         let recent = now.addingTimeInterval(-2 * 24 * 3600)
         let old = now.addingTimeInterval(-40 * 24 * 3600)
 
+        let ctx = makeContext()
         let games = [
-            makeGame("A", status: .playing, sessions: [(recent, 3600)]),
-            makeGame("B", status: .playing, sessions: [(old, 7200)]),
-            makeGame("C", status: .backlog, sessions: []),
+            makeGame("A", status: .playing, sessions: [(recent, 3600)], in: ctx),
+            makeGame("B", status: .playing, sessions: [(old, 7200)], in: ctx),
+            makeGame("C", status: .backlog, sessions: [], in: ctx),
         ]
         let s = PlayerSummary.make(from: games, now: now)
 
@@ -340,9 +355,10 @@ struct PlayerSummaryTests {
     @Test func aQuietWeekFallsBackToOneGame() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let ctx = makeContext()
         let games = [
-            makeGame("A", status: .playing, sessions: [(recent, 600)]),
-            makeGame("B", status: .paused, sessions: [(recent, 600)]),
+            makeGame("A", status: .playing, sessions: [(recent, 600)], in: ctx),
+            makeGame("B", status: .paused, sessions: [(recent, 600)], in: ctx),
         ]
         games[0].coverURLString = "https://example.com/a.jpg"
         games[1].coverURLString = "https://example.com/b.jpg"
@@ -354,9 +370,11 @@ struct PlayerSummaryTests {
 
     @Test func aBusyWeekUsesTheRibbonMostRecentFirst() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
         let games = (0..<4).map { i -> Game in
             let g = makeGame("G\(i)", status: .playing,
-                             sessions: [(now.addingTimeInterval(-Double(i) * 3600), 600)])
+                             sessions: [(now.addingTimeInterval(-Double(i) * 3600), 600)],
+                             in: ctx)
             g.coverURLString = "https://example.com/\(i).jpg"
             return g
         }
@@ -370,7 +388,7 @@ struct PlayerSummaryTests {
     /// Someone with no sessions at all still has a header; it just has nothing
     /// to draw behind them, which must not crash or show an empty ribbon.
     @Test func noPlayHistoryIsSafe() {
-        let s = PlayerSummary.make(from: [makeGame("A", status: .backlog, sessions: [])])
+        let s = PlayerSummary.make(from: [makeGame("A", status: .backlog, sessions: [], in: makeContext())])
         #expect(s.playing == 0)
         #expect(s.totalSeconds == 0)
         #expect(!s.usesRibbon)
@@ -433,10 +451,13 @@ extension PlayerSummaryTests {
     /// anyone whose current game was added by hand — while a shelf full of
     /// covers sat directly underneath it.
     @Test func theFallbackSkipsGamesWithNoArt() {
+        let ctx = makeContext()
         let bare = Game(name: "Hand-added")
+        ctx.insert(bare)
         bare.status = .playing
 
         let withArt = Game(name: "Has a cover")
+        ctx.insert(withArt)
         withArt.status = .playing
         withArt.coverURLString = "https://example.com/cover.jpg"
 
@@ -447,7 +468,9 @@ extension PlayerSummaryTests {
     /// And a backdrop beats a cover when both exist — a cover in a wide band
     /// is a portrait stretched sideways.
     @Test func aBackdropBeatsACover() {
+        let ctx = makeContext()
         let g = Game(name: "Both")
+        ctx.insert(g)
         g.status = .playing
         g.coverURLString = "https://example.com/cover.jpg"
         g.backdropURLString = "https://example.com/backdrop.jpg"

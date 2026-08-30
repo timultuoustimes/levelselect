@@ -2726,13 +2726,16 @@ extension Game {
     /// Checked here rather than at each call site because every relationship
     /// read in the app funnels through these two accessors.
     ///
-    /// Deliberately NOT `modelContext != nil`: a model that has never been
-    /// inserted is perfectly readable, and treating it as dead made every
-    /// PlayerSummary test compute zero. The real defence against a torn-down
-    /// container is `LibrarySwitcher.isSwitching`, which takes the view tree
-    /// down BEFORE the store goes; this is the cheap backstop for a model
-    /// deleted while something still points at it.
-    var isLive: Bool { !isDeleted }
+    /// A model whose container has gone loses its context, which is what
+    /// makes this the right test — and it is why the PlayerSummary tests now
+    /// insert into a real in-memory container instead of building loose
+    /// objects. A `Game` with no context is not a case production ever has.
+    ///
+    /// The first attempt at this crash took the whole view tree down during
+    /// the swap instead. That traded a SwiftData assertion for a SwiftUI one:
+    /// replacing a tree that HAS a window toolbar with one that does not
+    /// crashes in `BarAppearanceBridge.updatePlatformBar`.
+    var isLive: Bool { modelContext != nil && !isDeleted }
 
     var livePlaythroughs: [Playthrough] {
         guard isLive else { return [] }
@@ -2813,7 +2816,7 @@ extension Playthrough {
     /// Total time across all sessions (active session counted live via `asOf`;
     /// discarded/tombstoned sessions excluded).
     /// Same rule as `Game.isLive`, for the other side of the relationship.
-    var isLive: Bool { !isDeleted }
+    var isLive: Bool { modelContext != nil && !isDeleted }
 
     func totalPlaytime(asOf now: Date = .now) -> TimeInterval {
         guard isLive else { return 0 }

@@ -71,13 +71,8 @@ final class LibrarySwitcher {
         LiveActivityManager.endCurrent()
         UserDefaults.standard.set(on, forKey: Self.defaultsKey)
 
-        // Tear the tree down first, swap on the next turn.
-        isSwitching = true
-        Task { @MainActor in
-            isDemo = on
-            container = LevelSelectStore.makeContainer(demo: on)
-            isSwitching = false
-        }
+        isDemo = on
+        container = LevelSelectStore.makeContainer(demo: on)
     }
 
     /// Delete the demo store from disk. Only ever touches `demo.store`, so

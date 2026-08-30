@@ -13,14 +13,7 @@ struct LevelSelectApp: App {
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if library.isSwitching {
-                    // Nothing here points at a store, which is the point.
-                    LSTheme.background.ignoresSafeArea()
-                } else {
-                    RootView()
-                }
-            }
+            RootView()
                 // The window paints its OWN ground on macOS.
                 //
                 // Hiding the window toolbar background to get glass took the
