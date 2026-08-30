@@ -168,9 +168,8 @@ struct SchemaFreezeTests {
             // Promoted to Production 2026-08-29, verified in the Console diff
             // as a purely additive 19-line record type — CD_avatarData landing
             // as BYTES with no _ckAsset twin, which was the whole point.
-            // ⚠️ nameColorRaw + useHandleAsName NOT YET PROMOTED. Deploy before
-            // build 33 ships. Batched with ThemeSettings.savedSwatchesData
-            // below — one deploy for three fields rather than three deploys.
+            // nameColorRaw + useHandleAsName promoted to Production 2026-08-30,
+            // in one deploy with ThemeSettings.savedSwatchesData.
             "PlayerProfile: avatarData,createdAt,displayName,handlesData,id,nameColorRaw,updatedAt,useHandleAsName",
             "Playthrough: completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
@@ -187,7 +186,11 @@ struct SchemaFreezeTests {
             //
             // Promoted to Production 2026-08-29, verified in the Console
             // diff as CD_gamePageLayoutRaw STRING and CD_showGameLogos INT64.
-            // ⚠️ savedSwatchesData NOT YET PROMOTED. See PlayerProfile above.
+            // savedSwatchesData promoted to Production 2026-08-30. It very nearly
+            // was not: the seeder patches an EXISTING ThemeSettings rather
+            // than creating one, and the field had only been added to the
+            // create branch — so the first Console diff was silently missing
+            // it. See CloudKitSchemaSeeder's warning at that branch.
             "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,gamePageLayoutRaw,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
