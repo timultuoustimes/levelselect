@@ -49,6 +49,35 @@ PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
 SANS  = "/System/Library/Fonts/SFNS.ttf"
 
 
+def app_icon(size):
+    """The icon as an ICON: rounded corners and a soft glow behind it.
+
+    `icon.png` is a hard-cornered RGB square with no alpha — the site rounds
+    it in CSS (`.door { border-radius: 26px }`) and these images were pasting
+    the raw square, so the one piece of LevelSelect's own art in the picture
+    was the one thing that didn't look like it belonged to an app.
+
+    Radius is 22.5% of the side, which is close to the iOS squircle at these
+    sizes. Returns an RGBA tile larger than `size` — the glow needs margin —
+    so callers should paste by its centre, not its top-left.
+    """
+    src = Image.open(PUB / "assets" / "icon.png").convert("RGBA")
+    src = src.resize((size, size), Image.LANCZOS)
+
+    mask = Image.new("L", (size * 4, size * 4), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, size * 4 - 1, size * 4 - 1), radius=round(size * 4 * 0.225), fill=255)
+    src.putalpha(mask.resize((size, size), Image.LANCZOS))
+
+    pad = round(size * 0.45)
+    tile = Image.new("RGBA", (size + pad * 2, size + pad * 2), (0, 0, 0, 0))
+    halo = Image.new("RGBA", tile.size, (0, 0, 0, 0))
+    halo.paste(Image.new("RGBA", (size, size), TORCH + (90,)), (pad, pad), src)
+    tile.alpha_composite(halo.filter(ImageFilter.GaussianBlur(size * 0.22)))
+    tile.alpha_composite(src, (pad, pad))
+    return tile
+
+
 def gradient(size):
     """The app's own vertical background."""
     w, h = size
@@ -108,8 +137,11 @@ def devices(pair, height, max_width=None):
     # flush-to-the-baseline read as two devices standing on a shelf rather
     # than an arrangement. `expand=True` grows the bitmap to fit the rotated
     # corners, so the widths below are measured after rotating, not before.
-    pad = pad.rotate(1.2, resample=Image.BICUBIC, expand=True)
-    phone = phone.rotate(-2.4, resample=Image.BICUBIC, expand=True)
+    # The iPad is STRAIGHT. Only the phone tilts, and it tilts LEFT — its top
+    # leaning toward the iPad rather than away. PIL rotates counter-clockwise
+    # for a positive angle, the opposite sense to CSS, which is why the last
+    # version leaned the wrong way while claiming to match the site.
+    phone = phone.rotate(2.4, resample=Image.BICUBIC, expand=True)
 
     overlap = round(phone.width * 0.44)
     canvas = Image.new("RGBA",
@@ -173,8 +205,8 @@ def open_graph(pair):
     img = glow(img, (250, 250), 340, TORCH, 0.20)
     img = glow(img, (980, 430), 380, ACCENT, 0.16)
 
-    icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((128, 128), Image.LANCZOS)
-    img.paste(icon, (74, 92), icon)
+    icon = app_icon(128)
+    img.alpha_composite(icon, (74 + 64 - icon.width // 2, 92 + 64 - icon.height // 2))
 
     img = wordmark(img, (74, 250), 62)
     d = ImageDraw.Draw(img)
@@ -210,8 +242,8 @@ def story(pair):
     img = glow(img, (540, 430), 520, TORCH, 0.20)
     img = glow(img, (540, 1500), 620, ACCENT, 0.16)
 
-    icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((150, 150), Image.LANCZOS)
-    img.paste(icon, (465, 300), icon)
+    icon = app_icon(150)
+    img.alpha_composite(icon, (465 + 75 - icon.width // 2, 300 + 75 - icon.height // 2))
 
     img = wordmark(img, (540, 495), 66, anchor="mt")
     d = ImageDraw.Draw(img)
@@ -237,8 +269,8 @@ def square(pair):
     img = gradient((W, H))
     img = glow(img, (540, 300), 420, TORCH, 0.20)
 
-    icon = Image.open(PUB / "assets" / "icon.png").convert("RGBA").resize((120, 120), Image.LANCZOS)
-    img.paste(icon, (480, 104), icon)
+    icon = app_icon(120)
+    img.alpha_composite(icon, (480 + 60 - icon.width // 2, 104 + 60 - icon.height // 2))
 
     img = wordmark(img, (540, 268), 54, anchor="mt")
     d = ImageDraw.Draw(img)
