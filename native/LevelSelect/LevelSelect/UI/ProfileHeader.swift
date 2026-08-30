@@ -35,8 +35,21 @@ struct ProfileHeader: View {
     /// gives a new user — or anyone who hasn't played in a week — 168pt of
     /// empty colour above their own name, which reads as a broken image
     /// rather than a quiet week.
-    private var hasArt: Bool {
-        summary.usesRibbon || summary.fallbackBackdrop != nil
+    private var hasArt: Bool { Self.drawsArt(profile: profile, summary: summary) }
+
+    /// Whether the header will paint art to its own top edge.
+    ///
+    /// Home asks before laying out, because that art has to bleed into the
+    /// space under the toolbar. Left with the stack's ordinary top padding it
+    /// sits in a 16pt trench, which reads as a misaligned image rather than a
+    /// header.
+    static func drawsArt(profile: PlayerProfile?, summary: PlayerSummary) -> Bool {
+        guard let profile else { return false }
+        let filled = profile.avatarData != nil
+            || !(profile.displayName ?? "").isEmpty
+            || !profile.handles.isEmpty
+        guard filled else { return false }
+        return summary.usesRibbon || summary.fallbackBackdrop != nil
     }
 
     var body: some View {

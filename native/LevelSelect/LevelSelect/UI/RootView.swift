@@ -515,12 +515,16 @@ struct HomeTab: View {
     }
 
     private var home: some View {
-        ScrollView {
+        // Built once here rather than inside the header's body: it walks every
+        // game's sessions, and `body` runs far more often than the data changes.
+        let summary = PlayerSummary.make(from: games)
+        let headerBleeds = ProfileHeader.drawsArt(profile: profiles.first, summary: summary)
+
+        return ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
                 // Whose shelf this is, before what is on it. Draws nothing
                 // until someone has actually put something in it.
-                ProfileHeader(profile: profiles.first,
-                              summary: PlayerSummary.make(from: games)) {
+                ProfileHeader(profile: profiles.first, summary: summary) {
                     editingProfile = true
                 }
 
@@ -584,7 +588,10 @@ struct HomeTab: View {
                 // After the shelves, not above them: an ask, never a nag.
                 BetaQuestionCard()
             }
-            .padding(.vertical)
+            .padding(.bottom)
+            // The art runs to the top edge, under the toolbar. Everything else
+            // keeps the ordinary inset.
+            .padding(.top, headerBleeds ? 0 : 16)
         }
         .scrollIndicators(.hidden)
     }
