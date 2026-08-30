@@ -112,6 +112,10 @@ struct WishlistTab: View {
             .navigationTitle("Wishlist")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .searchable(text: $searchText, prompt: "Search wishlist")
+            // Glass, like Home — see LibraryView.
+            #if os(macOS)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #endif
             .toolbar {
                 ToolbarItem {
                     Menu {

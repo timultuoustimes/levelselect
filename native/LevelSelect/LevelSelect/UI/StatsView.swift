@@ -123,6 +123,10 @@ struct StatsTab: View {
             .scrollIndicators(.hidden)
             .lsBackground()
             .navigationTitle("Stats")
+            // Glass, like Home — see LibraryView.
+            #if os(macOS)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #endif
             .toolbar {
                 Button {
                     arranging = true

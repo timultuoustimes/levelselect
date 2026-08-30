@@ -469,17 +469,26 @@ struct HomeTab: View {
                 // the window toolbar sits outside the TabView on macOS, so
                 // whatever `.tint` the tab tree carries does not reliably
                 // reach it.
+                // Coloured EXPLICITLY, not via tint.
+                //
+                // Library's sort/filter/add take the accent from the same
+                // inherited `.tint` these buttons get — Library sets none of
+                // its own. The difference is the control: macOS applies a
+                // toolbar tint to a `Menu`'s symbol and ignores it for a plain
+                // `Button`'s. Neither `.tint` nor `.buttonStyle(.bordered)`
+                // moved them; `foregroundStyle` on the label does, because it
+                // stops asking and just says the colour.
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
+                            .foregroundStyle(LSTheme.accent)
                     }
-                    .tint(LSTheme.accent)
                 }
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingAdd = true } label: {
                         Label("Add Game", systemImage: "plus")
+                            .foregroundStyle(LSTheme.accent)
                     }
-                    .tint(LSTheme.accent)
                 }
             }
         }

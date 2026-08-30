@@ -82,6 +82,13 @@ struct LibraryTab: View {
                         prompt: "Search games, studios, genres")
             #endif
             .toolbar { toolbarContent }
+            // Glass, like Home. Each tab owns its own NavigationStack, so the
+            // window toolbar is configured per tab — Home alone was hidden and
+            // the other three kept an opaque slab, which is why the window
+            // changed character as you moved across the tabs.
+            #if os(macOS)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            #endif
         }
         .sheet(item: $sheet) { which in
             switch which {
