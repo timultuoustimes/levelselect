@@ -50,27 +50,26 @@ made for them, or the ask reads as a contradiction.
 Plain text — App Store Connect renders no markdown (no `**`, no `-` bullets
 that need styling; hyphens are fine as literal characters).
 
-> FIRST, A SMALL ASK (about 30 seconds)
+Shortened 2026-08-30 (build 33). The long version was around 150 words and
+sat above the thing testers actually opened the notes to read. Every
+load-bearing part survives: the privacy distinction FIRST, both switches with
+the note that the second is hidden until the first is on, that it is
+anonymous and reversible, and the consequence — no report exists without it.
+What went was the throat-clearing.
+
+> FIRST, A SMALL ASK (30 seconds)
 >
-> LevelSelect has no accounts, no ads, and no analytics of its own. That
-> isn't changing. It also means that if the app crashes on your device, I
-> have no way of ever knowing it happened.
->
-> Apple has a channel for exactly this, and it doesn't involve the app
-> collecting anything:
+> LevelSelect has no accounts, no ads and no analytics of its own, and that
+> isn't changing. It also means a crash on your device is invisible to me
+> unless you lend me Apple's own channel for it — which collects nothing
+> through the app.
 >
 > Settings > Privacy & Security > Analytics & Improvements
 > 1. Turn on "Share iPhone Analytics"
-> 2. Then turn on "Share With App Developers"
+> 2. Turn on "Share With App Developers" (it only appears once the first is on)
 >
-> The second switch only appears once the first one is on.
->
-> That sends Apple's anonymous crash reports my way — no personal data,
-> nothing tied to you, nothing the app itself can see, and you can switch it
-> back off whenever you like. If you hit a crash and this is off, the report
-> simply doesn't exist, so this is genuinely the only way I can fix it.
->
-> Thank you — it makes a real difference to a beta this small.
+> Anonymous, nothing tied to you, nothing the app itself can see, and off
+> again whenever you like. Without it, a crash report simply doesn't exist.
 
 ## Framing screenshots (the `frames` CLI)
 
