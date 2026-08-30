@@ -61,7 +61,7 @@ enum DemoLibrarySeeder {
         var withCovers = 0
         var byName: [String: Game] = [:]
 
-        for seed in seeds {
+        for (rank, seed) in seeds.enumerated() {
             // Look up by pinned id, not by name — see Seed.igdbID.
             let igdb = try? await IGDBService.lookup(id: seed.igdbID)
             let game: Game
@@ -85,7 +85,7 @@ enum DemoLibrarySeeder {
             created += 1
 
             if seed.hours > 0 {
-                addSessions(repo: repo, game: game, hours: seed.hours, status: seed.status)
+                addSessions(repo: repo, game: game, hours: seed.hours, rank: rank)
             }
         }
 
@@ -116,17 +116,45 @@ enum DemoLibrarySeeder {
         return "Demo library ready: \(created) games (\(withCovers) with IGDB art), sessions, a tracker, runs, and a collection."
     }
 
-    /// Sessions spread backwards from today, newest first, so Home's
-    /// "recently played" ordering looks natural.
-    private static func addSessions(repo: Repository, game: Game, hours: Double, status: GameStatus) {
+    /// A believable play history: sessions of a human length, spread over
+    /// months, with almost nothing inside the last week.
+    ///
+    /// The old version put six sessions at 1, 4.5, 8, 11.5, 15 and 18.5 days
+    /// ago and split each game's WHOLE lifetime across them. Two things
+    /// followed, and both were nonsense. Stardew Valley's 63 hours landed
+    /// inside nineteen days. And because the first two sessions carried half
+    /// the total and both fell inside the 7-day window, Home reported 138h 40m
+    /// played this week — 5.8 days of continuous play, out of a possible 7.
+    ///
+    /// Now: sessions are about two and a half hours each, roughly nine days
+    /// apart, running backwards from when the game was last touched. Only the
+    /// two most recently played games have been opened inside the last week,
+    /// which puts "this week" at a handful of hours rather than most of it.
+    private static func addSessions(repo: Repository, game: Game, hours: Double, rank: Int) {
         let pt = repo.ensureDefaultPlaythrough(for: game)
-        // Fixed shape rather than random, so repeat runs look identical.
-        let split: [Double] = [0.28, 0.22, 0.18, 0.14, 0.10, 0.08]
-        for (index, share) in split.enumerated() {
-            let duration = hours * 3600 * share
-            let daysAgo = Double(index) * 3.5 + 1
-            let start = Date.now.addingTimeInterval(-daysAgo * 86_400)
-            repo.logManualSession(on: pt, duration: duration, date: start)
+
+        // When this game was last played. Only the first two are inside the
+        // week; everything else trails off into months, which is what a real
+        // library of fourteen games looks like.
+        let lastPlayed: Double = switch rank {
+        case 0:  1.5
+        case 1:  4.0
+        default: Double(rank) * 11 + 9
+        }
+
+        // ~2.5 hours a sitting, so the count follows from the total rather
+        // than the total being crammed into a fixed six.
+        let count = max(3, min(24, Int((hours / 2.5).rounded())))
+        let each = hours / Double(count)
+
+        for index in 0..<count {
+            // Nine days apart: a game you come back to most weeks, not one you
+            // played for a fortnight straight and abandoned.
+            let daysAgo = lastPlayed + Double(index) * 9
+            repo.logManualSession(
+                on: pt,
+                duration: each * 3600,
+                date: Date.now.addingTimeInterval(-daysAgo * 86_400))
         }
         // NO open session for a paused game.
         //
