@@ -165,7 +165,9 @@ struct SchemaFreezeTests {
             // needs both a BYTES and an ASSET field and two seeds straddling
             // the threshold to create them. See the GameImage entry.
             //
-            // ⚠️ NOT YET PROMOTED to Production. Deploy before build 33 ships.
+            // Promoted to Production 2026-08-29, verified in the Console diff
+            // as a purely additive 19-line record type — CD_avatarData landing
+            // as BYTES with no _ckAsset twin, which was the whole point.
             "PlayerProfile: avatarData,createdAt,displayName,handlesData,id,updatedAt",
             "Playthrough: completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
