@@ -9,7 +9,7 @@ import SwiftData
 /// The adversarial shapes here are all about the gap between "the button ran"
 /// and "the category has content in it": a planned id never appears in a
 /// generated payload, so every one of these fills by NAME, and a payload that
-/// names nothing recognisable has to leave the placeholder intact rather than
+/// names nothing recognizable has to leave the placeholder intact rather than
 /// quietly emptying or quietly claiming success.
 @MainActor
 struct PlannedCategoryTests {
@@ -92,7 +92,7 @@ struct PlannedCategoryTests {
         #expect(cat(repo, game, named: "Charms") == nil)
     }
 
-    /// A payload that names nothing recognisable must leave the placeholder
+    /// A payload that names nothing recognizable must leave the placeholder
     /// exactly as it was — still empty, still pending, still offering its own
     /// Generate button. Emptying it or clearing the flag would strand the
     /// category with no way back.

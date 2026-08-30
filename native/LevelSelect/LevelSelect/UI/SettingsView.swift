@@ -226,10 +226,10 @@ struct SettingsView: View {
             // footers that wrap, sections that read as sections.
             #if os(macOS)
             .formStyle(.grouped)
-            // The app's own ground, not the system's grey. A sheet that keeps
+            // The app's own ground, not the system's gray. A sheet that keeps
             // the platform default reads as a different app bolted on — most
             // obvious on the Mac, where the window behind it is the purple
-            // gradient and the sheet was flat grey.
+            // gradient and the sheet was flat gray.
             .scrollContentBackground(.hidden)
             .background(LSTheme.background)
             #endif
@@ -245,11 +245,11 @@ struct SettingsView: View {
             // The bump lives on the PRESENTER's `onDismiss` now, not here.
             //
             // `.onDisappear` fires whenever this view leaves the screen — and
-            // pushing a colour editor onto this stack does exactly that. The
+            // pushing a color editor onto this stack does exactly that. The
             // tab tree is keyed off `themeRevision`, so the push bumped it,
             // re-keyed the tree, destroyed the TabView and took the Settings
-            // sheet with it: tapping a colour row closed Settings instead of
-            // opening anything. Same failure as the build-32 colour picker,
+            // sheet with it: tapping a color row closed Settings instead of
+            // opening anything. Same failure as the build-32 color picker,
             // reached by a different route. See RootView's `.sheet(onDismiss:)`.
             .sheet(isPresented: $editingProfile) { ProfileEditor() }
         }

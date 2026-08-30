@@ -257,7 +257,7 @@ struct ArtworkTests {
 
     @Test func backdropIntensityDecodesAndBoldBlursLess() {
         #expect(BackdropIntensity(rawValue: "bold") == .bold)
-        // Bold shows the art rather than a smear of its average colour.
+        // Bold shows the art rather than a smear of its average color.
         #expect(BackdropIntensity.bold.blurRadius < BackdropIntensity.subtle.blurRadius)
         #expect(BackdropIntensity.bold.opacity > BackdropIntensity.subtle.opacity)
         #expect(BackdropIntensity.off.opacity == 0)
@@ -276,7 +276,7 @@ struct BackdropSourceTests {
         #expect(ThemePageBackground(rawValue: "screenshot") == .screenshot)
         #expect(ThemePageBackground.keyArt.igdbEndpoint == "artworks")
         #expect(ThemePageBackground.screenshot.igdbEndpoint == "screenshots")
-        // Flat colours need no lookup at all.
+        // Flat colors need no lookup at all.
         #expect(ThemePageBackground.plain.igdbEndpoint == nil)
         #expect(ThemePageBackground.status.igdbEndpoint == nil)
         // The cover draws art but needs no fetch — it's already on the game.
@@ -369,7 +369,7 @@ struct PlatformShortNameTests {
     }
 
     /// Variants of one console must collapse to a single name, or the
-    /// library's system filter shows two identically-labelled rows filtering
+    /// library's system filter shows two identically-labeled rows filtering
     /// different sets — the bug `PlatformShort.systems(in:)` exists to avoid.
     @Test func variantsOfOneConsoleCollapseTogether() {
         for spelling in ["Sega Mega Drive/Genesis", "Sega Genesis", "Genesis", "Mega Drive"] {
@@ -392,7 +392,7 @@ struct PlatformShortNameTests {
 struct AccentContrastTests {
 
     /// A filled accent button has to pick its own lettering. The accent is the
-    /// user's to choose, so both extremes must work: white on a deep colour,
+    /// user's to choose, so both extremes must work: white on a deep color,
     /// black on a pale one. Getting this wrong makes the most important
     /// control on Home unreadable for whoever picked yellow.
     @Test func lightAccentsGetDarkText() {
@@ -433,7 +433,7 @@ struct AccentContrastTests {
 @MainActor
 struct StatsPieTests {
 
-    /// Colours must be STABLE across launches. A breakdown whose colours
+    /// Colors must be STABLE across launches. A breakdown whose colors
     /// shuffle teaches nothing — you cannot learn "green is Adventure" if
     /// green is Adventure only today.
     @Test func paletteIsPositionalAndStable() {
@@ -442,13 +442,13 @@ struct StatsPieTests {
         let b = PieSlice.palette(for: rows)
         #expect(a.map { $0.label } == b.map { $0.label })
         #expect(a[0].color != a[1].color)
-        // Same position, same colour, regardless of the values in it.
+        // Same position, same color, regardless of the values in it.
         let changed = PieSlice.palette(for: [("Adventure", 3), ("Platform", 999), ("Shooter", 1)])
         #expect(changed[0].color == a[0].color)
     }
 
     /// More rows than the palette has entries must not crash or leave a slice
-    /// colourless — it wraps.
+    /// colorless — it wraps.
     @Test func thePaletteWrapsRatherThanRunningOut() {
         let many = (0..<30).map { ("Row \($0)", $0 + 1) }
         let slices = PieSlice.palette(for: many)

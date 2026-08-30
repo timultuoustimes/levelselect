@@ -262,10 +262,10 @@ enum IGDBImageType {
     static let keyArtWithoutLogo = 2
     static let keyArtWithLogo = 3
 
-    /// Colour first — it's the cut a game is recognised by. White and black
+    /// Color first — it's the cut a game is recognized by. White and black
     /// are the same wordmark drawn for a light or dark ground, and they earn
     /// their place: the header lays the logo over artwork, where a white cut
-    /// often reads better than the colour one.
+    /// often reads better than the color one.
     ///
     /// An earlier pass shipped only `7`, inferred from one game's aspect
     /// ratio and alpha channel before this lookup was reachable. The

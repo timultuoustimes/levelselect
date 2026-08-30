@@ -330,7 +330,7 @@ struct ContinueHeroCard: View {
             // the running-timer readout above ("already going"). Green is now
             // reserved for running, so anywhere in the app it says one thing —
             // a timer is live.
-            // A gradient, a lit top edge and a coloured shadow — a flat
+            // A gradient, a lit top edge and a colored shadow — a flat
             // rectangle of accent read as a disabled block rather than the
             // most pressable thing on the page. The depth is what says
             // "button"; the fill is what says "primary".

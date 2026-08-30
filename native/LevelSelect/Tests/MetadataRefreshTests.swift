@@ -408,7 +408,7 @@ struct MetadataRefreshTests {
     /// a request to be refused — burning more of the allowance that is already
     /// gone, and pushing the window that has to roll over further out.
     @Test func rateLimitingIsTheFailureThatShouldStopARun() {
-        // The behaviour lives in the run loop; this pins the decision itself
+        // The behavior lives in the run loop; this pins the decision itself
         // so a future edit can't quietly downgrade it to "keep trying".
         let stopsTheRun: (IGDBError) -> Bool = { $0 == .rateLimited }
 
@@ -833,7 +833,7 @@ struct LibraryImportTests {
 @Suite("RA art")
 struct RAArtTests {
 
-    @Test("Badge URLs: colour when earned, RA's lock variant when not")
+    @Test("Badge URLs: color when earned, RA's lock variant when not")
     func badgeURLs() {
         #expect(RAArt.badgeURL("250341", earned: true)?.absoluteString
                 == "https://media.retroachievements.org/Badge/250341.png")

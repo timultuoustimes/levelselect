@@ -6,7 +6,7 @@ const horizons = [
     key: 'now',
     name: 'Now',
     note: 'being worked on',
-    colour: '#30D158',
+    color: '#30D158',
     items: [
       { t: 'Settling the beta', d: 'Making the things people use every day dependable before adding more.' },
       { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
@@ -18,7 +18,7 @@ const horizons = [
     key: 'next',
     name: 'Next',
     note: 'planned',
-    colour: '#0A84FF',
+    color: '#0A84FF',
     items: [
       { t: 'Every platform a game came out on', d: "Mark the ones you own it on or played it on, instead of the app knowing only the one you typed." },
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
@@ -32,7 +32,7 @@ const horizons = [
     key: 'exploring',
     name: 'Exploring',
     note: 'no commitment',
-    colour: '#BF5AF2',
+    color: '#BF5AF2',
     items: [
       { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
@@ -63,13 +63,13 @@ const notPlanned = [
       {horizons.map((h) => (
         <section class="col">
           <header class="col__head">
-            <span class="col__dot" style={`background:${h.colour}`}></span>
+            <span class="col__dot" style={`background:${h.color}`}></span>
             <h2 class="col__name">{h.name}</h2>
             <span class="col__note">{h.note}</span>
             <span class="col__n">{h.items.length}</span>
           </header>
           {h.items.map((item) => (
-            <div class="rcard" style={`--stripe:${h.colour}`}>
+            <div class="rcard" style={`--stripe:${h.color}`}>
               <b>{item.t}</b>
               <span>{item.d}</span>
             </div>
@@ -139,7 +139,7 @@ const notPlanned = [
     overflow: hidden;
   }
   /* A stripe rather than a full tint — the status stays legible when three
-     columns sit side by side without three coloured blocks fighting. */
+     columns sit side by side without three colored blocks fighting. */
   .rcard::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
     width: 3px; background: var(--stripe, var(--muted));

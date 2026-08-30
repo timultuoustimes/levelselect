@@ -242,7 +242,7 @@ struct HeaderHandleTests {
     }
 
     /// A near-miss typo is NOT the same handle, and the app must not pretend
-    /// it is — two rows here is correct behaviour on bad data, and the fix
+    /// it is — two rows here is correct behavior on bad data, and the fix
     /// belongs in the editor, not in a fuzzy match.
     @Test func aTypoIsADifferentHandle() {
         let p = PlayerProfile()
@@ -396,7 +396,7 @@ struct PlayerSummaryTests {
     }
 }
 
-@Suite("Profile name colour")
+@Suite("Profile name color")
 @MainActor
 struct ProfileNameColorTests {
 
@@ -409,7 +409,7 @@ struct ProfileNameColorTests {
     }
 
     /// "Accent" must FOLLOW the accent rather than freeze a copy of it — that
-    /// is the whole difference between it and picking the same colour by hand.
+    /// is the whole difference between it and picking the same color by hand.
     @Test func accentModeTracksTheLiveAccent() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5A34D"
@@ -441,7 +441,7 @@ struct ProfileNameColorTests {
 
     /// Garbage in storage falls back rather than rendering an invisible name.
     @Test func nonsenseFallsBack() {
-        #expect(ProfileNameColor.resolve("not a colour") == .primary)
+        #expect(ProfileNameColor.resolve("not a color") == .primary)
     }
 }
 

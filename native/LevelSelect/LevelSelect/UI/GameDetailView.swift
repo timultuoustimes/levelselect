@@ -1045,10 +1045,10 @@ struct GameDetailView: View {
     /// able to tell.
     ///
     /// The shape is Tim's: the cover and a narrow facts panel sit side by side
-    /// in the art, and the game's name runs underneath them both, centred and
+    /// in the art, and the game's name runs underneath them both, centered and
     /// large. An earlier pass had the name beside the cover on a full-width
     /// card it half-overlapped, which gave the title only the column left over
-    /// after a 132pt cover — so a wordmark that is the most recognisable thing
+    /// after a 132pt cover — so a wordmark that is the most recognizable thing
     /// about a game got the smallest space on the page. Below, it gets the
     /// whole width.
     private var layout: GamePageLayout { ThemePalette.gamePageLayout }
@@ -1076,12 +1076,12 @@ struct GameDetailView: View {
                     factsPanel(fills: true)
                 }
             } else {
-                // Two spacers, so the pair is CENTRED rather than left-flush.
+                // Two spacers, so the pair is CENTERED rather than left-flush.
                 // The panel takes the width its words need; without that it
                 // stretched to the page margin and carried a stripe of empty
                 // haze past the end of its own longest line. Hugging on the
                 // right alone then left the pair ending short while the title
-                // beneath it was centred — two alignments at once.
+                // beneath it was centered — two alignments at once.
                 //
                 // Both spacers collapse when space is tight, so a long
                 // platform name still gets the room.
@@ -1178,7 +1178,7 @@ struct GameDetailView: View {
         .padding(.top, 4)
     }
 
-    /// The box on a shelf. One large cover, centred, and everything else
+    /// The box on a shelf. One large cover, centered, and everything else
     /// beneath it — the arrangement a physical game has when you pick it up.
     ///
     /// Nothing sits beside the cover, which is what lets it be this big: at
@@ -1502,7 +1502,7 @@ struct GameDetailView: View {
         )
     }
 
-    /// A labelled value, tappable when there's a slice of the library behind
+    /// A labeled value, tappable when there's a slice of the library behind
     /// it. Styled the same either way — the panel is a reference table first,
     /// and making every field look like a button would turn it into a menu.
     @ViewBuilder

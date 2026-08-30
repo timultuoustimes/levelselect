@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// How the profile name on Home is coloured.
+/// How the profile name on Home is colored.
 ///
-/// Three states in one string, because the interesting one isn't a colour at
+/// Three states in one string, because the interesting one isn't a color at
 /// all: **following the accent** means the name keeps changing with the theme
 /// rather than being pinned to whatever the accent happened to be the day it
 /// was set.

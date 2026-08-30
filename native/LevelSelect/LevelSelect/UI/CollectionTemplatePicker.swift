@@ -96,8 +96,8 @@ struct CollectionTemplatePicker: View {
 
     /// A card rather than a list row.
     ///
-    /// These are meant to be browsed and picked from, and twenty-seven grey
-    /// rows read as a settings screen. The colour comes from the section, so
+    /// These are meant to be browsed and picked from, and twenty-seven gray
+    /// rows read as a settings screen. The color comes from the section, so
     /// the page has places in it rather than one wall of identical lines.
     private func card(_ template: CollectionTemplate) -> some View {
         let rgb = template.group.tint

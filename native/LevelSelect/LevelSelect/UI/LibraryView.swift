@@ -663,7 +663,7 @@ enum PlatformShort {
     /// Grouped by short name rather than by stored string, because `name(_:)`
     /// collapses IGDB's "Nintendo Switch 2" and the short "Switch 2" for
     /// DISPLAY only. A menu built from distinct raw values therefore offered
-    /// both, labelled identically, filtering 14 games and 3 — two rows that
+    /// both, labeled identically, filtering 14 games and 3 — two rows that
     /// looked like one thing and were not.
     ///
     /// Deliberately a view-layer fix rather than a data migration. The

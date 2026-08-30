@@ -147,7 +147,7 @@ Video framing needs `brew install ffmpeg`; not installed, not needed yet.
 >   pressing and holding a cover. It goes to Recently Deleted in Settings
 >   either way.
 > - Settings has been reorganised, and the reset buttons are now separate
->   (colours, background, and rating labels reset independently, under
+>   (colors, background, and rating labels reset independently, under
 >   "Reset"). They only appear when you have actually changed something.
 > - ON IPAD: please try a game page in landscape, especially if your
 >   tracker layout is set to Compact. The art at the top was sitting in the
@@ -184,7 +184,7 @@ Video framing needs `brew install ffmpeg`; not installed, not needed yet.
 > - Tags: start typing one and your existing tags are suggested underneath.
 >   Settings > Manage Tags to rename, merge (rename one onto another), or
 >   remove a tag everywhere.
-> - Two new game page backgrounds (accent colour, plain) in Appearance.
+> - Two new game page backgrounds (accent color, plain) in Appearance.
 >
 > If you have two devices, the star names and the start dates are the two
 > things most worth checking sync.

@@ -16,7 +16,7 @@ struct AppearanceSettingsSection: View {
     @State private var starDrafts = Array(repeating: "", count: 5)
     @State private var starNamesExpanded = false
     @State private var arrangingPages = false
-    /// Pending debounced write for the colour pickers. See `scheduleSave`.
+    /// Pending debounced write for the color pickers. See `scheduleSave`.
     @State private var themeCommit: Task<Void, Never>?
     // Same keys the game page reads — this sheet is the one editor for them.
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
@@ -28,7 +28,7 @@ struct AppearanceSettingsSection: View {
         // TWO sections, not one.
         //
         // "Appearance" was doing three jobs at once: personal theming, tracker
-        // layout, and third-party content toggles. Someone looking for colours
+        // layout, and third-party content toggles. Someone looking for colors
         // has no reason to expect "do tracker descriptions appear" to live
         // beside them — and the theming half is the part the notebook
         // direction expects to keep growing, so it needs room of its own.
@@ -151,7 +151,7 @@ struct AppearanceSettingsSection: View {
             if colorsAreCustomised || backgroundIsCustomised || settings?.starNamesData != nil {
                 DisclosureGroup("Reset") {
                     // Still here, and still useful — one tap to undo a whole
-                    // theme. Each colour now also resets on its own from
+                    // theme. Each color now also resets on its own from
                     // inside its own editor, which is where you are when you
                     // decide you preferred the default.
                     if colorsAreCustomised {
@@ -230,10 +230,10 @@ struct AppearanceSettingsSection: View {
         }
     }
 
-    /// A colour row: what it is, what it is set to, and whether it has been
+    /// A color row: what it is, what it is set to, and whether it has been
     /// changed from the default — the last of which is why this is not a
     /// plain `ColorPicker`. "Is this mine or the app's?" was unanswerable.
-    /// A colour row: what it is, what it is set to, and whether it has been
+    /// A color row: what it is, what it is set to, and whether it has been
     /// changed from the default — the last of which is why this is not a
     /// plain `ColorPicker`. "Is this mine or the app's?" was unanswerable.
     ///
@@ -382,11 +382,11 @@ struct AppearanceSettingsSection: View {
         ThemePalette.fetchOrCreate(in: context)
     }
 
-    /// A colour picker reports EVERY value as you drag through the spectrum,
+    /// A color picker reports EVERY value as you drag through the spectrum,
     /// and `save` commits the context and re-runs `ThemePalette.refresh` —
     /// which writes observable statics the whole app watches. Doing that from
     /// inside a binding setter re-rendered this sheet's ancestors mid-gesture,
-    /// so the sheet closed on the first touch and a colour could never be
+    /// so the sheet closed on the first touch and a color could never be
     /// adjusted, only stabbed at.
     ///
     /// Same disease as the rating-label fields, same cure: keep the cheap
@@ -404,7 +404,7 @@ struct AppearanceSettingsSection: View {
         }
     }
 
-    /// Closing the sheet mid-debounce must not lose the colour.
+    /// Closing the sheet mid-debounce must not lose the color.
     private func flushThemeCommit() {
         guard themeCommit != nil else { return }
         themeCommit?.cancel()

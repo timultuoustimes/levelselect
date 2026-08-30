@@ -295,7 +295,7 @@ struct CollectionMembersPicker: View {
     ///
     /// The old row was a 40pt thumbnail, a name, and a dot at the far right —
     /// three glances to answer "is this one in?". Box art is how anyone
-    /// actually recognises a game, and a ring around it answers the question
+    /// actually recognizes a game, and a ring around it answers the question
     /// in the same look.
     private func cell(_ game: Game, selected: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {

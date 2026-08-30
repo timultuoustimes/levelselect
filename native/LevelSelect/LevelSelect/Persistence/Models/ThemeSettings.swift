@@ -60,7 +60,7 @@ final class ThemeSettings {
     /// a logo and the bold one could never be turned down to plain text.
     var showGameLogos: Bool = true
 
-    /// Colours the user kept in the colour editor, as a JSON array of hex
+    /// Colors the user kept in the color editor, as a JSON array of hex
     /// strings. Synced, because a palette you built on your phone should be
     /// on your iPad — it was `@AppStorage` until this field existed.
     var savedSwatchesData: Data?
@@ -154,7 +154,7 @@ enum BackdropIntensity: String, CaseIterable, Identifiable {
 
     /// SMALL numbers. The first pass at this used 60/44/22pt, which destroys
     /// the image before opacity ever matters — Tim's own mockup uses a 3pt
-    /// gaussian, and it reads as artwork rather than a coloured smear. The
+    /// gaussian, and it reads as artwork rather than a colored smear. The
     /// job of the blur is to stop the art competing with the text on top of
     /// it, not to hide what the art is.
     var blurRadius: CGFloat {
@@ -196,7 +196,7 @@ enum ThemePageBackground: String, CaseIterable {
     }
 
     /// Which IGDB art this background wants fetched, if any. Nil means the
-    /// backdrop needs no lookup — it's the cover, a flat colour, or nothing.
+    /// backdrop needs no lookup — it's the cover, a flat color, or nothing.
     var igdbEndpoint: String? {
         switch self {
         case .keyArt:     "artworks"
@@ -215,7 +215,7 @@ enum ThemePageBackground: String, CaseIterable {
 }
 
 extension ThemeSettings {
-    /// Kept colours, newest first.
+    /// Kept colors, newest first.
     var savedSwatches: [String] {
         get {
             guard let savedSwatchesData,

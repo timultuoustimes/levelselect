@@ -24,8 +24,8 @@ struct CollectionTemplate: Identifiable, Hashable, Sendable {
         case unfinished = "Unfinished Business"
 
         /// A hue per section, so a long page of prompts reads as places rather
-        /// than one grey wall. Fixed rather than themed: these are the app's
-        /// own furniture and shouldn't all turn one colour with the accent.
+        /// than one gray wall. Fixed rather than themed: these are the app's
+        /// own furniture and shouldn't all turn one color with the accent.
         var tint: (r: Double, g: Double, b: Double) {
             switch self {
             case .identity:   (0.58, 0.36, 0.98)   // violet
@@ -84,7 +84,7 @@ extension CollectionTemplate {
     static let all: [CollectionTemplate] = [
         // ── Who you are
         .init(id: "made-me", name: "Six That Made Me",
-              prompt: "The games that formed your taste — not your favourites",
+              prompt: "The games that formed your taste — not your favorites",
               slots: 6, group: .identity, systemImage: "person.text.rectangle"),
         .init(id: "the-shelf", name: "The Shelf",
               prompt: "If you could keep only nine, forever",
@@ -202,7 +202,7 @@ extension CollectionTemplate {
               picksFrom: .backlog),
     ]
 
-    /// The template a collection was made from, recognised by name.
+    /// The template a collection was made from, recognized by name.
     ///
     /// A stored template id would be exact, but that is a new property and so
     /// a Schema V3. Name matching costs nothing and degrades harmlessly: rename

@@ -61,7 +61,7 @@ enum ThemePalette {
     /// Relative luminance, sRGB, per WCAG, against the crossover where black
     /// and white contrast EQUALLY: 0.179, not 0.5.
     ///
-    /// The number is derived, not chosen. Black on a colour scores
+    /// The number is derived, not chosen. Black on a color scores
     /// `(L + 0.05) / 0.05`; white scores `1.05 / (L + 0.05)`. Setting those
     /// equal gives `L = sqrt(0.0525) - 0.05 ~= 0.179`. Above it black wins,
     /// below it white does, and picking the other is measurably worse rather
@@ -70,7 +70,7 @@ enum ThemePalette {
     /// A sensible-looking 0.5 threshold puts WHITE on torch orange at about
     /// 2:1 — under half the 4.5:1 AA floor, on the most important control on
     /// Home. Black on that same orange is 10:1.
-    /// Internal so the colour editor can preview a candidate before it is
+    /// Internal so the color editor can preview a candidate before it is
     /// stored — the preview has to answer the same question the button will.
     static func onColor(for color: Color) -> Color {
         #if canImport(UIKit)

@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 ///
 /// Game artwork is wide — a 16:9 painting of a whole scene — and an avatar is
 /// square. Something has to decide which part survives, and the honest answer
-/// is the person, not a centre-crop: the character is rarely in the middle.
+/// is the person, not a center-crop: the character is rarely in the middle.
 ///
 /// Only ever shown for images WITHOUT transparency. A cut-out PNG already is
 /// the subject with nothing around it, so cropping one would be asking a

@@ -7,7 +7,7 @@ import Foundation
 /// covers get — rather than the ephemeral credential session.
 enum RAArt {
     /// Badge art for one achievement. RA serves every badge in two states:
-    /// full colour and a greyed "_lock" variant. Using their locked art for
+    /// full color and a grayed "_lock" variant. Using their locked art for
     /// unearned rows means nothing unearned can ever look earned.
     static func badgeURL(_ badge: String, earned: Bool) -> URL? {
         URL(string: "https://media.retroachievements.org/Badge/\(badge)\(earned ? "" : "_lock").png")

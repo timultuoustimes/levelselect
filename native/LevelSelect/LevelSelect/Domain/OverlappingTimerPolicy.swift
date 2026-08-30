@@ -9,7 +9,7 @@ import Foundation
 /// they were still watching. Ambiguity that belongs to the user should be
 /// handed back to them.
 ///
-/// The old automatic behaviour survives as `keepNewest` — still available,
+/// The old automatic behavior survives as `keepNewest` — still available,
 /// still the recommended answer, but now something chosen rather than
 /// something done.
 enum OverlappingTimerPolicy: String, CaseIterable, Identifiable, Sendable {

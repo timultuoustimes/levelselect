@@ -7,7 +7,7 @@ import SwiftData
 ///
 /// Verified empirically rather than asserted: the suite was run against a
 /// pre-fix tree, and SEVEN of these fail there. Three do not, and they are
-/// grouped separately below under their own heading — they guard behaviour
+/// grouped separately below under their own heading — they guard behavior
 /// worth keeping, but calling them regressions would be false, since reverting
 /// the fix they name does not make them fail.
 ///

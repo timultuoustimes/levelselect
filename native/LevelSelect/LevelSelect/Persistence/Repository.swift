@@ -442,7 +442,7 @@ struct Repository {
     static let raPlaythroughName = "RetroAchievements"
 
     /// Written into the record's notes when sync creates it, and required to
-    /// recognise it again.
+    /// recognize it again.
     ///
     /// The name alone was not enough, and the failure was the dangerous
     /// direction. A user who names an ordinary run "RetroAchievements" before
@@ -584,7 +584,7 @@ struct Repository {
             // means to run two timers on one device, and there is nothing
             // ambiguous to ask about. (A session with no recorded origin
             // predates Schema V2; treated as ours, which keeps the old
-            // behaviour for legacy records rather than prompting about a
+            // behavior for legacy records rather than prompting about a
             // device we can't name.)
             let isOurs = (active.originDevice ?? thisDevice) == thisDevice
             if isOurs || policy == .keepNewest {
@@ -1581,7 +1581,7 @@ struct Repository {
         var data = schema.jsonData
         var rescued = 0
         // Id is derived from the original rather than random, so a second
-        // rescue of the same item is recognisable — but `addingGoal` appends
+        // rescue of the same item is recognizable — but `addingGoal` appends
         // unconditionally, so the skip has to happen here.
         var present = Set(TrackerSchemaJSON.categories(from: data).flatMap(\.items).map(\.id))
         for item in items {
@@ -2635,7 +2635,7 @@ struct Repository {
         // Whose decision this is, is now the user's. Under `.ask` the overlap
         // is LEFT INTACT for the prompt to surface — closing it here first is
         // exactly the silent decision this replaced. `.keepNewest` is the old
-        // automatic behaviour, still available, now chosen. `.keepBoth` leaves
+        // automatic behavior, still available, now chosen. `.keepBoth` leaves
         // them alone permanently.
         guard running.count > 1, overlappingTimerPolicy == .keepNewest
         else { return repaired }

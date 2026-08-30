@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A slice of a breakdown: what it is, how many, and its colour.
+/// A slice of a breakdown: what it is, how many, and its color.
 struct PieSlice: Identifiable, Equatable {
     let label: String
     let value: Int
@@ -9,11 +9,11 @@ struct PieSlice: Identifiable, Equatable {
 }
 
 extension PieSlice {
-    /// Colours for a breakdown that has none of its own.
+    /// Colors for a breakdown that has none of its own.
     ///
-    /// Statuses carry their own colour and keep it. Genres, tags and systems
+    /// Statuses carry their own color and keep it. Genres, tags and systems
     /// do not, so they get a fixed palette walked in order — FIXED, not
-    /// random or hashed, because a chart whose colours change between
+    /// random or hashed, because a chart whose colors change between
     /// launches teaches nothing. You cannot learn "green is Adventure" if
     /// green is Adventure only today.
     ///
@@ -39,8 +39,8 @@ extension PieSlice {
 /// Deliberately not a stock donut. Three things make it the app's own:
 ///
 /// **Segmented, not continuous.** Each slice is drawn with a small angular gap
-/// and a gradient across its own colour, so the ring reads as separate pieces
-/// rather than one band that changes colour — closer to a dial than to a
+/// and a gradient across its own color, so the ring reads as separate pieces
+/// rather than one band that changes color — closer to a dial than to a
 /// pie, and it matches the app's other segmented chrome.
 ///
 /// **The total wears the app's face.** Press Start 2P in the middle, the same
@@ -48,7 +48,7 @@ extension PieSlice {
 /// appears and the first inside a chart.
 ///
 /// **Tapping tells you the share.** Tap a slice or its legend row and the
-/// centre becomes that slice: its count and its percentage. A static donut
+/// center becomes that slice: its count and its percentage. A static donut
 /// makes you estimate angles by eye; this answers the question the chart
 /// exists to raise. Tapping again returns to the total.
 ///

@@ -24,7 +24,7 @@ final class AppNavigator {
     /// tree is keyed off it — and re-keying a view destroys it. Bumping this
     /// on every theme edit tore down the whole TabView mid-edit, which reset
     /// HomeTab's `@State` and slammed the Settings sheet shut. Tapping any
-    /// colour, or moving any slider in the colour picker, threw you back to
+    /// color, or moving any slider in the color picker, threw you back to
     /// Home before you could choose: the first touch was the last one.
     ///
     /// The real fix is making `ThemePalette` observable so views re-render

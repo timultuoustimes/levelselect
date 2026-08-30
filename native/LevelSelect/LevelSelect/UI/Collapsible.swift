@@ -4,7 +4,7 @@ import SwiftUI
 /// sections collapsible so game pages stay scannable.
 ///
 /// Pass `scope` (a game's id) to persist per game. Without it the key is
-/// shared library-wide — which was the original behaviour *by accident*:
+/// shared library-wide — which was the original behavior *by accident*:
 /// keying on the title alone meant collapsing Tracker on one game collapsed
 /// it on every game. A game with a huge tracker and a game with none want
 /// different defaults, so game pages pass their game; a genuinely global

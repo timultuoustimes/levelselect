@@ -8,7 +8,7 @@ import SwiftData
 /// Every one of these had a passing test beside it while the bug was live. The
 /// common shape: the existing test used the happy-path input the code was
 /// written for — one playthrough, distinct ids, no name collisions — so it
-/// proved the intention rather than the behaviour. These use the boundary the
+/// proved the intention rather than the behavior. These use the boundary the
 /// code actually accepts.
 @MainActor
 struct MergeRegressionTests {

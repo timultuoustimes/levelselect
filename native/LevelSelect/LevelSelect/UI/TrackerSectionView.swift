@@ -1194,8 +1194,8 @@ struct TrackerSectionView: View {
             .accessibilityHint(hidden ? "Reveals what it is"
                                : (done ? "Marks it not completed" : "Marks it completed"))
 
-            // RA's own badge art, in RA's own states: colour when earned,
-            // their greyed "_lock" variant when not — so nothing unearned can
+            // RA's own badge art, in RA's own states: color when earned,
+            // their grayed "_lock" variant when not — so nothing unearned can
             // look earned. Hidden rows show nothing; the art is a hint too.
             if showRAArt, let badge = item.badge, !hidden {
                 AsyncImage(url: RAArt.badgeURL(badge, earned: done)) { phase in

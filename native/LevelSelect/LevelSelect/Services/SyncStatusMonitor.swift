@@ -95,7 +95,7 @@ final class SyncStatusMonitor {
         return !failures.isEmpty && failures.allSatisfy(\.failure.isThrottled)
     }
 
-    /// Direction-labelled error text. If two directions are unhealthy, both
+    /// Direction-labeled error text. If two directions are unhealthy, both
     /// remain visible; a healthy empty export can no longer make a failed
     /// import read as "Synced."
     var lastSyncError: String? {

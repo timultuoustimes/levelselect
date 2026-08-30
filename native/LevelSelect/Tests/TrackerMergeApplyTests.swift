@@ -204,7 +204,7 @@ struct TrackerMergeApplyTests {
     /// bosses whose names differ only by a trailing number, so any loosening of
     /// the match rules would pair them wrongly — and because this path rewrites
     /// progress ids, a mis-pair wouldn't lose a tick, it would move it onto the
-    /// WRONG boss, which is worse. Pin the behaviour.
+    /// WRONG boss, which is worse. Pin the behavior.
     @Test func similarlyNamedItemsAreNotConflated() {
         let (repo, game) = self.game(named: "Mina the Hollower")
         repo.applyGeneratedSchema(for: game, jsonData: schema([

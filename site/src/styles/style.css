@@ -210,7 +210,7 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 /* Sessions pair: Lock Screen front-left, widgets behind-right. Both stay
    larger than the old side-by-side ever allowed, at every width. */
 /* 55%, not 62%. At 62 the two phones overlapped by a quarter of the frame,
-   which hid the back one's left 39% — and a game page's logo is centred, so
+   which hid the back one's left 39% — and a game page's logo is centered, so
    what got cut was exactly the thing that identifies it. Hades read as
    "ADES". The container widens to compensate, so the phones are the same
    size as before and simply sit further apart. */

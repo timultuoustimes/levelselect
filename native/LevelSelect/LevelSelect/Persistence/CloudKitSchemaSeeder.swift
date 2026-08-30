@@ -98,7 +98,7 @@ enum CloudKitSchemaSeeder {
     /// inline. Without this row, Production has no BYTES field and every
     /// small image fails to sync forever.
     ///
-    /// 8x8 flat colour, a few hundred bytes — far below any plausible
+    /// 8x8 flat color, a few hundred bytes — far below any plausible
     /// threshold, in the way `largeSeedImage` is far above one. The point of
     /// both is to be unambiguous.
     static var smallSeedImage: Data {

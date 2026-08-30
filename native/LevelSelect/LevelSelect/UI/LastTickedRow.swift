@@ -10,7 +10,7 @@ import SwiftData
 ///
 /// It also teaches the note feature by showing it working. A per-item note was
 /// documented only as a promise — that regenerating wouldn't erase it — and
-/// lived behind a context menu labelled "Edit", so people never found it.
+/// lived behind a context menu labeled "Edit", so people never found it.
 /// Seeing someone's own note surfaced here, next to the thing it belongs to,
 /// explains the field better than a docs paragraph can.
 ///

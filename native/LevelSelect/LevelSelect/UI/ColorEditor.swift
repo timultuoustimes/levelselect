@@ -1,11 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// One colour, edited properly.
+/// One color, edited properly.
 ///
 /// Replaces a bare `ColorPicker` row, which wrote straight through and opened
 /// Apple's picker — so there was no way to change your mind, no way to put a
-/// single colour back to its default without resetting every colour, and no
+/// single color back to its default without resetting every color, and no
 /// control over a sheet that arrived needing a scroll to reach its own tabs.
 ///
 /// Pushed onto the Settings stack rather than presented: a `.sheet` inside a
@@ -17,7 +17,7 @@ import SwiftData
 /// looking.
 struct ColorEditor: View {
     let title: String
-    /// The colour this reverts to. Nil when there is no default to go back to.
+    /// The color this reverts to. Nil when there is no default to go back to.
     let defaultColor: Color?
     /// Whether a custom value is currently stored — Reset is pointless without.
     let isCustomised: Bool
@@ -36,7 +36,7 @@ struct ColorEditor: View {
     @State private var hexDraft = ""
     @State private var hexBad = false
 
-    /// Colours the user has kept. Synced, so a palette built on the phone is
+    /// Colors the user has kept. Synced, so a palette built on the phone is
     /// on the iPad — it was `@AppStorage` until `savedSwatchesData` existed.
     @Environment(\.modelContext) private var context
     @Query private var themeSettings: [ThemeSettings]
@@ -117,7 +117,7 @@ struct ColorEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     // Puts the LIVE theme back, not just the stored value —
-                    // the preview writes through so you can see a colour on
+                    // the preview writes through so you can see a color on
                     // the real app behind the sheet.
                     Button("Cancel") { color = original; dismiss() }
                 }
@@ -141,7 +141,7 @@ struct ColorEditor: View {
         #endif
     }
 
-    /// The colour doing the job it will actually do, rather than a square.
+    /// The color doing the job it will actually do, rather than a square.
     private var preview: some View {
         HStack(spacing: 12) {
             HStack(spacing: 6) {
@@ -173,7 +173,7 @@ struct ColorEditor: View {
 
     /// A hex field and a keep button.
     ///
-    /// Hex because a colour often comes from somewhere else — a game's art, a
+    /// Hex because a color often comes from somewhere else — a game's art, a
     /// brand, a palette someone already has — and re-finding it by dragging
     /// three sliders is guesswork. Keep, because having found it once, nobody
     /// should have to find it again.
@@ -190,7 +190,7 @@ struct ColorEditor: View {
                 .onSubmit(applyHex)
                 .onChange(of: hexDraft) { _, _ in hexBad = false }
             if hexBad {
-                Text("Not a colour")
+                Text("Not a color")
                     .font(.caption2)
                     .foregroundStyle(LSTheme.working)
             }
@@ -210,7 +210,7 @@ struct ColorEditor: View {
             }
             .buttonStyle(.plain)
             .disabled(saved.contains(currentHex))
-            .accessibilityLabel("Keep this colour")
+            .accessibilityLabel("Keep this color")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -251,7 +251,7 @@ struct ColorEditor: View {
         PersistenceMonitor.shared.commit(context)
     }
 
-    /// The current colour as `#RRGGBB`.
+    /// The current color as `#RRGGBB`.
     private var currentHex: String {
         #if canImport(UIKit)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

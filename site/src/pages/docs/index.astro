@@ -45,7 +45,7 @@ const sections = [
   { id: 'sessions',          label: 'Sessions & runs' },
   { id: 'shortcuts',         label: 'Siri & Shortcuts' },
   { id: 'stats',             label: 'Stats, bars and pies' },
-  { id: 'colors',            label: 'Colours' },
+  { id: 'colors',            label: 'Colors' },
   { id: 'widgets',           label: 'Widgets' },
   { id: 'data',              label: 'Getting your data out' },
 ];
@@ -98,15 +98,15 @@ const sections = [
     <p><strong>Settings &rarr; Your profile.</strong> A picture, a name, and your handles. It draws nothing on Home until you put something in it, so an empty profile costs you no space.</p>
 
     <h3>The picture</h3>
-    <p>Tap the picture itself to choose where it comes from: a photo, the artwork of any game in your library, or a sticker &mdash; Memoji, Genmoji, or one you made from your own photo. The app decides what to do next by looking at the image. Something with a transparent background is already the subject, so it goes straight in and is drawn whole. A photo or a wide piece of key art asks you to choose which square survives, because something has to and you are better at it than a centre crop.</p>
+    <p>Tap the picture itself to choose where it comes from: a photo, the artwork of any game in your library, or a sticker &mdash; Memoji, Genmoji, or one you made from your own photo. The app decides what to do next by looking at the image. Something with a transparent background is already the subject, so it goes straight in and is drawn whole. A photo or a wide piece of key art asks you to choose which square survives, because something has to and you are better at it than a center crop.</p>
 
     <h3>Handles</h3>
     <p>Add a handle once, then tick everywhere you use it. That is the whole design: someone who uses the same name on five services types it once, not five times. Sign up somewhere new later and you open that handle and add the service rather than starting again.</p>
     <p>A service belongs to one handle. Picking one that already sits on another handle moves it, and the row tells you so before you tap. You can add services the app has never heard of &mdash; Apple Arcade, a storefront, a forum.</p>
     <p><strong>Handles are decoration.</strong> Nothing signs in, nothing is fetched, nothing is shared. The one handle that does real work is your RetroAchievements username, and it is deliberately somewhere else: in the Keychain, on your device, never synced.</p>
 
-    <h3>Your name, and its colour</h3>
-    <p>Use a handle as your name and the two stay linked &mdash; rename the handle and the name follows. The name can take a colour of its own, and choosing <em>Accent</em> keeps it matched to your accent as you change it, rather than freezing a copy of whatever it is today.</p>
+    <h3>Your name, and its color</h3>
+    <p>Use a handle as your name and the two stay linked &mdash; rename the handle and the name follows. The name can take a color of its own, and choosing <em>Accent</em> keeps it matched to your accent as you change it, rather than freezing a copy of whatever it is today.</p>
 
     <h2 id="layouts">Game page layouts</h2>
     <p><strong>Settings &rarr; Game page layout.</strong> Four arrangements of the same page:</p>
@@ -129,7 +129,7 @@ const sections = [
     <pre><code>| Item      | Effect              | Location   | Notes            |
 | --------- | ------------------- | ---------- | ---------------- |
 | Lace Glove| Raises Attack by one| Ossex      | Reward from Ack  |</code></pre>
-    <p>Recognised headers include <em>Item, Name, Trinket, Title, Collectible</em> for the name; <em>Location, Area, Region, Zone</em> for where it is; <em>Effect, Description, Details</em>; and <em>Notes, How, Source, Hint</em>. Anything unrecognised is skipped and reported rather than guessed at.</p>
+    <p>Recognized headers include <em>Item, Name, Trinket, Title, Collectible</em> for the name; <em>Location, Area, Region, Zone</em> for where it is; <em>Effect, Description, Details</em>; and <em>Notes, How, Source, Hint</em>. Anything unrecognized is skipped and reported rather than guessed at.</p>
 
     <p><strong>Or headed sections</strong> of numbered or bulleted lines:</p>
     <pre><code>## Heart Coins
@@ -163,7 +163,7 @@ const sections = [
     <p>Your own notes stay yours: no merge mode rewrites them, and a Replace carries each note across wherever its item can still be matched.</p>
 
     <h2 id="notes">Your own notes, and where you left off</h2>
-    <p>Any tracker item can carry <strong>your own note</strong> — press and hold the row and choose <em>Edit item</em>. It's for the thing the checklist can't know: which NPC you were mid-quest with, where you'd stashed the key, what you meant to try next. The note shows on the item itself, in your accent colour, marked as yours rather than as more of whatever generated the list. Regenerating the tracker never touches it.</p>
+    <p>Any tracker item can carry <strong>your own note</strong> — press and hold the row and choose <em>Edit item</em>. It's for the thing the checklist can't know: which NPC you were mid-quest with, where you'd stashed the key, what you meant to try next. The note shows on the item itself, in your accent color, marked as yours rather than as more of whatever generated the list. Regenerating the tracker never touches it.</p>
     <p>The same sheet is where you rename an item to whatever you actually call it, and record where it is.</p>
     <p><strong>Where you left off</strong> sits at the top of the Tracker section: the last thing you ticked, when you ticked it, and your note about it if you wrote one. It's there for the game you haven't opened in three weeks — a percentage tells you how far you got, but not what you were <em>doing</em>. It records the moment you ticked something, so editing an old item later won't push it to the front. The same line appears on the Continue Playing card and its widget, so the answer reaches you before you open the app.</p>
 
@@ -174,7 +174,7 @@ const sections = [
     <p>When you actually want one hint, <strong>press and hold that row</strong> — a card shows that item's hint, location, and badge, and nothing else. One item at a time, so checking a single objective can't spoil the list below it. Your own notes on items always stay visible; they're yours, not hints.</p>
 
     <h2 id="retroachievements">RetroAchievements</h2>
-    <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in colour once you've earned it and RA's greyed version while you haven't.</p>
+    <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
     <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. Stats gains a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
 
@@ -200,10 +200,10 @@ const sections = [
     <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
     <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>
 
-    <h2 id="colors">Colours</h2>
-    <p><strong>Settings &rarr; Accent color</strong>, or any status colour under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the colour you want.</p>
-    <p>The <strong>+</strong> keeps a colour you have made, so you do not have to find it again; long-press one of your kept colours to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one colour, leaving every other colour you have chosen alone.</p>
-    <p>Kept colours live on the device. Your accent and status colours sync.</p>
+    <h2 id="colors">Colors</h2>
+    <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
+    <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
+    <p>Kept colors live on the device. Your accent and status colors sync.</p>
 
     <h2 id="widgets">Widgets</h2>
     <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
