@@ -64,12 +64,15 @@ struct ProfileHeader: View {
                         identity(profile)
                             .padding(.bottom, 10)
                     }
-                    // The art already sits under the toolbar rather than
-                    // starting below it. The glass bar then has something to
-                    // refract from the first frame, instead of the header
-                    // looking flat until you scroll art up into it — and the
-                    // hard top edge at the bar has nowhere to be.
-                    .padding(.top, -topOverscan)
+                    // NO negative top padding here, deliberately.
+                    //
+                    // Home's scroll view already ignores the top safe area, so
+                    // content starts at the window's top edge; the band being
+                    // `artHeight + topOverscan` tall is what puts the art under
+                    // the toolbar, and it lands the identity row at exactly the
+                    // height it had before. Offsetting as well double-counted
+                    // the inset and pulled the portrait and name up into the
+                    // wordmark.
                 } else {
                     identity(profile)
                         .padding(.top, 4)
