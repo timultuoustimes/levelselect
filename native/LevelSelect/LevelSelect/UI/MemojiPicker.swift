@@ -17,15 +17,19 @@ struct MemojiPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 18) {
+        // The catcher fills the screen behind the instructions, which are
+        // themselves not tappable. So a tap ANYWHERE focuses the field and
+        // brings the keyboard back — otherwise, losing focus once left a
+        // screen telling you to tap a keyboard that was no longer there, with
+        // no way to summon it.
+        ZStack {
             MemojiCatcher { data in
                 onPick(data)
                 dismiss()
             }
-            .frame(height: 1)
-            .opacity(0.01)
+            .opacity(0.02)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 10) {
                 Image(systemName: "face.smiling")
                     .font(.system(size: 44))
                     .foregroundStyle(LSTheme.accent)
@@ -33,18 +37,27 @@ struct MemojiPicker: View {
                     .font(.headline)
                 // Says where the control is rather than assuming anyone knows
                 // the sticker drawer exists — it is two taps into a keyboard.
-                Text("Tap the emoji or globe key on the keyboard, open the sticker drawer, then pick a Memoji. It becomes your picture straight away.")
+                Text("On the keyboard, tap the emoji or globe key, open the sticker drawer, then pick a Memoji. It becomes your picture straight away.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 28)
+                Text("Tap anywhere to bring the keyboard back.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 4)
             }
-
-            Spacer()
+            .padding(.bottom, 120)
+            .allowsHitTesting(false)
         }
-        .padding(.top, 28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .navigationTitle("Memoji")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+        }
     }
 }
 

@@ -297,6 +297,8 @@ struct ProfileEditor: View {
     @State private var name = ""
     @State private var handles: [String: String] = [:]
     @State private var picking: PhotosPickerItem?
+    @State private var choosingSource = false
+    @State private var pickingPhoto = false
     /// Which sheet is up, if any. One modifier, one source of truth.
     @State private var sheet: AvatarSheet?
     @State private var avatar: Data?
@@ -311,26 +313,38 @@ struct ProfileEditor: View {
                     HStack {
                         Spacer()
                         VStack(spacing: 10) {
-                            if let avatar {
-                                LocalArtworkThumb(data: avatar, contentMode: .fit)
-                                    .frame(width: 108, height: 108)
-                            } else {
-                                Image(systemName: "person.crop.circle")
-                                    .font(.system(size: 72))
-                                    .foregroundStyle(.tertiary)
+                            // The picture IS the control. Three text buttons
+                            // under it were a row of separate targets in one
+                            // Form row — which hit-tested as a single control
+                            // and fired the wrong one — and none of them was
+                            // the thing you actually want to tap.
+                            Button { choosingSource = true } label: {
+                                ZStack {
+                                    if let avatar {
+                                        LocalArtworkThumb(data: avatar, contentMode: .fit)
+                                            .frame(width: 108, height: 108)
+                                    } else {
+                                        Image(systemName: "person.crop.circle")
+                                            .font(.system(size: 78))
+                                            .foregroundStyle(.tertiary)
+                                    }
+                                }
+                                .frame(width: 116, height: 116)
+                                .overlay(alignment: .bottomTrailing) {
+                                    Image(systemName: "pencil")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundStyle(LSTheme.onAccent)
+                                        .frame(width: 28, height: 28)
+                                        .background(LSTheme.accent, in: .circle)
+                                }
+                                .contentShape(.rect)
                             }
-                            HStack(spacing: 16) {
-                                PhotosPicker("Photo", selection: $picking, matching: .images)
-                                Button("Game art") { sheet = .artwork }
-                                #if os(iOS)
-                                Button("Memoji") { sheet = .memoji }
-                                #endif
-                            }
-                            .font(.subheadline)
-                            if avatar != nil {
-                                Button("Remove picture", role: .destructive) { avatar = nil }
-                                    .font(.caption)
-                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(avatar == nil ? "Add a picture" : "Change picture")
+
+                            Text(avatar == nil ? "Add a picture" : "Tap to change")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                     }
@@ -378,6 +392,20 @@ struct ProfileEditor: View {
             }
             .task { load() }
             .task(id: picking) { await ingest() }
+            // One menu, naming the three places a picture can come from.
+            .confirmationDialog("Profile picture", isPresented: $choosingSource,
+                                titleVisibility: .visible) {
+                Button("Choose a photo") { pickingPhoto = true }
+                Button("Choose game art") { sheet = .artwork }
+                #if os(iOS)
+                Button("Choose a Memoji") { sheet = .memoji }
+                #endif
+                if avatar != nil {
+                    Button("Remove picture", role: .destructive) { avatar = nil }
+                }
+                Button("Cancel", role: .cancel) {}
+            }
+            .photosPicker(isPresented: $pickingPhoto, selection: $picking, matching: .images)
             .sheet(item: $sheet) { which in
                 switch which {
                 case .artwork:
