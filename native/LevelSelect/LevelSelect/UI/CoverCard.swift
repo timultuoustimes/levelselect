@@ -345,8 +345,13 @@ struct ContinueHeroCard: View {
                                 colors: [.white.opacity(0.45), .white.opacity(0.06)],
                                 startPoint: .top, endPoint: .bottom), lineWidth: 1)
                     }
-                    .shadow(color: LSTheme.accent.opacity(0.45), radius: 10, y: 4)
-                    .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                    // Quiet. The glow is here to lift the button off the
+                    // card, not to announce itself — and it vanishes the
+                    // moment a timer starts and Pause takes over, so a loud
+                    // one reads as something breaking rather than a state
+                    // change.
+                    .shadow(color: LSTheme.accent.opacity(0.22), radius: 6, y: 3)
+                    .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
             }
             .foregroundStyle(LSTheme.onAccent)
         }

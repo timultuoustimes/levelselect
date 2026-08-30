@@ -32,6 +32,20 @@ struct ColorEditor: View {
     @State private var saturation: Double = 0.7
     @State private var brightness: Double = 0.9
     @State private var loaded = false
+    @State private var hexDraft = ""
+    @State private var hexBad = false
+
+    /// Colours the user has kept.
+    ///
+    /// Device-local for now, deliberately: syncing these needs a new field on
+    /// `ThemeSettings`, which is a CloudKit schema deploy, and this shipped
+    /// between deploys. Worth folding into the next one — a palette you built
+    /// on your phone should be on your iPad.
+    @AppStorage("levelselect.savedSwatches") private var savedRaw = ""
+
+    private var saved: [String] {
+        savedRaw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+    }
 
     /// A dark-UI palette, not a full spectrum.
     ///
@@ -57,6 +71,22 @@ struct ColorEditor: View {
                         swatch(hex)
                     }
                 }
+
+                if !saved.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Yours")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                        LazyVGrid(columns: columns, spacing: 10) {
+                            ForEach(saved, id: \.self) { hex in
+                                swatch(hex, removable: true)
+                            }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
+                hexRow
 
                 VStack(spacing: 10) {
                     slider("Hue", value: $hue, track: hueTrack)
@@ -145,7 +175,87 @@ struct ColorEditor: View {
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 14))
     }
 
-    private func swatch(_ hex: String) -> some View {
+    /// A hex field and a keep button.
+    ///
+    /// Hex because a colour often comes from somewhere else — a game's art, a
+    /// brand, a palette someone already has — and re-finding it by dragging
+    /// three sliders is guesswork. Keep, because having found it once, nobody
+    /// should have to find it again.
+    private var hexRow: some View {
+        HStack(spacing: 10) {
+            Text("#")
+                .foregroundStyle(.tertiary)
+            TextField("F5A34D", text: $hexDraft)
+                .autocorrectionDisabled()
+                .font(.body.monospaced())
+                #if !os(macOS)
+                .textInputAutocapitalization(.never)
+                #endif
+                .onSubmit(applyHex)
+                .onChange(of: hexDraft) { _, _ in hexBad = false }
+            if hexBad {
+                Text("Not a colour")
+                    .font(.caption2)
+                    .foregroundStyle(LSTheme.working)
+            }
+            Button("Use", action: applyHex)
+                .buttonStyle(.borderless)
+                .disabled(hexDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+
+            Divider().frame(height: 22)
+
+            Button {
+                keepCurrent()
+            } label: {
+                Image(systemName: saved.contains(currentHex) ? "checkmark" : "plus")
+                    .font(.body.weight(.semibold))
+                    .frame(width: 30, height: 30)
+                    .background(LSTheme.accent.opacity(0.16), in: .circle)
+            }
+            .buttonStyle(.plain)
+            .disabled(saved.contains(currentHex))
+            .accessibilityLabel("Keep this colour")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(LSTheme.cardFill, in: .rect(cornerRadius: 12))
+    }
+
+    private func applyHex() {
+        let raw = hexDraft.trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "#", with: "")
+        guard let c = Color(hex: "#" + raw) else { hexBad = true; return }
+        hexBad = false
+        setFromColor(c)
+        push()
+    }
+
+    private func keepCurrent() {
+        let hex = currentHex
+        guard !saved.contains(hex) else { return }
+        // Newest first, capped — an unbounded list of near-identical purples
+        // stops being a palette and becomes a scroll.
+        savedRaw = ([hex] + saved).prefix(12).joined(separator: ",")
+    }
+
+    private func forget(_ hex: String) {
+        savedRaw = saved.filter { $0 != hex }.joined(separator: ",")
+    }
+
+    /// The current colour as `#RRGGBB`.
+    private var currentHex: String {
+        #if canImport(UIKit)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(current).getRed(&r, green: &g, blue: &b, alpha: &a)
+        #else
+        let n = NSColor(current).usingColorSpace(.sRGB) ?? .white
+        let r = n.redComponent, g = n.greenComponent, b = n.blueComponent
+        #endif
+        return String(format: "#%02X%02X%02X",
+                      Int(round(r * 255)), Int(round(g * 255)), Int(round(b * 255)))
+    }
+
+    private func swatch(_ hex: String, removable: Bool = false) -> some View {
         let c = Color(hex: hex) ?? .gray
         let selected = matches(c)
         return Button {
@@ -163,6 +273,11 @@ struct ColorEditor: View {
         .buttonStyle(.plain)
         .accessibilityLabel(hex)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .contextMenu {
+            if removable {
+                Button("Remove", role: .destructive) { forget(hex) }
+            }
+        }
     }
 
     private func slider(_ label: String, value: Binding<Double>,

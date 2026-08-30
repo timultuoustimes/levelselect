@@ -275,11 +275,13 @@ struct ProfileHeader: View {
 /// One modifier driven by an enum is the shape that actually works.
 private enum AvatarSheet: Identifiable {
     case artwork
+    case memoji
     case crop(Data)
 
     var id: String {
         switch self {
         case .artwork: "artwork"
+        case .memoji: "memoji"
         case .crop(let d): "crop-\(d.count)"
         }
     }
@@ -320,6 +322,9 @@ struct ProfileEditor: View {
                             HStack(spacing: 16) {
                                 PhotosPicker("Photo", selection: $picking, matching: .images)
                                 Button("Game art") { sheet = .artwork }
+                                #if os(iOS)
+                                Button("Memoji") { sheet = .memoji }
+                                #endif
                             }
                             .font(.subheadline)
                             if avatar != nil {
@@ -377,6 +382,15 @@ struct ProfileEditor: View {
                 switch which {
                 case .artwork:
                     AvatarArtworkPicker { take($0) }
+                case .memoji:
+                    #if os(iOS)
+                    // Memoji arrive as transparent HEIC, so `take` sends them
+                    // straight through with no crop step — which is right: a
+                    // Memoji is already a cut-out of exactly one thing.
+                    NavigationStack { MemojiPicker { take($0) } }
+                    #else
+                    EmptyView()
+                    #endif
                 case .crop(let raw):
                     AvatarCropView(source: raw) { take($0, alreadyCropped: true) }
                 }
