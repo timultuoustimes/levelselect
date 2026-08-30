@@ -178,9 +178,26 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
      across its full width above the phone. Before this it sat level with the
      phone and lost its left 39% behind it, which on an actual iPhone meant
      you could not tell there was an iPad there at all. */
-  .composite--hero { width: 108%; margin-inline: -4%; aspect-ratio: .92; }
-  .composite--hero .c-ipad { width: 96%; top: 0; }
-  .composite--hero .c-phone { width: 42%; left: 0; }
+  /* Tightened: the phone was 42% of a container bled 8% wider than the text,
+     so on an actual iPhone it stood ~90% of the viewport tall and pushed the
+     whole page down — you had to scroll past the hero to see the hero. It now
+     sits inside the text column at 36%, and the container is shorter, which
+     takes roughly a fifth off the height of the composite.
+
+     Rotations are halved too. At -2.4deg against the iPad's +1.2 the pair read
+     as askew rather than arranged; the section composites below use a
+     symmetric ±2 and look deliberate, so this matches that logic. */
+  /* The composite was only half the problem. Above it sat ~730px of hero —
+     a 112px icon, the wordmark, two paragraphs, two stacked buttons and the
+     platform line — so the image began below the fold no matter how small it
+     got. Tightening the icon and the gap lifts it by roughly 70px, which is
+     the difference between seeing the top of the device and seeing nothing. */
+  .hero .door { width: 88px; }
+  .hero .wrap { gap: 1rem; }
+
+  .composite--hero { width: 100%; margin-inline: 0; aspect-ratio: 1.06; }
+  .composite--hero .c-ipad { width: 88%; top: 0; transform: rotate(1deg); }
+  .composite--hero .c-phone { width: 36%; left: 0; transform: rotate(-1deg); }
 }
 
 .showcase { padding: var(--step) 0 calc(var(--step) * .5); }
