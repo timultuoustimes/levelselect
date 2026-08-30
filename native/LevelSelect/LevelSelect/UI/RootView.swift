@@ -431,7 +431,7 @@ struct HomeTab: View {
             // controls sitting on it. Hidden while the header paints art, the
             // tab pills and the gear/plus render as glass over the artwork,
             // which is what iPad already did.
-            .toolbarBackground(bleeds ? .hidden : .automatic, for: .windowToolbar)
+            .toolbarBackgroundVisibility(bleeds ? .hidden : .automatic, for: .windowToolbar)
             #else
             // The toolbar lockup IS the title on iOS; an empty title keeps
             // the system's text title from doubling it.
@@ -445,7 +445,11 @@ struct HomeTab: View {
             // other. With it hidden, the header's mask is the only fade and
             // both match. The toolbar's own controls keep their glass
             // capsules — this removes the slab behind them, not the chrome.
-            .toolbarBackground(bleeds ? .hidden : .automatic, for: .navigationBar)
+            // `toolbarBackgroundVisibility`, not `toolbarBackground`. The older
+            // modifier still compiles and did nothing here — the bar kept
+            // drawing its own translucent slab with a hard bottom edge, which
+            // is what King Kai kept showing after two "fixes".
+            .toolbarBackgroundVisibility(bleeds ? .hidden : .automatic, for: .navigationBar)
             #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }

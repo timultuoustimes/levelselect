@@ -91,6 +91,7 @@ targets:
             CFBundleURLSchemes: [levelselect]
     settings:
       base:
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
         # CloudKit + push environments. Base = Development so everyday
         # dev-signed builds never touch the real synced library; the Release

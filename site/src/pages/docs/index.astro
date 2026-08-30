@@ -23,13 +23,51 @@ const steps = [
     link: { href: '#paste', label: 'How pasting works' },
   },
 ];
+
+/**
+ * The reference sections, in page order.
+ *
+ * The page had eleven h2s and no way to see them: a wall of scroll that told
+ * you nothing about its own length or shape, which is exactly the page people
+ * leave. This list drives both the desktop rail and the phone jump menu, so
+ * there is one place to change and the nav cannot describe a page that no
+ * longer exists.
+ */
+const sections = [
+  { id: 'paste',             label: 'Pasting a checklist' },
+  { id: 'regenerating',      label: 'Regenerating safely' },
+  { id: 'notes',             label: 'Notes & where you left off' },
+  { id: 'hints',             label: 'Playing blind' },
+  { id: 'retroachievements', label: 'RetroAchievements' },
+  { id: 'beaten',            label: 'Beaten vs 100%' },
+  { id: 'sessions',          label: 'Sessions & runs' },
+  { id: 'shortcuts',         label: 'Siri & Shortcuts' },
+  { id: 'widgets',           label: 'Widgets' },
+  { id: 'data',              label: 'Getting your data out' },
+];
 ---
 <Base
   title="Help — LevelSelect"
   description="How to use LevelSelect: where to begin, pasting a checklist into a tracker, Siri and Shortcuts, widgets, and getting your data out."
   current="docs"
 >
-<main class="wrap">
+<main class="wrap docs-layout">
+  <!-- One list, so the nav can never drift from the page it describes. Each
+       entry's `id` must match an <h2 id> below. -->
+  <nav class="toc" aria-label="On this page">
+    <p class="toc__title">On this page</p>
+    <ol>
+      {sections.map((x) => <li><a href={`#${x.id}`}>{x.label}</a></li>)}
+    </ol>
+  </nav>
+
+  <details class="toc-mobile">
+    <summary>Jump to a section</summary>
+    <ol>
+      {sections.map((x) => <li><a href={`#${x.id}`}>{x.label}</a></li>)}
+    </ol>
+  </details>
+
   <article class="doc">
     <h1>Help</h1>
     <p class="stamp">Last updated 25 August 2026</p>
@@ -147,6 +185,81 @@ const steps = [
 </main>
 
 <style>
+  /* ---- navigation ------------------------------------------------------ */
+
+  /* A rail beside the text on wide screens, so the page's shape is visible
+     without scrolling it. Below 1100px there is not room for one without
+     squeezing the prose under 60 characters, so the phone gets a menu
+     instead — a rail that thin is worse than none. */
+  .docs-layout { position: relative; }
+
+  .toc { display: none; }
+
+  @media (min-width: 1100px) {
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 15rem minmax(0, 1fr);
+      gap: 3rem;
+      align-items: start;
+      max-width: 66rem;
+    }
+    .toc {
+      display: block;
+      position: sticky;
+      /* Clear of the site header, with a little air. */
+      top: 5.5rem;
+      max-height: calc(100vh - 7rem);
+      overflow-y: auto;
+      font-size: .88rem;
+    }
+    .toc__title {
+      font-family: "Press Start 2P", monospace;
+      font-size: .52rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--torch); margin: 0 0 .9rem;
+    }
+    .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
+    .toc a {
+      display: block; padding: .38rem .6rem; border-radius: 8px;
+      color: var(--muted); text-decoration: none; line-height: 1.35;
+      border-left: 2px solid transparent;
+    }
+    .toc a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
+    /* :target styles the section the URL points at — real state, no script. */
+    .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .toc-mobile { display: none; }
+  }
+
+  /* The phone version: closed by default, so it costs one line of height and
+     opens to the whole map. A <details> needs no script and keeps working
+     with JS off, like the invite form's :has() rules. */
+  .toc-mobile {
+    margin: 1.4rem 0 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+  }
+  .toc-mobile summary {
+    cursor: pointer; padding: .8rem 1rem; font-weight: 600;
+    list-style: none; display: flex; align-items: center; justify-content: space-between;
+  }
+  .toc-mobile summary::-webkit-details-marker { display: none; }
+  .toc-mobile summary::after {
+    content: "▾"; color: var(--torch); transition: transform .18s ease;
+  }
+  .toc-mobile[open] summary::after { transform: rotate(180deg); }
+  .toc-mobile ol {
+    list-style: none; margin: 0; padding: 0 .6rem .7rem;
+    display: grid; gap: .1rem;
+  }
+  .toc-mobile a {
+    display: block; padding: .5rem .6rem; border-radius: 8px;
+    color: var(--muted); text-decoration: none;
+  }
+  .toc-mobile a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
+
+  /* Anchors must not land under the sticky site header. */
+  .doc h2 { scroll-margin-top: 5rem; }
+
   .soon {
     font-size: .65em; font-weight: 700; letter-spacing: .04em;
     color: var(--torch); vertical-align: middle; margin-left: .5rem;
