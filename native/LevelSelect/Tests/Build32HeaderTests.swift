@@ -221,6 +221,39 @@ struct PlayerProfileTests {
     }
 }
 
+@Suite("Header handle display")
+struct HeaderHandleTests {
+
+    /// The header shows one handle, and it must be the one that is most
+    /// yours — the name across three services, not whichever happened to sort
+    /// first. Tim's real profile is a Discord-vs-everything-else shape.
+    @Test func theMostUsedHandleLeads() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "sameName",
+            GamerService.xbox.rawValue: "sameName",
+            GamerService.playstation.rawValue: "sameName",
+            GamerService.discord.rawValue: "otherName",
+        ]
+        let ranked = p.groupedHandles.sorted { $0.services.count > $1.services.count }
+        #expect(ranked.first?.handle == "sameName")
+        #expect(ranked.first?.services.count == 3)
+        #expect(ranked.count == 2)      // the header shows "+1"
+    }
+
+    /// A near-miss typo is NOT the same handle, and the app must not pretend
+    /// it is — two rows here is correct behaviour on bad data, and the fix
+    /// belongs in the editor, not in a fuzzy match.
+    @Test func aTypoIsADifferentHandle() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.nintendo.rawValue: "timultuoustimes",
+            GamerService.steam.rawValue: "timtultuoustimes",
+        ]
+        #expect(p.groupedHandles.count == 2)
+    }
+}
+
 @Suite("Player summary")
 struct PlayerSummaryTests {
 

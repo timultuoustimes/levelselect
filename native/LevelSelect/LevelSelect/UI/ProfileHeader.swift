@@ -24,7 +24,11 @@ struct ProfileHeader: View {
             || !profile.handles.isEmpty
     }
 
-    private static let artHeight: CGFloat = 168
+    /// Grown from 168 on Tim's read that the art wanted to be bigger. Most of
+    /// the increase is in the COVER WIDTH below rather than here: the Play
+    /// button already lands well, and height here comes straight out of the
+    /// Continue Playing card's position.
+    private static let artHeight: CGFloat = 190
     private static let portrait: CGFloat = 84
 
     /// No art means no art band. Reserving the full height for a flat tint
@@ -121,13 +125,13 @@ struct ProfileHeader: View {
         HStack(spacing: 5) {
             ForEach(Array(summary.recentCovers.prefix(9).enumerated()), id: \.offset) { _, art in
                 CoverThumb(urlString: art)
-                    .frame(width: 74)
-                    .clipShape(RoundedRectangle(cornerRadius: 5))
+                    .frame(width: 104)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
             }
         }
-        .frame(height: Self.artHeight * 1.35)
+        .frame(height: Self.artHeight * 1.3)
         .rotationEffect(.degrees(-4))
-        .scaleEffect(1.18)
+        .scaleEffect(1.12)
         .blur(radius: 1.5)
         .opacity(0.5)
     }
@@ -154,24 +158,42 @@ struct ProfileHeader: View {
         .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
     }
 
-    /// One chip per distinct handle, carrying every service that uses it.
+    /// ONE handle, whatever the data looks like.
+    ///
+    /// Two chips side by side don't fit a phone: the first truncated to
+    /// "timultuoustim…", which is worse than not showing it. And the header is
+    /// decoration — the editor is where the full set lives, so the header's
+    /// job is to say who you are once, not to be a complete record.
+    ///
+    /// Shows the handle used by the MOST services, so someone with one name
+    /// across Steam, Xbox and PSN plus a different Discord sees the name that
+    /// is actually theirs. Any others become a count.
     @ViewBuilder
     private func handleChips(_ profile: PlayerProfile) -> some View {
         let grouped = profile.groupedHandles
-        if !grouped.isEmpty {
+            .sorted { $0.services.count > $1.services.count }
+        if let main = grouped.first {
             HStack(spacing: 6) {
-                ForEach(grouped.prefix(2), id: \.handle) { row in
-                    HStack(spacing: 5) {
-                        Text(row.services.map(\.label).joined(separator: " · "))
-                            .foregroundStyle(.tertiary)
-                        Text(row.handle)
-                            .foregroundStyle(.secondary)
-                    }
-                    .font(.caption2)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(.white.opacity(0.09), in: .capsule)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Text(main.services.map(\.label).joined(separator: " · "))
+                        .foregroundStyle(.tertiary)
+                    Text(main.handle)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .font(.caption2)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(.white.opacity(0.09), in: .capsule)
+
+                if grouped.count > 1 {
+                    Text("+\(grouped.count - 1)")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.white.opacity(0.06), in: .capsule)
                 }
             }
         }
