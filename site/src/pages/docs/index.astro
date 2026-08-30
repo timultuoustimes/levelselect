@@ -34,6 +34,8 @@ const steps = [
  * longer exists.
  */
 const sections = [
+  { id: 'profile',           label: 'Your profile' },
+  { id: 'layouts',           label: 'Game page layouts' },
   { id: 'paste',             label: 'Pasting a checklist' },
   { id: 'regenerating',      label: 'Regenerating safely' },
   { id: 'notes',             label: 'Notes & where you left off' },
@@ -42,6 +44,8 @@ const sections = [
   { id: 'beaten',            label: 'Beaten vs 100%' },
   { id: 'sessions',          label: 'Sessions & runs' },
   { id: 'shortcuts',         label: 'Siri & Shortcuts' },
+  { id: 'stats',             label: 'Stats, bars and pies' },
+  { id: 'colors',            label: 'Colours' },
   { id: 'widgets',           label: 'Widgets' },
   { id: 'data',              label: 'Getting your data out' },
 ];
@@ -70,7 +74,7 @@ const sections = [
 
   <article class="doc">
     <h1>Help</h1>
-    <p class="stamp">Last updated 25 August 2026</p>
+    <p class="stamp">Last updated 30 August 2026</p>
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
@@ -90,7 +94,34 @@ const sections = [
 
     <p class="divider"><span>Then, when you need it</span></p>
 
-<h2 id="paste">Pasting a checklist into a tracker</h2>
+<h2 id="profile">Your profile</h2>
+    <p><strong>Settings &rarr; Your profile.</strong> A picture, a name, and your handles. It draws nothing on Home until you put something in it, so an empty profile costs you no space.</p>
+
+    <h3>The picture</h3>
+    <p>Tap the picture itself to choose where it comes from: a photo, the artwork of any game in your library, or a sticker &mdash; Memoji, Genmoji, or one you made from your own photo. The app decides what to do next by looking at the image. Something with a transparent background is already the subject, so it goes straight in and is drawn whole. A photo or a wide piece of key art asks you to choose which square survives, because something has to and you are better at it than a centre crop.</p>
+
+    <h3>Handles</h3>
+    <p>Add a handle once, then tick everywhere you use it. That is the whole design: someone who uses the same name on five services types it once, not five times. Sign up somewhere new later and you open that handle and add the service rather than starting again.</p>
+    <p>A service belongs to one handle. Picking one that already sits on another handle moves it, and the row tells you so before you tap. You can add services the app has never heard of &mdash; Apple Arcade, a storefront, a forum.</p>
+    <p><strong>Handles are decoration.</strong> Nothing signs in, nothing is fetched, nothing is shared. The one handle that does real work is your RetroAchievements username, and it is deliberately somewhere else: in the Keychain, on your device, never synced.</p>
+
+    <h3>Your name, and its colour</h3>
+    <p>Use a handle as your name and the two stay linked &mdash; rename the handle and the name follows. The name can take a colour of its own, and choosing <em>Accent</em> keeps it matched to your accent as you change it, rather than freezing a copy of whatever it is today.</p>
+
+    <h2 id="layouts">Game page layouts</h2>
+    <p><strong>Settings &rarr; Game page layout.</strong> Four arrangements of the same page:</p>
+    <ul>
+      <li><strong>Showcase</strong> &mdash; the art fills the top with the logo underneath. The most visual.</li>
+      <li><strong>Classic</strong> &mdash; close to the original: cover on the left, details beside it.</li>
+      <li><strong>Cover</strong> &mdash; box art leads, at the size box art deserves.</li>
+      <li><strong>Compact</strong> &mdash; nearly all list, with the art reduced to a tint.</li>
+    </ul>
+    <p>The choice applies to every game and syncs with your library. There is no right answer &mdash; pick the one that matches how you read a page.</p>
+
+    <h3>Logos</h3>
+    <p>Game pages fetch a wordmark on their own, from IGDB first and SteamGridDB after, and fall back to the game's name as text when neither has one. <strong>Settings &rarr; Use game logos</strong> turns it off if you would rather always read the name. You can still choose a specific logo per game from that game's artwork picker, and an explicit choice always wins.</p>
+
+    <h2 id="paste">Pasting a checklist into a tracker</h2>
     <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: every item comes from your text. It does interpret as it reads — stripping list syntax, working out which part of a line is the name and which is the location — and the rest of this section explains exactly how, so you can predict what it will do.</p>
 
     <h3>Two formats work</h3>
@@ -163,6 +194,16 @@ const sections = [
       <li><strong>Build your own automations.</strong> Because sessions are Shortcuts actions, you can wire them to anything the Shortcuts app can see: an NFC tag stuck to the console that starts a session when you tap your phone on it, a Focus that opens your library, a bedtime automation that reminds you a timer's still running.</li>
     </ul>
     <p>Nothing to set up — the shortcuts register themselves when the app is installed. Open the Shortcuts app and search LevelSelect to see the full set.</p>
+
+    <h2 id="stats">Stats, bars and pies</h2>
+    <p>Every card that shows a breakdown can be turned over. Tap the chart icon in its corner and the card flips between bars and a donut &mdash; Library, Ratings, By System, Genres and Tags. Your choice is remembered per card, and it is kept on the device rather than synced, like the order of the cards themselves.</p>
+    <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
+    <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>
+
+    <h2 id="colors">Colours</h2>
+    <p><strong>Settings &rarr; Accent color</strong>, or any status colour under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the colour you want.</p>
+    <p>The <strong>+</strong> keeps a colour you have made, so you do not have to find it again; long-press one of your kept colours to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one colour, leaving every other colour you have chosen alone.</p>
+    <p>Kept colours live on the device. Your accent and status colours sync.</p>
 
     <h2 id="widgets">Widgets</h2>
     <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
