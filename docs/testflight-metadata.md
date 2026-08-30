@@ -50,6 +50,12 @@ made for them, or the ask reads as a contradiction.
 Plain text — App Store Connect renders no markdown (no `**`, no `-` bullets
 that need styling; hyphens are fine as literal characters).
 
+**"What to Test" is capped at 4,000 characters**, and this header costs about
+490 of them. Build 33's notes came in at 5,098 and had to be cut back on the
+spot — write to the budget rather than trimming afterwards. Roughly: header
+490, framing 500, what's new 1,600, fixes 350, what to poke at 500, known
+150.
+
 Shortened 2026-08-30 (build 33). The long version was around 150 words and
 sat above the thing testers actually opened the notes to read. Every
 load-bearing part survives: the privacy distinction FIRST, both switches with
