@@ -428,3 +428,31 @@ struct AccentContrastTests {
         #expect(ThemePalette.onAccent == .black)
     }
 }
+
+@Suite("Stats pie")
+@MainActor
+struct StatsPieTests {
+
+    /// Colours must be STABLE across launches. A breakdown whose colours
+    /// shuffle teaches nothing — you cannot learn "green is Adventure" if
+    /// green is Adventure only today.
+    @Test func paletteIsPositionalAndStable() {
+        let rows = [("Adventure", 85), ("Platform", 30), ("Shooter", 12)]
+        let a = PieSlice.palette(for: rows)
+        let b = PieSlice.palette(for: rows)
+        #expect(a.map { $0.label } == b.map { $0.label })
+        #expect(a[0].color != a[1].color)
+        // Same position, same colour, regardless of the values in it.
+        let changed = PieSlice.palette(for: [("Adventure", 3), ("Platform", 999), ("Shooter", 1)])
+        #expect(changed[0].color == a[0].color)
+    }
+
+    /// More rows than the palette has entries must not crash or leave a slice
+    /// colourless — it wraps.
+    @Test func thePaletteWrapsRatherThanRunningOut() {
+        let many = (0..<30).map { ("Row \($0)", $0 + 1) }
+        let slices = PieSlice.palette(for: many)
+        #expect(slices.count == 30)
+        #expect(slices.allSatisfy { !$0.label.isEmpty })
+    }
+}

@@ -203,7 +203,31 @@ struct StatsTab: View {
         .lsCard()
     }
 
+    /// The breakdown as pie slices, in the same order the bars use so the two
+    /// faces of the card describe the data the same way round.
+    private var statusSlices: [PieSlice] {
+        GameStatus.displayOrder.compactMap { status in
+            let count = statusCounts[status] ?? 0
+            guard count > 0 else { return nil }
+            return PieSlice(label: status.sectionTitle, value: count, color: status.color)
+        }
+    }
+
     private var statusBreakdownCard: some View {
+        FlipCard(storageKey: "levelselect.stats.flip.library") {
+            statusBreakdownBars
+        } back: {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Library", systemImage: "books.vertical.fill")
+                    .font(.headline)
+                StatsPie(slices: statusSlices,
+                         centerTitle: "Games",
+                         total: statusSlices.reduce(0) { $0 + $1.value })
+            }
+        }
+    }
+
+    private var statusBreakdownBars: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Library", systemImage: "books.vertical.fill")
                 .font(.headline)
@@ -225,8 +249,6 @@ struct StatsTab: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .lsCard()
     }
 
     private func topPlayedCard(_ top: [(Game, TimeInterval)]) -> some View {
@@ -291,7 +313,35 @@ struct StatsTab: View {
     /// minority of their games, and "4.8" over three ratings would read as a
     /// library of masterpieces. The distribution answers whether the average
     /// means anything.
+    /// Star distribution as slices, five down to one, each in the accent at
+    /// descending strength — a rating scale is ordered, so a rainbow palette
+    /// would imply categories where there is really a ladder.
+    private var ratingSlices: [PieSlice] {
+        ratingDistribution.compactMap { stars, count in
+            guard count > 0 else { return nil }
+            return PieSlice(label: ThemePalette.starNames.isEmpty
+                                ? "\(stars)★"
+                                : "\(stars)★ \(ThemePalette.starLabel(for: stars))",
+                            value: count,
+                            color: LSTheme.accent.opacity(0.35 + 0.13 * Double(stars)))
+        }
+    }
+
     private var ratingsCard: some View {
+        FlipCard(storageKey: "levelselect.stats.flip.ratings") {
+            ratingsBars
+        } back: {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Ratings", systemImage: "star.fill")
+                    .font(.headline)
+                StatsPie(slices: ratingSlices,
+                         centerTitle: "Rated",
+                         total: ratedCount)
+            }
+        }
+    }
+
+    private var ratingsBars: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Ratings", systemImage: "star.fill")
                 .font(.headline)
@@ -332,8 +382,7 @@ struct StatsTab: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .lsCard()
+
     }
 
     /// Hours and finishes for the last six months, oldest first so the eye
@@ -472,6 +521,20 @@ struct StatsTab: View {
     /// Games per system, the way the library groups them — by the platform
     /// you recorded, normalised to its preferred name.
     private var platformsCard: some View {
+        FlipCard(storageKey: "levelselect.stats.flip.systems") {
+            platformsBars
+        } back: {
+            VStack(alignment: .leading, spacing: 10) {
+                Label("By System", systemImage: "gamecontroller.fill")
+                    .font(.headline)
+                StatsPie(slices: PieSlice.palette(for: Array(platformCounts.prefix(10))),
+                         centerTitle: "Systems",
+                         total: platformCounts.reduce(0) { $0 + $1.1 })
+            }
+        }
+    }
+
+    private var platformsBars: some View {
         let rows = platformCounts
         let maxCount = rows.first?.1 ?? 1
         return VStack(alignment: .leading, spacing: 10) {
@@ -490,8 +553,6 @@ struct StatsTab: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .lsCard()
     }
 
     /// A counted slice of the library where every row is a door — tapping a
@@ -500,16 +561,26 @@ struct StatsTab: View {
                            rows: [(String, Int)], kind: GameFacet.Kind) -> some View {
         Group {
             if !rows.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(title, systemImage: icon)
-                        .font(.headline)
-                    FlowCountRows(rows: rows, kind: kind)
+                FlipCard(storageKey: "levelselect.stats.flip.\(kind)") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label(title, systemImage: icon)
+                            .font(.headline)
+                        FlowCountRows(rows: rows, kind: kind)
+                    }
+                } back: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Label(title, systemImage: icon)
+                            .font(.headline)
+                        StatsPie(slices: PieSlice.palette(for: rows),
+                                 centerTitle: title,
+                                 total: rows.reduce(0) { $0 + $1.1 })
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lsCard()
             }
         }
     }
+
+
 
     private var franchisesCard: some View {
         let rows = franchiseCounts
