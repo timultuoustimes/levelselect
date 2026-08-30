@@ -549,7 +549,11 @@ struct HomeTab: View {
                     }
                 }
 
-                ForEach(GameStatus.displayOrder, id: \.self) { status in
+                // Wishlist is a TAB, not a shelf. It was both, which meant the
+                // same games had two homes on the same screen — and a wishlist
+                // is the one status that isn't part of your library at all.
+                // Tim: "it should be in the tab only."
+                ForEach(GameStatus.displayOrder.filter { $0 != .wishlist }, id: \.self) { status in
                     let items = grouped[status] ?? []
                     if !items.isEmpty, !hiddenStatuses.contains(status.rawValue) {
                         StatusCarousel(
@@ -624,8 +628,13 @@ struct HomeTab: View {
     /// is a bug from the user's side, however deliberate the tap was.
     @ViewBuilder
     private var hiddenStatusesFooter: some View {
+        // Same wishlist exclusion as the shelves above. Anyone who had hidden
+        // the wishlist shelf before it was removed would otherwise be offered
+        // a button that restores a shelf which no longer exists.
         let hidden = GameStatus.displayOrder.filter {
-            hiddenStatuses.contains($0.rawValue) && !(grouped[$0] ?? []).isEmpty
+            $0 != .wishlist
+                && hiddenStatuses.contains($0.rawValue)
+                && !(grouped[$0] ?? []).isEmpty
         }
         if !hidden.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
