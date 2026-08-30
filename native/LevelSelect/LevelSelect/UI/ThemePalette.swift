@@ -50,10 +50,47 @@ enum ThemePalette {
         statusOverrides[status] ?? defaultColor(for: status)
     }
 
+    /// Text and glyphs drawn ON the accent, black or white by contrast.
+    ///
+    /// The accent is the user's to choose, and a pale yellow one makes white
+    /// lettering unreadable while a deep indigo does the same to black. Any
+    /// filled accent control has to ask rather than assume — this is the one
+    /// place that decides.
+    private(set) static var onAccent: Color = .white
+
+    /// Relative luminance, sRGB, per WCAG, against the crossover where black
+    /// and white contrast EQUALLY: 0.179, not 0.5.
+    ///
+    /// The number is derived, not chosen. Black on a colour scores
+    /// `(L + 0.05) / 0.05`; white scores `1.05 / (L + 0.05)`. Setting those
+    /// equal gives `L = sqrt(0.0525) - 0.05 ~= 0.179`. Above it black wins,
+    /// below it white does, and picking the other is measurably worse rather
+    /// than a matter of taste.
+    ///
+    /// A sensible-looking 0.5 threshold puts WHITE on torch orange at about
+    /// 2:1 — under half the 4.5:1 AA floor, on the most important control on
+    /// Home. Black on that same orange is 10:1.
+    private static func onColor(for color: Color) -> Color {
+        #if canImport(UIKit)
+        let native = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard native.getRed(&r, green: &g, blue: &b, alpha: &a) else { return .white }
+        #else
+        guard let native = NSColor(color).usingColorSpace(.sRGB) else { return .white }
+        let r = native.redComponent, g = native.greenComponent, b = native.blueComponent
+        #endif
+        func lin(_ c: CGFloat) -> CGFloat {
+            c <= 0.03928 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+        return luminance > 0.179 ? .black : .white
+    }
+
     static func refresh(from settings: ThemeSettings?) {
         let custom = settings?.accentHex.flatMap { Color(hex: $0) }
         accent = custom ?? LSTheme.purple
         accentIsCustom = custom != nil
+        onAccent = onColor(for: accent)
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
         defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
         var overrides: [GameStatus: Color] = [:]

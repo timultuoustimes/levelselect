@@ -11,6 +11,12 @@ enum LSTheme {
     @MainActor
     static var accent: Color { ThemePalette.accent }
 
+    /// What to draw on top of a filled accent surface. See
+    /// `ThemePalette.onAccent` — chosen by contrast, because the accent is the
+    /// user's and can be anything from pale yellow to near-black.
+    @MainActor
+    static var onAccent: Color { ThemePalette.onAccent }
+
     /// App background: near-black with a purple cast at the top.
     static var background: LinearGradient {
         LinearGradient(

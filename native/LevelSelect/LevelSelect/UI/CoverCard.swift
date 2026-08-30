@@ -230,6 +230,12 @@ struct ContinueHeroCard: View {
                 .font(.headline)
                 .lineLimit(2)
 
+            // Where you were, directly under the title. This is the line that
+            // actually gets you back into the game, and it used to sit fourth,
+            // under two lines of bookkeeping — so the card answered "how long
+            // have I been at this" before "where was I".
+            LastTickedRow(game: game, compact: true)
+
             if let active {
                 TimelineView(.periodic(from: .now, by: 1)) { ctx in
                     Label(Format.clock(active.elapsed(asOf: ctx.date)),
@@ -260,10 +266,6 @@ struct ContinueHeroCard: View {
                     .foregroundStyle(.secondary)
             }
 
-            // The card said how long ago and for how long, never what you
-            // were doing — which is the question you actually opened the
-            // app with.
-            LastTickedRow(game: game, compact: true)
         }
     }
 
@@ -318,9 +320,19 @@ struct ContinueHeroCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Play")
-            .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
-            .foregroundStyle(.green)
+            // FILLED, and in the accent rather than green.
+            //
+            // Two reasons. It is the most important control on Home and it was
+            // the lightest thing in the card — a hairline outline beside a big
+            // filled panel, which is what a *secondary* action looks like.
+            //
+            // And green meant two opposite things: this button ("start"), and
+            // the running-timer readout above ("already going"). Green is now
+            // reserved for running, so anywhere in the app it says one thing —
+            // a timer is live.
+            .background(LSTheme.accent, in: .rect(cornerRadius: 12))
+            .foregroundStyle(LSTheme.onAccent)
+            .shadow(color: LSTheme.accent.opacity(0.35), radius: 8, y: 3)
         }
     }
 }

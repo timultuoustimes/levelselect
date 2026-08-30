@@ -386,3 +386,45 @@ struct PlatformShortNameTests {
         #expect(PlatformShort.name("Bandai WonderSwan") == "Bandai WonderSwan")
     }
 }
+
+@Suite("Accent contrast")
+@MainActor
+struct AccentContrastTests {
+
+    /// A filled accent button has to pick its own lettering. The accent is the
+    /// user's to choose, so both extremes must work: white on a deep colour,
+    /// black on a pale one. Getting this wrong makes the most important
+    /// control on Home unreadable for whoever picked yellow.
+    @Test func lightAccentsGetDarkText() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5E663"          // pale yellow
+        ThemePalette.refresh(from: settings)
+        #expect(ThemePalette.onAccent == .black)
+    }
+
+    @Test func darkAccentsGetLightText() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#3B1D6E"          // deep indigo
+        ThemePalette.refresh(from: settings)
+        #expect(ThemePalette.onAccent == .white)
+    }
+
+    /// The shipped default, which nobody chose and everybody starts on.
+    ///
+    /// Brand purple lands at L~=0.21, just above the crossover, so it takes
+    /// BLACK lettering — 5.2:1 against white's 4.1:1. Worth knowing, because
+    /// it is a visible change to the default look and it is the correct one.
+    @Test func theDefaultAccentGetsTheHigherContrastOption() {
+        ThemePalette.refresh(from: nil)
+        #expect(ThemePalette.onAccent == .black)
+    }
+
+    /// Tim's own accent — torch orange. Mid-tone, so it is exactly the case a
+    /// naive 0.5 threshold gets wrong.
+    @Test func torchOrangeGetsDarkText() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        #expect(ThemePalette.onAccent == .black)
+    }
+}
