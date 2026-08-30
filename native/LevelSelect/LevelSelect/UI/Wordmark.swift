@@ -31,6 +31,7 @@ struct Wordmark: View {
             }
             Text("LevelSelect")
                 .font(LSTheme.pixel(size))
+            .fontDesign(nil)   // never let an app-wide design override the pixel face
                 .foregroundStyle(tint)
                 .shadow(color: shadowTint, radius: 0, y: max(1, size * 0.16))
                 .shadow(color: tint.opacity(0.3), radius: size * 0.65)

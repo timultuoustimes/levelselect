@@ -106,6 +106,7 @@ struct ProfileHeader: View {
                     Text(name)
                         .foregroundStyle(ProfileNameColor.resolve(profile.nameColorRaw ?? ""))
                         .font(LSTheme.pixel(22))
+                        .fontDesign(nil)   // never let an app-wide design override the pixel face
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                         .shadow(color: .black.opacity(0.55), radius: 3, y: 2)

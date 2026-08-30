@@ -377,9 +377,6 @@ struct HomeTab: View {
     @State private var showingAdd = false
     @State private var showingSettings = false
     @State private var editingProfile = false
-    /// Whether Home's header is currently painting art to its own top edge.
-    /// The toolbar needs this and cannot see inside `home`.
-    @State private var homeHeaderBleeds = false
     @State private var showingCSVImport = false
     @State private var showingWelcome = false
     /// What the welcome's button asked for, fired from its onDismiss so the
@@ -410,9 +407,21 @@ struct HomeTab: View {
     }
 
     var body: some View {
-        NavigationStack(path: $path) {
+        // Computed HERE, not carried in @State.
+        //
+        // It was a `@State` flag set from the scroll view's `.onAppear` — so
+        // on the very first render the toolbar was configured with the flag
+        // still false, and the update afterwards did not always re-apply to a
+        // bar the system had already laid out. The simulator won that race and
+        // King Kai lost it, which is exactly the kind of bug that looks like
+        // "works on my machine". Deriving it in `body` means the toolbar and
+        // the scroll view cannot disagree.
+        let summary = PlayerSummary.make(from: games)
+        let bleeds = ProfileHeader.drawsArt(profile: profiles.first, summary: summary)
+
+        return NavigationStack(path: $path) {
             Group {
-                if games.isEmpty { emptyState } else { home }
+                if games.isEmpty { emptyState } else { home(summary, bleeds) }
             }
             .lsBackground()
             #if os(macOS)
@@ -422,8 +431,7 @@ struct HomeTab: View {
             // controls sitting on it. Hidden while the header paints art, the
             // tab pills and the gear/plus render as glass over the artwork,
             // which is what iPad already did.
-            .toolbarBackground(homeHeaderBleeds ? .hidden : .automatic,
-                               for: .windowToolbar)
+            .toolbarBackground(bleeds ? .hidden : .automatic, for: .windowToolbar)
             #else
             // The toolbar lockup IS the title on iOS; an empty title keeps
             // the system's text title from doubling it.
@@ -437,8 +445,7 @@ struct HomeTab: View {
             // other. With it hidden, the header's mask is the only fade and
             // both match. The toolbar's own controls keep their glass
             // capsules — this removes the slab behind them, not the chrome.
-            .toolbarBackground(homeHeaderBleeds ? .hidden : .automatic,
-                               for: .navigationBar)
+            .toolbarBackground(bleeds ? .hidden : .automatic, for: .navigationBar)
             #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
@@ -454,15 +461,21 @@ struct HomeTab: View {
                         .fixedSize()
                 }
                 #endif
+                // Tinted per item rather than relying on an inherited tint:
+                // the window toolbar sits outside the TabView on macOS, so
+                // whatever `.tint` the tab tree carries does not reliably
+                // reach it.
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
+                    .tint(LSTheme.accent)
                 }
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingAdd = true } label: {
                         Label("Add Game", systemImage: "plus")
                     }
+                    .tint(LSTheme.accent)
                 }
             }
         }
@@ -540,15 +553,10 @@ struct HomeTab: View {
         games.max { sortKey($0) < sortKey($1) }
     }
 
-    private var home: some View {
-        // Built once here rather than inside the header's body: it walks every
-        // game's sessions, and `body` runs far more often than the data changes.
-        let summary = PlayerSummary.make(from: games)
-        let headerBleeds = ProfileHeader.drawsArt(profile: profiles.first, summary: summary)
-
+    private func home(_ summary: PlayerSummary, _ headerBleeds: Bool) -> some View {
         // The GeometryReader is here for one number: the top safe-area inset,
         // which is how far the art has to reach up to sit under the toolbar.
-        return GeometryReader { outer in
+        GeometryReader { outer in
             ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
                 // Whose shelf this is, before what is on it. Draws nothing
@@ -628,8 +636,6 @@ struct HomeTab: View {
             // content start under the bar would put Continue Playing behind
             // the toolbar at rest, which is a bug rather than an effect.
             .ignoresSafeArea(.container, edges: headerBleeds ? .top : [])
-            .onAppear { homeHeaderBleeds = headerBleeds }
-            .onChange(of: headerBleeds) { _, now in homeHeaderBleeds = now }
         }
     }
 

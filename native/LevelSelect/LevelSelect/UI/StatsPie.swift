@@ -126,6 +126,7 @@ struct StatsPie: View {
 
             Text("\(chosen?.value ?? total)")
                 .font(LSTheme.pixel(chosen == nil ? 22 : 20))
+            .fontDesign(nil)   // never let an app-wide design override the pixel face
                 .foregroundStyle(chosen?.color ?? .primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.4)
