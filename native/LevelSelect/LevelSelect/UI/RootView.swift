@@ -377,6 +377,9 @@ struct HomeTab: View {
     @State private var showingAdd = false
     @State private var showingSettings = false
     @State private var editingProfile = false
+    /// Whether Home's header is currently painting art to its own top edge.
+    /// The toolbar needs this and cannot see inside `home`.
+    @State private var homeHeaderBleeds = false
     @State private var showingCSVImport = false
     @State private var showingWelcome = false
     /// What the welcome's button asked for, fired from its onDismiss so the
@@ -414,11 +417,28 @@ struct HomeTab: View {
             .lsBackground()
             #if os(macOS)
             .navigationTitle("LevelSelect")
+            // Same reason as iOS below: the window toolbar draws an opaque
+            // background that both hides the art behind it and flattens the
+            // controls sitting on it. Hidden while the header paints art, the
+            // tab pills and the gear/plus render as glass over the artwork,
+            // which is what iPad already did.
+            .toolbarBackground(homeHeaderBleeds ? .hidden : .automatic,
+                               for: .windowToolbar)
             #else
             // The toolbar lockup IS the title on iOS; an empty title keeps
             // the system's text title from doubling it.
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            // Hide the bar's OWN background when the header paints art.
+            //
+            // iPhone draws a navigation-bar background that stops with a hard
+            // horizontal line; iPad's does not, which is why the same header
+            // read as a gradient on one and a hard-edged glass band on the
+            // other. With it hidden, the header's mask is the only fade and
+            // both match. The toolbar's own controls keep their glass
+            // capsules — this removes the slab behind them, not the chrome.
+            .toolbarBackground(homeHeaderBleeds ? .hidden : .automatic,
+                               for: .navigationBar)
             #endif
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
@@ -608,6 +628,8 @@ struct HomeTab: View {
             // content start under the bar would put Continue Playing behind
             // the toolbar at rest, which is a bug rather than an effect.
             .ignoresSafeArea(.container, edges: headerBleeds ? .top : [])
+            .onAppear { homeHeaderBleeds = headerBleeds }
+            .onChange(of: headerBleeds) { _, now in homeHeaderBleeds = now }
         }
     }
 
