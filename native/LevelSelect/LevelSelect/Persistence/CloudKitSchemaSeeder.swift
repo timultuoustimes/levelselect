@@ -399,6 +399,19 @@ enum CloudKitSchemaSeeder {
         collection.gameIDs = [game.id.uuidString]
         context.insert(collection)
 
+        // --- PlayerProfile (build 33; no soft-delete field, purge removes it) ---
+        //
+        // `avatarData` is a PLAIN Data field, not externalStorage, so one seed
+        // creates it. The GameImage lesson from build 32 — externalStorage
+        // picks BYTES or ASSET by size, so the schema needs both and seeding
+        // needs two images straddling the threshold — does not apply, and
+        // deliberately so.
+        let player = PlayerProfile()
+        player.displayName = marker
+        player.avatarData = Self.smallSeedImage
+        player.handles = [GamerService.steam.rawValue: marker]
+        context.insert(player)
+
         // --- Profile (no soft-delete field; purge removes it) ---
         let profile = Profile(appleUserIdentifier: marker, email: marker, displayName: marker)
         profile.appleUserIdentifier = marker
@@ -483,6 +496,7 @@ enum CloudKitSchemaSeeder {
         purgeAll(EarnedBadge.self) { $0.legacyID == marker }
         purgeAll(GameImage.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
+        purgeAll(PlayerProfile.self) { $0.displayName == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
 
         // Undo the theme fields we populated, so a seeding run never leaves the

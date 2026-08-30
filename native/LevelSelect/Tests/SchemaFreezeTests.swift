@@ -154,6 +154,19 @@ struct SchemaFreezeTests {
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
             "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
             "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
+            // PlayerProfile added 2026-08-29 build 33 — the person the shelf
+            // belongs to. A NEW record type rather than reusing `Profile`,
+            // which is dead code carrying `appleUserIdentifier` and `email`
+            // from the web-app era; CloudKit is additive-only, so reusing it
+            // would keep account fields in the schema of an app whose promise
+            // is that there is no account.
+            //
+            // `avatarData` is deliberately NOT externalStorage: that attribute
+            // needs both a BYTES and an ASSET field and two seeds straddling
+            // the threshold to create them. See the GameImage entry.
+            //
+            // ⚠️ NOT YET PROMOTED to Production. Deploy before build 33 ships.
+            "PlayerProfile: avatarData,createdAt,displayName,handlesData,id,updatedAt",
             "Playthrough: completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playedWithData,playthrough,revision,startedAt,templateID,updatedAt,userID",
@@ -167,9 +180,8 @@ struct SchemaFreezeTests {
             // preferences, which is why they sync — same reasoning as
             // backdropIntensityRaw.
             //
-            // ⚠️ NOT YET PROMOTED to the Production CloudKit schema. Do that
-            // before build 33 ships, or these two fields fail to write on
-            // every device with CKErrorDomain error 2.
+            // Promoted to Production 2026-08-29, verified in the Console
+            // diff as CD_gamePageLayoutRaw STRING and CD_showGameLogos INT64.
             "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,gamePageLayoutRaw,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,showGameLogos,showItemHints,starNamesData,statusColorsData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",

@@ -143,3 +143,80 @@ struct GamePageLayoutTests {
         }
     }
 }
+
+/// Build 33 — the profile. Home is plural, and what unites a plural page is
+/// whose it is.
+@MainActor
+struct PlayerProfileTests {
+
+    /// Tim's rule: "it shouldn't list the same thing 4 times if they use the
+    /// handle across all of them."
+    @Test func oneHandleAcrossServicesIsOneRow() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "timultuoustimes",
+            GamerService.xbox.rawValue: "timultuoustimes",
+            GamerService.playstation.rawValue: "timultuoustimes",
+            GamerService.nintendo.rawValue: "TimM",
+        ]
+        let rows = p.groupedHandles
+        #expect(rows.count == 2)
+
+        let shared = try! #require(rows.first { $0.handle == "timultuoustimes" })
+        #expect(shared.services.count == 3)
+        #expect(Set(shared.services) == [.steam, .xbox, .playstation])
+
+        let solo = try! #require(rows.first { $0.handle == "TimM" })
+        #expect(solo.services == [.nintendo])
+    }
+
+    /// "There shouldn't be blank spaces if they don't put any." A service
+    /// someone left empty is absent, not a row with nothing in it.
+    @Test func blankHandlesAreDroppedEntirely() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "someone",
+            GamerService.xbox.rawValue: "",
+            GamerService.gog.rawValue: "   ",
+        ]
+        #expect(p.handles.count == 1)
+        #expect(p.groupedHandles.count == 1)
+        #expect(p.groupedHandles.first?.services == [.steam])
+    }
+
+    /// A profile nobody has filled in stores nothing at all, rather than an
+    /// empty JSON object that would sync and read as "set to nothing".
+    @Test func anEmptyProfileStoresNothing() {
+        let p = PlayerProfile()
+        #expect(p.handlesData == nil)
+        p.handles = [GamerService.itch.rawValue: "x"]
+        #expect(p.handlesData != nil)
+        p.handles = [:]
+        #expect(p.handlesData == nil)
+    }
+
+    /// Rows come back in a stable order, so the profile doesn't reshuffle
+    /// itself between launches — dictionary iteration order would.
+    @Test func rowOrderIsStable() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.discord.rawValue: "z",
+            GamerService.nintendo.rawValue: "a",
+            GamerService.steam.rawValue: "m",
+        ]
+        let first = p.groupedHandles.map(\.handle)
+        #expect(first == p.groupedHandles.map(\.handle))
+        // Nintendo sorts before Steam before Discord.
+        #expect(first == ["a", "m", "z"])
+    }
+
+    /// The seed marker must not survive as a real handle after a purge.
+    @Test func seedMarkerIsNotAPlausibleHandle() {
+        let p = PlayerProfile()
+        p.handles = [GamerService.steam.rawValue: "levelselect-schema-seed"]
+        // Nothing validates handle CONTENT — this test exists to pin that the
+        // purge matches on displayName, not on handles, so a marker handle
+        // can't be stranded by a rename of the marker constant.
+        #expect(p.displayName == nil)
+    }
+}

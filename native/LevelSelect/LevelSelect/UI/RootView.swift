@@ -372,9 +372,11 @@ struct HomeTab: View {
     @Environment(\.modelContext) private var context
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
+    @Query private var profiles: [PlayerProfile]
 
     @State private var showingAdd = false
     @State private var showingSettings = false
+    @State private var editingProfile = false
     @State private var showingCSVImport = false
     @State private var showingWelcome = false
     /// What the welcome's button asked for, fired from its onDismiss so the
@@ -446,6 +448,7 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
         .sheet(isPresented: $showingSettings) { SettingsView() }
+        .sheet(isPresented: $editingProfile) { ProfileEditor() }
         .sheet(isPresented: $showingCSVImport) { CSVImportView() }
         .sheet(isPresented: $showingWelcome, onDismiss: {
             // Any way out counts as seen — including a swipe-down. A welcome
@@ -514,6 +517,10 @@ struct HomeTab: View {
     private var home: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
+                // Whose shelf this is, before what is on it. Draws nothing
+                // until someone has actually put something in it.
+                ProfileHeader(profile: profiles.first) { editingProfile = true }
+
                 if let cp = continueGame {
                     VStack(alignment: .leading, spacing: 10) {
                         // Capped, and only this. At Accessibility XXL a

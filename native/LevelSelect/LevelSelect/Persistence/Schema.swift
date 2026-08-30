@@ -16,6 +16,7 @@ enum LevelSelectSchemaV1: VersionedSchema {
     static var models: [any PersistentModel.Type] {
         [
             Profile.self,
+            PlayerProfile.self,
             Game.self,
             Playthrough.self,
             Session.self,
