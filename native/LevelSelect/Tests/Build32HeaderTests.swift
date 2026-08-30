@@ -220,3 +220,87 @@ struct PlayerProfileTests {
         #expect(p.displayName == nil)
     }
 }
+
+@Suite("Player summary")
+struct PlayerSummaryTests {
+
+    private func makeGame(_ name: String, status: GameStatus, sessions: [(Date, TimeInterval)]) -> Game {
+        let game = Game(name: name)
+        game.status = status
+        let pt = Playthrough()
+        pt.game = game
+        pt.sessions = sessions.map { start, seconds in
+            let s = Session()
+            s.startDate = start
+            s.endDate = start.addingTimeInterval(seconds)
+            s.accumulatedDuration = seconds
+            s.state = .stopped
+            s.playthrough = pt
+            return s
+        }
+        game.playthroughs = [pt]
+        return game
+    }
+
+    /// The three numbers are the whole point of the band, so each has to be
+    /// right on its own: playing counts games, this week counts a window,
+    /// total counts everything.
+    @Test func countsPlayingAndSplitsTimeByWindow() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-2 * 24 * 3600)
+        let old = now.addingTimeInterval(-40 * 24 * 3600)
+
+        let games = [
+            makeGame("A", status: .playing, sessions: [(recent, 3600)]),
+            makeGame("B", status: .playing, sessions: [(old, 7200)]),
+            makeGame("C", status: .backlog, sessions: []),
+        ]
+        let s = PlayerSummary.make(from: games, now: now)
+
+        #expect(s.playing == 2)
+        #expect(s.weekSeconds == 3600)
+        #expect(s.totalSeconds == 3600 + 7200)
+    }
+
+    /// Two covers tilted behind a portrait look like a layout bug rather than
+    /// a pattern, so a quiet week must fall back to one game's art.
+    @Test func aQuietWeekFallsBackToOneGame() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let games = [
+            makeGame("A", status: .playing, sessions: [(recent, 600)]),
+            makeGame("B", status: .paused, sessions: [(recent, 600)]),
+        ]
+        games[0].coverURLString = "https://example.com/a.jpg"
+        games[1].coverURLString = "https://example.com/b.jpg"
+
+        let s = PlayerSummary.make(from: games, now: now)
+        #expect(s.recentCovers.count == 2)
+        #expect(!s.usesRibbon)          // two is below the floor
+    }
+
+    @Test func aBusyWeekUsesTheRibbonMostRecentFirst() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let games = (0..<4).map { i -> Game in
+            let g = makeGame("G\(i)", status: .playing,
+                             sessions: [(now.addingTimeInterval(-Double(i) * 3600), 600)])
+            g.coverURLString = "https://example.com/\(i).jpg"
+            return g
+        }
+        let s = PlayerSummary.make(from: games, now: now)
+        #expect(s.usesRibbon)
+        // G0 played most recently, so its cover leads.
+        #expect(s.recentCovers.first == "https://example.com/0.jpg")
+        #expect(s.recentCovers.last == "https://example.com/3.jpg")
+    }
+
+    /// Someone with no sessions at all still has a header; it just has nothing
+    /// to draw behind them, which must not crash or show an empty ribbon.
+    @Test func noPlayHistoryIsSafe() {
+        let s = PlayerSummary.make(from: [makeGame("A", status: .backlog, sessions: [])])
+        #expect(s.playing == 0)
+        #expect(s.totalSeconds == 0)
+        #expect(!s.usesRibbon)
+        #expect(s.fallbackBackdrop == nil)
+    }
+}

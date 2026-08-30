@@ -519,7 +519,10 @@ struct HomeTab: View {
             LazyVStack(alignment: .leading, spacing: 26) {
                 // Whose shelf this is, before what is on it. Draws nothing
                 // until someone has actually put something in it.
-                ProfileHeader(profile: profiles.first) { editingProfile = true }
+                ProfileHeader(profile: profiles.first,
+                              summary: PlayerSummary.make(from: games)) {
+                    editingProfile = true
+                }
 
                 if let cp = continueGame {
                     VStack(alignment: .leading, spacing: 10) {

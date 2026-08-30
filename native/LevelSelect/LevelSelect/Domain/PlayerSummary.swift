@@ -1,0 +1,73 @@
+import Foundation
+
+/// What the Home header says about you.
+///
+/// Three numbers, chosen because each one moves. Tim's cut of an earlier
+/// four-stat band: "174 games" and "5 finished" are the two that look identical
+/// week after week, and a header that never changes is a header nobody reads
+/// twice. Playing, this week and total all answer *how it's going*.
+///
+/// Computed from the `[Game]` Home already queries rather than fetching
+/// sessions separately — the relationships are loaded, and walking them once
+/// costs nothing next to a second round trip through the context.
+struct PlayerSummary {
+    /// Games with status `.playing`, matching the Now Playing shelf's count.
+    var playing: Int = 0
+    var weekSeconds: TimeInterval = 0
+    var totalSeconds: TimeInterval = 0
+
+    /// Cover art for the games played in the last seven days, most recently
+    /// played first — the backdrop's raw material.
+    var recentCovers: [String] = []
+
+    /// One game's art, for when the week is too quiet to build a backdrop
+    /// from. The game you're on now, or failing that the last one you touched.
+    var fallbackBackdrop: String?
+
+    /// Below this, a ribbon reads as a mistake rather than a pattern — two
+    /// covers tilted behind a portrait look like a layout bug. Fall back to
+    /// one game's artwork instead, which is a composition rather than a gap.
+    static let minimumRibbon = 3
+
+    var usesRibbon: Bool { recentCovers.count >= Self.minimumRibbon }
+
+    static func make(from games: [Game], now: Date = .now) -> PlayerSummary {
+        var summary = PlayerSummary()
+        let weekAgo = now.addingTimeInterval(-7 * 24 * 60 * 60)
+
+        // (game, most recent session start) for anything played this week.
+        var recent: [(game: Game, at: Date)] = []
+
+        for game in games {
+            if game.status == .playing { summary.playing += 1 }
+
+            var latestThisWeek: Date?
+            for playthrough in game.livePlaythroughs {
+                for session in (playthrough.sessions ?? []) where session.deletedAt == nil {
+                    let seconds = session.elapsed(asOf: now)
+                    summary.totalSeconds += seconds
+                    if session.startDate >= weekAgo {
+                        summary.weekSeconds += seconds
+                        if session.startDate > (latestThisWeek ?? .distantPast) {
+                            latestThisWeek = session.startDate
+                        }
+                    }
+                }
+            }
+            if let at = latestThisWeek { recent.append((game, at)) }
+        }
+
+        summary.recentCovers = recent
+            .sorted { $0.at > $1.at }
+            .compactMap { $0.game.displayCoverURLString }
+
+        // The current game first, then whatever was played most recently — so
+        // the fallback is never empty for anyone who has played anything.
+        summary.fallbackBackdrop =
+            games.first(where: { $0.status == .playing })?.backdropURLString
+            ?? recent.max(by: { $0.at < $1.at })?.game.backdropURLString
+            ?? recent.max(by: { $0.at < $1.at })?.game.displayCoverURLString
+
+        return summary
+    }
+}

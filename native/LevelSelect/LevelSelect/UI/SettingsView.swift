@@ -263,13 +263,15 @@ struct SettingsView: View {
     /// already in it — so the row is never a mystery in either state.
     private var profileSubtitle: String {
         guard let profile else { return "Add your name, picture and handles" }
+        // Only ever offers what is actually still missing. Saying "add your
+        // name" under someone's name is the row telling them it didn't work.
         let handles = profile.groupedHandles.count
-        if handles == 0 {
-            return profile.avatarData == nil
-                ? "Add your name, picture and handles"
-                : "Add your handles"
-        }
-        return handles == 1 ? "1 handle" : "\(handles) handles"
+        if handles > 0 { return handles == 1 ? "1 handle" : "\(handles) handles" }
+        var missing: [String] = []
+        if (profile.displayName ?? "").isEmpty { missing.append("name") }
+        if profile.avatarData == nil { missing.append("picture") }
+        missing.append("handles")
+        return "Add your " + ListFormatter.localizedString(byJoining: missing)
     }
 
     @ViewBuilder

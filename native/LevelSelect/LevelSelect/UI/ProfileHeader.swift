@@ -14,6 +14,7 @@ import PhotosUI
 /// form, and a form is the opposite of a personal page.
 struct ProfileHeader: View {
     let profile: PlayerProfile?
+    let summary: PlayerSummary
     var onEdit: () -> Void
 
     private var hasAnything: Bool {
@@ -23,71 +24,210 @@ struct ProfileHeader: View {
             || !profile.handles.isEmpty
     }
 
+    private static let artHeight: CGFloat = 168
+    private static let portrait: CGFloat = 84
+
+    /// No art means no art band. Reserving the full height for a flat tint
+    /// gives a new user — or anyone who hasn't played in a week — 168pt of
+    /// empty colour above their own name, which reads as a broken image
+    /// rather than a quiet week.
+    private var hasArt: Bool {
+        summary.usesRibbon || summary.fallbackBackdrop != nil
+    }
+
     var body: some View {
         if let profile, hasAnything {
-            Button(action: onEdit) {
-                HStack(alignment: .center, spacing: 12) {
-                    avatar(profile)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        if let name = profile.displayName, !name.isEmpty {
-                            Text(name)
-                                .font(.title3.bold())
-                                .foregroundStyle(.primary)
-                        }
-                        handleRows(profile)
+            VStack(spacing: 10) {
+                if hasArt {
+                    ZStack(alignment: .bottomLeading) {
+                        backdrop
+                        identity(profile)
+                            .padding(.bottom, 10)
                     }
-                    Spacer(minLength: 0)
+                } else {
+                    identity(profile)
+                        .padding(.top, 4)
                 }
-                .contentShape(.rect)
+                statBand
             }
-            .buttonStyle(.plain)
-            .padding(.horizontal)
+            .contentShape(.rect)
+            .onTapGesture(perform: onEdit)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityText(profile))
+            .accessibilityAddTraits(.isButton)
         }
+    }
+
+    private func identity(_ profile: PlayerProfile) -> some View {
+        HStack(alignment: .bottom, spacing: 12) {
+            avatar(profile)
+            VStack(alignment: .leading, spacing: 6) {
+                if let name = profile.displayName, !name.isEmpty {
+                    Text(name)
+                        .font(.system(size: 27, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                handleChips(profile)
+            }
+            .padding(.bottom, 2)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    /// Your week, or one game.
+    ///
+    /// The ribbon is the covers of everything played in the last seven days,
+    /// tilted and dimmed — so the header genuinely changes because of how you
+    /// played, without anyone choosing anything. Under three games it stops
+    /// reading as a pattern, so it falls back to a single game's artwork,
+    /// which is a composition rather than a gap.
+    @ViewBuilder
+    private var backdrop: some View {
+        Group {
+            if summary.usesRibbon {
+                ribbon
+            } else if let art = summary.fallbackBackdrop {
+                CoverThumb(urlString: art)
+                    .blur(radius: 3)
+                    .opacity(0.55)
+            }
+        }
+        .frame(height: Self.artHeight)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        // A MASK, not a colour overlay — the same technique the game page
+        // uses. Painting the page colour on top would be wrong the moment
+        // someone changes their page background, since the header would then
+        // fade to a colour the page no longer is.
+        //
+        // Holds through the top half and clears by the bottom, so the portrait
+        // and the name sit on the page rather than on the art.
+        .mask {
+            LinearGradient(
+                stops: [
+                    .init(color: .black, location: 0),
+                    .init(color: .black, location: 0.38),
+                    .init(color: .black.opacity(0.45), location: 0.68),
+                    .init(color: .clear, location: 1),
+                ],
+                startPoint: .top, endPoint: .bottom)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var ribbon: some View {
+        HStack(spacing: 5) {
+            ForEach(Array(summary.recentCovers.prefix(9).enumerated()), id: \.offset) { _, art in
+                CoverThumb(urlString: art)
+                    .frame(width: 74)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+            }
+        }
+        .frame(height: Self.artHeight * 1.35)
+        .rotationEffect(.degrees(-4))
+        .scaleEffect(1.18)
+        .blur(radius: 1.5)
+        .opacity(0.5)
     }
 
     @ViewBuilder
     private func avatar(_ profile: PlayerProfile) -> some View {
-        if let data = profile.avatarData {
-            // Uncropped and unframed. A character render with a transparent
-            // background should stand in the header the way a logo stands on a
-            // game page — a circular mask would cut the top off anything
-            // taller than it is wide, which is most characters.
-            LocalArtworkThumb(data: data, contentMode: .fit)
-                .frame(width: 56, height: 56)
-        } else if let initial = profile.displayName?.trimmingCharacters(in: .whitespaces).first {
-            // Their letter, not a generic person glyph — the same reason the
-            // empty Home gets the DoorMark rather than a controller outline.
-            Text(String(initial).uppercased())
-                .font(.title2.bold())
-                .foregroundStyle(LSTheme.accent)
-                .frame(width: 52, height: 52)
-                .background(LSTheme.accent.opacity(0.16), in: .circle)
+        Group {
+            if let data = profile.avatarData {
+                // Uncropped. A cut-out render stands in the header the way a
+                // logo stands on a game page; a circular mask would take the
+                // top off anything taller than it is wide.
+                LocalArtworkThumb(data: data, contentMode: .fit)
+            } else if let initial = profile.displayName?
+                .trimmingCharacters(in: .whitespaces).first {
+                Text(String(initial).uppercased())
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(LSTheme.accent)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(LSTheme.accent.opacity(0.16))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
         }
+        .frame(width: Self.portrait, height: Self.portrait)
+        .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
     }
 
-    /// One row per distinct handle, carrying every service that uses it.
-    ///
-    /// Someone using the same name on Steam, Xbox and PSN sees it once with
-    /// three marks — not the same word three times. See
-    /// `PlayerProfile.groupedHandles`.
+    /// One chip per distinct handle, carrying every service that uses it.
     @ViewBuilder
-    private func handleRows(_ profile: PlayerProfile) -> some View {
+    private func handleChips(_ profile: PlayerProfile) -> some View {
         let grouped = profile.groupedHandles
         if !grouped.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                ForEach(grouped, id: \.handle) { row in
+            HStack(spacing: 6) {
+                ForEach(grouped.prefix(2), id: \.handle) { row in
                     HStack(spacing: 5) {
                         Text(row.services.map(\.label).joined(separator: " · "))
-                            .font(.caption2)
                             .foregroundStyle(.tertiary)
                         Text(row.handle)
-                            .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    .font(.caption2)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(.white.opacity(0.09), in: .capsule)
+                    .lineLimit(1)
                 }
             }
         }
+    }
+
+    /// Three numbers that all move.
+    ///
+    /// An earlier version showed four, two of which ("174 games", "5 finished")
+    /// read the same week after week. A header nobody reads twice is height
+    /// spent on nothing — and height here is taken directly from the Continue
+    /// Playing card below.
+    private var statBand: some View {
+        HStack(spacing: 0) {
+            stat("\(summary.playing)", "Playing")
+            divider
+            stat(Format.duration(summary.weekSeconds), "This week")
+            divider
+            stat(Format.duration(summary.totalSeconds), "Total")
+        }
+        .background(.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 13))
+        .overlay {
+            RoundedRectangle(cornerRadius: 13)
+                .strokeBorder(.white.opacity(0.09), lineWidth: 1)
+        }
+        .padding(.horizontal, 16)
+    }
+
+    private var divider: some View {
+        Rectangle().fill(.white.opacity(0.09)).frame(width: 1, height: 26)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.system(size: 9.5, weight: .medium))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 9)
+    }
+
+    private func accessibilityText(_ profile: PlayerProfile) -> String {
+        var parts: [String] = []
+        if let name = profile.displayName, !name.isEmpty { parts.append(name) }
+        parts.append("\(summary.playing) playing")
+        parts.append("\(Format.duration(summary.weekSeconds)) this week")
+        parts.append("\(Format.duration(summary.totalSeconds)) total")
+        return parts.joined(separator: ", ")
     }
 }
 
