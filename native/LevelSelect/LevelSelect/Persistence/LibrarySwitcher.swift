@@ -30,6 +30,16 @@ final class LibrarySwitcher {
 
     /// True when the demo library is open.
     private(set) var isDemo: Bool
+
+    /// True for one runloop turn while the store is being replaced.
+    ///
+    /// The container swap used to happen with the old view tree still on
+    /// screen, and SwiftUI renders one more frame from it. A view holding a
+    /// `Game` from the dead container that touches a RELATIONSHIP hits a
+    /// SwiftData assertion and takes the app down — which is what happened on
+    /// the Mac the moment the demo library was chosen. Showing a placeholder
+    /// first means nothing is pointing at the old store when it goes.
+    private(set) var isSwitching = false
     /// The container for whichever library is open. Swapping this is what
     /// switches the app over.
     private(set) var container: ModelContainer
@@ -60,8 +70,14 @@ final class LibrarySwitcher {
         // out is to swipe it away.
         LiveActivityManager.endCurrent()
         UserDefaults.standard.set(on, forKey: Self.defaultsKey)
-        isDemo = on
-        container = LevelSelectStore.makeContainer(demo: on)
+
+        // Tear the tree down first, swap on the next turn.
+        isSwitching = true
+        Task { @MainActor in
+            isDemo = on
+            container = LevelSelectStore.makeContainer(demo: on)
+            isSwitching = false
+        }
     }
 
     /// Delete the demo store from disk. Only ever touches `demo.store`, so

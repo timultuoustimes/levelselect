@@ -2713,8 +2713,30 @@ extension Game {
     /// total tie-break, because `activePlaythrough` falls back to `.first`:
     /// equal creation timestamps otherwise let two devices resolve different
     /// fallback playthroughs and write sessions into different histories.
+    /// True while this object still belongs to a live store.
+    ///
+    /// Switching between the real library and the demo one tears down the
+    /// container and builds a new one. SwiftUI can render one more frame from
+    /// the old tree in between, and a view holding a `Game` from the dead
+    /// container that touches a RELATIONSHIP — not a plain field — hits a
+    /// SwiftData assertion and takes the app with it. Observed 2026-08-30:
+    /// LevelSelect crashed on the Mac the moment Tim switched to the demo
+    /// library, in `LastTickedRow` reading `activePlaythrough`.
+    ///
+    /// Checked here rather than at each call site because every relationship
+    /// read in the app funnels through these two accessors.
+    ///
+    /// Deliberately NOT `modelContext != nil`: a model that has never been
+    /// inserted is perfectly readable, and treating it as dead made every
+    /// PlayerSummary test compute zero. The real defence against a torn-down
+    /// container is `LibrarySwitcher.isSwitching`, which takes the view tree
+    /// down BEFORE the store goes; this is the cheap backstop for a model
+    /// deleted while something still points at it.
+    var isLive: Bool { !isDeleted }
+
     var livePlaythroughs: [Playthrough] {
-        (playthroughs ?? [])
+        guard isLive else { return [] }
+        return (playthroughs ?? [])
             .filter { $0.deletedAt == nil }
             .sorted { ($0.createdAt, $0.id.uuidString) < ($1.createdAt, $1.id.uuidString) }
     }
@@ -2790,8 +2812,12 @@ extension Playthrough {
 extension Playthrough {
     /// Total time across all sessions (active session counted live via `asOf`;
     /// discarded/tombstoned sessions excluded).
+    /// Same rule as `Game.isLive`, for the other side of the relationship.
+    var isLive: Bool { !isDeleted }
+
     func totalPlaytime(asOf now: Date = .now) -> TimeInterval {
-        (sessions ?? [])
+        guard isLive else { return 0 }
+        return (sessions ?? [])
             .filter { $0.deletedAt == nil }
             .reduce(0) { $0 + $1.elapsed(asOf: now) }
     }

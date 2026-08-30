@@ -128,11 +128,15 @@ enum DemoLibrarySeeder {
             let start = Date.now.addingTimeInterval(-daysAgo * 86_400)
             repo.logManualSession(on: pt, duration: duration, date: start)
         }
-        // A paused game should look paused: leave the most recent session open.
-        if status == .paused {
-            let session = repo.startSession(on: pt, at: Date.now.addingTimeInterval(-5_400))
-            repo.pauseSession(session, at: Date.now.addingTimeInterval(-1_800))
-        }
+        // NO open session for a paused game.
+        //
+        // This used to leave the most recent session open, reasoning that "a
+        // paused game should look paused". But those are two different
+        // paused: the STATUS means you have set the game aside, while a paused
+        // SESSION is a timer stopped mid-play. An open session put all three
+        // shelved games into "Also Running" — the shelf that exists to show
+        // live timers — each frozen at 01:00:00, so every demo library opened
+        // looking like three timers had been left going.
     }
 
     /// A small hand-written schema so the tracker page has real structure

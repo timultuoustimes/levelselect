@@ -13,7 +13,25 @@ struct LevelSelectApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                if library.isSwitching {
+                    // Nothing here points at a store, which is the point.
+                    LSTheme.background.ignoresSafeArea()
+                } else {
+                    RootView()
+                }
+            }
+                // The window paints its OWN ground on macOS.
+                //
+                // Hiding the window toolbar background to get glass took the
+                // window's own ground with it — the toolbar material was what
+                // made the window solid — so the empty state rendered on the
+                // system's default window colour, a flat grey. `lsBackground()`
+                // lives inside the NavigationStack and never reached the
+                // window itself.
+                #if os(macOS)
+                .containerBackground(LSTheme.background, for: .window)
+                #endif
                 // Forces a clean rebuild on a library switch. Without it,
                 // @Query results from the previous container can linger.
                 .id(library.isDemo)
