@@ -447,7 +447,13 @@ struct HomeTab: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet() }
-        .sheet(isPresented: $showingSettings) { SettingsView() }
+        // `onDismiss`, not the sheet's own `onDisappear`: this fires ONCE when
+        // Settings actually closes, where that fired on any disappearance —
+        // including pushing a subscreen onto the Settings stack, which re-keyed
+        // the tab tree and tore down the sheet mid-tap.
+        .sheet(isPresented: $showingSettings, onDismiss: {
+            AppNavigator.shared.themeRevision += 1
+        }) { SettingsView() }
         .sheet(isPresented: $editingProfile) { ProfileEditor() }
         .sheet(isPresented: $showingCSVImport) { CSVImportView() }
         .sheet(isPresented: $showingWelcome, onDismiss: {

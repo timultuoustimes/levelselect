@@ -236,11 +236,15 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            // The tab tree is keyed off this, so bumping it destroys and
-            // rebuilds every tab. That is fine here — this sheet is on its way
-            // out — and was NOT fine on every theme edit, which is what shut
-            // this sheet the moment you touched a colour.
-            .onDisappear { AppNavigator.shared.themeRevision += 1 }
+            // The bump lives on the PRESENTER's `onDismiss` now, not here.
+            //
+            // `.onDisappear` fires whenever this view leaves the screen — and
+            // pushing a colour editor onto this stack does exactly that. The
+            // tab tree is keyed off `themeRevision`, so the push bumped it,
+            // re-keyed the tree, destroyed the TabView and took the Settings
+            // sheet with it: tapping a colour row closed Settings instead of
+            // opening anything. Same failure as the build-32 colour picker,
+            // reached by a different route. See RootView's `.sheet(onDismiss:)`.
             .sheet(isPresented: $editingProfile) { ProfileEditor() }
         }
         // A sheet with no size on macOS gets whatever the system guesses,

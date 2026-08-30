@@ -70,7 +70,9 @@ enum ThemePalette {
     /// A sensible-looking 0.5 threshold puts WHITE on torch orange at about
     /// 2:1 — under half the 4.5:1 AA floor, on the most important control on
     /// Home. Black on that same orange is 10:1.
-    private static func onColor(for color: Color) -> Color {
+    /// Internal so the colour editor can preview a candidate before it is
+    /// stored — the preview has to answer the same question the button will.
+    static func onColor(for color: Color) -> Color {
         #if canImport(UIKit)
         let native = UIColor(color)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

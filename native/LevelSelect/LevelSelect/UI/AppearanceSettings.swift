@@ -43,7 +43,19 @@ struct AppearanceSettingsSection: View {
 
     private var personalization: some View {
         Section {
-            ColorPicker("Accent color", selection: accentBinding, supportsOpacity: false)
+            colorRow("Accent color", swatch: LSTheme.accent,
+                     isCustom: settings?.accentHex != nil) {
+                ColorEditor(
+                    title: "Accent color",
+                    defaultColor: LSTheme.purple,
+                    isCustomised: settings?.accentHex != nil,
+                    color: accentBinding,
+                    onReset: {
+                        let s = ensureSettings()
+                        s.accentHex = nil
+                        save(s)
+                    })
+            }
 
             Picker("Game page background", selection: pageBackgroundBinding) {
                 ForEach(ThemePageBackground.allCases, id: \.rawValue) { choice in
@@ -84,8 +96,21 @@ struct AppearanceSettingsSection: View {
 
             DisclosureGroup("Status colors") {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
-                    ColorPicker(selection: statusBinding(status), supportsOpacity: false) {
-                        Label(status.sectionTitle, systemImage: status.systemImage)
+                    colorRow(status.sectionTitle, icon: status.systemImage,
+                             swatch: status.color,
+                             isCustom: settings?.statusColors[status.rawValue] != nil) {
+                        ColorEditor(
+                            title: status.sectionTitle,
+                            defaultColor: ThemePalette.defaultColor(for: status),
+                            isCustomised: settings?.statusColors[status.rawValue] != nil,
+                            color: statusBinding(status),
+                            onReset: {
+                                let s = ensureSettings()
+                                var map = s.statusColors
+                                map[status.rawValue] = nil
+                                s.statusColors = map
+                                save(s)
+                            })
                     }
                 }
             }
@@ -125,8 +150,12 @@ struct AppearanceSettingsSection: View {
             // they apply, and invisible on a library nobody has themed.
             if colorsAreCustomised || backgroundIsCustomised || settings?.starNamesData != nil {
                 DisclosureGroup("Reset") {
+                    // Still here, and still useful — one tap to undo a whole
+                    // theme. Each colour now also resets on its own from
+                    // inside its own editor, which is where you are when you
+                    // decide you preferred the default.
                     if colorsAreCustomised {
-                        Button("Reset colors", role: .destructive) {
+                        Button("Reset all colors", role: .destructive) {
                             let s = ensureSettings()
                             s.accentHex = nil
                             s.statusColorsData = nil
@@ -198,6 +227,41 @@ struct AppearanceSettingsSection: View {
             // preference that changes on one device and not another otherwise
             // looks like broken iCloud sync.
             Text("These are library-wide defaults; a game's own Tracker section overrides them for that game. Layout and hints sync through iCloud. Achievement badges and page arrangement are set per device. With hints off, tracker rows show just their names — press and hold a row to peek at its hint and location. Badge art comes from RetroAchievements and appears only on imported sets.")
+        }
+    }
+
+    /// A colour row: what it is, what it is set to, and whether it has been
+    /// changed from the default — the last of which is why this is not a
+    /// plain `ColorPicker`. "Is this mine or the app's?" was unanswerable.
+    /// A colour row: what it is, what it is set to, and whether it has been
+    /// changed from the default — the last of which is why this is not a
+    /// plain `ColorPicker`. "Is this mine or the app's?" was unanswerable.
+    ///
+    /// PUSHES rather than presenting a sheet. `.sheet` attached inside a
+    /// `Form` lands on a `Section`, which SwiftUI applies once per child —
+    /// the row's tap then dismissed Settings instead of opening anything.
+    /// Same trap as the tracker sheet in build 30.
+    private func colorRow<Destination: View>(
+        _ title: String, icon: String? = nil, swatch: Color, isCustom: Bool,
+        @ViewBuilder destination: () -> Destination
+    ) -> some View {
+        NavigationLink {
+            destination()
+        } label: {
+            HStack(spacing: 10) {
+                if let icon { Image(systemName: icon).frame(width: 22) }
+                Text(title)
+                Spacer(minLength: 8)
+                if isCustom {
+                    Text("Custom")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                Circle()
+                    .fill(swatch)
+                    .frame(width: 24, height: 24)
+                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+            }
         }
     }
 

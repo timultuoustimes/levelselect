@@ -330,9 +330,25 @@ struct ContinueHeroCard: View {
             // the running-timer readout above ("already going"). Green is now
             // reserved for running, so anywhere in the app it says one thing —
             // a timer is live.
-            .background(LSTheme.accent, in: .rect(cornerRadius: 12))
+            // A gradient, a lit top edge and a coloured shadow — a flat
+            // rectangle of accent read as a disabled block rather than the
+            // most pressable thing on the page. The depth is what says
+            // "button"; the fill is what says "primary".
+            .background {
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(LinearGradient(
+                        colors: [LSTheme.accent, LSTheme.accent.opacity(0.78)],
+                        startPoint: .top, endPoint: .bottom))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14)
+                            .strokeBorder(LinearGradient(
+                                colors: [.white.opacity(0.45), .white.opacity(0.06)],
+                                startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                    }
+                    .shadow(color: LSTheme.accent.opacity(0.45), radius: 10, y: 4)
+                    .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+            }
             .foregroundStyle(LSTheme.onAccent)
-            .shadow(color: LSTheme.accent.opacity(0.35), radius: 8, y: 3)
         }
     }
 }
