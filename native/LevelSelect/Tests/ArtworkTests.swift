@@ -14,6 +14,17 @@ struct ArtworkTests {
     }
 
     /// A 2x2 red PNG — small, real, and decodable by ImageIO.
+    /// 8x8 RGBA with half its pixels fully transparent.
+    ///
+    /// `samplePNG` is opaque, and small enough that `prepare` passes it
+    /// through unchanged — so a test using it to check "alpha survived" is
+    /// really checking that nothing happened. Anything about transparency
+    /// needs this one.
+    private var transparentPNG: Data {
+        Data(base64Encoded:
+            "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAGklEQVR42mO4o2HzH4gZcNEM+CRBNMOwMAEA1A9v4ZYXfGMAAAAASUVORK5CYII=")!
+    }
+
     private var samplePNG: Data {
         Data(base64Encoded:
             "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGP4z8AARAwQCgAf7gP9i18U1AAAAABJRU5ErkJggg==")!
@@ -147,6 +158,42 @@ struct ArtworkTests {
         let result = try ImageIngest.prepare(samplePNG, role: .logo)
         // PNG magic number.
         #expect(result.data.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
+    }
+
+    /// An avatar from a transparent character render must stay PNG. Encoding
+    /// it as JPEG puts a black rectangle behind the character, which is the
+    /// same mistake that made game logos look like they were on a card.
+    @Test func avatarKeepsAlphaWhenTheSourceHasIt() throws {
+        let result = try ImageIngest.prepareAvatar(transparentPNG)
+        #expect(result.data.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
+        #expect(ImageIngest.hasAlpha(result.data))
+    }
+
+    /// The mirror image, and the one that actually protects the crop flow: an
+    /// opaque source must NOT be treated as a cut-out.
+    @Test func avatarWithoutAlphaIsNotTreatedAsACutOut() throws {
+        #expect(!ImageIngest.hasAlpha(samplePNG))
+    }
+
+    /// `PlayerProfile.avatarData` mirrors to one BYTES field with no ASSET
+    /// twin, so an oversized avatar does not spill — it silently never syncs.
+    /// The ingest has to guarantee the ceiling rather than hope for it.
+    @Test func avatarStaysUnderTheCloudKitBudget() throws {
+        let result = try ImageIngest.prepareAvatar(transparentPNG)
+        #expect(result.data.count <= ImageIngest.avatarByteBudget)
+        #expect(max(result.pixelWidth, result.pixelHeight) <= 640)
+    }
+
+    /// The rule the avatar flow turns on: transparency present means the image
+    /// is already the subject and goes straight in; opaque means it needs
+    /// positioning. If `hasAlpha` is wrong, a cut-out PNG gets sent to a crop
+    /// screen that has nothing to crop, or a wide painting is stored whole and
+    /// drawn as a letterboxed sliver.
+    @Test func alphaDecidesWhetherAnAvatarNeedsPositioning() throws {
+        // Transparent: already the subject, goes straight in.
+        #expect(ImageIngest.hasAlpha(transparentPNG))
+        // Opaque: a whole scene, so the person picks the square.
+        #expect(!ImageIngest.hasAlpha(samplePNG))
     }
 
     // MARK: Export round trip — the promise that matters

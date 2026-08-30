@@ -7,6 +7,9 @@ struct SettingsView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
+    @Query private var profiles: [PlayerProfile]
+
+    @State private var editingProfile = false
 
     // Tim's one-time migration from the web app. Debug builds only — the
     // bundled export is personal data and the actions are a developer tool,
@@ -51,6 +54,34 @@ struct SettingsView: View {
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+
+                // The only way in. `ProfileHeader` on Home deliberately draws
+                // nothing until there is something to draw — which, on its
+                // own, made the profile unreachable: no header meant no way
+                // to open the editor, so an empty profile could never stop
+                // being empty. This row is always here, the way the account
+                // card is always at the top of iOS Settings.
+                Section {
+                    Button { editingProfile = true } label: {
+                        HStack(spacing: 12) {
+                            profileAvatar
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(profileTitle)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text(profileSubtitle)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 Section("Library") {
                     LabeledContent("Games", value: "\(games.count)")
@@ -210,6 +241,7 @@ struct SettingsView: View {
             // out — and was NOT fine on every theme edit, which is what shut
             // this sheet the moment you touched a colour.
             .onDisappear { AppNavigator.shared.themeRevision += 1 }
+            .sheet(isPresented: $editingProfile) { ProfileEditor() }
         }
         // A sheet with no size on macOS gets whatever the system guesses,
         // which was too short for a screen with eight sections — the last of
@@ -218,6 +250,46 @@ struct SettingsView: View {
         #if os(macOS)
         .frame(minWidth: 540, idealWidth: 620, minHeight: 560, idealHeight: 780)
         #endif
+    }
+
+    private var profile: PlayerProfile? { profiles.first }
+
+    private var profileTitle: String {
+        let name = profile?.displayName ?? ""
+        return name.isEmpty ? "Your profile" : name
+    }
+
+    /// Says what the row will DO, and for a filled-in profile says what is
+    /// already in it — so the row is never a mystery in either state.
+    private var profileSubtitle: String {
+        guard let profile else { return "Add your name, picture and handles" }
+        let handles = profile.groupedHandles.count
+        if handles == 0 {
+            return profile.avatarData == nil
+                ? "Add your name, picture and handles"
+                : "Add your handles"
+        }
+        return handles == 1 ? "1 handle" : "\(handles) handles"
+    }
+
+    @ViewBuilder
+    private var profileAvatar: some View {
+        if let data = profile?.avatarData {
+            LocalArtworkThumb(data: data, contentMode: .fit)
+                .frame(width: 34, height: 34)
+        } else if let initial = profile?.displayName?
+            .trimmingCharacters(in: .whitespaces).first {
+            Text(String(initial).uppercased())
+                .font(.headline)
+                .foregroundStyle(LSTheme.accent)
+                .frame(width: 34, height: 34)
+                .background(LSTheme.accent.opacity(0.16), in: .circle)
+        } else {
+            Image(systemName: "person.crop.circle")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, height: 34)
+        }
     }
 
     #if LEGACY_IMPORT

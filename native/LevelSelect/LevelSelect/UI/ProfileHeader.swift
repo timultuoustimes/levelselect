@@ -49,10 +49,12 @@ struct ProfileHeader: View {
     @ViewBuilder
     private func avatar(_ profile: PlayerProfile) -> some View {
         if let data = profile.avatarData {
-            LocalArtworkThumb(data: data)
-                .frame(width: 52, height: 52)
-                .clipShape(.circle)
-                .overlay { Circle().strokeBorder(.white.opacity(0.14), lineWidth: 1) }
+            // Uncropped and unframed. A character render with a transparent
+            // background should stand in the header the way a logo stands on a
+            // game page — a circular mask would cut the top off anything
+            // taller than it is wide, which is most characters.
+            LocalArtworkThumb(data: data, contentMode: .fit)
+                .frame(width: 56, height: 56)
         } else if let initial = profile.displayName?.trimmingCharacters(in: .whitespaces).first {
             // Their letter, not a generic person glyph — the same reason the
             // empty Home gets the DoorMark rather than a controller outline.
@@ -89,6 +91,25 @@ struct ProfileHeader: View {
     }
 }
 
+/// An image waiting to be positioned. `sheet(item:)` needs identity and `Data`
+/// has none of its own.
+/// The editor's one sheet, as a value.
+///
+/// Two `.sheet` modifiers on the same view do NOT both work — SwiftUI keeps
+/// one and silently drops the other, which is why "Game art" opened nothing.
+/// One modifier driven by an enum is the shape that actually works.
+private enum AvatarSheet: Identifiable {
+    case artwork
+    case crop(Data)
+
+    var id: String {
+        switch self {
+        case .artwork: "artwork"
+        case .crop(let d): "crop-\(d.count)"
+        }
+    }
+}
+
 /// Editing the profile. Everything is optional and blank means absent — there
 /// is nothing here to "complete".
 struct ProfileEditor: View {
@@ -99,6 +120,8 @@ struct ProfileEditor: View {
     @State private var name = ""
     @State private var handles: [String: String] = [:]
     @State private var picking: PhotosPickerItem?
+    /// Which sheet is up, if any. One modifier, one source of truth.
+    @State private var sheet: AvatarSheet?
     @State private var avatar: Data?
     @State private var importError: String?
 
@@ -112,16 +135,18 @@ struct ProfileEditor: View {
                         Spacer()
                         VStack(spacing: 10) {
                             if let avatar {
-                                LocalArtworkThumb(data: avatar)
-                                    .frame(width: 88, height: 88)
-                                    .clipShape(.circle)
+                                LocalArtworkThumb(data: avatar, contentMode: .fit)
+                                    .frame(width: 108, height: 108)
                             } else {
                                 Image(systemName: "person.crop.circle")
                                     .font(.system(size: 72))
                                     .foregroundStyle(.tertiary)
                             }
-                            PhotosPicker("Choose a picture", selection: $picking, matching: .images)
-                                .font(.subheadline)
+                            HStack(spacing: 16) {
+                                PhotosPicker("Photo", selection: $picking, matching: .images)
+                                Button("Game art") { sheet = .artwork }
+                            }
+                            .font(.subheadline)
                             if avatar != nil {
                                 Button("Remove picture", role: .destructive) { avatar = nil }
                                     .font(.caption)
@@ -173,6 +198,14 @@ struct ProfileEditor: View {
             }
             .task { load() }
             .task(id: picking) { await ingest() }
+            .sheet(item: $sheet) { which in
+                switch which {
+                case .artwork:
+                    AvatarArtworkPicker { take($0) }
+                case .crop(let raw):
+                    AvatarCropView(source: raw) { take($0, alreadyCropped: true) }
+                }
+            }
         }
         #if os(macOS)
         .frame(minWidth: 460, minHeight: 520)
@@ -199,6 +232,35 @@ struct ProfileEditor: View {
         )
     }
 
+    /// The one rule that decides how an avatar behaves, applied in one place.
+    ///
+    /// **Transparency present** — a cut-out PNG, whether from Photos or from
+    /// game art — goes straight in and is drawn whole, unframed, the way a
+    /// logo sits on a game page. There is nothing to crop: the image is
+    /// already the subject and nothing else.
+    ///
+    /// **Opaque** — a photo, or a wide painting of a whole scene — gets the
+    /// positioning step, because something has to choose which square of a
+    /// 16:9 image survives and the person is better at that than a centre
+    /// crop. The character is rarely in the middle.
+    ///
+    /// Nobody is asked which of these they want. The image already knows.
+    private func take(_ raw: Data, alreadyCropped: Bool = false) {
+        if !alreadyCropped && !ImageIngest.hasAlpha(raw) {
+            // Replacing the artwork sheet with the crop sheet, not stacking
+            // one on the other.
+            sheet = .crop(raw)
+            return
+        }
+        do {
+            avatar = try ImageIngest.prepareAvatar(raw).data
+            importError = nil
+        } catch {
+            importError = "That picture couldn't be used. Try another."
+        }
+        sheet = nil
+    }
+
     private func load() {
         guard let profile else { return }
         name = profile.displayName ?? ""
@@ -214,7 +276,7 @@ struct ProfileEditor: View {
             // Same downscaler the artwork picker uses. An avatar drawn at 52pt
             // has no business carrying a camera's output, and keeping it small
             // is what lets `avatarData` be a plain inline field.
-            avatar = try ImageIngest.prepare(raw, role: .cover).data
+            take(raw)
         } catch {
             importError = "That picture couldn't be used. Try another."
         }
