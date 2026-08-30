@@ -205,33 +205,27 @@ def open_graph(pair):
     img = glow(img, (250, 250), 340, TORCH, 0.20)
     img = glow(img, (980, 430), 380, ACCENT, 0.16)
 
-    icon = app_icon(128)
-    img.alpha_composite(icon, (74 + 64 - icon.width // 2, 92 + 64 - icon.height // 2))
+    icon = app_icon(104)
+    img.alpha_composite(icon, (74 + 52 - icon.width // 2, 86 + 52 - icon.height // 2))
 
-    img = wordmark(img, (74, 250), 62)
+    # Type is smaller than it was so the devices fit.
+    #
+    # At 62px the wordmark ran to about x756 (Press Start 2P is one em per
+    # character), which left 444px for a pair 616 wide — a third of the iPad
+    # fell off the right edge. At 50px it ends near x624, and the art starts at
+    # 645 with only about 60px bleeding. The words were never the thing anyone
+    # was squinting at; the screens were.
+    img = wordmark(img, (74, 214), 50)
     d = ImageDraw.Draw(img)
-    d.text((74, 352), "Every game you're playing,", font=sans(32, 400), fill=INK)
-    d.text((74, 396), "and exactly where you left off.", font=sans(32, 400), fill=INK)
-    d.text((74, 462), "Library · session timer · progress tracker",
-           font=sans(24, 400), fill=MUTED)
-    d.text((74, 508), "iPhone · iPad · Mac · Watch", font=sans(22, 400), fill=MUTED)
-    d.text((74, 560), "levelselect.app", font=sans(28, 600), fill=TORCH)
+    d.text((74, 300), "Every game you're playing,", font=sans(27, 400), fill=INK)
+    d.text((74, 337), "and exactly where you left off.", font=sans(27, 400), fill=INK)
+    d.text((74, 398), "Library · session timer · progress tracker",
+           font=sans(20, 400), fill=MUTED)
+    d.text((74, 436), "iPhone · iPad · Mac · Watch", font=sans(19, 400), fill=MUTED)
+    d.text((74, 492), "levelselect.app", font=sans(25, 600), fill=TORCH)
 
-    # Bled off the right edge so a crop can't behead it. The pair starts
-    # further right and stands shorter: the wordmark runs to ~x756 at 62px
-    # (Press Start 2P is one em per character), and the phone was landing on
-    # its final letter.
-    # The pair is wider than it was — the iPad leads now — so it is shorter
-    # here and starts further left, otherwise more than half the iPad falls off
-    # the right edge. The wordmark runs to about x756 at 62px (Press Start 2P
-    # is one em per character), so 764 is as far left as the art can go.
-    # 790, not further left. The wordmark runs to about x756 at 62px (Press
-    # Start 2P is one em per character) and at 764 the phone landed on its
-    # final letter — which is the same collision the original note here warned
-    # about. The pair is shorter instead, so the iPad still reads without the
-    # art having to encroach on the type.
-    art = devices(pair, 700 if not pair else 384)
-    img.alpha_composite(art, (835, 92) if not pair else (790, 128))
+    art = devices(pair, 700 if not pair else 424)
+    img.alpha_composite(art, (835, 92) if not pair else (645, 103))
     return img, f"og{'-2up' if pair else ''}.png"
 
 
