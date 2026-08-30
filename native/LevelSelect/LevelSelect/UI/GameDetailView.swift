@@ -657,6 +657,11 @@ struct GameDetailView: View {
             .background(alignment: .top) { scrollingBackdrop(topInset: topInset) }
         }
         .scrollIndicators(.hidden)
+        // Soft, not the default `.hard`. See RootView: iOS 26's scroll edge
+        // effect draws a crisp line where content meets a bar unless told
+        // otherwise, and one screen fading while the rest cut is worse than
+        // either done consistently.
+        .scrollEdgeEffectStyle(.soft, for: .top)
         // The handoff point is the header card's own title. Below it the name
         // is on screen in full; above it, the bar takes over.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in

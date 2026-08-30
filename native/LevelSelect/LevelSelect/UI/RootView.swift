@@ -645,6 +645,14 @@ struct HomeTab: View {
                 .padding(.top, headerBleeds ? 0 : 16)
             }
             .scrollIndicators(.hidden)
+            // THE hard edge, finally named.
+            //
+            // iOS 26 draws a "scroll edge effect" where content meets a bar,
+            // and its default style is literally `.hard` — a crisp line. That
+            // is what King Kai kept showing through two toolbar-background
+            // fixes: the bar's background was not drawing it, this was. `.soft`
+            // is the gradual fade, which is what the art wants.
+            .scrollEdgeEffectStyle(.soft, for: .top)
             // ONLY when the header paints art. Without a header, letting
             // content start under the bar would put Continue Playing behind
             // the toolbar at rest, which is a bug rather than an effect.
