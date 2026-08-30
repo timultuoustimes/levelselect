@@ -23,6 +23,23 @@ struct BetaQuestionCard: View {
         #endif
     }
 
+    private var answerButton: some View {
+        Button("Answer on the web") {
+            if let url = URL(string: "https://levelselect.app/invite/?tester=1") {
+                openURL(url)
+            }
+            dismissed = true
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+    }
+
+    private var declineButton: some View {
+        Button("No thanks") { dismissed = true }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+    }
+
     var body: some View {
         if !dismissed && Self.isBetaInstall {
             VStack(alignment: .leading, spacing: 10) {
@@ -32,18 +49,14 @@ struct BetaQuestionCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Button("Answer on the web") {
-                        if let url = URL(string: "https://levelselect.app/invite/?tester=1") {
-                            openURL(url)
-                        }
-                        dismissed = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    Button("No thanks") { dismissed = true }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                // `ViewThatFits` measures rather than guessing a breakpoint:
+                // side by side while both labels fit, stacked when they don't.
+                // Two `.small` buttons with five words between them are fine
+                // on a phone at normal type and nowhere near fitting at
+                // accessibility sizes.
+                ViewThatFits(in: .horizontal) {
+                    HStack { answerButton; declineButton }
+                    VStack(alignment: .leading, spacing: 8) { answerButton; declineButton }
                 }
             }
             .padding(14)

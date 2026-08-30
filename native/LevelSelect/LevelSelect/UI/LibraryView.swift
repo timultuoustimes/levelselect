@@ -742,7 +742,9 @@ struct LibraryGridCell: View {
                     .multilineTextAlignment(.leading)
 
                 if size == .large, let platform = game.platforms.first {
-                    Text(platform)
+                    // Short name here too — a grid cell has even less room for
+                    // a console's full legal title than the hero card did.
+                    Text(PlatformShort.name(platform))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)

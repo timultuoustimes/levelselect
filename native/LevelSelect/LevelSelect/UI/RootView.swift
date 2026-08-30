@@ -516,10 +516,17 @@ struct HomeTab: View {
             LazyVStack(alignment: .leading, spacing: 26) {
                 if let cp = continueGame {
                     VStack(alignment: .leading, spacing: 10) {
+                        // Capped, and only this. At Accessibility XXL a
+                        // `.caption` all-caps eyebrow scaled into the largest
+                        // thing on Home — bigger than the hero's own title and
+                        // its cover — which inverts the hierarchy it exists to
+                        // introduce. It still grows, just not past the content
+                        // it labels. Nothing here is truncated or hidden.
                         Text("CONTINUE PLAYING")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .kerning(1)
+                            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
                         BouncyTap {
                             path.append(cp)
                         } label: {

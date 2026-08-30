@@ -26,6 +26,7 @@ struct PlatformIconView: View {
 
 /// Home "Systems" shelf — scroll your consoles, tap one to see its games.
 struct SystemsRow: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let groups: [(platform: String, count: Int)]
     var onOpen: (String) -> Void
 
@@ -53,14 +54,21 @@ struct SystemsRow: View {
                                     .background(.white.opacity(0.05), in: .rect(cornerRadius: 18))
                                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                                         .strokeBorder(.white.opacity(0.07)))
+                                // Two lines, not one. `lineLimit(1)` turned
+                                // "Other" and "SNES" into "Oth…" and "SN…" at
+                                // accessibility sizes — the shortest names the
+                                // app has, so nothing longer stood a chance.
                                 Text(PlatformShort.name(g.platform))
                                     .font(.caption.weight(.medium))
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.center)
                                 Text("\(g.count)")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
-                            .frame(width: 90)
+                            // The tile widens with the type rather than
+                            // holding a phone-sized 90pt and clipping.
+                            .frame(width: typeSize.isAccessibilitySize ? 150 : 90)
                         }
                         .scrollTransition(axis: .horizontal) { content, phase in
                             content

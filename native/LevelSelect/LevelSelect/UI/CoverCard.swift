@@ -3,6 +3,7 @@ import SwiftUI
 /// Box-art card for the horizontal carousels: large cover + title beneath,
 /// like the web app's home sections.
 struct CoverCard: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let game: Game
 
     var body: some View {
@@ -21,18 +22,23 @@ struct CoverCard: View {
                 }
                 .shadow(color: .black.opacity(0.45), radius: 6, y: 3)
 
+            // Two lines in a 108pt cell fits "Super Metroid" at normal type
+            // and truncates it to "Super Metr…" at accessibility sizes. The
+            // cell widens and takes a third line rather than clipping the one
+            // piece of text on a cover card that identifies the game.
             Text(game.name)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.primary)
-                .lineLimit(2, reservesSpace: true)
+                .lineLimit(typeSize.isAccessibilitySize ? 3 : 2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
         }
-        .frame(width: 108, alignment: .leading)
+        .frame(width: typeSize.isAccessibilitySize ? 168 : 108, alignment: .leading)
     }
 }
 
 /// A titled horizontal carousel of covers, with count + "See all".
 struct StatusCarousel: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     let status: GameStatus
     let games: [Game]
     var collapsed = false
@@ -41,31 +47,67 @@ struct StatusCarousel: View {
     var onToggleCollapse: () -> Void = {}
     var onHide: (() -> Void)?
 
+    private var collapseChevron: some View {
+        Button {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { onToggleCollapse() }
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .rotationEffect(.degrees(collapsed ? 0 : 90))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var statusIcon: some View {
+        Image(systemName: status.systemImage)
+            .foregroundStyle(status == .playing ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
+    }
+
+    private var seeAllButton: some View {
+        Button("See all") { onSeeAll() }
+            .font(.subheadline)
+            .foregroundStyle(LSTheme.accent)
+            .buttonStyle(.plain)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Button {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) { onToggleCollapse() }
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(collapsed ? 0 : 90))
-                }
-                .buttonStyle(.plain)
-                Image(systemName: status.systemImage)
-                    .foregroundStyle(status == .playing ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
-                Text(status.sectionTitle)
-                    .font(.title3.bold())
-                Text("(\(games.count))")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if !collapsed {
-                    Button("See all") { onSeeAll() }
-                        .font(.subheadline)
-                        .foregroundStyle(LSTheme.accent)
-                        .buttonStyle(.plain)
+            // Five things in one row — chevron, icon, title, count, See all —
+            // works until the title is 50pt, at which point "Now Playing"
+            // truncates to "Now" and the action is pushed off the edge. At
+            // accessibility sizes the row splits: the shelf identifies itself
+            // on one line, and See all becomes its own control underneath
+            // rather than competing for the same horizontal space.
+            Group {
+                if typeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            collapseChevron
+                            statusIcon
+                            // Title and count as ONE string here. Kept apart
+                            // they became two stacked lines, because at this
+                            // size each is wide enough to claim a row of its
+                            // own — "Now Playing" then "(2)" then "See all",
+                            // three lines to say one thing.
+                            Text("\(status.sectionTitle) (\(games.count))")
+                                .font(.title3.bold())
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if !collapsed { seeAllButton }
+                    }
+                } else {
+                    HStack(spacing: 6) {
+                        collapseChevron
+                        statusIcon
+                        Text(status.sectionTitle)
+                            .font(.title3.bold())
+                        Text("(\(games.count))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if !collapsed { seeAllButton }
+                    }
                 }
             }
             .padding(.horizontal)
@@ -137,102 +179,32 @@ struct ContinueHeroCard: View {
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
-        HStack(spacing: 14) {
-            CoverThumb(urlString: game.displayCoverURLString)
-                .frame(width: 76, height: 101)
-                .overlay { CoverShine() }
-                .clipShape(.rect(cornerRadius: 10))
-                .shadow(color: .black.opacity(0.4), radius: 5, y: 2)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(game.name)
-                    .font(.headline)
-                    .lineLimit(2)
-
-                if let active {
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Label(Format.clock(active.elapsed(asOf: ctx.date)),
-                              systemImage: active.state == .running ? "record.circle" : "pause.circle")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(active.state == .running ? .green : .orange)
+        // At accessibility sizes this was a fixed HStack and it inverted its
+        // own hierarchy: the 76pt cover stayed 76pt while "Super Nintendo
+        // Entertainment System" wrapped to five lines and hyphenated
+        // ("Entertain-ment") in the strip left between two fixed objects.
+        //
+        // Stacked, the cover and the action share one row — they are the two
+        // things that DON'T grow with type — and the text gets the whole card
+        // width underneath. Nothing is hidden and no size is capped; the
+        // component changes shape instead.
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 14) {
+                        cover(width: 96, height: 128)
+                        Spacer(minLength: 0)
+                        actions
                     }
-                } else if let last = playthrough?.lastPlayedAt {
-                    Text("Last played \(last, format: .relative(presentation: .named))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if let platform = game.platforms.first {
-                    Text(platform)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                let total = playthrough?.totalPlaytime() ?? 0
-                if total > 0 {
-                    Text(Format.duration(total) + " played")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-
-                // The card said how long ago and for how long, never what you
-                // were doing — which is the question you actually opened the
-                // app with.
-                LastTickedRow(game: game, compact: true)
-            }
-
-            Spacer(minLength: 0)
-
-            // A running timer is the thing you most want to act on, and it
-            // used to be unreachable from here: the button still said Play,
-            // and stopping meant navigating into the game. When a session is
-            // live the primary action becomes pause/resume, with stop beside
-            // it — small, because ending a session by mis-tap is worse than
-            // an extra tap.
-            if let active, let onPauseResume, let onStop {
-                HStack(spacing: 8) {
-                    Button(action: onStop) {
-                        Image(systemName: "stop.fill")
-                            .frame(width: 34, height: 56)
-                    }
-                    .buttonStyle(.plain)
-                    .background(.red.opacity(0.14), in: .rect(cornerRadius: 10))
-                    .foregroundStyle(.red.opacity(0.9))
-                    .accessibilityLabel("Stop session")
-
-                    Button(action: onPauseResume) {
-                        VStack(spacing: 4) {
-                            Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
-                            // At accessibility sizes the caption can't fit the
-                            // fixed square — the glyph alone reads better than
-                            // "P…", and the label below says the word.
-                            if !typeSize.isAccessibilitySize {
-                                Text(active.state == .running ? "Pause" : "Resume")
-                                    .font(.caption.weight(.semibold))
-                            }
-                        }
-                        .frame(width: 56, height: 56)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(active.state == .running ? "Pause" : "Resume")
-                    .background(LSTheme.accent.opacity(0.16), in: .rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(LSTheme.accent.opacity(0.6), lineWidth: 1))
-                    .foregroundStyle(LSTheme.accent)
+                    details
                 }
             } else {
-                Button(action: onPlay) {
-                    VStack(spacing: 4) {
-                        Image(systemName: "play.fill")
-                        if !typeSize.isAccessibilitySize {
-                            Text("Play").font(.caption.weight(.semibold))
-                        }
-                    }
-                    .frame(width: 56, height: 56)
+                HStack(spacing: 14) {
+                    cover(width: 76, height: 101)
+                    details
+                    Spacer(minLength: 0)
+                    actions
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Play")
-                .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
-                .foregroundStyle(.green)
             }
         }
         .padding(14)
@@ -241,5 +213,114 @@ struct ContinueHeroCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(LSTheme.accent.opacity(0.35), lineWidth: 1)
         )
+    }
+
+    private func cover(width: CGFloat, height: CGFloat) -> some View {
+        CoverThumb(urlString: game.displayCoverURLString)
+            .frame(width: width, height: height)
+            .overlay { CoverShine() }
+            .clipShape(.rect(cornerRadius: 10))
+            .shadow(color: .black.opacity(0.4), radius: 5, y: 2)
+    }
+
+    @ViewBuilder
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(game.name)
+                .font(.headline)
+                .lineLimit(2)
+
+            if let active {
+                TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                    Label(Format.clock(active.elapsed(asOf: ctx.date)),
+                          systemImage: active.state == .running ? "record.circle" : "pause.circle")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(active.state == .running ? .green : .orange)
+                }
+            } else if let last = playthrough?.lastPlayedAt {
+                Text("Last played \(last, format: .relative(presentation: .named))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let platform = game.platforms.first {
+                // The short name, same as the game page. This card was the one
+                // place still printing "Super Nintendo Entertainment System"
+                // in full — which is how it came to hyphenate into
+                // "Entertain-ment" across five lines at accessibility sizes.
+                // Shortening the string is the real fix; the stacked layout
+                // just stops the long ones being squeezed.
+                Text(PlatformShort.name(platform))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            let total = playthrough?.totalPlaytime() ?? 0
+            if total > 0 {
+                Text(Format.duration(total) + " played")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            // The card said how long ago and for how long, never what you
+            // were doing — which is the question you actually opened the
+            // app with.
+            LastTickedRow(game: game, compact: true)
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        // A running timer is the thing you most want to act on, and it
+        // used to be unreachable from here: the button still said Play,
+        // and stopping meant navigating into the game. When a session is
+        // live the primary action becomes pause/resume, with stop beside
+        // it — small, because ending a session by mis-tap is worse than
+        // an extra tap.
+        if let active, let onPauseResume, let onStop {
+            HStack(spacing: 8) {
+                Button(action: onStop) {
+                    Image(systemName: "stop.fill")
+                        .frame(width: 34, height: 56)
+                }
+                .buttonStyle(.plain)
+                .background(.red.opacity(0.14), in: .rect(cornerRadius: 10))
+                .foregroundStyle(.red.opacity(0.9))
+                .accessibilityLabel("Stop session")
+
+                Button(action: onPauseResume) {
+                    VStack(spacing: 4) {
+                        Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
+                        // At accessibility sizes the caption can't fit the
+                        // fixed square — the glyph alone reads better than
+                        // "P…", and the label below says the word.
+                        if !typeSize.isAccessibilitySize {
+                            Text(active.state == .running ? "Pause" : "Resume")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .frame(width: 56, height: 56)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(active.state == .running ? "Pause" : "Resume")
+                .background(LSTheme.accent.opacity(0.16), in: .rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(LSTheme.accent.opacity(0.6), lineWidth: 1))
+                .foregroundStyle(LSTheme.accent)
+            }
+        } else {
+            Button(action: onPlay) {
+                VStack(spacing: 4) {
+                    Image(systemName: "play.fill")
+                    if !typeSize.isAccessibilitySize {
+                        Text("Play").font(.caption.weight(.semibold))
+                    }
+                }
+                .frame(width: 56, height: 56)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play")
+            .background(.green.opacity(0.16), in: .rect(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.green.opacity(0.6), lineWidth: 1))
+            .foregroundStyle(.green)
+        }
     }
 }
