@@ -55,6 +55,21 @@ final class PlayerProfile {
     /// needs exactly one plain BYTES field.
     var avatarData: Data?
 
+    /// How the name on Home is coloured: nil or "" plain, "accent" to follow
+    /// the accent as it changes, otherwise a hex.
+    ///
+    /// Per-profile rather than per-device, because it is part of how you look
+    /// rather than a preference of this phone — the whole point of the profile
+    /// is that it is the same you on every device.
+    var nameColorRaw: String?
+
+    /// Show the handle instead of a typed name, and keep showing it.
+    ///
+    /// Distinct from the editor's "Use …" button, which COPIES the handle into
+    /// the name once. This LINKS them: rename the handle and the name follows.
+    /// Both are worth having — one is a shortcut, one is a decision.
+    var useHandleAsName: Bool = false
+
     /// Your handles, as JSON `[service: handle]`.
     ///
     /// One field rather than one per service, the same shape as
@@ -68,6 +83,22 @@ final class PlayerProfile {
 }
 
 extension PlayerProfile {
+    /// The name Home should draw: the linked handle, or the typed name.
+    ///
+    /// Falls back to the typed name when the link is on but there is no handle
+    /// to link to — otherwise turning the toggle on before adding a handle
+    /// makes the header vanish, which reads as having lost the profile.
+    var resolvedDisplayName: String? {
+        if useHandleAsName,
+           let handle = groupedHandles
+            .max(by: { $0.services.count < $1.services.count })?.handle,
+           !handle.isEmpty {
+            return handle
+        }
+        let typed = (displayName ?? "").trimmingCharacters(in: .whitespaces)
+        return typed.isEmpty ? nil : typed
+    }
+
     /// Handles keyed by `GamerService.rawValue`, blank entries dropped.
     var handles: [String: String] {
         get {

@@ -410,6 +410,8 @@ enum CloudKitSchemaSeeder {
         player.displayName = marker
         player.avatarData = Self.smallSeedImage
         player.handles = [GamerService.steam.rawValue: marker]
+        player.nameColorRaw = marker                  // build 33, second deploy
+        player.useHandleAsName = true                 // build 33, second deploy
         context.insert(player)
 
         // --- Profile (no soft-delete field; purge removes it) ---
@@ -449,6 +451,14 @@ enum CloudKitSchemaSeeder {
             if existingTheme.starNamesData == nil { existingTheme.starNamesData = stamp }
             if existingTheme.backdropIntensityRaw == nil { existingTheme.backdropIntensityRaw = marker }
             if existingTheme.gamePageLayoutRaw == nil { existingTheme.gamePageLayoutRaw = marker }
+            if existingTheme.savedSwatchesData == nil { existingTheme.savedSwatchesData = stamp }
+        // ⚠️ A NEW ThemeSettings FIELD MUST BE ADDED TO BOTH BRANCHES.
+        //
+        // The app creates a ThemeSettings on launch, so a seed run almost
+        // always takes the branch ABOVE, not this one. Adding a field only
+        // here means it is never written, never appears in the Console diff,
+        // and the deploy silently ships without it — which is exactly what
+        // happened to `savedSwatchesData` on the first attempt at this deploy.
         } else {
             let theme = ThemeSettings()
             theme.accentHex = "#8A5CF6"
@@ -460,6 +470,7 @@ enum CloudKitSchemaSeeder {
             theme.starNamesData = stamp                  // build 31
             theme.backdropIntensityRaw = marker           // build 32
             theme.gamePageLayoutRaw = marker              // build 33
+            theme.savedSwatchesData = stamp               // build 33, second deploy
             context.insert(theme)
         }
 

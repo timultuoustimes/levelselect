@@ -13,9 +13,6 @@ import PhotosUI
 /// no header at all, because a placeholder ring above "Add your name" is a
 /// form, and a form is the opposite of a personal page.
 struct ProfileHeader: View {
-    /// How the name is coloured. See `ProfileNameColor`.
-    @AppStorage(ProfileNameColor.key) private var nameColorRaw = ""
-
     let profile: PlayerProfile?
     let summary: PlayerSummary
     var onEdit: () -> Void
@@ -23,7 +20,7 @@ struct ProfileHeader: View {
     private var hasAnything: Bool {
         guard let profile else { return false }
         return profile.avatarData != nil
-            || !(profile.displayName ?? "").isEmpty
+            || profile.resolvedDisplayName != nil
             || !profile.handles.isEmpty
     }
 
@@ -49,7 +46,7 @@ struct ProfileHeader: View {
     static func drawsArt(profile: PlayerProfile?, summary: PlayerSummary) -> Bool {
         guard let profile else { return false }
         let filled = profile.avatarData != nil
-            || !(profile.displayName ?? "").isEmpty
+            || profile.resolvedDisplayName != nil
             || !profile.handles.isEmpty
         guard filled else { return false }
         return summary.usesRibbon || summary.fallbackBackdrop != nil
@@ -82,7 +79,7 @@ struct ProfileHeader: View {
         HStack(alignment: .bottom, spacing: 12) {
             avatar(profile)
             VStack(alignment: .leading, spacing: 6) {
-                if let name = profile.displayName, !name.isEmpty {
+                if let name = profile.resolvedDisplayName {
                     // Press Start 2P — the app's own face, used somewhere
                     // other than the wordmark for the first time.
                     //
@@ -95,7 +92,7 @@ struct ProfileHeader: View {
                     // 0.5 floor and stops there rather than wrapping mid-word,
                     // which is what a pixel face does worst.
                     Text(name)
-                        .foregroundStyle(ProfileNameColor.resolve(nameColorRaw))
+                        .foregroundStyle(ProfileNameColor.resolve(profile.nameColorRaw ?? ""))
                         .font(LSTheme.pixel(22))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -173,8 +170,7 @@ struct ProfileHeader: View {
                 // logo stands on a game page; a circular mask would take the
                 // top off anything taller than it is wide.
                 LocalArtworkThumb(data: data, contentMode: .fit)
-            } else if let initial = profile.displayName?
-                .trimmingCharacters(in: .whitespaces).first {
+            } else if let initial = profile.resolvedDisplayName?.first {
                 Text(String(initial).uppercased())
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(LSTheme.accent)
@@ -207,7 +203,7 @@ struct ProfileHeader: View {
             // the part that adds anything, and they read as a caption to the
             // name rather than a repeat of it.
             let echoesName = main.handle.compare(
-                (profile.displayName ?? "").trimmingCharacters(in: .whitespaces),
+                profile.resolvedDisplayName ?? "",
                 options: .caseInsensitive) == .orderedSame
 
             HStack(spacing: 6) {
@@ -285,7 +281,7 @@ struct ProfileHeader: View {
 
     private func accessibilityText(_ profile: PlayerProfile) -> String {
         var parts: [String] = []
-        if let name = profile.displayName, !name.isEmpty { parts.append(name) }
+        if let name = profile.resolvedDisplayName { parts.append(name) }
         parts.append("\(summary.playing) playing")
         parts.append("\(Format.duration(summary.weekSeconds)) this week")
         parts.append("\(Format.duration(summary.totalSeconds)) total")
@@ -322,10 +318,11 @@ struct ProfileEditor: View {
     @Query private var profiles: [PlayerProfile]
 
     @State private var name = ""
+    @State private var nameColorRaw = ""
+    @State private var useHandleAsName = false
     @State private var handles: [String: String] = [:]
     @State private var picking: PhotosPickerItem?
     @State private var choosingSource = false
-    @AppStorage(ProfileNameColor.key) private var nameColorRaw = ""
     /// Load from the model exactly once.
     @State private var loaded = false
     @State private var pickingPhoto = false
@@ -383,11 +380,18 @@ struct ProfileEditor: View {
 
                 Section {
                     TextField("Your name", text: $name)
+                        .disabled(useHandleAsName)
+                        .foregroundStyle(useHandleAsName ? .secondary : .primary)
                     // One tap instead of retyping a handle you already
                     // entered. It COPIES rather than links — the name stays
                     // yours to edit, and changing a handle later does not
                     // silently rename you.
-                    if let handle = primaryDraftHandle, handle != name {
+                    if primaryDraftHandle != nil {
+                        Toggle("Use my handle as my name", isOn: $useHandleAsName)
+                            .tint(LSTheme.accent)
+                    }
+
+                    if !useHandleAsName, let handle = primaryDraftHandle, handle != name {
                         Button {
                             name = handle
                         } label: {
@@ -596,6 +600,12 @@ struct ProfileEditor: View {
         name = profile.displayName ?? ""
         handles = profile.handles
         avatar = profile.avatarData
+        useHandleAsName = profile.useHandleAsName
+        // Carry across whatever was chosen while this lived on the device
+        // only, so nobody has to set it twice.
+        nameColorRaw = profile.nameColorRaw
+            ?? UserDefaults.standard.string(forKey: ProfileNameColor.key)
+            ?? ProfileNameColor.plain
     }
 
     private func ingest() async {
@@ -621,6 +631,8 @@ struct ProfileEditor: View {
             context.insert(target)
         }
         target.displayName = name.trimmingCharacters(in: .whitespaces).isEmpty ? nil : name
+        target.nameColorRaw = nameColorRaw.isEmpty ? nil : nameColorRaw
+        target.useHandleAsName = useHandleAsName
         target.avatarData = avatar
         target.handles = handles
         target.updatedAt = .now

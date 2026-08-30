@@ -60,6 +60,11 @@ final class ThemeSettings {
     /// a logo and the bold one could never be turned down to plain text.
     var showGameLogos: Bool = true
 
+    /// Colours the user kept in the colour editor, as a JSON array of hex
+    /// strings. Synced, because a palette you built on your phone should be
+    /// on your iPad — it was `@AppStorage` until this field existed.
+    var savedSwatchesData: Data?
+
     /// Which header arrangement game pages use. Nil = `showcase`, the build
     /// 32 default. See `GamePageLayout`.
     ///
@@ -207,4 +212,22 @@ enum ThemePageBackground: String, CaseIterable {
 
     /// Whether this background draws a game's own artwork at all.
     var usesArtwork: Bool { igdbEndpoint != nil || self == .cover }
+}
+
+extension ThemeSettings {
+    /// Kept colours, newest first.
+    var savedSwatches: [String] {
+        get {
+            guard let savedSwatchesData,
+                  let list = try? JSONDecoder().decode([String].self, from: savedSwatchesData)
+            else { return [] }
+            return list
+        }
+        set {
+            // Capped, and empty stores nothing rather than an empty array that
+            // would sync as a deliberate "I cleared my palette".
+            let trimmed = Array(newValue.prefix(12))
+            savedSwatchesData = trimmed.isEmpty ? nil : try? JSONEncoder().encode(trimmed)
+        }
+    }
 }

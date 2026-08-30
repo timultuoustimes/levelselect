@@ -77,21 +77,27 @@ const tracking = [
       </fieldset>
 
       <div class="field trackfield">
-        <label class="q" for="tracking">How do you keep track today?</label>
+        <label class="q" for="tracking">How do you keep track today?<span class="opt">optional</span></label>
         <select id="tracking" name="tracking">
+          {/* An empty first option, selected. Without it the browser picks the
+              first real one — "I don't — that's the problem" — so everyone who
+              skipped this question was recorded as answering it, and answering
+              it the most loaded way available. It also read as pre-filled
+              rather than as something to change. */}
+          <option value="" selected>Choose one…</option>
           {tracking.map((t) => <option value={t.value}>{t.label}</option>)}
         </select>
       </div>
 
       <div class="field followup">
-        <label class="q" for="tool">Which one?</label>
+        <label class="q" for="tool">Which one?<span class="opt">optional</span></label>
         <input id="tool" name="tool" type="text" autocomplete="off"
                placeholder="Backloggd, Sheets, Notion, a shoebox of receipts…" />
         <p class="hint">Optional, and the most useful thing you can tell me — it's what LevelSelect is being compared against.</p>
       </div>
 
       <div class="field">
-        <label class="q" for="wants">Anything you'd want it to do?</label>
+        <label class="q" for="wants">Anything you'd want it to do?<span class="opt">optional</span></label>
         <textarea id="wants" name="wants" rows="4"
           placeholder="Optional. A game it should handle, something that annoys you about what you use now, whatever."></textarea>
       </div>
@@ -120,6 +126,11 @@ const tracking = [
   .field { display: flex; flex-direction: column; gap: .5rem; border: 0; padding: 0; margin: 0; min-width: 0; }
   .q { font-weight: 600; font-size: 1rem; padding: 0; }
   .req { font-family: "Press Start 2P", monospace; font-size: .52rem; color: var(--torch); margin-left: .5rem; vertical-align: middle; }
+  /* Quieter than `required` and in the muted colour, so the pair reads as
+     "two of these matter" rather than as five equally weighted demands.
+     Marking only the required ones left the rest ambiguous — someone who
+     skipped the select could not tell whether they were allowed to. */
+  .opt { font-family: "Press Start 2P", monospace; font-size: .52rem; color: var(--muted); margin-left: .5rem; vertical-align: middle; }
   .hint { font-size: .82rem; color: var(--muted); line-height: 1.5; margin: 0; }
 
   input[type='email'], select, textarea {
@@ -152,6 +163,10 @@ const tracking = [
      show-when on purpose: a browser without :has() then shows an extra
      optional question, which is harmless, instead of silently never asking
      it — the failure lands on the side that still collects the answer. */
+  /* The empty placeholder joins this list: with nothing chosen there is
+     nothing to name, and "Which one?" hanging under an unanswered question
+     reads as a follow-up to something that never happened. */
+  .trackfield:has(option[value='']:checked) + .followup,
   .trackfield:has(option[value='nothing']:checked) + .followup,
   .trackfield:has(option[value='memory']:checked) + .followup,
   .trackfield:has(option[value='notes']:checked) + .followup {

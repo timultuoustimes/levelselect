@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// One colour, edited properly.
 ///
@@ -35,17 +36,12 @@ struct ColorEditor: View {
     @State private var hexDraft = ""
     @State private var hexBad = false
 
-    /// Colours the user has kept.
-    ///
-    /// Device-local for now, deliberately: syncing these needs a new field on
-    /// `ThemeSettings`, which is a CloudKit schema deploy, and this shipped
-    /// between deploys. Worth folding into the next one — a palette you built
-    /// on your phone should be on your iPad.
-    @AppStorage("levelselect.savedSwatches") private var savedRaw = ""
+    /// Colours the user has kept. Synced, so a palette built on the phone is
+    /// on the iPad — it was `@AppStorage` until `savedSwatchesData` existed.
+    @Environment(\.modelContext) private var context
+    @Query private var themeSettings: [ThemeSettings]
 
-    private var saved: [String] {
-        savedRaw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
-    }
+    private var saved: [String] { themeSettings.first?.savedSwatches ?? [] }
 
     /// A dark-UI palette, not a full spectrum.
     ///
@@ -235,11 +231,24 @@ struct ColorEditor: View {
         guard !saved.contains(hex) else { return }
         // Newest first, capped — an unbounded list of near-identical purples
         // stops being a palette and becomes a scroll.
-        savedRaw = ([hex] + saved).prefix(12).joined(separator: ",")
+        write([hex] + saved)
     }
 
     private func forget(_ hex: String) {
-        savedRaw = saved.filter { $0 != hex }.joined(separator: ",")
+        write(saved.filter { $0 != hex })
+    }
+
+    private func write(_ list: [String]) {
+        let settings: ThemeSettings
+        if let existing = themeSettings.first {
+            settings = existing
+        } else {
+            settings = ThemeSettings()
+            context.insert(settings)
+        }
+        settings.savedSwatches = list
+        settings.updatedAt = .now
+        PersistenceMonitor.shared.commit(context)
     }
 
     /// The current colour as `#RRGGBB`.

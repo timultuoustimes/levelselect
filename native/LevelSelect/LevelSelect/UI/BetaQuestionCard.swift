@@ -45,7 +45,16 @@ struct BetaQuestionCard: View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("One question from the developer", systemImage: "hand.wave")
                     .font(.subheadline.weight(.semibold))
-                Text("What do you play, and how do you track it today? Two questions on the web — they genuinely shape what gets built next. The app itself collects nothing, so this is the only way I'd ever know.")
+                // Asks ONE thing, matching the title. The old copy promised
+                // "two questions on the web" under a heading that said one,
+                // and the form has five — a count is a promise that goes stale
+                // the moment a question is added, so this names the question
+                // that actually matters instead of counting them.
+                //
+                // That question is "what were you using before this", because
+                // it is the only answer that names something to be compared
+                // against. Everything else is nice to know.
+                Text("What were you using to keep track before this? A spreadsheet, another app, nothing at all — whichever it is, it's the most useful thing you can tell me, because it's what LevelSelect is being measured against.\n\nThe app collects nothing about you. No analytics, no telemetry, nothing phoning home. Asking is the only way I'd ever find out.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
