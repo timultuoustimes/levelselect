@@ -31,6 +31,10 @@ final class LibrarySwitcher {
     /// True when the demo library is open.
     private(set) var isDemo: Bool
 
+    /// The container we just switched away from, held briefly so that views
+    /// still mid-render can finish reading from it. See `setDemo`.
+    private var retired: ModelContainer?
+
     /// True for one runloop turn while the store is being replaced.
     ///
     /// The container swap used to happen with the old view tree still on
@@ -71,8 +75,31 @@ final class LibrarySwitcher {
         LiveActivityManager.endCurrent()
         UserDefaults.standard.set(on, forKey: Self.defaultsKey)
 
+        // Hold the OUTGOING container alive for a moment.
+        //
+        // This is the fix after three failed ones, and the crash reports are
+        // what pointed at it. Every attempt before this guarded an accessor —
+        // `livePlaythroughs`, then `activePlaythrough`, then it surfaced in
+        // `pinned` — because ANY property read on a model whose container has
+        // gone traps, so guarding them one at a time is endless.
+        //
+        // The last report showed why the reads happen at all: the swap runs
+        // while the Settings sheet is tearing down, and SwiftUI re-evaluates
+        // the existing tree during that same pass — `GameContextMenuModifier`
+        // asking a `Game` from the container we just released.
+        //
+        // So do not release it yet. Keeping a reference for a couple of
+        // seconds leaves those objects readable — stale, but readable — for
+        // the frames that still point at them, and by then `.id(isDemo)` has
+        // built the new tree against the new store. Nothing has to be guarded
+        // and no view has to be torn down early.
+        retired = container
         isDemo = on
         container = LevelSelectStore.makeContainer(demo: on)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            retired = nil
+        }
     }
 
     /// Delete the demo store from disk. Only ever touches `demo.store`, so

@@ -226,6 +226,12 @@ struct SettingsView: View {
             // footers that wrap, sections that read as sections.
             #if os(macOS)
             .formStyle(.grouped)
+            // The app's own ground, not the system's grey. A sheet that keeps
+            // the platform default reads as a different app bolted on — most
+            // obvious on the Mac, where the window behind it is the purple
+            // gradient and the sheet was flat grey.
+            .scrollContentBackground(.hidden)
+            .background(LSTheme.background)
             #endif
             .navigationTitle("Settings")
             #if !os(macOS)

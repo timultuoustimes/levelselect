@@ -431,7 +431,11 @@ struct HomeTab: View {
             // controls sitting on it. Hidden while the header paints art, the
             // tab pills and the gear/plus render as glass over the artwork,
             // which is what iPad already did.
-            .toolbarBackgroundVisibility(bleeds ? .hidden : .automatic, for: .windowToolbar)
+            // Unconditional on macOS, matching Library, Wishlist and Stats.
+            // Keying it to `bleeds` meant Home lost its glass whenever the
+            // header had no art to draw — an empty demo library, say — so the
+            // window changed character depending on which library was loaded.
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             #else
             // The toolbar lockup IS the title on iOS; an empty title keeps
             // the system's text title from doubling it.

@@ -2772,6 +2772,15 @@ extension Game {
     /// The playthrough all per-playthrough UI reads: the current selection,
     /// falling back to the oldest live one.
     var activePlaythrough: Playthrough? {
+        // Guarded HERE too, not just inside `livePlaythroughs`.
+        //
+        // The crash moved rather than went away: `livePlaythroughs` returned
+        // empty as designed, and then this read `currentPlaythroughID` — a
+        // PLAIN STORED PROPERTY — and trapped on that instead. Any property
+        // access on a model whose container has gone will trap, not only the
+        // relationships, so the guard belongs at the top of every accessor a
+        // view can reach rather than only where a relationship is touched.
+        guard isLive else { return nil }
         let live = livePlaythroughs
         if let id = currentPlaythroughID, let match = live.first(where: { $0.id == id }) {
             return match

@@ -23,10 +23,15 @@ struct Wordmark: View {
     var body: some View {
         HStack(spacing: size * 0.55) {
             if showsIcon {
+                // Clipped to a rounded square. The artwork carries its own
+                // background out to the edges, so unclipped it read as a
+                // square tile pasted onto the card — "a weird cut out" — where
+                // rounding makes it read as what it is, an app icon.
                 Image("DoorMark")
                     .resizable()
                     .scaledToFit()
                     .frame(height: size * 2.1)
+                    .clipShape(.rect(cornerRadius: size * 0.45, style: .continuous))
                     .shadow(color: .black.opacity(0.5), radius: size * 0.35, y: size * 0.12)
             }
             Text("LevelSelect")
