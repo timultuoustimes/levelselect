@@ -80,10 +80,22 @@ struct ProfileHeader: View {
             avatar(profile)
             VStack(alignment: .leading, spacing: 6) {
                 if let name = profile.displayName, !name.isEmpty {
+                    // Press Start 2P — the app's own face, used somewhere
+                    // other than the wordmark for the first time.
+                    //
+                    // It is monospaced at roughly one em per character, so a
+                    // name's width is almost exactly `count x size`. Tim's
+                    // "TIMULTUOUSTIMES" is 15 characters: at 22pt that is
+                    // ~330pt against ~290pt of usable width beside an 84pt
+                    // portrait, so it MUST be allowed to shrink. It scales to
+                    // about 19pt and fits; a 24-character name lands near the
+                    // 0.5 floor and stops there rather than wrapping mid-word,
+                    // which is what a pixel face does worst.
                     Text(name)
-                        .font(.system(size: 27, weight: .bold))
+                        .font(LSTheme.pixel(22))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+                        .minimumScaleFactor(0.5)
+                        .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
                 }
                 handleChips(profile)
             }
@@ -298,6 +310,8 @@ struct ProfileEditor: View {
     @State private var handles: [String: String] = [:]
     @State private var picking: PhotosPickerItem?
     @State private var choosingSource = false
+    /// Load from the model exactly once.
+    @State private var loaded = false
     @State private var pickingPhoto = false
     /// Which sheet is up, if any. One modifier, one source of truth.
     @State private var sheet: AvatarSheet?
@@ -353,6 +367,19 @@ struct ProfileEditor: View {
 
                 Section {
                     TextField("Your name", text: $name)
+                    // One tap instead of retyping a handle you already
+                    // entered. It COPIES rather than links — the name stays
+                    // yours to edit, and changing a handle later does not
+                    // silently rename you.
+                    if let handle = primaryDraftHandle, handle != name {
+                        Button {
+                            name = handle
+                        } label: {
+                            Label("Use \"\(handle)\"", systemImage: "arrow.turn.up.left")
+                                .font(.subheadline)
+                        }
+                        .buttonStyle(.borderless)
+                    }
                 } footer: {
                     Text("Shown at the top of Home. Leave it blank and nothing appears.")
                 }
@@ -449,6 +476,12 @@ struct ProfileEditor: View {
         #endif
     }
 
+    /// The handle covering the most services — the one most likely to be
+    /// what someone would call themselves.
+    private var primaryDraftHandle: String? {
+        groupedDrafts.max { $0.services.count < $1.services.count }?.handle
+    }
+
     /// The drafts as they will be DRAWN — one row per distinct handle.
     private var groupedDrafts: [(handle: String, services: [HandleService])] {
         Dictionary(grouping: handles.keys.compactMap(HandleService.init(key:))) {
@@ -493,7 +526,15 @@ struct ProfileEditor: View {
         sheet = nil
     }
 
+    /// Fill the drafts from the stored profile — ONCE.
+    ///
+    /// `.task` runs again when this view returns to the screen, and pushing
+    /// the handle editor and coming back is exactly that. Without the guard
+    /// it reloaded from the model on the way back and threw away everything
+    /// just typed: handles were added, Done was tapped, and nothing saved.
     private func load() {
+        guard !loaded else { return }
+        loaded = true
         guard let profile else { return }
         name = profile.displayName ?? ""
         handles = profile.handles
