@@ -13,6 +13,9 @@ import PhotosUI
 /// no header at all, because a placeholder ring above "Add your name" is a
 /// form, and a form is the opposite of a personal page.
 struct ProfileHeader: View {
+    /// How the name is coloured. See `ProfileNameColor`.
+    @AppStorage(ProfileNameColor.key) private var nameColorRaw = ""
+
     let profile: PlayerProfile?
     let summary: PlayerSummary
     var onEdit: () -> Void
@@ -92,6 +95,7 @@ struct ProfileHeader: View {
                     // 0.5 floor and stops there rather than wrapping mid-word,
                     // which is what a pixel face does worst.
                     Text(name)
+                        .foregroundStyle(ProfileNameColor.resolve(nameColorRaw))
                         .font(LSTheme.pixel(22))
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -183,12 +187,12 @@ struct ProfileHeader: View {
         .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
     }
 
-    /// ONE handle, whatever the data looks like.
+    /// ONE handle, whatever the data looks like — and not the handle at all
+    /// when the name above already IS it.
     ///
     /// Two chips side by side don't fit a phone: the first truncated to
-    /// "timultuoustim…", which is worse than not showing it. And the header is
-    /// decoration — the editor is where the full set lives, so the header's
-    /// job is to say who you are once, not to be a complete record.
+    /// "timultuoustim…", which is worse than not showing it. The editor is
+    /// where the full set lives; the header says who you are once.
     ///
     /// Shows the handle used by the MOST services, so someone with one name
     /// across Steam, Xbox and PSN plus a different Discord sees the name that
@@ -198,16 +202,27 @@ struct ProfileHeader: View {
         let grouped = profile.groupedHandles
             .sorted { $0.services.count > $1.services.count }
         if let main = grouped.first {
+            // When the display name and the handle are the same word, printing
+            // both puts it on screen twice in a row. The services alone are
+            // the part that adds anything, and they read as a caption to the
+            // name rather than a repeat of it.
+            let echoesName = main.handle.compare(
+                (profile.displayName ?? "").trimmingCharacters(in: .whitespaces),
+                options: .caseInsensitive) == .orderedSame
+
             HStack(spacing: 6) {
                 HStack(spacing: 5) {
                     Text(main.services.map(\.label).joined(separator: " · "))
-                        .foregroundStyle(.tertiary)
-                    Text(main.handle)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                        .foregroundStyle(echoesName ? .secondary : .tertiary)
+                    if !echoesName {
+                        Text(main.handle)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                 }
                 .font(.caption2)
+                .lineLimit(2)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(.white.opacity(0.09), in: .capsule)
@@ -310,6 +325,7 @@ struct ProfileEditor: View {
     @State private var handles: [String: String] = [:]
     @State private var picking: PhotosPickerItem?
     @State private var choosingSource = false
+    @AppStorage(ProfileNameColor.key) private var nameColorRaw = ""
     /// Load from the model exactly once.
     @State private var loaded = false
     @State private var pickingPhoto = false
@@ -380,8 +396,49 @@ struct ProfileEditor: View {
                         }
                         .buttonStyle(.borderless)
                     }
+                    Picker("Name color", selection: Binding(
+                        get: { ProfileNameColor.mode(of: nameColorRaw) },
+                        set: { mode in
+                            switch mode {
+                            case .plain:  nameColorRaw = ProfileNameColor.plain
+                            case .accent: nameColorRaw = ProfileNameColor.accent
+                            case .custom:
+                                // Seed from the accent, so "Custom" starts
+                                // somewhere deliberate rather than black.
+                                if ProfileNameColor.mode(of: nameColorRaw) != .custom {
+                                    nameColorRaw = LSTheme.accent.hexString() ?? "#FFFFFF"
+                                }
+                            }
+                        })) {
+                        ForEach(ProfileNameColor.Mode.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if ProfileNameColor.mode(of: nameColorRaw) == .custom {
+                        NavigationLink {
+                            ColorEditor(
+                                title: "Name color",
+                                defaultColor: LSTheme.accent,
+                                isCustomised: true,
+                                color: Binding(
+                                    get: { Color(hex: nameColorRaw) ?? LSTheme.accent },
+                                    set: { nameColorRaw = $0.hexString() ?? nameColorRaw }),
+                                onReset: { nameColorRaw = ProfileNameColor.accent })
+                        } label: {
+                            HStack {
+                                Text("Pick a color")
+                                Spacer()
+                                Circle()
+                                    .fill(ProfileNameColor.swatch(nameColorRaw))
+                                    .frame(width: 22, height: 22)
+                                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+                            }
+                        }
+                    }
                 } footer: {
-                    Text("Shown at the top of Home. Leave it blank and nothing appears.")
+                    // "Accent" is the one worth explaining: it keeps following
+                    // the theme instead of freezing today's accent.
+                    Text("Shown at the top of Home. Leave the name blank and nothing appears. Accent keeps the name matched to your accent color as you change it.")
                 }
 
                 Section {

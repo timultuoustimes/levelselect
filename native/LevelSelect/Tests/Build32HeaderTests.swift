@@ -377,3 +377,52 @@ struct PlayerSummaryTests {
         #expect(s.fallbackBackdrop == nil)
     }
 }
+
+@Suite("Profile name colour")
+@MainActor
+struct ProfileNameColorTests {
+
+    /// Three states in one string, and the modes must round-trip — a mode that
+    /// misreads its own stored value silently resets someone's choice.
+    @Test func modesRoundTrip() {
+        #expect(ProfileNameColor.mode(of: ProfileNameColor.plain) == .plain)
+        #expect(ProfileNameColor.mode(of: ProfileNameColor.accent) == .accent)
+        #expect(ProfileNameColor.mode(of: "#F5A34D") == .custom)
+    }
+
+    /// "Accent" must FOLLOW the accent rather than freeze a copy of it — that
+    /// is the whole difference between it and picking the same colour by hand.
+    @Test func accentModeTracksTheLiveAccent() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let warm = ProfileNameColor.resolve(ProfileNameColor.accent)
+
+        settings.accentHex = "#4D9BFF"
+        ThemePalette.refresh(from: settings)
+        let cool = ProfileNameColor.resolve(ProfileNameColor.accent)
+
+        #expect(warm != cool)
+        ThemePalette.refresh(from: nil)
+    }
+
+    /// A stored hex must NOT move when the accent changes.
+    @Test func customModeStaysPut() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let before = ProfileNameColor.resolve("#4D9BFF")
+
+        settings.accentHex = "#3FD07A"
+        ThemePalette.refresh(from: settings)
+        let after = ProfileNameColor.resolve("#4D9BFF")
+
+        #expect(before == after)
+        ThemePalette.refresh(from: nil)
+    }
+
+    /// Garbage in storage falls back rather than rendering an invisible name.
+    @Test func nonsenseFallsBack() {
+        #expect(ProfileNameColor.resolve("not a colour") == .primary)
+    }
+}
