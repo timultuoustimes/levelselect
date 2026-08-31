@@ -15,9 +15,10 @@ enum PlatformCatalog {
     ]
 
     /// Two spellings of the same console collapse to one key (so "Switch" and
-    /// "Nintendo Switch" aren't offered twice).
+    /// "Nintendo Switch" aren't offered twice). See `PlatformIcon.consoleKey`
+    /// — one definition, shared with `Repository.mergePlatforms`.
     static func normalize(_ platform: String) -> String {
-        PlatformIcon.assetName(platform) ?? platform.lowercased()
+        PlatformIcon.consoleKey(platform)
     }
 }
 
