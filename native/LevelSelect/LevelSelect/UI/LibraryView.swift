@@ -16,7 +16,7 @@ struct LibraryTab: View {
     @State private var nav = AppNavigator.shared
     @State private var tagFilter: String?
     @State private var platformFilter: String?
-    @State private var ownershipFilter: String?
+    @State private var ownershipFilter: OwnershipFilter?
     /// One sheet slot, not two. Presentation here is single-occupancy and two
     /// `.sheet` modifiers on one view have swallowed each other twice in this
     /// app — same fix as OverlappingTimerGuard: an enum through one binding.
@@ -495,7 +495,7 @@ struct LibraryTab: View {
         // Matched by displayed name, so picking "Switch 2" finds the games
         // stored as "Nintendo Switch 2" too.
         && (platformFilter == nil || PlatformShort.matches(g.platforms, short: platformFilter!))
-        && (ignoringOwnership || ownershipFilter == nil || g.ownership.contains(ownershipFilter!))
+        && (ignoringOwnership || ownershipFilter?.matches(g) ?? true)
         && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
         && matchesSearch(g)
     }
@@ -503,7 +503,7 @@ struct LibraryTab: View {
     /// Overlapping by design — a game can be owned physically AND emulated,
     /// which is the case that made ownership worth browsing rather than
     /// picking. So these will not sum to the library size, and shouldn't.
-    private var ownershipCounts: [Ownership: Int] {
+    private var ownershipCounts: OwnershipFacet.Counts {
         let hidden = bundledGameIDs
         return OwnershipFacet.counts(games.filter {
             matches($0, hidden: hidden, ignoringOwnership: true)

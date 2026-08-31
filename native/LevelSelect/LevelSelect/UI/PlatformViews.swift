@@ -9,14 +9,14 @@ import SwiftData
 /// disagreeing about the same word. Home passes none, and gets all of them.
 struct PlatformRoute: Hashable {
     let platform: String
-    var ownership: String? = nil
+    var ownership: OwnershipFilter? = nil
 
     /// Grouped by the game's most-PREFERRED owned platform, the same rule the
     /// shelf counts by — so a multi-platform game lands on one console page,
     /// not all of them.
-    static func matches(_ game: Game, platform: String, ownership: String?) -> Bool {
+    static func matches(_ game: Game, platform: String, ownership: OwnershipFilter?) -> Bool {
         (PlatformPreference.owned(game.platforms) ?? "Other") == platform
-        && (ownership == nil || game.ownership.contains(ownership!))
+        && (ownership?.matches(game) ?? true)
     }
 }
 
@@ -104,7 +104,7 @@ struct SystemsRow: View {
 /// All games on a platform (reached by tapping a Systems icon).
 struct PlatformGamesView: View {
     let platform: String
-    var ownership: String? = nil
+    var ownership: OwnershipFilter? = nil
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var allGames: [Game]
 

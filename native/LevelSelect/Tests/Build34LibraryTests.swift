@@ -32,11 +32,12 @@ struct Build34LibraryTests {
 
         let counts = OwnershipFacet.counts([sonic, chrono, hades])
 
-        #expect(counts[.physical] == 1)
-        #expect(counts[.emulated] == 2)
-        #expect(counts[.digital] == 1)
+        #expect(counts.byKind[.physical] == 1)
+        #expect(counts.byKind[.emulated] == 2)
+        #expect(counts.byKind[.digital] == 1)
         // Four chip-counts over three games. Overlap, not double-counting.
-        #expect(counts.values.reduce(0, +) == 4)
+        #expect(counts.byKind.values.reduce(0, +) == 4)
+        #expect(counts.unset == 0)
     }
 
     /// A kind nobody has recorded gets no count, which is what hides its chip
@@ -48,9 +49,9 @@ struct Build34LibraryTests {
 
         let counts = OwnershipFacet.counts([game])
 
-        #expect(counts[.digital] == 1)
-        #expect(counts[.previouslyOwned] == nil)
-        #expect(counts[.physical] == nil)
+        #expect(counts.byKind[.digital] == 1)
+        #expect(counts.byKind[.previouslyOwned] == nil)
+        #expect(counts.byKind[.physical] == nil)
     }
 
     /// Ownership is not sentiment (08-31): "previously owned" is a fact about
@@ -61,7 +62,66 @@ struct Build34LibraryTests {
         let game = Repository(context).addGame(name: "Chrono Trigger")
         game.ownership = [Ownership.previouslyOwned.rawValue]
 
-        #expect(OwnershipFacet.counts([game])[.previouslyOwned] == 1)
+        #expect(OwnershipFacet.counts([game]).byKind[.previouslyOwned] == 1)
+    }
+
+    // MARK: The gap
+
+    /// Found on Tim's real library 08-31: 143 of 160 games had no ownership
+    /// recorded, so the axis was browsing a tenth of the shelf. The gap gets
+    /// counted like anything else, and it is the number that makes the row
+    /// worth its space until the field fills in.
+    @Test func gamesWithNoOwnershipAreCountedAsTheGap() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        let sonic = repo.addGame(name: "Sonic the Hedgehog 2")
+        sonic.ownership = [Ownership.emulated.rawValue]
+        let blank = repo.addGame(name: "Tunic")
+        let alsoBlank = repo.addGame(name: "Celeste")
+
+        let counts = OwnershipFacet.counts([sonic, blank, alsoBlank])
+        #expect(counts.unset == 2)
+        #expect(counts.byKind[.emulated] == 1)
+    }
+
+    /// A game with an ownership is never also part of the gap — the two are
+    /// exclusive, unlike the four kinds, which overlap freely.
+    @Test func theGapAndTheKindsDoNotOverlap() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Hades")
+        game.ownership = [Ownership.digital.rawValue, Ownership.physical.rawValue]
+
+        let counts = OwnershipFacet.counts([game])
+        #expect(counts.unset == 0)
+        #expect(counts.byKind[.digital] == 1)
+        #expect(counts.byKind[.physical] == 1)
+    }
+
+    /// Tapping the gap chip has to select exactly the games that need fixing.
+    @Test func theGapFilterSelectsOnlyGamesWithNothingRecorded() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        let owned = repo.addGame(name: "Balatro")
+        owned.ownership = [Ownership.digital.rawValue]
+        let blank = repo.addGame(name: "Tunic")
+
+        #expect(OwnershipFilter.unset.matches(blank))
+        #expect(!OwnershipFilter.unset.matches(owned))
+        #expect(OwnershipFilter.kind(.digital).matches(owned))
+        #expect(!OwnershipFilter.kind(.digital).matches(blank))
+    }
+
+    /// "Previously owned" is a recorded fact, not an absence — selling a game
+    /// is something you said, and it must not fall into the gap.
+    @Test func previouslyOwnedIsNotAGap() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Chrono Trigger")
+        game.ownership = [Ownership.previouslyOwned.rawValue]
+
+        #expect(!OwnershipFilter.unset.matches(game))
+        #expect(OwnershipFacet.counts([game]).unset == 0)
     }
 
     // MARK: The console page
@@ -82,7 +142,7 @@ struct Build34LibraryTests {
 
         let platform = PlatformPreference.owned(sonic.platforms) ?? "Other"
         let emulated = [sonic, shining].filter {
-            PlatformRoute.matches($0, platform: platform, ownership: Ownership.emulated.rawValue)
+            PlatformRoute.matches($0, platform: platform, ownership: .kind(.emulated))
         }
         #expect(emulated.map(\.name) == ["Sonic the Hedgehog 2"])
 
