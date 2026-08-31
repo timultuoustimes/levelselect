@@ -64,11 +64,21 @@ enum MetadataRefresh {
     /// Absent by design:
     ///
     /// - `name` — the user's, and never empty anyway.
-    /// - `platforms` — the exact field Tim is hand-correcting, and today it
-    ///   conflates "released on" with "I own it on". Writing IGDB's full
-    ///   platform list into a game that says "Switch" would reintroduce the
-    ///   vocabulary split the filter work is cleaning up. Splitting the two
-    ///   meanings is a V3 item; until then this pass stays out.
+    /// - ~~`platforms`~~ — **admitted 2026-08-31.** It was excluded because
+    ///   writing IGDB's full list into a game that says "Switch" would
+    ///   reintroduce the vocabulary split, and because position zero is the
+    ///   ownership record. Both are handled now: the write is a MERGE that
+    ///   keeps position zero and dedupes by `PlatformIcon.consoleKey`, so one
+    ///   console cannot appear twice under two spellings and the platform you
+    ///   own is never moved. The field still conflates "released on" with "I
+    ///   own it on" — that split is the V3 `ownedPlatforms` item — but filling
+    ///   the availability half does not make the conflation worse.
+    ///
+    ///   Worth doing because of who has the gap: games added through IGDB
+    ///   search already arrive with the full list (`addGame(from:platform:)`
+    ///   stores `[chosen] + igdb.platforms`). Only the CSV and legacy-import
+    ///   paths write a single entry — which is Tim's library, and almost
+    ///   nobody else's.
     /// - status, rating, review, notes, ownership, tags — user data. A
     ///   metadata refresh has no business anywhere near them.
     enum Field: String, CaseIterable, Sendable {
@@ -83,6 +93,7 @@ enum MetadataRefresh {
         case franchise
         case summary
         case slug
+        case platforms
 
         /// Plural, for "119 games are missing a release date".
         var label: String {
@@ -98,6 +109,7 @@ enum MetadataRefresh {
             case .franchise:          "a series"
             case .summary:            "a description"
             case .slug:               "an IGDB link"
+            case .platforms:          "the other platforms it's on"
             }
         }
 
@@ -116,15 +128,39 @@ enum MetadataRefresh {
             case .franchise:          "series"
             case .summary:            "description"
             case .slug:               "IGDB link"
+            case .platforms:          "platform list"
             }
         }
 
         /// Report order — most visible problem first. The 1969 dates are the
         /// reason this exists, so they lead.
         static let reportOrder: [Field] = [
-            .releaseDate, .cover, .genres, .developers, .publishers,
+            .releaseDate, .cover, .platforms, .genres, .developers, .publishers,
             .themes, .gameModes, .playerPerspectives, .franchise, .summary, .slug,
         ]
+    }
+
+    /// Availability from IGDB, ownership from the user, neither overwriting
+    /// the other.
+    ///
+    /// - **Position zero is preserved.** It is the record of a choice, and
+    ///   every label, grouping and filter in the app reads it as "the one you
+    ///   own". Nothing here may move it.
+    /// - The user's spelling wins on collision. Someone who stored "PC" must
+    ///   not end up with both "PC" and "PC (Microsoft Windows)" — two rows for
+    ///   one console is the exact bug `PlatformShort` exists to prevent.
+    ///   Sameness is `PlatformIcon.consoleKey`: the artwork IS the identity.
+    /// - Hand-added platforms IGDB has never heard of survive. Emulation and
+    ///   unlisted ports are real, and a refresh that silently deleted them
+    ///   would punish the people most likely to run it.
+    static func mergedPlatforms(existing: [String], igdb: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for platform in existing + igdb
+        where seen.insert(PlatformIcon.consoleKey(platform)).inserted {
+            out.append(platform)
+        }
+        return out
     }
 
     /// Which of the fillable fields this game currently has nothing in.
@@ -142,7 +178,11 @@ enum MetadataRefresh {
         if game.publishers.isEmpty { missing.insert(.publishers) }
         if (game.franchise ?? "").isEmpty { missing.insert(.franchise) }
         if isMissing(summary: game.summary) { missing.insert(.summary) }
-        if (game.igdbSlug ?? "").isEmpty { missing.insert(.slug) }
+        // One entry is the signature of "added on a platform, never merged" —
+        // the importers write exactly that. A game genuinely exclusive to one
+        // console also reads as missing here, asks once, gains nothing, and is
+        // then marked checked for a month like any other fruitless lookup.
+        if game.platforms.count <= 1 { missing.insert(.platforms) }
         return missing
     }
 
@@ -296,6 +336,16 @@ enum MetadataRefresh {
         if isMissing(summary: game.summary), let summary = igdb.summary, !summary.isEmpty {
             game.summary = summary
             filled.insert(.summary)
+        }
+        if game.platforms.count <= 1, !igdb.platforms.isEmpty {
+            let merged = mergedPlatforms(existing: game.platforms, igdb: igdb.platforms)
+            // Only a real gain counts. A one-platform exclusive merges to
+            // itself, and reporting that as a filled field would make the
+            // pass claim work it did not do.
+            if merged.count > game.platforms.count {
+                game.platforms = merged
+                filled.insert(.platforms)
+            }
         }
         if (game.igdbSlug ?? "").isEmpty, let slug = igdb.slug, !slug.isEmpty {
             game.igdbSlug = slug

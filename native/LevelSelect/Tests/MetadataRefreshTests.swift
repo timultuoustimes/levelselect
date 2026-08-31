@@ -104,6 +104,8 @@ struct MetadataRefreshTests {
             $0.playerPerspectives = ["Sideways"]
             $0.developers = ["Sabotage"]
             $0.publishers = ["Devolver"]
+            // Already merged, so the fill has nothing to add here either.
+            $0.platforms = ["Switch", "PC (Microsoft Windows)"]
             $0.franchise = "Messenger"
             $0.summary = "My own words about this game."
             $0.igdbSlug = "my-slug"
@@ -125,22 +127,46 @@ struct MetadataRefreshTests {
         #expect(game.igdbSlug == "my-slug")
     }
 
-    /// Platforms are the exact field being hand-corrected — "Switch" versus
-    /// IGDB's "Nintendo Switch" — and today the field conflates "released on"
-    /// with "I own it on". This pass stays out of it entirely, including when
-    /// the game has none.
-    @Test func platformsAreNeverTouchedEvenWhenEmpty() {
+    /// **This test used to assert the opposite**, and the reversal is
+    /// deliberate (2026-08-31, with Tim). Platforms were excluded because
+    /// writing IGDB's list into a game that says "Switch" would reintroduce
+    /// the vocabulary split, and because position zero is the ownership
+    /// record. Both are handled: the write is a merge keyed on
+    /// `PlatformIcon.consoleKey`, so the user's spelling wins and position
+    /// zero never moves.
+    ///
+    /// The reason it matters: games added through IGDB search already arrive
+    /// with the full list. Only the CSV and legacy importers write a single
+    /// entry — which is Tim's library and almost nobody else's.
+    @Test func platformsAreMergedAndTheUsersSpellingWins() {
         let repo = self.repo()
         let renamed = repo.addGame(name: "Renamed")
+        // "Switch" is the user's word for IGDB's "Nintendo Switch".
         repo.edit(renamed) { $0.platforms = ["Switch"] }
         let bare = repo.addGame(name: "Bare")
 
         MetadataRefresh.fill(renamed, from: igdb())
         MetadataRefresh.fill(bare, from: igdb())
 
-        #expect(renamed.platforms == ["Switch"])
-        #expect(bare.platforms.isEmpty)
-        #expect(!MetadataRefresh.Field.allCases.contains { $0.rawValue == "platforms" })
+        // One console, one entry, spelled the way the user spelled it — and
+        // still first, because first means "mine".
+        #expect(renamed.platforms == ["Switch", "PC (Microsoft Windows)"])
+        #expect(bare.platforms == ["Nintendo Switch", "PC (Microsoft Windows)"])
+    }
+
+    /// The ownership lock, stated on its own because everything else depends
+    /// on it: a merge may ADD, never reorder. Every label, grouping and filter
+    /// in the app reads position zero as the platform you own.
+    @Test func aMergeNeverMovesThePlatformYouOwn() {
+        let repo = self.repo()
+        let game = repo.addGame(name: "Owned on the second one")
+        repo.edit(game) { $0.platforms = ["PC (Microsoft Windows)"] }
+
+        MetadataRefresh.fill(game, from: igdb())
+
+        // IGDB lists Switch first; the user owns it on PC. PC stays first.
+        #expect(game.platforms.first == "PC (Microsoft Windows)")
+        #expect(game.platforms.contains("Nintendo Switch"))
     }
 
     /// User data isn't metadata, and a refresh has no business near it.
@@ -232,6 +258,9 @@ struct MetadataRefreshTests {
             $0.gameModes = ["Single player"]; $0.playerPerspectives = ["Side view"]
             $0.developers = ["Dev"]; $0.publishers = ["Pub"]
             $0.franchise = "F"; $0.summary = "S"; $0.igdbSlug = "s"
+            // Two, not one: a single-entry list is what the importers write,
+            // and the fill now reads it as "never merged".
+            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
         }
 
         let plan = MetadataRefresh.plan(for: [fillable, unmatched, complete])
@@ -384,6 +413,9 @@ struct MetadataRefreshTests {
             $0.gameModes = ["Single player"]; $0.playerPerspectives = ["Side view"]
             $0.developers = ["Dev"]; $0.publishers = ["Pub"]
             $0.franchise = "F"; $0.summary = "S"; $0.igdbSlug = "s"
+            // Two, not one: a single-entry list is what the importers write,
+            // and the fill now reads it as "never merged".
+            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
         }
 
         let result = await repo.fillMissingMetadata(in: [game])
@@ -453,6 +485,7 @@ struct MetadataPlanNoiseTests {
         g.developers = ["Dev"]; g.publishers = ["Pub"]
         g.summary = "A game."
         g.igdbSlug = "a-game"
+        g.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
         return g
     }
 

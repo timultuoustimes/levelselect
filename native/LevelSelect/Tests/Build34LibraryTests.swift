@@ -12,6 +12,17 @@ struct Build34LibraryTests {
         ModelContext(LevelSelectStore.makeContainer(inMemory: true))
     }
 
+    /// A complete IGDB answer, so anything left unfilled is the fill's
+    /// decision rather than a gap in the source.
+    private func igdbAnswer(id: Int, name: String, platforms: [String]) -> IGDBGame {
+        IGDBGame(id: id, name: name, slug: "slug", coverImageID: "co1abc",
+                 franchise: nil, releaseYear: 2018, summary: "A game.",
+                 gameType: 0, platforms: platforms, genres: ["Platform"],
+                 themes: ["Action"], gameModes: ["Single player"],
+                 playerPerspectives: ["Side view"], developers: ["Dev"],
+                 publishers: ["Pub"])
+    }
+
     // MARK: Ownership facets
 
     /// The case that made ownership worth putting on screen, in Tim's words:
@@ -315,7 +326,7 @@ struct Build34LibraryTests {
     /// Refresh changed nothing — because refresh skipped `platforms` entirely
     /// to avoid clobbering position zero, which is the ownership record.
     @Test func refreshFillsInThePlatformsAGameShippedOn() {
-        let merged = Repository.mergePlatforms(
+        let merged = MetadataRefresh.mergedPlatforms(
             existing: ["Mac"],
             igdb: ["PC (Microsoft Windows)", "Mac", "PlayStation 4", "Xbox One", "Nintendo Switch"])
 
@@ -329,7 +340,7 @@ struct Build34LibraryTests {
     /// one console, and two rows for one console is the exact bug
     /// `PlatformShort` exists to prevent.
     @Test func refreshDoesNotDuplicateAConsoleUnderTwoNames() {
-        let merged = Repository.mergePlatforms(
+        let merged = MetadataRefresh.mergedPlatforms(
             existing: ["PC"], igdb: ["PC (Microsoft Windows)", "Mac"])
 
         #expect(merged == ["PC", "Mac"])
@@ -338,7 +349,7 @@ struct Build34LibraryTests {
     /// Emulation and unlisted ports are real, and a refresh that quietly
     /// deleted them would punish the people most likely to press it.
     @Test func refreshKeepsPlatformsIGDBHasNeverHeardOf() {
-        let merged = Repository.mergePlatforms(
+        let merged = MetadataRefresh.mergedPlatforms(
             existing: ["Recalbox", "Mac"], igdb: ["Mac", "PC (Microsoft Windows)"])
 
         #expect(merged.first == "Recalbox")
@@ -348,7 +359,53 @@ struct Build34LibraryTests {
 
     /// A game IGDB knows nothing about keeps whatever it has.
     @Test func aGameWithNoIGDBPlatformsIsLeftAlone() {
-        #expect(Repository.mergePlatforms(existing: ["itch.io"], igdb: []) == ["itch.io"])
+        #expect(MetadataRefresh.mergedPlatforms(existing: ["itch.io"], igdb: []) == ["itch.io"])
+    }
+
+    /// The fill now offers platforms, and the "mine" lock is what makes that
+    /// safe: the merge may add, never move. Position zero is read everywhere
+    /// as the platform you own.
+    @Test func theLibraryFillNeverMovesThePlatformYouOwn() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Celeste")
+        game.platforms = ["Mac"]
+        game.igdbID = 7788
+
+        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms))
+
+        let igdb = igdbAnswer(id: 7788, name: "Celeste",
+                              platforms: ["Linux", "Mac", "Nintendo Switch",
+                                          "PC (Microsoft Windows)", "PlayStation 4", "Xbox One"])
+        let filled = MetadataRefresh.fill(game, from: igdb)
+
+        #expect(filled.contains(.platforms))
+        #expect(game.platforms.first == "Mac")
+        #expect(game.platforms.contains("Nintendo Switch"))
+        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms) == false)
+    }
+
+    /// A one-platform exclusive merges to itself. Reporting that as filled
+    /// would make the pass claim work it did not do — and the run's
+    /// "asked and answered" bookkeeping is what stops it asking forever.
+    @Test func anExclusiveIsNotReportedAsFilled() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Some Switch Exclusive")
+        game.platforms = ["Nintendo Switch"]
+        game.igdbID = 999
+
+        let igdb = igdbAnswer(id: 999, name: "Some Switch Exclusive",
+                              platforms: ["Nintendo Switch"])
+        #expect(MetadataRefresh.fill(game, from: igdb).contains(.platforms) == false)
+        #expect(game.platforms == ["Nintendo Switch"])
+    }
+
+    /// A game that already has a merged list is not offered as work.
+    @Test func anAlreadyMergedListIsNotMissing() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Crypt of the NecroDancer")
+        game.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
+
+        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms) == false)
     }
 
     // MARK: The menu bar

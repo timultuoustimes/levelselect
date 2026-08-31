@@ -124,33 +124,12 @@ struct Repository {
         if !igdb.gameModes.isEmpty { game.gameModes = igdb.gameModes }
         if !igdb.playerPerspectives.isEmpty { game.playerPerspectives = igdb.playerPerspectives }
         if !igdb.platforms.isEmpty {
-            game.platforms = Self.mergePlatforms(existing: game.platforms, igdb: igdb.platforms)
+            game.platforms = MetadataRefresh.mergedPlatforms(existing: game.platforms, igdb: igdb.platforms)
         }
         touch(game)
         persist()
     }
 
-    /// Availability from IGDB, ownership from the user, neither overwriting
-    /// the other.
-    ///
-    /// - Position zero is preserved: it is the record of a choice, and every
-    ///   label, grouping and filter in the app reads it as "the one you own".
-    /// - The user's spelling wins on collision. Someone who stored "PC" should
-    ///   not end up with both "PC" and "PC (Microsoft Windows)" — two rows for
-    ///   one console is the exact bug `PlatformShort` exists to prevent.
-    ///   Sameness is `PlatformIcon.consoleKey` — the artwork IS the identity.
-    /// - Hand-added platforms IGDB has never heard of survive. Emulation and
-    ///   unlisted ports are real, and a refresh that silently deleted them
-    ///   would punish the people most likely to press it.
-    static func mergePlatforms(existing: [String], igdb: [String]) -> [String] {
-        var seen = Set<String>()
-        var out: [String] = []
-        for platform in existing + igdb
-        where seen.insert(PlatformIcon.consoleKey(platform)).inserted {
-            out.append(platform)
-        }
-        return out
-    }
 
     // MARK: Library-wide metadata fill
 
