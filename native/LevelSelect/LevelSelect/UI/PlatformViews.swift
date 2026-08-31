@@ -2,7 +2,23 @@ import SwiftUI
 import SwiftData
 
 /// Navigation target for a platform's games.
-struct PlatformRoute: Hashable { let platform: String }
+///
+/// `ownership` carries the Library filter that was active when the tile was
+/// tapped. Without it the shelf counted "Genesis 1" under an Emulated filter
+/// and then opened a page listing every Genesis game — the tile and the page
+/// disagreeing about the same word. Home passes none, and gets all of them.
+struct PlatformRoute: Hashable {
+    let platform: String
+    var ownership: String? = nil
+
+    /// Grouped by the game's most-PREFERRED owned platform, the same rule the
+    /// shelf counts by — so a multi-platform game lands on one console page,
+    /// not all of them.
+    static func matches(_ game: Game, platform: String, ownership: String?) -> Bool {
+        (PlatformPreference.owned(game.platforms) ?? "Other") == platform
+        && (ownership == nil || game.ownership.contains(ownership!))
+    }
+}
 
 /// The soft-3D console icon for a platform (falls back to a controller glyph).
 struct PlatformIconView: View {
@@ -88,11 +104,12 @@ struct SystemsRow: View {
 /// All games on a platform (reached by tapping a Systems icon).
 struct PlatformGamesView: View {
     let platform: String
+    var ownership: String? = nil
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var allGames: [Game]
 
     private var games: [Game] {
-        allGames.filter { (PlatformPreference.owned($0.platforms) ?? "Other") == platform }
+        allGames.filter { PlatformRoute.matches($0, platform: platform, ownership: ownership) }
     }
 
     var body: some View {

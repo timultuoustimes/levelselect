@@ -46,7 +46,7 @@ struct LibraryTab: View {
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
-                if !allTags.isEmpty { tagChips }
+                filterBar
                 content
             }
             .lsBackground()
@@ -59,9 +59,28 @@ struct LibraryTab: View {
                 statusFilter = status
                 nav.pendingLibraryStatus = nil
             }
+            // Menu bar (Mac and iPad). See LevelSelectCommands.
+            .onChange(of: nav.newCollectionRequest) { _, _ in
+                newCollectionName = ""
+                newCollection = true
+            }
+            .onChange(of: nav.clearFiltersRequest) { _, _ in
+                statusFilter = nil
+                platformFilter = nil
+                ownershipFilter = nil
+                tagFilter = nil
+                searchText = ""
+            }
             .navigationTitle("Library")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
+            // Each tab owns its stack, so a route appended here has to be
+            // registered here — the systems shelf moved over from Home in
+            // cb2469f and this did not come with it, which left every console
+            // on the shelf opening a blank page.
+            .navigationDestination(for: PlatformRoute.self) {
+                PlatformGamesView(platform: $0.platform, ownership: $0.ownership)
+            }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: CollectionRoute.self) { route in
                 if let collection = collections.first(where: { $0.id == route.id }) {
@@ -153,7 +172,7 @@ struct LibraryTab: View {
     private var systemsShelf: some View {
         if platformGroups.count > 1 {
             SystemsRow(groups: platformGroups) { platform in
-                path.append(PlatformRoute(platform: platform))
+                path.append(PlatformRoute(platform: platform, ownership: ownershipFilter))
             }
         }
     }
@@ -328,29 +347,16 @@ struct LibraryTab: View {
         return counts.sorted { ($1.value, $0.key) < ($0.value, $1.key) }.map(\.key)
     }
 
-    private var tagChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(allTags, id: \.self) { tag in
-                    let active = tagFilter == tag
-                    Button {
-                        tagFilter = active ? nil : tag
-                    } label: {
-                        Text("#\(tag)")
-                            .font(.caption)
-                            .padding(.horizontal, 10).padding(.vertical, 5)
-                            .background(
-                                active ? LSTheme.accent.opacity(0.45) : .white.opacity(0.07),
-                                in: .capsule)
-                            .overlay(Capsule().strokeBorder(
-                                active ? LSTheme.accent : .white.opacity(0.12), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-        }
+    /// Ownership, tags, and whatever the toolbar menu has set — one row.
+    /// See `LibraryFilterBar`: the three axes are peers, and a combination of
+    /// them has to be visible or it reads as an empty library.
+    @ViewBuilder
+    private var filterBar: some View {
+        let bar = LibraryFilterBar(
+            statusFilter: $statusFilter, platformFilter: $platformFilter,
+            ownershipFilter: $ownershipFilter, tagFilter: $tagFilter,
+            ownershipCounts: ownershipCounts, tags: allTags)
+        if !bar.isEmpty { bar }
     }
 
     // MARK: Toolbar
@@ -385,13 +391,6 @@ struct LibraryTab: View {
                             }
                         }
                         .tag(String?.some(entry.short))
-                    }
-                }
-                Divider()
-                Picker("Ownership", selection: $ownershipFilter) {
-                    Text("Any ownership").tag(String?.none)
-                    ForEach(Ownership.allCases, id: \.self) { k in
-                        Label(k.label, systemImage: k.systemImage).tag(String?.some(k.rawValue))
                     }
                 }
             } label: {
@@ -476,21 +475,35 @@ struct LibraryTab: View {
 
     private var visible: [Game] {
         let hidden = bundledGameIDs
-        return games.filter { g in
-            // A wishlisted game is not in your library — you don't own it. It
-            // has its own tab, and appearing here as well is the same
-            // duplication Home had, one tab over. This also makes "All" mean
-            // what it says: everything you actually have.
-            g.status != .wishlist
-            && (statusFilter == nil || g.status == statusFilter)
-            && (tagFilter == nil || g.userTags.contains(tagFilter!))
-            // Matched by displayed name, so picking "Switch 2" finds the games
-            // stored as "Nintendo Switch 2" too.
-            && (platformFilter == nil || PlatformShort.matches(g.platforms, short: platformFilter!))
-            && (ownershipFilter == nil || g.ownership.contains(ownershipFilter!))
-            && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
-            && matchesSearch(g)
-        }
+        return games.filter { matches($0, hidden: hidden) }
+    }
+
+    /// `ignoringOwnership` powers the chip counts: a facet count should say
+    /// what you would get by tapping it, which means every filter but its own.
+    private func matches(_ g: Game, hidden: Set<String>, ignoringOwnership: Bool = false) -> Bool {
+        // A wishlisted game is not in your library — you don't own it. It
+        // has its own tab, and appearing here as well is the same
+        // duplication Home had, one tab over. This also makes "All" mean
+        // what it says: everything you actually have.
+        g.status != .wishlist
+        && (statusFilter == nil || g.status == statusFilter)
+        && (tagFilter == nil || g.userTags.contains(tagFilter!))
+        // Matched by displayed name, so picking "Switch 2" finds the games
+        // stored as "Nintendo Switch 2" too.
+        && (platformFilter == nil || PlatformShort.matches(g.platforms, short: platformFilter!))
+        && (ignoringOwnership || ownershipFilter == nil || g.ownership.contains(ownershipFilter!))
+        && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
+        && matchesSearch(g)
+    }
+
+    /// Overlapping by design — a game can be owned physically AND emulated,
+    /// which is the case that made ownership worth browsing rather than
+    /// picking. So these will not sum to the library size, and shouldn't.
+    private var ownershipCounts: [Ownership: Int] {
+        let hidden = bundledGameIDs
+        return OwnershipFacet.counts(games.filter {
+            matches($0, hidden: hidden, ignoringOwnership: true)
+        })
     }
 
     private func matchesSearch(_ g: Game) -> Bool {

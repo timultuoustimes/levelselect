@@ -84,4 +84,35 @@ final class AppNavigator {
     func go(to tab: LSTab) {
         selectedTab = tab
     }
+
+    // MARK: Menu bar requests
+    //
+    // The menu bar lives in the Scene, outside the view tree that owns these
+    // sheets, so a command raises a request here and the view consumes it.
+    //
+    // Counters, not Bools: pressing ⌘N twice has to open the sheet twice, and
+    // setting a Bool that is already true changes nothing — so the second
+    // press would be silently swallowed.
+    var addGameRequest = 0
+    var csvImportRequest = 0
+    var settingsRequest = 0
+    var newCollectionRequest = 0
+    var clearFiltersRequest = 0
+
+    func requestAddGame() { addGameRequest += 1 }
+    func requestCSVImport() { csvImportRequest += 1 }
+    func requestSettings() { settingsRequest += 1 }
+
+    /// Both of these act on the Library, so they take you there first —
+    /// a new collection appearing on a tab that cannot show it, or filters
+    /// clearing out of sight, would read as the command having done nothing.
+    func requestNewCollection() {
+        selectedTab = .library
+        newCollectionRequest += 1
+    }
+
+    func requestClearFilters() {
+        selectedTab = .library
+        clearFiltersRequest += 1
+    }
 }

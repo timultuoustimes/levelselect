@@ -536,6 +536,10 @@ struct HomeTab: View {
         .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingContinue) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingRoute) { _, _ in consumePendingNavigation() }
+        // Menu bar (Mac and iPad). See LevelSelectCommands.
+        .onChange(of: nav.addGameRequest) { _, _ in showingAdd = true }
+        .onChange(of: nav.csvImportRequest) { _, _ in showingCSVImport = true }
+        .onChange(of: nav.settingsRequest) { _, _ in showingSettings = true }
     }
 
     /// Push a game the navigator asked for (deep link or App Intent).

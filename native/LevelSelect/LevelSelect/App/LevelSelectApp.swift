@@ -37,5 +37,6 @@ struct LevelSelectApp: App {
                 }
         }
         .modelContainer(library.container)
+        .commands { LevelSelectCommands() }
     }
 }
