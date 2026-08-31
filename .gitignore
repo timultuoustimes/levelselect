@@ -44,3 +44,6 @@ deno.lock
 # cli-latest was tracked, so every `supabase` invocation dirtied the tree and
 # release-gate.sh refused to run. Untracked 2026-08-28.
 supabase/.temp/
+
+# Reference screenshots from other apps — local only, not for the public repo.
+screenshots/

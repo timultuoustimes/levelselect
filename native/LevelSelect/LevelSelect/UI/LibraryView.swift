@@ -972,7 +972,17 @@ struct LibraryGridCell: View {
             if size != .small {
                 Text(game.name)
                     .font(size == .large ? .footnote.weight(.medium) : .caption)
-                    .lineLimit(2, reservesSpace: true)
+                    // Reserve the second line ONLY when nothing follows.
+                    //
+                    // The reserved line exists so covers align across a row
+                    // when some names wrap and others don't. With a subtitle
+                    // under it that same line becomes a gap: "Future Knight"
+                    // is one line, reserves two, and the release date lands
+                    // below the blank one — reading as unattached to the game
+                    // it describes. Coupling a label to its own name matters
+                    // more than aligning labels to each other, which is the
+                    // same call made for `CollectionCard` on 08-31.
+                    .lineLimit(2, reservesSpace: subtitle == nil)
                     .multilineTextAlignment(.leading)
 
                 if let subtitle {
