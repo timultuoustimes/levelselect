@@ -29,6 +29,9 @@ enum PlatformIcon {
         if p.contains("xbox")                                  { return "platform-xbox" }
         if p.contains("recalbox")                              { return "platform-recalbox" }
         if p.contains("steam deck")                            { return "platform-steamdeck" }
+        // Valve's living-room box. No conflict with the bare `steam` test
+        // further down — that one is an exact match, not a substring.
+        if p.contains("steam machine")                         { return "platform-steammachine" }
         if p.contains("playstation 5") || p == "ps5"           { return "platform-ps5" }
         if p.contains("playstation 4") || p == "ps4"           { return "platform-ps4" }
         if p.contains("playstation 3") || p == "ps3"           { return "platform-ps3" }

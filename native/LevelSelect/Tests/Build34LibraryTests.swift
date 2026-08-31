@@ -232,6 +232,15 @@ struct Build34LibraryTests {
         #expect(PlatformIcon.assetName("PlayStation 5") == "platform-ps5")
     }
 
+    /// Valve's living-room box. "Steam Machine" must not collapse into the
+    /// PC icon — that test is an exact match on "steam", not a substring, but
+    /// pinning it keeps the next edit honest.
+    @Test func steamMachineIsItsOwnThing() {
+        #expect(PlatformIcon.assetName("Steam Machine") == "platform-steammachine")
+        #expect(PlatformIcon.assetName("Steam Deck") == "platform-steamdeck")
+        #expect(PlatformIcon.assetName("Steam") == "platform-pc")
+    }
+
     /// Linux is not a device, so it gets the mascot — the only unambiguous
     /// signifier, and Steam Deck already has its own platform and icon.
     @Test func linuxGetsAnIcon() {
