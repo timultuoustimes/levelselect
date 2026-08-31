@@ -12,66 +12,75 @@ import Foundation
 /// not out yet.** A game you could buy this afternoon and a game arriving in
 /// February are different kinds of wanting, and only one of them is waiting.
 enum WishlistShelf {
-    /// IGDB year-only precision lands on **1 January**, so a date cannot
-    /// always be compared as a day.
+    /// Which shelf a wanted game belongs on.
     ///
-    /// The Ocarina of Time remake, added 2026-08-31: announced at the June
-    /// Direct for "late 2026", no date confirmed, so IGDB carries the year
-    /// alone — stored as 1 January 2026, which is eight months in the past.
-    /// Compared as a day it read as already out, filed under "Out now", and
-    /// the one genuinely awaited game on the wishlist was the one the feature
-    /// failed to catch.
-    ///
-    /// A game with a confirmed date gets an exact date from IGDB — Resident
-    /// Evil Requiem carries 27 February, Pragmata 17 April, and both correctly
-    /// read as released. So **year-only is itself the signal**: it means
-    /// nobody has announced a day, which for the current year or later means
-    /// it is still ahead.
-    static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
-        let parts = calendar.dateComponents([.month, .day], from: date)
-        return parts.month == 1 && parts.day == 1
+    /// Three, not two. Tim, 2026-08-31: *"For new games within 2026 or later
+    /// with just a year, those are going to have announcement days and should
+    /// have a category of their own."* He is right — a game with a date and a
+    /// game merely promised this year are not the same kind of waiting, and
+    /// folding them together made "Coming soon" claim five games when one of
+    /// them was a February release and another had no date at all.
+    enum Shelf {
+        /// A real date, still ahead. The countdown case.
+        case comingSoon
+        /// Announced, but nobody has said when. IGDB carries the year alone.
+        case noDateYet
+        /// Out in the world.
+        case outNow
     }
 
-    /// Games still ahead of you, soonest first.
-    ///
-    /// "Real" excludes the epoch artifact the CSV import left on a third of
-    /// the library — see `MetadataRefresh.isMissing(_:)`. A 1970 date is a
-    /// missing date, and a missing date is not an announcement.
+    /// See `MetadataRefresh.isYearOnly` — date precision lives there.
+    static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
+        MetadataRefresh.isYearOnly(date, calendar: calendar)
+    }
+
+    static func shelf(for game: Game, now: Date = .now,
+                      calendar: Calendar = .current) -> Shelf {
+        guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else {
+            // No date at all is not a promise of one.
+            return .outNow
+        }
+        if isYearOnly(date) {
+            let year = calendar.component(.year, from: date)
+            return year >= calendar.component(.year, from: now) ? .noDateYet : .outNow
+        }
+        return date > now ? .comingSoon : .outNow
+    }
+
+    /// A real date, still ahead — soonest first, because that is the order you
+    /// will experience them in.
     static func comingSoon(_ games: [Game], now: Date = .now) -> [Game] {
-        let thisYear = Calendar.current.component(.year, from: now)
-        return games
-            .filter { game in
-                guard let date = game.firstReleaseDate,
-                      !MetadataRefresh.isMissing(date) else { return false }
-                if isYearOnly(date) {
-                    // No day announced. This year or later is still ahead.
-                    return Calendar.current.component(.year, from: date) >= thisYear
-                }
-                return date > now
-            }
+        games.filter { shelf(for: $0, now: now) == .comingSoon }
             .sorted { ($0.firstReleaseDate ?? .distantFuture) < ($1.firstReleaseDate ?? .distantFuture) }
     }
 
-    /// Everything else — out in the world, and yours whenever you decide.
-    /// Includes games with no known date at all: "we don't know when" is not
-    /// the same claim as "it's coming", and only one of those should sit under
-    /// a heading promising a date.
+    /// Announced, no date. Alphabetical, because there is no other order —
+    /// sorting by a 1 January placeholder would be sorting by nothing.
+    static func noDateYet(_ games: [Game], now: Date = .now) -> [Game] {
+        games.filter { shelf(for: $0, now: now) == .noDateYet }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    /// Out in the world, and yours whenever you decide.
     static func outNow(_ games: [Game], now: Date = .now) -> [Game] {
-        let soon = Set(comingSoon(games, now: now).map(\.id))
-        return games.filter { !soon.contains($0.id) }
+        games.filter { shelf(for: $0, now: now) == .outNow }
     }
 
     /// Exactly as much as is known, and no more.
     ///
-    /// A year-only date prints as the year. Printing "January 2026" for a game
-    /// arriving in November would be inventing a month out of a storage
-    /// convention — the same mistake as printing a day, one level up.
-    /// Otherwise month and year, never a day: `firstReleaseDate` carries no
-    /// precision flag, so a day would claim more than the data holds.
+    /// Only ever called for the dated shelf now, so it never has to print a
+    /// year-only placeholder — but it still refuses to claim a day, because
+    /// `firstReleaseDate` carries no precision flag and IGDB's own answer can
+    /// be a month.
     static func releaseLabel(_ date: Date, calendar: Calendar = .current) -> String {
         if isYearOnly(date) {
             return String(calendar.component(.year, from: date))
         }
-        return date.formatted(.dateTime.month(.wide).year())
+        return date.formatted(.dateTime.month(.abbreviated).day().year())
+    }
+
+    /// How long until it lands — "in 6 days", "in 3 months".
+    static func countdown(to date: Date, from now: Date = .now) -> String {
+        date.formatted(.relative(presentation: .named, unitsStyle: .wide))
     }
 }

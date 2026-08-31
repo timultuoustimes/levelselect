@@ -14,6 +14,15 @@ struct Build34WishlistTests {
 
     private let now = Date(timeIntervalSince1970: 1_780_000_000)
 
+    private func igdbAnswer(id: Int, name: String, release: Date) -> IGDBGame {
+        IGDBGame(id: id, name: name, slug: "slug", coverImageID: "co1",
+                 franchise: nil, releaseYear: Calendar.current.component(.year, from: release),
+                 summary: "A game.", gameType: 0, platforms: [], genres: [],
+                 themes: [], gameModes: [], playerPerspectives: [],
+                 developers: [], publishers: [],
+                 releaseTimestamp: release.timeIntervalSince1970)
+    }
+
     /// The split that makes the tab itself: a game you could buy this
     /// afternoon and a game arriving in February are different kinds of
     /// wanting, and only one of them is waiting.
@@ -81,7 +90,10 @@ struct Build34WishlistTests {
     /// 1 January 2026, eight months in the PAST. Compared as a day it read as
     /// already out, and the one genuinely awaited game on the wishlist was the
     /// one the feature failed to catch.
-    @Test func aYearOnlyDateThisYearIsStillAhead() {
+    /// **Superseded by the three-shelf split, 2026-08-31.** The two-shelf
+    /// version put this under "Coming soon"; Tim's correction is that a game
+    /// merely promised this year is not the same waiting as one with a date.
+    @Test func aYearOnlyDateThisYearHasNoDateYet() {
         let context = makeContext()
         let repo = Repository(context)
         var parts = DateComponents(); parts.year = 2026; parts.month = 1; parts.day = 1
@@ -89,8 +101,10 @@ struct Build34WishlistTests {
         ocarina.firstReleaseDate = Calendar.current.date(from: parts)!
 
         let august = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 31))!
-        #expect(WishlistShelf.comingSoon([ocarina], now: august).count == 1)
-        // And it says only what is known — not "January".
+        #expect(WishlistShelf.shelf(for: ocarina, now: august) == .noDateYet)
+        #expect(WishlistShelf.comingSoon([ocarina], now: august).isEmpty)
+        #expect(WishlistShelf.noDateYet([ocarina], now: august).count == 1)
+        // And it never prints "January", which it does not know.
         #expect(WishlistShelf.releaseLabel(ocarina.firstReleaseDate!) == "2026")
     }
 
@@ -103,8 +117,11 @@ struct Build34WishlistTests {
             from: DateComponents(year: 2026, month: 2, day: 27))!
 
         let august = Calendar.current.date(from: DateComponents(year: 2026, month: 8, day: 31))!
-        #expect(WishlistShelf.comingSoon([game], now: august).isEmpty)
-        #expect(WishlistShelf.releaseLabel(game.firstReleaseDate!).contains("February"))
+        #expect(WishlistShelf.shelf(for: game, now: august) == .outNow)
+        // A real date CAN show its day now — IGDB's own answer is kept whole,
+        // so this is not a claim the data cannot support. Before the parse fix
+        // every date was 1 January and a day would have been an invention.
+        #expect(WishlistShelf.releaseLabel(game.firstReleaseDate!).contains("27"))
     }
 
     /// A year-only date from a PREVIOUS year is genuinely old — most of the
@@ -152,6 +169,51 @@ struct Build34WishlistTests {
         #expect(parts.year == 2026)
         #expect(parts.month == 1)
         #expect(parts.day == 1)
+    }
+
+    /// Tim: *"those should get release dates added when they get announced."*
+    /// A year-only date for the current year or later is upgradeable — the one
+    /// deliberate exception to the fill's additive-only rule, and narrow: same
+    /// year, and only because release dates are fetched, never typed.
+    @Test func anAnnouncedDayUpgradesAYearOnlyDate() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Ocarina of Time", status: .wishlist)
+        game.igdbID = 42
+        game.firstReleaseDate = Calendar.current.date(
+            from: DateComponents(year: 2026, month: 1, day: 1))!
+
+        #expect(MetadataRefresh.awaitsAnnouncedDate(game.firstReleaseDate))
+        #expect(MetadataRefresh.missingFields(of: game).contains(.releaseDate))
+
+        let announced = Calendar.current.date(
+            from: DateComponents(year: 2026, month: 11, day: 12))!
+        let filled = MetadataRefresh.fill(game, from: igdbAnswer(
+            id: 42, name: "Ocarina of Time", release: announced))
+
+        #expect(filled.contains(.releaseDate))
+        #expect(Calendar.current.component(.month, from: game.firstReleaseDate!) == 11)
+    }
+
+    /// Most of the retro library is year-only and none of it is going to be
+    /// announced — those must not be offered as work forever.
+    @Test func oldYearOnlyDatesAreNotAwaitingAnything() {
+        let old = Calendar.current.date(from: DateComponents(year: 2005, month: 1, day: 1))!
+        #expect(!MetadataRefresh.awaitsAnnouncedDate(old))
+    }
+
+    /// A fuzzy answer must never quietly move a game into a different year.
+    @Test func anUpgradeNeverChangesTheYear() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Slipped", status: .wishlist)
+        game.igdbID = 43
+        game.firstReleaseDate = Calendar.current.date(
+            from: DateComponents(year: 2026, month: 1, day: 1))!
+
+        let nextYear = Calendar.current.date(
+            from: DateComponents(year: 2027, month: 3, day: 4))!
+        _ = MetadataRefresh.fill(game, from: igdbAnswer(id: 43, name: "Slipped", release: nextYear))
+
+        #expect(Calendar.current.component(.year, from: game.firstReleaseDate!) == 2026)
     }
 
     // MARK: Deku, and what the library already knows

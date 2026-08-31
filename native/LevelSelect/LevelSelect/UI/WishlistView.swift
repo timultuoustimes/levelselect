@@ -217,10 +217,22 @@ struct WishlistTab: View {
                     // there is a distinction to draw — one section with a
                     // label above it is a label for nothing.
                     let soon = WishlistShelf.comingSoon(mine)
+                    let undated = WishlistShelf.noDateYet(mine)
                     let out = WishlistShelf.outNow(mine)
-                    if !soon.isEmpty && !out.isEmpty {
-                        section("Coming soon", soon, showsDate: true, icon: "calendar")
-                        section("Out now", out, showsDate: false, icon: "bag")
+                    let sections = [soon, undated, out].filter { !$0.isEmpty }
+                    if sections.count > 1 {
+                        if !soon.isEmpty {
+                            section("Coming soon", soon, showsDate: true, icon: "calendar")
+                        }
+                        if !undated.isEmpty {
+                            // NOT "unannounced" — these games are very much
+                            // announced, which is why they are on a wishlist.
+                            // It is the DATE nobody has given yet.
+                            section("No date yet", undated, showsDate: false, icon: "calendar.badge.clock")
+                        }
+                        if !out.isEmpty {
+                            section("Out now", out, showsDate: false, icon: "bag")
+                        }
                     } else {
                         // "6 games" is a measurement. Every other tab's
                         // heading says what the things ARE — Now Playing,
@@ -230,7 +242,7 @@ struct WishlistTab: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
-                        grid(mine, showsDate: !out.isEmpty ? false : true)
+                        grid(mine, showsDate: !soon.isEmpty)
                     }
                 }
                 .padding(.vertical)

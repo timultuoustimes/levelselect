@@ -34,6 +34,31 @@ enum MetadataRefresh {
     /// the epoch once a timezone is applied to it.
     static let epochArtifactWindow: TimeInterval = 172_800
 
+    /// IGDB year-only precision lands on **1 January**, so a date that falls
+    /// there almost certainly means "sometime that year" rather than New
+    /// Year's Day. Lives here because date precision is this type's business;
+    /// `WishlistShelf` reads it to decide what it can honestly print.
+    static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let parts = calendar.dateComponents([.month, .day], from: date)
+        return parts.month == 1 && parts.day == 1
+    }
+
+    /// A year-only date for the current year or later is **upgradeable**: the
+    /// game is coming and nobody has announced a day yet, so IGDB may know one
+    /// tomorrow even though the field is not empty.
+    ///
+    /// The one deliberate exception to additive-only, and it is narrow on
+    /// purpose. Release dates are fetched, never typed — nothing the user
+    /// wrote can be sitting in the field — and replacing "1 January 2026" with
+    /// "12 November 2026" is strictly better information about the same event.
+    /// Past years are excluded: most of the retro library is year-only and
+    /// none of it is going to be announced.
+    static func awaitsAnnouncedDate(_ date: Date?, now: Date = .now,
+                                    calendar: Calendar = .current) -> Bool {
+        guard let date, !isMissing(date), isYearOnly(date) else { return false }
+        return calendar.component(.year, from: date) >= calendar.component(.year, from: now)
+    }
+
     /// Is this release date absent — either genuinely nil, or the epoch
     /// placeholder that renders as 1969?
     ///
@@ -166,7 +191,9 @@ enum MetadataRefresh {
     /// Which of the fillable fields this game currently has nothing in.
     static func missingFields(of game: Game) -> Set<Field> {
         var missing: Set<Field> = []
-        if isMissing(game.firstReleaseDate) { missing.insert(.releaseDate) }
+        if isMissing(game.firstReleaseDate) || awaitsAnnouncedDate(game.firstReleaseDate) {
+            missing.insert(.releaseDate)
+        }
         if (game.coverImageID ?? "").isEmpty && (game.coverURLString ?? "").isEmpty {
             missing.insert(.cover)
         }
@@ -296,6 +323,14 @@ enum MetadataRefresh {
         var filled: Set<Field> = []
 
         if isMissing(game.firstReleaseDate), let date = igdb.releaseDate {
+            game.firstReleaseDate = date
+            filled.insert(.releaseDate)
+        } else if awaitsAnnouncedDate(game.firstReleaseDate),
+                  let date = igdb.releaseDate, !isYearOnly(date),
+                  Calendar.current.component(.year, from: date)
+                    == Calendar.current.component(.year, from: game.firstReleaseDate!) {
+            // The day got announced. Same year only, so a fuzzy answer can
+            // never quietly move a game into a different one.
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
         }
