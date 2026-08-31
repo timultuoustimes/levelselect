@@ -220,6 +220,24 @@ struct Build34LibraryTests {
         #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Switch"))
     }
 
+    /// PS2 must be tested BEFORE the bare "playstation" check, or it falls
+    /// into PS1 exactly the way Series X|S fell into the original Xbox. Vita
+    /// contains "playstation" too and has the same trap.
+    @Test func eachPlayStationGenerationGetsItsOwnIcon() {
+        #expect(PlatformIcon.assetName("PlayStation 2") == "platform-ps2")
+        #expect(PlatformIcon.assetName("PS2") == "platform-ps2")
+        #expect(PlatformIcon.assetName("PlayStation Vita") == "platform-vita")
+        #expect(PlatformIcon.assetName("PlayStation") == "platform-ps1")
+        #expect(PlatformIcon.assetName("PlayStation 3") == "platform-ps3")
+        #expect(PlatformIcon.assetName("PlayStation 5") == "platform-ps5")
+    }
+
+    /// Linux is not a device, so it gets the mascot — the only unambiguous
+    /// signifier, and Steam Deck already has its own platform and icon.
+    @Test func linuxGetsAnIcon() {
+        #expect(PlatformIcon.assetName("Linux") == "platform-linux")
+    }
+
     /// `platform-xbox-series` art shipped but was unreachable: bare "xbox"
     /// sat above "xbox series" in a chain of substring matches, so every
     /// Series X|S drew the 2001 original's console.

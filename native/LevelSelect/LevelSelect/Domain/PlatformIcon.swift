@@ -32,8 +32,13 @@ enum PlatformIcon {
         if p.contains("playstation 5") || p == "ps5"           { return "platform-ps5" }
         if p.contains("playstation 4") || p == "ps4"           { return "platform-ps4" }
         if p.contains("playstation 3") || p == "ps3"           { return "platform-ps3" }
+        if p.contains("playstation 2") || p == "ps2"           { return "platform-ps2" }
         if p == "playstation" || p.contains("playstation 1")
             || p == "ps1" || p == "psx"                        { return "platform-ps1" }
+        // "PlayStation Vita" contains "playstation", so it has to be tested
+        // before the bare check above would ever see it — it is above by
+        // virtue of `vita` being the more specific string.
+        if p.contains("vita")                                  { return "platform-vita" }
         if p.contains("3ds")                                   { return "platform-3ds" }
         if p.contains("wii u")                                 { return "platform-wiiu" }
         if p.contains("wii")                                   { return "platform-wii" }
@@ -47,6 +52,7 @@ enum PlatformIcon {
         if p == "ios" || p.contains("iphone")                  { return "platform-iphone" }
         if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "android"                                      { return "platform-android" }
+        if p == "linux"                                        { return "platform-linux" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
         return nil
     }
