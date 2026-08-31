@@ -258,6 +258,10 @@ enum MetadataRefresh {
         var recentlyChecked: Int = 0
         /// How many games lack each field, across the whole library.
         var missingCounts: [Field: Int] = [:]
+        /// Games in `fillable` whose ONLY reason to be looked up is a platform
+        /// list too short to trust. They appear in no `missingCounts` row, so
+        /// the report has to name them separately or they are unexplained.
+        var platformOnly: Int = 0
 
         var isEmpty: Bool { fillable.isEmpty }
 
@@ -349,6 +353,7 @@ enum MetadataRefresh {
             guard !plan.fillable.contains(where: { $0.id == game.id }) else { continue }
             guard !MetadataRefresh.hasBeenAskedAbout(game) else { continue }
             plan.complete = max(0, plan.complete - 1)
+            plan.platformOnly += 1
             plan.fillable.append(game)
         }
         return plan
@@ -368,11 +373,13 @@ enum MetadataRefresh {
     static func fill(_ game: Game, from igdb: IGDBGame) -> Set<Field> {
         var filled: Set<Field> = []
 
-        if isMissing(game.firstReleaseDate), let date = igdb.storableReleaseDate {
+        if isMissing(game.firstReleaseDate),
+           let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
         } else if awaitsAnnouncedDate(game.firstReleaseDate),
-                  let date = igdb.storableReleaseDate, !isYearOnly(date),
+                  let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform),
+                  !isYearOnly(date),
                   Calendar.current.component(.year, from: date)
                     == Calendar.current.component(.year, from: game.firstReleaseDate!) {
             // The day got announced. Same year only, so a fuzzy answer can

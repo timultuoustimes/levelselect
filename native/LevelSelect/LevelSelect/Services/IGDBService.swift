@@ -22,6 +22,15 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     var releaseTimestamp: Double? = nil
     /// How much of that timestamp IGDB actually knows. See `ReleasePrecision`.
     var releasePrecision: ReleasePrecision = .unknown
+    /// Every dated release IGDB lists, per platform. See `release(on:)`.
+    var platformReleases: [PlatformRelease] = []
+
+    /// One platform's release, with IGDB's own precision for it.
+    struct PlatformRelease: Hashable, Sendable {
+        let platform: String
+        let timestamp: Double
+        let precision: ReleasePrecision
+    }
 
     /// What IGDB's date actually claims.
     ///
@@ -83,6 +92,33 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     /// is all we know" (`MetadataRefresh.isYearOnly`). That keeps one
     /// convention rather than introducing a second kind of fuzzy date, and it
     /// means an imprecise answer can never be mistaken for a launch day.
+    /// The date to store for someone who owns — or intends to buy — this game
+    /// on `platform`.
+    ///
+    /// `first_release_date` is the EARLIEST across every platform, so a game
+    /// that reached PC in 2025 and arrives on Switch 2 in 2026 reads as
+    /// released. For a wishlist that is the wrong answer in exactly the case
+    /// the wishlist exists for. Tim's framing, 2026-08-31: *"letting them pick
+    /// the game and then the platform they want it for, which in turn is
+    /// choosing the date."*
+    ///
+    /// Falls back to the aggregate when IGDB lists no date for that platform,
+    /// or when no platform has been chosen.
+    func storableReleaseDate(on platform: String?) -> Date? {
+        guard let platform,
+              let match = platformReleases.first(where: {
+                  PlatformIcon.consoleKey($0.platform) == PlatformIcon.consoleKey(platform)
+              })
+        else { return storableReleaseDate }
+
+        let date = Date(timeIntervalSince1970: match.timestamp)
+        guard match.precision.hasDay, !MetadataRefresh.isYearOnly(date) else {
+            let year = Calendar.current.component(.year, from: date)
+            return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
+        }
+        return date
+    }
+
     var storableReleaseDate: Date? {
         guard let date = releaseDate else { return nil }
         // IGDB's own category is trusted, EXCEPT when the day it gives is one
@@ -131,6 +167,7 @@ enum IGDBService {
     private static let fields = """
         fields name, slug, summary, game_type, cover.image_id, franchises.name, collection.name, \
         first_release_date, release_dates.category, release_dates.date, \
+        release_dates.platform.name, \
         platforms.name, genres.name, themes.name, game_modes.name, \
         player_perspectives.name, involved_companies.developer, involved_companies.publisher, \
         involved_companies.company.name;
@@ -263,7 +300,12 @@ enum IGDBService {
         /// IGDB's own precision for each regional release. `category` is the
         /// date-format enum: 0 = exact day, 1 = month, 2 = year, 3–6 = a
         /// quarter, 7 = TBD.
-        struct ReleaseDate: Decodable { let category: Int?; let date: Double? }
+        struct ReleaseDate: Decodable {
+            let category: Int?
+            let date: Double?
+            struct Platform: Decodable { let name: String? }
+            let platform: Platform?
+        }
         let release_dates: [ReleaseDate]?
 
         /// How precise IGDB's own answer is for the earliest release.
@@ -281,7 +323,11 @@ enum IGDBService {
             let match = dates
                 .filter { $0.date != nil }
                 .min { abs(($0.date ?? 0) - first) < abs(($1.date ?? 0) - first) }
-            switch match?.category {
+            return precision(for: match?.category)
+        }
+
+        static func precision(for category: Int?) -> IGDBGame.ReleasePrecision {
+            switch category {
             case 0: return .day
             case 1: return .month
             case 2: return .year
@@ -318,7 +364,13 @@ enum IGDBService {
                 developers: developers,
                 publishers: publishers,
                 releaseTimestamp: first_release_date,
-                releasePrecision: Self.precision(of: first_release_date, in: release_dates)
+                releasePrecision: Self.precision(of: first_release_date, in: release_dates),
+                platformReleases: (release_dates ?? []).compactMap { row in
+                    guard let name = row.platform?.name, let stamp = row.date else { return nil }
+                    return IGDBGame.PlatformRelease(
+                        platform: name, timestamp: stamp,
+                        precision: Self.precision(for: row.category))
+                }
             )
         }
     }

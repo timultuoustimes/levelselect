@@ -81,7 +81,9 @@ struct Repository {
         game.coverImageID = igdb.coverImageID
         game.coverURLString = igdb.coverURLString
         game.franchise = igdb.franchise
-        game.firstReleaseDate = igdb.storableReleaseDate
+        // The platform just chosen on the confirm screen IS the date choice —
+        // a game out on PC and coming to Switch 2 has two different answers.
+        game.firstReleaseDate = igdb.storableReleaseDate(on: platform)
         game.summary = igdb.summary
         game.genres = igdb.genres
         game.themes = igdb.themes
@@ -119,7 +121,9 @@ struct Repository {
         // shorthand for "the year is all we know" — see
         // `MetadataRefresh.isYearOnly`. Storing IGDB's padded 30 December
         // would make the wishlist promise a launch day nobody announced.
-        if let date = igdb.storableReleaseDate { game.firstReleaseDate = date }
+        if let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+            game.firstReleaseDate = date
+        }
         if let f = igdb.franchise { game.franchise = f }
         if let cover = igdb.coverImageID { game.coverImageID = cover; game.coverURLString = igdb.coverURLString }
         if !igdb.developers.isEmpty { game.developers = igdb.developers }

@@ -285,6 +285,71 @@ struct Build34WishlistTests {
         #expect(MetadataRefresh.isYearOnly(claimed.storableReleaseDate!))
     }
 
+    // MARK: The date that matters to YOU
+
+    /// `first_release_date` is the earliest across EVERY platform, so a game
+    /// that reached PC in 2025 and arrives on Switch 2 in 2026 read as
+    /// released — wrong in exactly the case the wishlist exists for.
+    @Test func theStoredDateIsTheOneForYourPlatform() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let pc = utc.date(from: DateComponents(year: 2025, month: 6, day: 10))!
+        let switch2 = utc.date(from: DateComponents(year: 2026, month: 11, day: 12))!
+
+        let game = IGDBGame(
+            id: 1, name: "Ported Later", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2025, summary: nil, gameType: 0,
+            platforms: ["PC (Microsoft Windows)", "Nintendo Switch 2"],
+            genres: [], themes: [], gameModes: [], playerPerspectives: [],
+            developers: [], publishers: [],
+            releaseTimestamp: pc.timeIntervalSince1970, releasePrecision: .day,
+            platformReleases: [
+                .init(platform: "PC (Microsoft Windows)", timestamp: pc.timeIntervalSince1970, precision: .day),
+                .init(platform: "Nintendo Switch 2", timestamp: switch2.timeIntervalSince1970, precision: .day),
+            ])
+
+        // Bought on Switch 2 → November 2026, and still ahead.
+        let mine = game.storableReleaseDate(on: "Nintendo Switch 2")!
+        #expect(Calendar.current.component(.year, from: mine) == 2026)
+        #expect(Calendar.current.component(.month, from: mine) == 11)
+
+        // Bought on PC → 2025, and out.
+        let onPC = game.storableReleaseDate(on: "PC (Microsoft Windows)")!
+        #expect(Calendar.current.component(.year, from: onPC) == 2025)
+
+        // No platform chosen → the aggregate, as before.
+        #expect(game.storableReleaseDate(on: nil) == game.storableReleaseDate)
+    }
+
+    /// Platform names are matched on console identity, so the user's spelling
+    /// does not have to match IGDB's.
+    @Test func theMatchIsByConsoleNotBySpelling() {
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        let game = IGDBGame(
+            id: 2, name: "Whatever", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2027, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: 0, releasePrecision: .day,
+            platformReleases: [.init(platform: "Nintendo Switch", timestamp: date.timeIntervalSince1970,
+                                     precision: .day)])
+
+        #expect(game.storableReleaseDate(on: "Switch") != nil)
+        #expect(game.storableReleaseDate(on: "Switch") == game.storableReleaseDate(on: "Nintendo Switch"))
+    }
+
+    /// A platform IGDB lists no date for falls back rather than inventing one.
+    @Test func anUndatedPlatformFallsBackToTheAggregate() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let game = IGDBGame(
+            id: 3, name: "Whatever", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2023, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: date.timeIntervalSince1970, releasePrecision: .day,
+            platformReleases: [])
+
+        #expect(game.storableReleaseDate(on: "Dreamcast") == game.storableReleaseDate)
+    }
+
     // MARK: Deku, and what the library already knows
 
     /// The duplication that was visible on one screen: "Future Knight",
