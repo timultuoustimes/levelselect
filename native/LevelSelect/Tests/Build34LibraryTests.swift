@@ -493,6 +493,39 @@ struct Build34LibraryTests {
         #expect(game.ownedPlatformNames == ["Nintendo Switch"])
     }
 
+    /// Alien: Isolation, from Tim's library: IGDB lists Switch first and Mac
+    /// sixth, with four consoles he does not own in between — so the two chips
+    /// that say something about HIM sat at opposite ends of two wrapped rows.
+    @Test func theConsolesYouOwnComeFirst() {
+        let all = ["Nintendo Switch", "PlayStation 3", "PlayStation 4", "Linux",
+                   "PC (Microsoft Windows)", "Mac", "Xbox 360", "Xbox One"]
+        let sorted = PlatformShort.ownedFirst(all, owned: ["Nintendo Switch", "Mac"])
+
+        #expect(Array(sorted.prefix(2)) == ["Nintendo Switch", "Mac"])
+        // Nothing gained, nothing lost, and the rest hold their order.
+        #expect(sorted.count == all.count)
+        #expect(Array(sorted.dropFirst(2)) == ["PlayStation 3", "PlayStation 4", "Linux",
+                                               "PC (Microsoft Windows)", "Xbox 360", "Xbox One"])
+    }
+
+    /// Owning none of them leaves the list exactly as IGDB gave it.
+    @Test func owningNothingChangesNothing() {
+        let all = ["Nintendo Switch", "Mac"]
+        #expect(PlatformShort.ownedFirst(all, owned: []) == all)
+    }
+
+    /// Sorting is display-only: the stored order still carries the pre-V3
+    /// fallback, so it must not be disturbed.
+    @Test func sortingDoesNotTouchTheStoredOrder() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Alien: Isolation")
+        game.platforms = ["Nintendo Switch", "Mac"]
+        game.ownedPlatforms = ["Mac"]
+
+        _ = PlatformShort.ownedFirst(game.platforms, owned: game.ownedPlatformNames)
+        #expect(game.platforms == ["Nintendo Switch", "Mac"])
+    }
+
     // MARK: The menu bar
 
     /// ⌘1–⌘4 are assigned by tab-bar position, so the number pressed matches

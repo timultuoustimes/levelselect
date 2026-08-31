@@ -1606,7 +1606,8 @@ struct GameDetailView: View {
         return VStack(alignment: .leading, spacing: 6) {
             Text("Platforms").font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {
-                ForEach(game.platforms, id: \.self) { platform in
+                ForEach(PlatformShort.ownedFirst(game.platforms,
+                                                 owned: game.ownedPlatformNames), id: \.self) { platform in
                     if mine.contains(platform) {
                         HStack(spacing: 5) {
                             PlatformIconView(platform: platform, size: 14)

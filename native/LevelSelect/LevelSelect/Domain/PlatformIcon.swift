@@ -63,3 +63,56 @@ extension PlatformIcon {
         assetName(platform) ?? platform.lowercased()
     }
 }
+
+
+import SwiftUI
+
+/// A console icon sized for a MENU row.
+///
+/// The imagesets are 1024×1024. A bare `Image(asset)` in a `Label`'s icon slot
+/// renders at native size, and while iOS quietly constrains menu images,
+/// **macOS does not** — the System filter opened as a full-screen wall of
+/// giant consoles, one per row, on 2026-08-31.
+///
+/// SwiftUI's sizing modifiers do not fix it either: AppKit draws a menu item's
+/// image from an `NSImage` and ignores `.resizable().frame(…)` entirely, which
+/// is why the obvious fix changed nothing. The image itself has to BE small,
+/// so on macOS this redraws it at 16pt before handing it over. On iOS the
+/// ordinary modifiers work and are used.
+///
+/// Use this anywhere a platform icon goes into a `Menu` or `Picker` row.
+struct PlatformMenuIcon: View {
+    let platform: String
+    /// Matches the size AppKit gives an SF Symbol in a menu row.
+    var size: CGFloat = 16
+
+    var body: some View {
+        if let asset = PlatformIcon.assetName(platform) {
+            #if os(macOS)
+            if let image = Self.menuSized(asset, side: size) {
+                Image(nsImage: image)
+            } else {
+                Image(systemName: "gamecontroller")
+            }
+            #else
+            Image(asset)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+            #endif
+        } else {
+            Image(systemName: "gamecontroller")
+        }
+    }
+
+    #if os(macOS)
+    /// Redrawn at menu size, because AppKit uses the NSImage's own dimensions.
+    private static func menuSized(_ asset: String, side: CGFloat) -> NSImage? {
+        guard let source = NSImage(named: asset) else { return nil }
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            source.draw(in: rect)
+            return true
+        }
+    }
+    #endif
+}

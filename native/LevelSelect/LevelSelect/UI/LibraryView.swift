@@ -512,12 +512,10 @@ struct LibraryTab: View {
                 Picker("System", selection: $platformFilter) {
                     Text("All systems").tag(String?.none)
                     ForEach(allPlatforms, id: \.short) { entry in
-                        Group {
-                            if let asset = PlatformIcon.assetName(entry.icon) {
-                                Label { Text(entry.short) } icon: { Image(asset) }
-                            } else {
-                                Label(entry.short, systemImage: "gamecontroller")
-                            }
+                        Label {
+                            Text(entry.short)
+                        } icon: {
+                            PlatformMenuIcon(platform: entry.icon)
                         }
                         .tag(String?.some(entry.short))
                     }
@@ -817,6 +815,22 @@ enum PlatformShort {
     /// which is what the library filter means, use `ownedMatches`.
     static func matches(_ platforms: [String], short: String) -> Bool {
         platforms.contains { name($0) == short }
+    }
+
+    /// Yours first, then the rest, each keeping its existing relative order.
+    ///
+    /// The stored list is IGDB's, in IGDB's order, which has nothing to do
+    /// with you: on Alien: Isolation that put Switch first and Mac sixth with
+    /// four consoles you do not own in between, so the two chips that say
+    /// something about YOU sat at opposite ends of two wrapped rows.
+    ///
+    /// Display-only. The stored array is untouched — `ownedPlatforms` is the
+    /// ownership record now, so reordering `platforms` would be a write and a
+    /// sync in service of a purely visual concern, and it would also move the
+    /// position-zero fallback that pre-V3 games still read.
+    static func ownedFirst(_ platforms: [String], owned: [String]) -> [String] {
+        let mine = Set(owned)
+        return platforms.filter { mine.contains($0) } + platforms.filter { !mine.contains($0) }
     }
 
     /// Whether any platform this game is YOURS on is displayed as `short`.

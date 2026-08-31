@@ -56,7 +56,7 @@ struct PlatformEditor: View {
 
             if !platforms.isEmpty {
                 FlowLayout(spacing: 6) {
-                    ForEach(platforms, id: \.self) { platform in
+                    ForEach(PlatformShort.ownedFirst(platforms, owned: ownedNames), id: \.self) { platform in
                         chip(platform)
                     }
                 }
@@ -135,7 +135,7 @@ struct PlatformEditor: View {
             } else {
                 next.append(platform)
             }
-            owned = next
+            withAnimation(.snappy(duration: 0.28)) { owned = next }
         }
         .accessibilityHint(isMine
                            ? "Double tap to unmark as a platform you own"
@@ -148,10 +148,10 @@ struct PlatformEditor: View {
             Button {
                 platforms.append(platform)
             } label: {
-                if let asset = PlatformIcon.assetName(platform) {
-                    Label { Text(PlatformShort.name(platform)) } icon: { Image(asset) }
-                } else {
-                    Label(PlatformShort.name(platform), systemImage: "gamecontroller")
+                Label {
+                    Text(PlatformShort.name(platform))
+                } icon: {
+                    PlatformMenuIcon(platform: platform)
                 }
             }
         }
