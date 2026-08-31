@@ -321,29 +321,32 @@ struct WishlistTab: View {
         }
     }
 
+    /// What the shelf can honestly print for this game.
+    private func dateLabel(_ game: Game) -> String? {
+        guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else { return nil }
+        return WishlistShelf.releaseLabel(date)
+    }
+
+    /// A year with no day behind it. Drawn in the quieter colour, because
+    /// Tim's note is exactly right: *"'by December 31' is technically correct,
+    /// but it just reads as a definitive date."* A bare year in secondary grey
+    /// does not make that promise; an accent-coloured day does.
+    private func isApproximate(_ game: Game) -> Bool {
+        guard let date = game.firstReleaseDate else { return true }
+        return WishlistShelf.isYearOnly(date)
+    }
+
     private func coverGrid(_ games: [Game], showsDate: Bool) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: max(gridSize.minWidth, 76)), spacing: 12)],
                   spacing: 16) {
             ForEach(games) { game in
                 NavigationLink(value: game) {
-                    // `maxWidth: .infinity` inside LibraryGridCell proposes no
-                    // IDEAL width, so a wrapping stack sizes itself to its
-                    // widest intrinsic child instead — the little date label.
-                    // Every cover collapsed from 105pt to about 40 and showed
-                    // its placeholder glyph, which read as broken artwork.
-                    VStack(alignment: .leading, spacing: 3) {
-                        LibraryGridCell(game: game, size: gridSize)
-                        // The date is the whole point of the section, so it
-                        // goes on the cell rather than only in the heading.
-                        if showsDate, let date = game.firstReleaseDate,
-                           !MetadataRefresh.isMissing(date) {
-                            Text(WishlistShelf.releaseLabel(date))
-                                .font(.caption2)
-                                .foregroundStyle(LSTheme.accent)
-                                .lineLimit(1)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    LibraryGridCell(
+                        game: game, size: gridSize,
+                        subtitle: showsDate ? dateLabel(game) : nil,
+                        // Approximate dates read quieter than announced ones,
+                        // so a year does not look like a launch day.
+                        subtitleTint: isApproximate(game) ? .secondary : LSTheme.accent)
                 }
                 .buttonStyle(PressableCardStyle())
                 .gameContextMenu(game)

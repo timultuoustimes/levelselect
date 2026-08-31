@@ -39,8 +39,24 @@ enum MetadataRefresh {
     /// Year's Day. Lives here because date precision is this type's business;
     /// `WishlistShelf` reads it to decide what it can honestly print.
     static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
-        let parts = calendar.dateComponents([.month, .day], from: date)
-        return parts.month == 1 && parts.day == 1
+        // Compared in UTC, because IGDB stamps release dates at UTC midnight
+        // and a local calendar would see 31 December as the 30th.
+        var utc = calendar
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let parts = utc.dateComponents([.month, .day], from: date)
+        // BOTH ends of the year are placeholders. 1 January is the app's own
+        // shorthand for "the year is all we know"; **31 December is IGDB's** —
+        // it pads a year-only or fourth-quarter release to the last day of the
+        // period. The Ocarina of Time remake, which has no announced date at
+        // all, arrived as 31 December 2026 and the wishlist printed it as a
+        // launch day. Tim: *"'by December 31' is technically correct, but it
+        // just reads as a definitive date."*
+        //
+        // A game genuinely launching on either day is misfiled as year-only.
+        // That trade is deliberate: the cost is showing "2026" instead of a
+        // day, against promising a launch date nobody has given.
+        return (parts.month == 1 && parts.day == 1)
+            || (parts.month == 12 && parts.day == 31)
     }
 
     /// A year-only date for the current year or later is **upgradeable**: the

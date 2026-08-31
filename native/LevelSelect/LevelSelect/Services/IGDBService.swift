@@ -85,7 +85,10 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     /// means an imprecise answer can never be mistaken for a launch day.
     var storableReleaseDate: Date? {
         guard let date = releaseDate else { return nil }
-        guard releasePrecision.hasDay else {
+        // IGDB's own category is trusted, EXCEPT when the day it gives is one
+        // of the two padding days — a category-0 answer landing on
+        // 31 December is a period boundary far more often than a launch.
+        guard releasePrecision.hasDay, !MetadataRefresh.isYearOnly(date) else {
             let year = Calendar.current.component(.year, from: date)
             return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
         }

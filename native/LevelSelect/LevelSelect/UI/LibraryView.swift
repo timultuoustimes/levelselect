@@ -919,6 +919,15 @@ enum GridSize: String, CaseIterable {
 struct LibraryGridCell: View {
     let game: Game
     let size: GridSize
+    /// A line under the name — the wishlist's release date, for instance.
+    ///
+    /// Belongs INSIDE the cell rather than stacked under it. The name reserves
+    /// a second line so covers align across a row, and anything appended
+    /// outside therefore starts a full line low: on the wishlist the date
+    /// floated away from the game it belonged to, the same way a collection's
+    /// count did before 08-31.
+    var subtitle: String? = nil
+    var subtitleTint: Color = .secondary
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -965,6 +974,13 @@ struct LibraryGridCell: View {
                     .font(size == .large ? .footnote.weight(.medium) : .caption)
                     .lineLimit(2, reservesSpace: true)
                     .multilineTextAlignment(.leading)
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(subtitleTint)
+                        .lineLimit(1)
+                }
 
                 if size == .large, let platform = game.platforms.first {
                     // Short name here too — a grid cell has even less room for

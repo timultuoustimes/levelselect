@@ -252,6 +252,39 @@ struct Build34WishlistTests {
         #expect(Calendar.current.component(.day, from: exact.storableReleaseDate!) == 5)
     }
 
+    /// BOTH ends of the year are placeholders. 1 January is the app's own
+    /// shorthand; 31 December is IGDB's, padding a year-only or Q4 release to
+    /// the last day of the period. Ocarina arrived as 31 December 2026 and the
+    /// wishlist printed it as a launch day.
+    @Test func decemberThirtyFirstIsAlsoAYearPlaceholder() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let dec31 = utc.date(from: DateComponents(year: 2026, month: 12, day: 31))!
+        let jan1 = utc.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let midYear = utc.date(from: DateComponents(year: 2026, month: 6, day: 15))!
+
+        #expect(MetadataRefresh.isYearOnly(dec31))
+        #expect(MetadataRefresh.isYearOnly(jan1))
+        #expect(!MetadataRefresh.isYearOnly(midYear))
+        #expect(WishlistShelf.releaseLabel(dec31) == "2026")
+    }
+
+    /// Even when IGDB claims exact-day precision, a 31 December answer is a
+    /// period boundary far more often than a launch — so it is not stored as
+    /// a day.
+    @Test func aPaddingDayIsNotTrustedEvenWhenIGDBClaimsExactness() {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        let dec31 = utc.date(from: DateComponents(year: 2026, month: 12, day: 31))!
+        let claimed = IGDBGame(
+            id: 11, name: "Ocarina of Time", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2026, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: dec31.timeIntervalSince1970, releasePrecision: .day)
+
+        #expect(MetadataRefresh.isYearOnly(claimed.storableReleaseDate!))
+    }
+
     // MARK: Deku, and what the library already knows
 
     /// The duplication that was visible on one screen: "Future Knight",
