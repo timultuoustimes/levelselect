@@ -275,6 +275,11 @@ struct WishlistTab: View {
                   spacing: 16) {
             ForEach(games) { game in
                 NavigationLink(value: game) {
+                    // `maxWidth: .infinity` inside LibraryGridCell proposes no
+                    // IDEAL width, so a wrapping stack sizes itself to its
+                    // widest intrinsic child instead — the little date label.
+                    // Every cover collapsed from 105pt to about 40 and showed
+                    // its placeholder glyph, which read as broken artwork.
                     VStack(alignment: .leading, spacing: 3) {
                         LibraryGridCell(game: game, size: .medium)
                         // The date is the whole point of the section, so it
@@ -287,6 +292,7 @@ struct WishlistTab: View {
                                 .lineLimit(1)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(PressableCardStyle())
                 .gameContextMenu(game)
