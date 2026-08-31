@@ -24,10 +24,15 @@ struct PlayerSummary {
     /// from. The game you're on now, or failing that the last one you touched.
     var fallbackBackdrop: String?
 
-    /// Below this, a ribbon reads as a mistake rather than a pattern — two
-    /// covers tilted behind a portrait look like a layout bug. Fall back to
-    /// one game's artwork instead, which is a composition rather than a gap.
-    static let minimumRibbon = 3
+    /// Two, not three.
+    ///
+    /// This was three on the theory that two tilted covers read as a layout
+    /// bug rather than a pattern. Tim's real week, 08-31, settled it against
+    /// that: he played Skate Story and finished Under the Island, and the
+    /// header showed only Skate Story — the finish was simply absent from the
+    /// picture of his week. A quiet week is still a week, and showing half of
+    /// it is worse than showing two covers.
+    static let minimumRibbon = 2
 
     var usesRibbon: Bool { recentCovers.count >= Self.minimumRibbon }
 
@@ -52,6 +57,22 @@ struct PlayerSummary {
                             latestThisWeek = session.startDate
                         }
                     }
+                }
+            }
+
+            // Finishing a game counts as a week with that game in it, whether
+            // or not a timer was running for it.
+            //
+            // Tim beat Under the Island on the 25th and it was missing from
+            // the header on the 31st, because the week was built from sessions
+            // alone. A finish is the most memorable thing that can happen to a
+            // game, and plenty of them are recorded by marking them rather
+            // than by running a clock — most of the app's own history predates
+            // its timer. It contributes no seconds, only presence.
+            for event in (game.completionEvents ?? []) where event.deletedAt == nil {
+                guard event.date >= weekAgo, event.date <= now else { continue }
+                if event.date > (latestThisWeek ?? .distantPast) {
+                    latestThisWeek = event.date
                 }
             }
             if let at = latestThisWeek { recent.append((game, at)) }

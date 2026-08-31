@@ -37,13 +37,17 @@ struct LibraryTab: View {
     @State private var newCollectionName = ""
     @AppStorage("libraryHideBundled") private var hideBundled = false
 
-    // Recently played, not status.
+    // A–Z.
     //
-    // Status-first opened the page on "Backlog (98)" — the pile, not the
-    // connection. Library is your games and your connection to them, and the
-    // games you actually touch are the ones that answer that. Status is one
-    // tap away and keeps its own grouping.
-    @AppStorage("librarySort") private var sortRaw = LibrarySort.recentlyPlayed.rawValue
+    // Status-first opened the page on "Backlog (98)" — the pile rather than
+    // the collection. Recently-played was the next guess and Tim's answer was
+    // simpler: the whole library, alphabetical. It is the one order that makes
+    // no claim about you, which is the right thing for a shelf you are about
+    // to look for something on.
+    //
+    // Only ever a STARTING point. The picker writes straight to this key, so
+    // whatever anyone chooses is what they get from then on.
+    @AppStorage("librarySort") private var sortRaw = LibrarySort.name.rawValue
     @AppStorage("libraryViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
     @AppStorage("libraryGridSize") private var gridSizeRaw = GridSize.medium.rawValue
 
@@ -633,43 +637,49 @@ struct LibraryTab: View {
         Dictionary(grouping: visible, by: \.status)
     }
 
-    private var sorted: [Game] {
-        switch sort {
+    private var sorted: [Game] { sort.apply(to: visible) }
+
+}
+
+// MARK: - Options
+
+extension LibrarySort {
+    /// `games` must arrive already sorted by name — every caller queries that
+    /// way, and the name/status/system cases lean on it rather than re-sorting.
+    func apply(to games: [Game]) -> [Game] {
+        switch self {
         case .status, .name, .system:
-            return visible
+            return games
         case .recentlyAdded:
-            return visible.sorted { $0.addedAt > $1.addedAt }
+            return games.sorted { $0.addedAt > $1.addedAt }
         case .recentlyPlayed:
             // Key computed once per game, not once per COMPARISON — the
             // comparator form rescanned every playthrough and session for both
             // operands on each of the O(n log n) comparisons.
             //
-            // Name breaks the ties. Swift's sort is not stable, and most of a
-            // library has never been played — so without a second key those
-            // games shuffle between renders. Now that this is the DEFAULT
-            // sort, that is most of what you see.
-            return visible.map { ($0, lastPlayed($0)) }
+            // Name breaks the ties. Swift's sort is not stable and most of a
+            // library has never been played, so without a second key those
+            // games shuffle between renders.
+            return games.map { ($0, Self.lastPlayed($0)) }
                 .sorted { ($0.1, $1.0.name) > ($1.1, $0.0.name) }
                 .map(\.0)
         case .mostPlayed:
-            return visible.map { ($0, playtime($0)) }
+            return games.map { ($0, Self.playtime($0)) }
                 .sorted { ($0.1, $1.0.name) > ($1.1, $0.0.name) }
                 .map(\.0)
         case .rating:
-            return visible.sorted { ($0.rating ?? -1, $0.name) > ($1.rating ?? -1, $1.name) }
+            return games.sorted { ($0.rating ?? -1, $1.name) > ($1.rating ?? -1, $0.name) }
         }
     }
 
-    private func lastPlayed(_ g: Game) -> Date {
+    static func lastPlayed(_ g: Game) -> Date {
         g.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? .distantPast
     }
 
-    private func playtime(_ g: Game) -> TimeInterval {
+    static func playtime(_ g: Game) -> TimeInterval {
         g.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime() }
     }
 }
-
-// MARK: - Options
 
 enum LibrarySort: String, CaseIterable {
     case status, system, name, recentlyAdded, recentlyPlayed, mostPlayed, rating

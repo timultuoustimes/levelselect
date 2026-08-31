@@ -114,6 +114,66 @@ struct Build34SessionEditTests {
         #expect(summary.fallbackBackdrop == "animal-well.jpg")
     }
 
+    /// Tim beat Under the Island on the 25th and it was missing from the
+    /// header on the 31st: the week was built from sessions alone, and a
+    /// finish recorded by marking it runs no clock. A finish is the most
+    /// memorable thing that can happen to a game.
+    @Test func finishingAGamePutsItInYourWeek() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        let played = repo.addGame(name: "Skate Story", status: .playing)
+        played.coverURLString = "skate.jpg"
+        let session = repo.startSession(on: repo.ensureDefaultPlaythrough(for: played))
+        session.startDate = Date.now.addingTimeInterval(-3600)
+        session.accumulatedDuration = 600
+        session.state = .stopped
+
+        // Beaten six days ago, with no session logged at all.
+        let beaten = repo.addGame(name: "Under the Island", status: .completed)
+        beaten.coverURLString = "island.jpg"
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-6 * 86_400))
+        event.game = beaten
+        beaten.completionEvents = [event]
+        context.insert(event)
+
+        let summary = PlayerSummary.make(from: [played, beaten])
+        #expect(summary.recentCovers.count == 2)
+        #expect(Set(summary.recentCovers) == ["skate.jpg", "island.jpg"])
+        // Two covers is a ribbon now — a quiet week is still a week.
+        #expect(summary.usesRibbon)
+    }
+
+    /// A finish contributes presence, not time. It runs no clock, so it must
+    /// not invent hours.
+    @Test func aFinishAddsNoSecondsToTheWeek() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Under the Island", status: .completed)
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-86_400))
+        event.game = game
+        game.completionEvents = [event]
+        context.insert(event)
+
+        let summary = PlayerSummary.make(from: [game])
+        #expect(summary.weekSeconds == 0)
+        #expect(summary.recentCovers.isEmpty)   // no art on this fixture
+    }
+
+    /// An old finish is not this week.
+    @Test func anOldFinishIsNotPartOfThisWeek() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Chrono Trigger", status: .completed)
+        game.coverURLString = "chrono.jpg"
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-90 * 86_400))
+        event.game = game
+        game.completionEvents = [event]
+        context.insert(event)
+
+        #expect(PlayerSummary.make(from: [game]).recentCovers.isEmpty)
+    }
+
     /// And saving what the editor showed must not change the number.
     @Test func savingAnUntouchedSessionPreservesItsPlaytime() {
         let context = makeContext()

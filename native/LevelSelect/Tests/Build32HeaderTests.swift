@@ -350,9 +350,26 @@ struct PlayerSummaryTests {
         #expect(s.totalSeconds == 3600 + 7200)
     }
 
-    /// Two covers tilted behind a portrait look like a layout bug rather than
-    /// a pattern, so a quiet week must fall back to one game's art.
-    @Test func aQuietWeekFallsBackToOneGame() {
+    /// The floor moved from three to two on 2026-08-31, and this test moved
+    /// with it. The old rule said two tilted covers read as a layout bug; the
+    /// real week that settled it was Tim's — one game played, one finished,
+    /// and a header that showed only the first. Half a week is worse than two
+    /// covers. **One** game is the fallback case now.
+    @Test func aWeekWithOneGameFallsBackToItsArt() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let ctx = makeContext()
+        let game = makeGame("A", status: .playing, sessions: [(recent, 600)], in: ctx)
+        game.coverURLString = "https://example.com/a.jpg"
+
+        let s = PlayerSummary.make(from: [game], now: now)
+        #expect(s.recentCovers.count == 1)
+        #expect(!s.usesRibbon)
+        #expect(s.fallbackBackdrop == "https://example.com/a.jpg")
+    }
+
+    /// And two now makes a ribbon.
+    @Test func twoGamesInAWeekMakeARibbon() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let recent = now.addingTimeInterval(-1 * 24 * 3600)
         let ctx = makeContext()
@@ -365,7 +382,7 @@ struct PlayerSummaryTests {
 
         let s = PlayerSummary.make(from: games, now: now)
         #expect(s.recentCovers.count == 2)
-        #expect(!s.usesRibbon)          // two is below the floor
+        #expect(s.usesRibbon)
     }
 
     @Test func aBusyWeekUsesTheRibbonMostRecentFirst() {
