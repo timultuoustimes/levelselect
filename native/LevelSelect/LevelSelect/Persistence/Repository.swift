@@ -81,7 +81,7 @@ struct Repository {
         game.coverImageID = igdb.coverImageID
         game.coverURLString = igdb.coverURLString
         game.franchise = igdb.franchise
-        game.firstReleaseDate = igdb.releaseDate
+        game.firstReleaseDate = igdb.storableReleaseDate
         game.summary = igdb.summary
         game.genres = igdb.genres
         game.themes = igdb.themes
@@ -114,7 +114,12 @@ struct Repository {
     func refreshFromIGDB(_ game: Game) async {
         guard let id = game.igdbID, let igdb = try? await IGDBService.lookup(id: id) else { return }
         if let s = igdb.summary, !s.isEmpty { game.summary = s }
-        if let date = igdb.releaseDate { game.firstReleaseDate = date }
+        // Only a real day is stored as a day. An imprecise IGDB answer is
+        // normalised to 1 January of its year, which is the app's existing
+        // shorthand for "the year is all we know" — see
+        // `MetadataRefresh.isYearOnly`. Storing IGDB's padded 30 December
+        // would make the wishlist promise a launch day nobody announced.
+        if let date = igdb.storableReleaseDate { game.firstReleaseDate = date }
         if let f = igdb.franchise { game.franchise = f }
         if let cover = igdb.coverImageID { game.coverImageID = cover; game.coverURLString = igdb.coverURLString }
         if !igdb.developers.isEmpty { game.developers = igdb.developers }

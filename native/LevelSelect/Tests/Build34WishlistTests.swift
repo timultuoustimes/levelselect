@@ -20,7 +20,11 @@ struct Build34WishlistTests {
                  summary: "A game.", gameType: 0, platforms: [], genres: [],
                  themes: [], gameModes: [], playerPerspectives: [],
                  developers: [], publishers: [],
-                 releaseTimestamp: release.timeIntervalSince1970)
+                 releaseTimestamp: release.timeIntervalSince1970,
+                 // Explicit: without IGDB's own exact-day category the date is
+                 // collapsed to 1 January, which is the whole point of the
+                 // precision work — a padded timestamp is not an announcement.
+                 releasePrecision: .day)
     }
 
     /// The split that makes the tab itself: a game you could buy this
@@ -149,7 +153,7 @@ struct Build34WishlistTests {
             franchise: nil, releaseYear: 2026, summary: nil, gameType: 0,
             platforms: [], genres: [], themes: [], gameModes: [],
             playerPerspectives: [], developers: [], publishers: [],
-            releaseTimestamp: feb27.timeIntervalSince1970)
+            releaseTimestamp: feb27.timeIntervalSince1970, releasePrecision: .day)
 
         let parts = Calendar.current.dateComponents([.year, .month, .day], from: game.releaseDate!)
         #expect(parts.month == 2)
@@ -214,6 +218,38 @@ struct Build34WishlistTests {
         _ = MetadataRefresh.fill(game, from: igdbAnswer(id: 43, name: "Slipped", release: nextYear))
 
         #expect(Calendar.current.component(.year, from: game.firstReleaseDate!) == 2026)
+    }
+
+    /// IGDB pads imprecise dates to real timestamps — a year-only entry can
+    /// arrive as **30 December**. The Ocarina remake came through exactly that
+    /// way and the wishlist printed "Dec 30, 2026" as a launch day for a game
+    /// with no announced date. Only IGDB's own exact-day category is trusted.
+    @Test func aPaddedTimestampIsNotALaunchDay() {
+        let dec30 = Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 30))!
+        let padded = IGDBGame(
+            id: 9, name: "Ocarina of Time", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2026, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: dec30.timeIntervalSince1970, releasePrecision: .year)
+
+        let stored = padded.storableReleaseDate!
+        let parts = Calendar.current.dateComponents([.year, .month, .day], from: stored)
+        #expect(parts.year == 2026)
+        #expect(parts.month == 1)   // collapsed to the app's year-only shorthand
+        #expect(parts.day == 1)
+        #expect(MetadataRefresh.isYearOnly(stored))
+    }
+
+    /// A genuine day survives untouched.
+    @Test func anExactDayIsKept() {
+        let mar5 = Calendar.current.date(from: DateComponents(year: 2027, month: 3, day: 5))!
+        let exact = IGDBGame(
+            id: 10, name: "Something", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2027, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: mar5.timeIntervalSince1970, releasePrecision: .day)
+
+        #expect(Calendar.current.component(.day, from: exact.storableReleaseDate!) == 5)
     }
 
     // MARK: Deku, and what the library already knows

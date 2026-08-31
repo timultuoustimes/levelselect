@@ -322,11 +322,11 @@ enum MetadataRefresh {
     static func fill(_ game: Game, from igdb: IGDBGame) -> Set<Field> {
         var filled: Set<Field> = []
 
-        if isMissing(game.firstReleaseDate), let date = igdb.releaseDate {
+        if isMissing(game.firstReleaseDate), let date = igdb.storableReleaseDate {
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
         } else if awaitsAnnouncedDate(game.firstReleaseDate),
-                  let date = igdb.releaseDate, !isYearOnly(date),
+                  let date = igdb.storableReleaseDate, !isYearOnly(date),
                   Calendar.current.component(.year, from: date)
                     == Calendar.current.component(.year, from: game.firstReleaseDate!) {
             // The day got announced. Same year only, so a fuzzy answer can

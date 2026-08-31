@@ -87,6 +87,21 @@ struct WishlistTab: View {
     /// Scales with text size for the same reason the other browsing grids do.
     @ScaledMetric(relativeTo: .caption2) private var cellWidth: CGFloat = 105
 
+    // Deliberately NOT Library's keys. The wishlist is a handful of games you
+    // are deciding about; Library is a shelf of 174 you are looking through.
+    // Wanting big covers here and a dense grid there is a coherent taste, and
+    // sharing one key would make it unexpressible.
+    @AppStorage("wishlistViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
+    @AppStorage("wishlistGridSize") private var gridSizeRaw = GridSize.medium.rawValue
+
+    private var viewMode: LibraryViewMode {
+        // Shelves is Library's answer to grouping. The wishlist always groups
+        // — by whether a game is out — so the mode would mean nothing here.
+        let stored = LibraryViewMode(rawValue: viewModeRaw) ?? .grid
+        return stored == .shelves ? .grid : stored
+    }
+    private var gridSize: GridSize { GridSize(rawValue: gridSizeRaw) ?? .medium }
+
     private var isSplit: Bool { horizontalSizeClass == .regular }
 
     var body: some View {
@@ -138,8 +153,25 @@ struct WishlistTab: View {
                                 Label(option.label, systemImage: option.systemImage).tag(option)
                             }
                         }
+                        Divider()
+                        Picker("View", selection: $viewModeRaw) {
+                            // No Shelves: the wishlist always groups by
+                            // whether a game is out, so the mode has nothing
+                            // left to mean here.
+                            ForEach(LibraryViewMode.allCases.filter { $0 != .shelves },
+                                    id: \.rawValue) { mode in
+                                Label(mode.label, systemImage: mode.icon).tag(mode.rawValue)
+                            }
+                        }
+                        if viewMode == .grid {
+                            Picker("Grid Size", selection: $gridSizeRaw) {
+                                ForEach(GridSize.allCases, id: \.rawValue) { size in
+                                    Text(size.label).tag(size.rawValue)
+                                }
+                            }
+                        }
                     } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                        Label("Sort & View", systemImage: "arrow.up.arrow.down")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -231,7 +263,10 @@ struct WishlistTab: View {
                             section("No date yet", undated, showsDate: false, icon: "calendar.badge.clock")
                         }
                         if !out.isEmpty {
-                            section("Out now", out, showsDate: false, icon: "bag")
+                            // Released games carry their date too — knowing a
+                            // wanted game came out in February is the same
+                            // kind of useful as knowing one lands in November.
+                            section("Out now", out, showsDate: true, icon: "bag")
                         }
                     } else {
                         // "6 games" is a measurement. Every other tab's
@@ -242,7 +277,7 @@ struct WishlistTab: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.horizontal)
-                        grid(mine, showsDate: !soon.isEmpty)
+                        grid(mine, showsDate: true)
                     }
                 }
                 .padding(.vertical)
@@ -270,8 +305,24 @@ struct WishlistTab: View {
         }
     }
 
+    @ViewBuilder
     private func grid(_ games: [Game], showsDate: Bool) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
+        if viewMode == .list {
+            VStack(spacing: 0) {
+                ForEach(games) { game in
+                    NavigationLink(value: game) { GameRow(game: game) }
+                        .buttonStyle(.plain)
+                        .gameContextMenu(game)
+                }
+            }
+            .padding(.horizontal)
+        } else {
+            coverGrid(games, showsDate: showsDate)
+        }
+    }
+
+    private func coverGrid(_ games: [Game], showsDate: Bool) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: max(gridSize.minWidth, 76)), spacing: 12)],
                   spacing: 16) {
             ForEach(games) { game in
                 NavigationLink(value: game) {
@@ -281,7 +332,7 @@ struct WishlistTab: View {
                     // Every cover collapsed from 105pt to about 40 and showed
                     // its placeholder glyph, which read as broken artwork.
                     VStack(alignment: .leading, spacing: 3) {
-                        LibraryGridCell(game: game, size: .medium)
+                        LibraryGridCell(game: game, size: gridSize)
                         // The date is the whole point of the section, so it
                         // goes on the cell rather than only in the heading.
                         if showsDate, let date = game.firstReleaseDate,
