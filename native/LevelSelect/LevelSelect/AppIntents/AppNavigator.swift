@@ -111,6 +111,21 @@ final class AppNavigator {
         newCollectionRequest += 1
     }
 
+    /// ⌘F focuses the search field on the tab you are already on — Library
+    /// and Wishlist each have their own, and jumping you to Library from a
+    /// wishlist you were searching would be the wrong kind of helpful.
+    ///
+    /// From Home or Stats, which have no search, it goes to Library: that way
+    /// ⌘F always means "find a game" rather than sometimes meaning nothing.
+    var searchRequest = 0
+
+    func requestSearch() {
+        if selectedTab != .library && selectedTab != .wishlist {
+            selectedTab = .library
+        }
+        searchRequest += 1
+    }
+
     func requestClearFilters() {
         selectedTab = .library
         clearFiltersRequest += 1

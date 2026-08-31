@@ -26,6 +26,8 @@ struct LibraryTab: View {
     /// the sheet just closed and left them at their old scroll position with
     /// no sign the tap had done anything.
     @State private var path = NavigationPath()
+    /// Driven by ⌘F from the menu bar. See LevelSelectCommands.
+    @FocusState private var searchFocused: Bool
 
     private enum LibrarySheet: String, Identifiable {
         case addGame, collectionTemplates
@@ -64,6 +66,7 @@ struct LibraryTab: View {
                 newCollectionName = ""
                 newCollection = true
             }
+            .onChange(of: nav.searchRequest) { _, _ in searchFocused = true }
             .onChange(of: nav.clearFiltersRequest) { _, _ in
                 statusFilter = nil
                 platformFilter = nil
@@ -100,6 +103,7 @@ struct LibraryTab: View {
                         placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search games, studios, genres")
             #endif
+            .searchFocused($searchFocused)
             .toolbar { toolbarContent }
             // Glass, like Home. Each tab owns its own NavigationStack, so the
             // window toolbar is configured per tab — Home alone was hidden and

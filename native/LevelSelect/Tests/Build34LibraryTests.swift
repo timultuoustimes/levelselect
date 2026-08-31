@@ -122,6 +122,32 @@ struct Build34LibraryTests {
         #expect(nav.addGameRequest == before + 2)
     }
 
+    /// ⌘F focuses the field on the tab you are already on — Wishlist has its
+    /// own search, and being thrown to Library mid-wishlist-search would be
+    /// the wrong kind of helpful.
+    @Test func findStaysOnATabThatHasItsOwnSearch() {
+        let nav = AppNavigator.shared
+        nav.selectedTab = .wishlist
+        nav.requestSearch()
+        #expect(nav.selectedTab == .wishlist)
+
+        nav.selectedTab = .library
+        nav.requestSearch()
+        #expect(nav.selectedTab == .library)
+    }
+
+    /// From Home or Stats, which have no search at all, ⌘F goes to Library —
+    /// so the shortcut always means "find a game" rather than sometimes
+    /// meaning nothing.
+    @Test func findGoesToLibraryFromATabWithNoSearch() {
+        let nav = AppNavigator.shared
+        for tab in [LSTab.home, .stats] {
+            nav.selectedTab = tab
+            nav.requestSearch()
+            #expect(nav.selectedTab == .library)
+        }
+    }
+
     /// Both library commands move you to Library first: a collection created
     /// on a tab that cannot show it reads as the command having done nothing.
     @Test func theLibraryCommandsGoToLibraryFirst() {

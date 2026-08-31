@@ -79,6 +79,9 @@ struct WishlistTab: View {
     @State private var paneURL: URL = DekuLinks.home
     @State private var sidebarShowsSite = false
     @State private var urlInput = ""
+    /// Driven by ⌘F from the menu bar. See LevelSelectCommands — Wishlist has
+    /// its own search, so ⌘F focuses THIS one rather than sending you away.
+    @FocusState private var searchFocused: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Scales with text size for the same reason the other browsing grids do.
@@ -112,6 +115,8 @@ struct WishlistTab: View {
             .navigationTitle("Wishlist")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .searchable(text: $searchText, prompt: "Search wishlist")
+            .searchFocused($searchFocused)
+            .onChange(of: AppNavigator.shared.searchRequest) { _, _ in searchFocused = true }
             // Glass, like Home — see LibraryView.
             #if os(macOS)
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)

@@ -38,6 +38,14 @@ struct LevelSelectCommands: Commands {
                 .keyboardShortcut(",")
         }
 
+        // Find belongs in Edit, beside the pasteboard items, which is where
+        // every Mac app puts it and where the muscle memory looks.
+        CommandGroup(after: .pasteboard) {
+            Divider()
+            Button("Find a Game") { nav.requestSearch() }
+                .keyboardShortcut("f")
+        }
+
         // Sits with the system's own View items (sidebar, toolbar) rather than
         // in a menu of its own, because that is what these are.
         CommandGroup(after: .toolbar) {
