@@ -97,7 +97,16 @@ struct WishlistTab: View {
                         yours
                         Divider()
                         dekuSidebar
-                            .frame(width: 380)
+                            // Narrower until it has something to show.
+                            //
+                            // 380pt is the width of Deku's LIST — covers,
+                            // prices, names. Unconnected, the same 380pt held
+                            // a "paste your link here" card, so on a Mac
+                            // window half the tab was setup instructions
+                            // sitting beside six games. An invitation can be
+                            // an invitation without taking a list's worth of
+                            // room.
+                            .frame(width: store.isConfigured ? 380 : 260)
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -202,28 +211,76 @@ struct WishlistTab: View {
                 }
                 .padding(.top, 40)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("\(mine.count) \(mine.count == 1 ? "game" : "games")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
-                              spacing: 16) {
-                        ForEach(mine) { game in
-                            NavigationLink(value: game) {
-                                LibraryGridCell(game: game, size: .medium)
-                            }
-                            .buttonStyle(PressableCardStyle())
-                            .gameContextMenu(game)
-                        }
+                VStack(alignment: .leading, spacing: 18) {
+                    // Coming soon leads, because it is the only thing in the
+                    // app that is about the future. Headings appear only when
+                    // there is a distinction to draw — one section with a
+                    // label above it is a label for nothing.
+                    let soon = WishlistShelf.comingSoon(mine)
+                    let out = WishlistShelf.outNow(mine)
+                    if !soon.isEmpty && !out.isEmpty {
+                        section("Coming soon", soon, showsDate: true, icon: "calendar")
+                        section("Out now", out, showsDate: false, icon: "bag")
+                    } else {
+                        // "6 games" is a measurement. Every other tab's
+                        // heading says what the things ARE — Now Playing,
+                        // Always Around — and this is the one tab whose
+                        // contents are defined by not being yours yet.
+                        Text("\(mine.count) \(mine.count == 1 ? "game" : "games") you want")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                        grid(mine, showsDate: !out.isEmpty ? false : true)
                     }
-                    .padding(.horizontal)
                 }
                 .padding(.vertical)
             }
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func section(_ title: String, _ games: [Game],
+                         showsDate: Bool, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(LSTheme.accent)
+                    .frame(width: 22)
+                Text(title).font(.headline)
+                Text("(\(games.count))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal)
+            grid(games, showsDate: showsDate)
+        }
+    }
+
+    private func grid(_ games: [Game], showsDate: Bool) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
+                  spacing: 16) {
+            ForEach(games) { game in
+                NavigationLink(value: game) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        LibraryGridCell(game: game, size: .medium)
+                        // The date is the whole point of the section, so it
+                        // goes on the cell rather than only in the heading.
+                        if showsDate, let date = game.firstReleaseDate,
+                           !MetadataRefresh.isMissing(date) {
+                            Text(WishlistShelf.releaseLabel(date))
+                                .font(.caption2)
+                                .foregroundStyle(LSTheme.accent)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .buttonStyle(PressableCardStyle())
+                .gameContextMenu(game)
+            }
+        }
+        .padding(.horizontal)
     }
 
     // MARK: Deku
