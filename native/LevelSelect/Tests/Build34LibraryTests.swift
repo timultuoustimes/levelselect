@@ -309,6 +309,48 @@ struct Build34LibraryTests {
         #expect(RecentlyBeaten.games(from: [game]).isEmpty)
     }
 
+    // MARK: Refreshing platforms
+
+    /// Cities: Skylines was added on Mac, knew about Mac and nothing else, and
+    /// Refresh changed nothing — because refresh skipped `platforms` entirely
+    /// to avoid clobbering position zero, which is the ownership record.
+    @Test func refreshFillsInThePlatformsAGameShippedOn() {
+        let merged = Repository.mergePlatforms(
+            existing: ["Mac"],
+            igdb: ["PC (Microsoft Windows)", "Mac", "PlayStation 4", "Xbox One", "Nintendo Switch"])
+
+        // Yours stays first — every label and grouping reads position zero.
+        #expect(merged.first == "Mac")
+        #expect(merged.contains("Nintendo Switch"))
+        #expect(merged.count == 5)
+    }
+
+    /// Your spelling wins on collision. "PC" and "PC (Microsoft Windows)" are
+    /// one console, and two rows for one console is the exact bug
+    /// `PlatformShort` exists to prevent.
+    @Test func refreshDoesNotDuplicateAConsoleUnderTwoNames() {
+        let merged = Repository.mergePlatforms(
+            existing: ["PC"], igdb: ["PC (Microsoft Windows)", "Mac"])
+
+        #expect(merged == ["PC", "Mac"])
+    }
+
+    /// Emulation and unlisted ports are real, and a refresh that quietly
+    /// deleted them would punish the people most likely to press it.
+    @Test func refreshKeepsPlatformsIGDBHasNeverHeardOf() {
+        let merged = Repository.mergePlatforms(
+            existing: ["Recalbox", "Mac"], igdb: ["Mac", "PC (Microsoft Windows)"])
+
+        #expect(merged.first == "Recalbox")
+        #expect(merged.contains("Mac"))
+        #expect(merged.contains("PC (Microsoft Windows)"))
+    }
+
+    /// A game IGDB knows nothing about keeps whatever it has.
+    @Test func aGameWithNoIGDBPlatformsIsLeftAlone() {
+        #expect(Repository.mergePlatforms(existing: ["itch.io"], igdb: []) == ["itch.io"])
+    }
+
     // MARK: The menu bar
 
     /// ⌘1–⌘4 are assigned by tab-bar position, so the number pressed matches

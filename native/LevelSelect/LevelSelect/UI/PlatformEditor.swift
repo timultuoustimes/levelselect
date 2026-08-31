@@ -26,6 +26,13 @@ enum PlatformCatalog {
 /// console icon; "Other…" still allows a genuinely new platform.
 struct PlatformEditor: View {
     @Binding var platforms: [String]
+    /// True when this game's list comes from IGDB and can be trusted to say
+    /// what it actually shipped on. The catalog then sits behind a submenu
+    /// rather than at the top level — Cities: Skylines offering Game Boy, NES
+    /// and Genesis as one-tap options is noise, and it buries the handful of
+    /// consoles the game exists on. A hand-added game has no such list, so
+    /// there the catalog IS the answer and stays where it was.
+    var listIsAuthoritative = false
 
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
     private var allGames: [Game]
@@ -46,16 +53,17 @@ struct PlatformEditor: View {
             }
 
             Menu {
-                ForEach(available, id: \.self) { platform in
-                    Button {
-                        platforms.append(platform)
+                if listIsAuthoritative {
+                    // Emulation and unlisted ports are real, so this is a
+                    // submenu rather than a removal — one step further away,
+                    // not gone.
+                    Menu {
+                        catalogButtons
                     } label: {
-                        if let asset = PlatformIcon.assetName(platform) {
-                            Label { Text(PlatformShort.name(platform)) } icon: { Image(asset) }
-                        } else {
-                            Label(PlatformShort.name(platform), systemImage: "gamecontroller")
-                        }
+                        Label("Another console…", systemImage: "gamecontroller")
                     }
+                } else {
+                    catalogButtons
                 }
                 Divider()
                 Button { addingCustom = true } label: {
@@ -113,6 +121,21 @@ struct PlatformEditor: View {
             platforms.insert(platform, at: 0)
         }
         .accessibilityHint(isMine ? "" : "Double tap to mark as the platform you own")
+    }
+
+    @ViewBuilder
+    private var catalogButtons: some View {
+        ForEach(available, id: \.self) { platform in
+            Button {
+                platforms.append(platform)
+            } label: {
+                if let asset = PlatformIcon.assetName(platform) {
+                    Label { Text(PlatformShort.name(platform)) } icon: { Image(asset) }
+                } else {
+                    Label(PlatformShort.name(platform), systemImage: "gamecontroller")
+                }
+            }
+        }
     }
 
     // MARK: Options

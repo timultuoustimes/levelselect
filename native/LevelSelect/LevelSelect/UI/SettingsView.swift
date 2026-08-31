@@ -83,19 +83,40 @@ struct SettingsView: View {
                     .buttonStyle(.plain)
                 }
 
-                Section("Library") {
+                // Two groups, because these settings answer two different
+                // questions and were interleaved.
+                //
+                // Tim asked whether each tab should get its own settings
+                // button. The answer was no — Library's Sort & View menu
+                // already IS its per-tab settings, one tap from what it
+                // affects — but the observation underneath was right: things
+                // about YOUR GAMES (tracker layout, critic scores, achievement
+                // badges) were sitting among things about THE APP (accent
+                // colour, iCloud, this device) with nothing marking the
+                // difference. Grouping them costs no new surface.
+                SettingsGroupHeader(
+                    "Your library",
+                    "How your games are shown, and where their information comes from.")
+
+                Section {
                     LabeledContent("Games", value: "\(games.count)")
                 }
 
-                SyncStatusSection()
-
-                AppearanceSettingsSection()
+                AppearanceSettingsSection(scope: .gamePages)
 
                 CriticScoreSettings()
 
                 RetroAchievementsSettings()
 
                 DataSettingsSection()
+
+                SettingsGroupHeader(
+                    "This app",
+                    "How LevelSelect looks and syncs, across your devices.")
+
+                AppearanceSettingsSection(scope: .personalization)
+
+                SyncStatusSection()
 
                 #if LEGACY_IMPORT
                 Section {
@@ -361,4 +382,38 @@ struct SettingsView: View {
         }
     }
     #endif
+}
+
+
+/// The boundary between Settings' two groups.
+///
+/// A plain row rather than a `Section` header: real headers already label the
+/// sections inside each group ("Personalization", "Game pages & trackers"),
+/// and nesting a header inside a header reads as a mistake. This is the
+/// heading those headers sit under.
+struct SettingsGroupHeader: View {
+    let title: String
+    let subtitle: String
+
+    init(_ title: String, _ subtitle: String) {
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.title3.bold())
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 14)
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
+        .accessibilityAddTraits(.isHeader)
+    }
 }

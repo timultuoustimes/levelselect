@@ -1468,7 +1468,10 @@ struct GameDetailView: View {
                 labeledField("Developer", text: firstElementBinding(\.developers))
                 labeledField("Publisher", text: firstElementBinding(\.publishers))
             }
-            PlatformEditor(platforms: $game.platforms)
+            // A game IGDB knows carries IGDB's own platform list, so the
+            // catalog is the exception rather than the menu.
+            PlatformEditor(platforms: $game.platforms,
+                           listIsAuthoritative: game.igdbID != nil && !game.platforms.isEmpty)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)

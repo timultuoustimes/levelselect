@@ -101,8 +101,16 @@ struct Repository {
 
     /// Re-pull metadata from IGDB by id — fixes legacy data (summaries the web
     /// app capped at 200 chars, bad release dates) and refreshes dev/genre/etc.
-    /// Never touches user data (status, rating, ownership, notes) or the user's
-    /// chosen `platforms`.
+    /// Never touches user data (status, rating, ownership, notes).
+    ///
+    /// It used to skip `platforms` entirely, because position zero is the
+    /// platform you own and replacing the array would throw that away. The
+    /// cost was that a game kept whatever list it was born with forever:
+    /// Cities: Skylines, added on Mac, knew about Mac and nothing else, and
+    /// Refresh changed nothing — so there was no way to say you also had it on
+    /// Switch except by typing consoles in by hand from a menu offering every
+    /// console ever made. Merged now: your platform stays first, IGDB fills in
+    /// the rest, and anything you added yourself survives.
     func refreshFromIGDB(_ game: Game) async {
         guard let id = game.igdbID, let igdb = try? await IGDBService.lookup(id: id) else { return }
         if let s = igdb.summary, !s.isEmpty { game.summary = s }
@@ -115,8 +123,32 @@ struct Repository {
         if !igdb.themes.isEmpty { game.themes = igdb.themes }
         if !igdb.gameModes.isEmpty { game.gameModes = igdb.gameModes }
         if !igdb.playerPerspectives.isEmpty { game.playerPerspectives = igdb.playerPerspectives }
+        if !igdb.platforms.isEmpty {
+            game.platforms = Self.mergePlatforms(existing: game.platforms, igdb: igdb.platforms)
+        }
         touch(game)
         persist()
+    }
+
+    /// Availability from IGDB, ownership from the user, neither overwriting
+    /// the other.
+    ///
+    /// - Position zero is preserved: it is the record of a choice, and every
+    ///   label, grouping and filter in the app reads it as "the one you own".
+    /// - The user's spelling wins on collision. Someone who stored "PC" should
+    ///   not end up with both "PC" and "PC (Microsoft Windows)" — two rows for
+    ///   one console is the exact bug `PlatformShort` exists to prevent.
+    /// - Hand-added platforms IGDB has never heard of survive. Emulation and
+    ///   unlisted ports are real, and a refresh that silently deleted them
+    ///   would punish the people most likely to press it.
+    static func mergePlatforms(existing: [String], igdb: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for platform in existing + igdb
+        where seen.insert(PlatformCatalog.normalize(platform)).inserted {
+            out.append(platform)
+        }
+        return out
     }
 
     // MARK: Library-wide metadata fill

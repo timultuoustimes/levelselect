@@ -5,6 +5,15 @@ import SwiftData
 /// and the game-page backdrop choice. Stored in a synced SwiftData record so
 /// choices follow the iCloud account across devices.
 struct AppearanceSettingsSection: View {
+    /// Which half to render.
+    ///
+    /// The two halves belong to different GROUPS in Settings, not just
+    /// different sections: theming is about the app, while tracker layout and
+    /// badges are about your games. They still share this view's state and
+    /// helpers, so the split is a parameter rather than a second type.
+    enum Scope { case personalization, gamePages }
+    var scope: Scope = .personalization
+
     @Environment(\.modelContext) private var context
     @Query private var themeSettings: [ThemeSettings]
     /// Device-local, not synced: it's a display preference, like stats order.
@@ -33,12 +42,16 @@ struct AppearanceSettingsSection: View {
         // beside them — and the theming half is the part the notebook
         // direction expects to keep growing, so it needs room of its own.
         // Split per the 2026-08-28 settings audit.
-        personalization
-            .onDisappear { flushThemeCommit() }
-        gamePagesAndTrackers
-            .sheet(isPresented: $arrangingPages) {
-                GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
-            }
+        switch scope {
+        case .personalization:
+            personalization
+                .onDisappear { flushThemeCommit() }
+        case .gamePages:
+            gamePagesAndTrackers
+                .sheet(isPresented: $arrangingPages) {
+                    GameArrangeSheet(orderRaw: $sectionOrderRaw, hiddenRaw: $hiddenSectionsRaw)
+                }
+        }
     }
 
     private var personalization: some View {
