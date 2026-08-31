@@ -1231,7 +1231,7 @@ struct GameDetailView: View {
                 Image(systemName: game.status.systemImage)
                     .foregroundStyle(game.status.color)
                 Text(game.status.label)
-                if let platform = PlatformPreference.owned(game.platforms) {
+                if let platform = game.primaryOwnedPlatform {
                     Text("·").foregroundStyle(.tertiary)
                     PlatformIconView(platform: platform, size: 20)
                     Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
@@ -1477,6 +1477,9 @@ struct GameDetailView: View {
             // catalog behind a submenu on exactly the game that needed it
             // most. Two or more means a merge has happened.
             PlatformEditor(platforms: $game.platforms,
+                           owned: Binding(
+                            get: { game.ownedPlatformNames },
+                            set: { game.ownedPlatforms = $0 }),
                            listIsAuthoritative: game.igdbID != nil && game.platforms.count > 1)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
@@ -1599,12 +1602,12 @@ struct GameDetailView: View {
     /// there's a Switch port. But the one you own is the one that's *yours*,
     /// and an undifferentiated row of three said nothing about which.
     private var platformsGroup: some View {
-        let mine = PlatformPreference.owned(game.platforms)
+        let mine = Set(game.ownedPlatformNames)
         return VStack(alignment: .leading, spacing: 6) {
             Text("Platforms").font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {
                 ForEach(game.platforms, id: \.self) { platform in
-                    if platform == mine {
+                    if mine.contains(platform) {
                         HStack(spacing: 5) {
                             PlatformIconView(platform: platform, size: 14)
                             Text(platform)

@@ -11,12 +11,13 @@ struct PlatformRoute: Hashable {
     let platform: String
     var ownership: OwnershipFilter? = nil
 
-    /// Grouped by the game's most-PREFERRED owned platform, the same rule the
-    /// shelf counts by — so a multi-platform game lands on one console page,
-    /// not all of them.
+    /// On this console's page if you own it on this console — which since
+    /// Schema V3 can be more than one, so a game bought twice appears on both
+    /// pages. Games with nothing recorded fall to "Other", matching the shelf.
     static func matches(_ game: Game, platform: String, ownership: OwnershipFilter?) -> Bool {
-        (PlatformPreference.owned(game.platforms) ?? "Other") == platform
-        && (ownership?.matches(game) ?? true)
+        let owned = game.ownedPlatformNames
+        let mine = owned.isEmpty ? ["Other"] : owned
+        return mine.contains(platform) && (ownership?.matches(game) ?? true)
     }
 }
 

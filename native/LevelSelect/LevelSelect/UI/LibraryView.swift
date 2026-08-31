@@ -196,9 +196,20 @@ struct LibraryTab: View {
     /// largest groups first. Counts follow the CURRENT filters, unlike Home's
     /// which always counted the whole library — here the shelf sits inside a
     /// filtered view and should agree with what's on screen.
+    /// Counted per console you own the game ON, so a game owned on two stands
+    /// on both shelves. The counts therefore sum to more than the library, the
+    /// same way the ownership chips do — and for the same reason: these are
+    /// facts about copies, not a partition of the games.
     private var platformGroups: [(platform: String, count: Int)] {
-        Dictionary(grouping: visible) { PlatformPreference.owned($0.platforms) ?? "Other" }
-            .map { (platform: $0.key, count: $0.value.count) }
+        var counts: [String: Int] = [:]
+        for game in visible {
+            let owned = game.ownedPlatformNames
+            for platform in (owned.isEmpty ? ["Other"] : owned) {
+                counts[platform, default: 0] += 1
+            }
+        }
+        return counts
+            .map { (platform: $0.key, count: $0.value) }
             .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
     }
 
@@ -432,17 +443,24 @@ struct LibraryTab: View {
             // raw value put "Nintendo Switch 2" and "Switch 2" in separate
             // buckets that then rendered the same heading twice, one with 14
             // games and one with 3, with nothing on screen to tell them apart.
-            let byPlatform = Dictionary(grouping: visible) {
-                PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other")
+            // A game owned on two consoles appears under both headings. It
+            // is one game seen from two shelves, not a duplicate — which is
+            // why this builds membership rather than partitioning with
+            // `Dictionary(grouping:)`.
+            var byPlatform: [String: (raw: String, items: [Game])] = [:]
+            for game in visible {
+                let owned = game.ownedPlatformNames
+                for platform in (owned.isEmpty ? ["Other"] : owned) {
+                    let short = PlatformShort.name(platform)
+                    var entry = byPlatform[short] ?? (raw: platform, items: [])
+                    entry.items.append(game)
+                    byPlatform[short] = entry
+                }
             }
             return byPlatform
-                .map { short, items in
-                    // Any member's raw value will do for the icon — they all
-                    // shorten to this heading, and PlatformIcon matches both
-                    // vocabularies anyway.
-                    let raw = items.compactMap { PlatformPreference.owned($0.platforms) }.first
-                    return LibGroup(title: short, status: nil, platform: raw,
-                                    items: items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
+                .map { short, entry in
+                    LibGroup(title: short, status: nil, platform: entry.raw,
+                             items: entry.items.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending })
                 }
                 .sorted { ($1.items.count, $0.title) < ($0.items.count, $1.title) }
         default:
@@ -576,9 +594,7 @@ struct LibraryTab: View {
     /// sitting in a list titled "your systems". The shelf beside it always
     /// counted the owned platform only, so the two disagreed.
     private var allPlatforms: [(short: String, icon: String)] {
-        PlatformShort.systems(in: games.compactMap {
-            PlatformPreference.owned($0.platforms).map { [$0] }
-        })
+        PlatformShort.systems(in: games.map(\.ownedPlatformNames))
     }
 
     private var anyFilterActive: Bool {
@@ -613,7 +629,7 @@ struct LibraryTab: View {
         // so picking "Switch 2" finds what is stored as "Nintendo Switch 2",
         // and picking "Linux" does not find a Switch game that merely also
         // shipped on Linux.
-        && (platformFilter == nil || PlatformShort.ownedMatches(g.platforms, short: platformFilter!))
+        && (platformFilter == nil || PlatformShort.ownedMatches(g.ownedPlatformNames, short: platformFilter!))
         && (ignoringOwnership || ownershipFilter?.matches(g) ?? true)
         && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
         && matchesSearch(g)
@@ -803,14 +819,13 @@ enum PlatformShort {
         platforms.contains { name($0) == short }
     }
 
-    /// Whether the platform this game is YOURS on is displayed as `short`.
+    /// Whether any platform this game is YOURS on is displayed as `short`.
     ///
-    /// Position zero is the platform picked when the game was added — see
-    /// `PlatformPreference.owned`. Crypt of the NecroDancer lists eight
-    /// platforms and is owned on one; the library filter means the one.
-    static func ownedMatches(_ platforms: [String], short: String) -> Bool {
-        guard let owned = PlatformPreference.owned(platforms) else { return false }
-        return name(owned) == short
+    /// Takes `Game.ownedPlatformNames`, not the whole availability list.
+    /// Crypt of the NecroDancer lists eight platforms and is owned on one or
+    /// two; the library filter means the ones you own.
+    static func ownedMatches(_ ownedNames: [String], short: String) -> Bool {
+        ownedNames.contains { name($0) == short }
     }
 }
 

@@ -835,7 +835,11 @@ struct StatsTab: View {
 
     /// Counted like the library groups: one preferred platform per game.
     private var platformCounts: [(String, Int)] {
-        let names = games.map { PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other") }
+        // The PRIMARY, not every console you own it on: a chart of "games per
+        // system" that counted one game twice would not sum to the library,
+        // and a bar chart carries no room to explain that. Revisit with the
+        // Stats identity pass, where the framing can be chosen deliberately.
+        let names = games.map { PlatformShort.name($0.primaryOwnedPlatform ?? "Other") }
         return Dictionary(grouping: names) { $0 }.mapValues(\.count)
             .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
     }

@@ -161,6 +161,10 @@ enum CloudKitSchemaSeeder {
         game.trackerDisplayRaw = TrackerDisplay.inline.rawValue
         game.showItemHintsOverride = true
         game.platforms = [marker]
+        // Schema V3. CloudKit types a field from what it observes, so a field
+        // never written is a field the container has never heard of — and
+        // writes to it fail forever after with CKErrorDomain error 2.
+        game.ownedPlatforms = [marker]
         game.ownership = [Ownership.physical.rawValue]
         game.userTags = [marker]
         game.genres = [marker]

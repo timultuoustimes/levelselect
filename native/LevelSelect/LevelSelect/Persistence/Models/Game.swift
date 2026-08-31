@@ -140,7 +140,22 @@ final class Game {
     var showItemHintsOverride: Bool?
 
     // Value metadata arrays
+    /// Every platform this game was released on — IGDB's availability list.
+    /// NOT a statement about you; see `ownedPlatforms`.
     var platforms: [String] = []
+    /// The platforms YOU own it on. Schema V3.
+    ///
+    /// Until this existed, ownership was encoded as **position zero** of
+    /// `platforms`, which meant exactly one console could be yours. Owning
+    /// Hades on both Switch and PC was unrepresentable — there is one index
+    /// zero — and buying a second copy silently moved the game rather than
+    /// adding to it.
+    ///
+    /// Optional because every game written before V3 has none. `nil` means
+    /// "never recorded", and `ownedPlatformNames` reads position zero for
+    /// those, which is precisely what the app meant at the time. Nothing
+    /// migrates on write; the fallback IS the migration.
+    var ownedPlatforms: [String]?
     /// How the game is owned (raw `Ownership` values; multi-select).
     var ownership: [String] = []
     var userTags: [String] = []
@@ -150,6 +165,21 @@ final class Game {
     var playerPerspectives: [String] = []
     var developers: [String] = []
     var publishers: [String] = []
+
+    /// The platforms you own this game on, for every era of the data.
+    ///
+    /// Pre-V3 games have no `ownedPlatforms`, and position zero of `platforms`
+    /// is what the app meant by "mine" then — so that is the fallback. Reading
+    /// through here means no caller has to know which era a game is from, and
+    /// nothing has to be rewritten on disk to make old rows correct.
+    var ownedPlatformNames: [String] {
+        if let owned = ownedPlatforms, !owned.isEmpty { return owned }
+        return platforms.first.map { [$0] } ?? []
+    }
+
+    /// One platform, for the places that can only show one — a row's subtitle,
+    /// a badge. The first you own, which for pre-V3 data is position zero.
+    var primaryOwnedPlatform: String? { ownedPlatformNames.first }
 
     // Relationships — all optional (CloudKit requires optional relationships).
     @Relationship(deleteRule: .cascade, inverse: \Playthrough.game)

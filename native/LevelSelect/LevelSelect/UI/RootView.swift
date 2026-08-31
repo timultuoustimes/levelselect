@@ -222,7 +222,7 @@ struct RootView: View {
             let statusOK = statuses.contains(g.status.rawValue)
                 || (includeCompleted && g.status == .completed)
             let platformOK = platform == nil
-                || PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other") == platform
+                || PlatformShort.ownedMatches(g.ownedPlatformNames, short: platform!)
             return statusOK && platformOK && g.status != .abandoned && g.status != .wishlist
         }
         if let pick = candidates.randomElement() {

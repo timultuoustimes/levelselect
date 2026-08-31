@@ -202,9 +202,9 @@ struct Build34LibraryTests {
         let game = Repository(context).addGame(name: "Crypt of the NecroDancer")
         game.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
 
-        #expect(PlatformShort.ownedMatches(game.platforms, short: "Switch"))
-        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Linux"))
-        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Vita"))
+        #expect(PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Switch"))
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Linux"))
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Vita"))
 
         // `matches` still answers the availability question, for callers that
         // genuinely mean it.
@@ -217,7 +217,7 @@ struct Build34LibraryTests {
         let game = Repository(context).addGame(name: "Some Jam Game")
         game.platforms = []
 
-        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Switch"))
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Switch"))
     }
 
     /// `platform-xbox-series` art shipped but was unreachable: bare "xbox"
@@ -406,6 +406,91 @@ struct Build34LibraryTests {
         game.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
 
         #expect(MetadataRefresh.missingFields(of: game).contains(.platforms) == false)
+    }
+
+    // MARK: Owning a game on more than one console
+
+    /// The limitation this field exists to remove. Ownership was position zero
+    /// of `platforms`, and there is one index zero — so owning Hades on both
+    /// Switch and PC was unrepresentable, and marking the second silently
+    /// unmarked the first.
+    @Test func aGameCanBeOwnedOnSeveralConsoles() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Hades")
+        game.platforms = ["Nintendo Switch", "PC (Microsoft Windows)", "PlayStation 4"]
+        game.ownedPlatforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+
+        #expect(game.ownedPlatformNames.count == 2)
+        #expect(PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Switch"))
+        #expect(PlatformShort.ownedMatches(game.ownedPlatformNames, short: "PC"))
+        // Released on it, but not yours.
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "PS4"))
+    }
+
+    /// The migration is the fallback, not a rewrite. Every game written before
+    /// V3 has `ownedPlatforms == nil`, and position zero is exactly what the
+    /// app meant by "mine" then — so nothing on disk has to change for old
+    /// rows to read correctly.
+    @Test func gamesFromBeforeTheSplitStillKnowWhatIsYours() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Cities: Skylines")
+        game.platforms = ["Mac", "PC (Microsoft Windows)", "PlayStation 4"]
+        game.ownedPlatforms = nil
+
+        #expect(game.ownedPlatformNames == ["Mac"])
+        #expect(game.primaryOwnedPlatform == "Mac")
+        #expect(PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Mac"))
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "PC"))
+    }
+
+    /// An empty array is treated as "never recorded" too, not as "I own this
+    /// on nothing" — a stored empty set would otherwise erase a pre-V3 game's
+    /// only ownership record the first time the editor round-tripped it.
+    @Test func anEmptyOwnedSetFallsBackRatherThanErasing() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Celeste")
+        game.platforms = ["Mac", "Nintendo Switch"]
+        game.ownedPlatforms = []
+
+        #expect(game.ownedPlatformNames == ["Mac"])
+    }
+
+    /// A game with no platforms at all owns nothing, and must not crash or
+    /// invent one.
+    @Test func aGameWithNoPlatformsOwnsNothing() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Some Jam Game")
+        game.platforms = []
+
+        #expect(game.ownedPlatformNames.isEmpty)
+        #expect(game.primaryOwnedPlatform == nil)
+    }
+
+    /// The console page shows a game you own on two consoles on BOTH pages.
+    /// One game seen from two shelves, not a duplicate.
+    @Test func aGameOwnedTwiceAppearsOnBothConsolePages() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Hades")
+        game.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+        game.ownedPlatforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+
+        #expect(PlatformRoute.matches(game, platform: "Nintendo Switch", ownership: nil))
+        #expect(PlatformRoute.matches(game, platform: "PC (Microsoft Windows)", ownership: nil))
+    }
+
+    /// Dropping a platform from the game must drop it from what you own on,
+    /// or the shelf keeps counting a console the game no longer lists.
+    @Test func removingAPlatformRemovesTheOwnershipToo() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Hades")
+        game.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+        game.ownedPlatforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+
+        // What PlatformEditor's remove button does.
+        game.platforms.removeAll { $0 == "PC (Microsoft Windows)" }
+        game.ownedPlatforms?.removeAll { $0 == "PC (Microsoft Windows)" }
+
+        #expect(game.ownedPlatformNames == ["Nintendo Switch"])
     }
 
     // MARK: The menu bar

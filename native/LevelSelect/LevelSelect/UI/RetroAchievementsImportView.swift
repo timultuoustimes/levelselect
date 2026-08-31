@@ -46,7 +46,7 @@ struct RetroAchievementsImportView: View {
 
             if !consoles.isEmpty {
                 Section("Which system?") {
-                    Text("RetroAchievements doesn't recognize \(PlatformPreference.owned(game.platforms) ?? "this platform"). Pick the system this copy runs on.")
+                    Text("RetroAchievements doesn't recognize \(game.primaryOwnedPlatform ?? "this platform"). Pick the system this copy runs on.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     ForEach(consoles) { console in
@@ -137,7 +137,7 @@ struct RetroAchievementsImportView: View {
         do {
             let result = try await RetroAchievementsService.search(
                 gameName: query,
-                platform: PlatformPreference.owned(game.platforms),
+                platform: game.primaryOwnedPlatform,
                 consoleID: chosenConsole)
             switch result {
             case .needsConsole(let list):
