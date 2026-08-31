@@ -185,9 +185,31 @@ struct SessionControlsView: View {
 
     private var recentSessions: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Recent — tap to edit")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+            HStack {
+                Text("Recent — tap to edit")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                // The way out of the five.
+                //
+                // Five is the right number HERE — "what have I been doing
+                // lately" wants five. But it was also the only list of
+                // sessions in the app, so on a long-running game everything
+                // older was unreachable and, since this row is the only route
+                // to EditSessionSheet, uneditable. Counts every playthrough,
+                // not just the active one, because that is what the history
+                // screen shows.
+                if liveSessions.count > 5 {
+                    NavigationLink {
+                        SessionHistoryView(game: game)
+                    } label: {
+                        Text("See all \(liveSessions.count)")
+                            .font(.subheadline)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LSTheme.accent)
+                }
+            }
             ForEach(sessions.prefix(5)) { s in
                 Button {
                     if s.state == .stopped { editing = s }

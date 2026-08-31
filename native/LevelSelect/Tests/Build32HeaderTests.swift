@@ -477,3 +477,77 @@ extension PlayerSummaryTests {
         #expect(PlayerSummary.make(from: [g]).fallbackBackdrop == "https://example.com/backdrop.jpg")
     }
 }
+
+@Suite("Session history")
+@MainActor
+struct SessionHistoryTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// Sessions on the given days, all in one playthrough.
+    private func sessions(_ days: [Int], in context: ModelContext,
+                          from anchor: Date) -> [Session] {
+        let game = Game(name: "Long one")
+        context.insert(game)
+        let pt = Playthrough()
+        context.insert(pt)
+        pt.game = game
+        let made = days.map { day -> Session in
+            let s = Session()
+            context.insert(s)
+            s.startDate = anchor.addingTimeInterval(-Double(day) * 86_400)
+            s.endDate = s.startDate.addingTimeInterval(3600)
+            s.accumulatedDuration = 3600
+            s.state = .stopped
+            s.playthrough = pt
+            return s
+        }
+        pt.sessions = made
+        return made
+    }
+
+    /// A 63-hour game is the case this screen exists for: five rows on the
+    /// game page, and everything older unreachable until now.
+    @Test func groupsByMonthNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)   // mid-Jan 2027
+        let ctx = makeContext()
+        // Today, last month, and three months back.
+        let made = sessions([0, 40, 100], in: ctx, from: anchor)
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 3)
+        // Newest month leads, and the dates descend.
+        #expect(months[0].start > months[1].start)
+        #expect(months[1].start > months[2].start)
+    }
+
+    /// Sessions in the same month collapse into one section, and the section
+    /// carries that month's total — the question a month grouping invites.
+    @Test func oneSectionPerMonthWithItsOwnTotal() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([0, 1, 2], in: ctx, from: anchor)   // same month
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 1)
+        #expect(months[0].sessions.count == 3)
+        #expect(months[0].total == 3 * 3600)
+    }
+
+    /// Within a month, newest first — the query sorts, but grouping must not
+    /// undo it, and `Dictionary(grouping:)` gives no order guarantee.
+    @Test func sessionsInsideAMonthStayNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([5, 1, 3], in: ctx, from: anchor)
+        let inside = SessionMonth.group(made)[0].sessions
+        #expect(inside[0].startDate > inside[1].startDate)
+        #expect(inside[1].startDate > inside[2].startDate)
+    }
+
+    @Test func noSessionsIsNoMonths() {
+        #expect(SessionMonth.group([]).isEmpty)
+    }
+}
