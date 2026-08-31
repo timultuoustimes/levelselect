@@ -34,6 +34,13 @@ enum WishlistShelf {
         MetadataRefresh.isYearOnly(date, calendar: calendar)
     }
 
+    /// A calendar whose day boundaries match how release dates are stamped.
+    static let utc: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        return c
+    }()
+
     static func shelf(for game: Game, now: Date = .now,
                       calendar: Calendar = .current) -> Shelf {
         guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else {
@@ -76,7 +83,12 @@ enum WishlistShelf {
         if isYearOnly(date) {
             return String(calendar.component(.year, from: date))
         }
-        return date.formatted(.dateTime.month(.abbreviated).day().year())
+        // Formatted in UTC, because a release date is a CALENDAR DATE and not
+        // an instant. IGDB stamps them at UTC midnight, so rendering in a
+        // western timezone walks them back a day — Resident Evil Requiem
+        // launched on 27 February and the wishlist printed "Feb 26, 2026".
+        return date.formatted(Date.FormatStyle(timeZone: .gmt)
+            .month(.abbreviated).day().year())
     }
 
     /// How long until it lands — "in 6 days", "in 3 months".
