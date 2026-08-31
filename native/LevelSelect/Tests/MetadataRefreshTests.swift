@@ -260,7 +260,9 @@ struct MetadataRefreshTests {
             $0.franchise = "F"; $0.summary = "S"; $0.igdbSlug = "s"
             // Two, not one: a single-entry list is what the importers write,
             // and the fill now reads it as "never merged".
-            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+            // Three, not two: a shorter list is indistinguishable from an
+            // importer's fragment, so `plan` spends one lookup finding out.
+            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)", "Xbox One"]
         }
 
         let plan = MetadataRefresh.plan(for: [fillable, unmatched, complete])
@@ -415,7 +417,9 @@ struct MetadataRefreshTests {
             $0.franchise = "F"; $0.summary = "S"; $0.igdbSlug = "s"
             // Two, not one: a single-entry list is what the importers write,
             // and the fill now reads it as "never merged".
-            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+            // Three, not two: a shorter list is indistinguishable from an
+            // importer's fragment, so `plan` spends one lookup finding out.
+            $0.platforms = ["Nintendo Switch", "PC (Microsoft Windows)", "Xbox One"]
         }
 
         let result = await repo.fillMissingMetadata(in: [game])
@@ -485,7 +489,7 @@ struct MetadataPlanNoiseTests {
         g.developers = ["Dev"]; g.publishers = ["Pub"]
         g.summary = "A game."
         g.igdbSlug = "a-game"
-        g.platforms = ["Nintendo Switch", "PC (Microsoft Windows)"]
+        g.platforms = ["Nintendo Switch", "PC (Microsoft Windows)", "Xbox One"]
         return g
     }
 

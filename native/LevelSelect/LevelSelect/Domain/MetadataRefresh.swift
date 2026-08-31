@@ -150,7 +150,7 @@ enum MetadataRefresh {
             case .franchise:          "a series"
             case .summary:            "a description"
             case .slug:               "an IGDB link"
-            case .platforms:          "the other platforms it's on"
+            case .platforms:          "a platform list nobody has checked"
             }
         }
 
@@ -221,11 +221,19 @@ enum MetadataRefresh {
         if game.publishers.isEmpty { missing.insert(.publishers) }
         if (game.franchise ?? "").isEmpty { missing.insert(.franchise) }
         if isMissing(summary: game.summary) { missing.insert(.summary) }
-        // One entry is the signature of "added on a platform, never merged" —
-        // the importers write exactly that. A game genuinely exclusive to one
-        // console also reads as missing here, asks once, gains nothing, and is
-        // then marked checked for a month like any other fruitless lookup.
-        if game.platforms.count <= 1 { missing.insert(.platforms) }
+        // Platforms are deliberately NOT decided here — see `plan`.
+        //
+        // No count means "complete": only IGDB knows how many platforms a game
+        // shipped on, so any threshold is a guess about someone else's data.
+        // This used to read `count <= 1`, on the theory that one entry meant
+        // "never merged". Ball x Pit had TWO — Switch and iOS — so the pass
+        // skipped it and truthfully reported nothing to update, while a
+        // per-game Refresh immediately added more.
+        //
+        // Making it always-missing was worse: a library could then never be
+        // complete, and the pass would re-ask every game forever. The question
+        // is not "is this list short" but "has anyone ever asked", which is a
+        // fact about the RUN rather than the game, and `plan` holds it.
         return missing
     }
 
@@ -280,6 +288,14 @@ enum MetadataRefresh {
     /// permanently demanding a lookup was the sheet crying wolf.
     static let informational: Set<Field> = [.franchise]
 
+    /// A cheap "this list did not come from an importer" test, used only to
+    /// keep the FIRST pass over a fresh library from looking up every game
+    /// that obviously already has IGDB's answer. Deliberately generous: a
+    /// wrong guess here costs one lookup, which the run then remembers.
+    static func hasBeenAskedAbout(_ game: Game) -> Bool {
+        game.platforms.count >= 3
+    }
+
     /// How long "IGDB had nothing to add" stays believed before a game is
     /// worth asking about again. Upstream data does grow — a month is long
     /// enough to stop the sheet re-offering the same dead lookups every run,
@@ -320,6 +336,20 @@ enum MetadataRefresh {
             } else {
                 plan.unmatched.append(game)
             }
+        }
+
+        // A game nothing is missing from is still worth ONE lookup if IGDB has
+        // never been asked about it, because its platform list may be a
+        // fragment nobody can measure — see `missingFields`. Bounded, and it
+        // converges: the run marks every game it learns nothing new from, so
+        // the second pass over a library reports it complete and makes no
+        // requests at all.
+        for game in library where game.deletedAt == nil
+        && game.igdbID != nil && checked[game.id] == nil {
+            guard !plan.fillable.contains(where: { $0.id == game.id }) else { continue }
+            guard !MetadataRefresh.hasBeenAskedAbout(game) else { continue }
+            plan.complete = max(0, plan.complete - 1)
+            plan.fillable.append(game)
         }
         return plan
     }
@@ -388,7 +418,10 @@ enum MetadataRefresh {
             game.summary = summary
             filled.insert(.summary)
         }
-        if game.platforms.count <= 1, !igdb.platforms.isEmpty {
+        // Same reasoning as `missingFields`: merge whenever IGDB has anything,
+        // and let the "did it actually grow" check below decide whether that
+        // counted as filling a field.
+        if !igdb.platforms.isEmpty {
             let merged = mergedPlatforms(existing: game.platforms, igdb: igdb.platforms)
             // Only a real gain counts. A one-platform exclusive merges to
             // itself, and reporting that as a filled field would make the

@@ -398,8 +398,6 @@ struct Build34LibraryTests {
         game.platforms = ["Mac"]
         game.igdbID = 7788
 
-        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms))
-
         let igdb = igdbAnswer(id: 7788, name: "Celeste",
                               platforms: ["Linux", "Mac", "Nintendo Switch",
                                           "PC (Microsoft Windows)", "PlayStation 4", "Xbox One"])
@@ -408,7 +406,6 @@ struct Build34LibraryTests {
         #expect(filled.contains(.platforms))
         #expect(game.platforms.first == "Mac")
         #expect(game.platforms.contains("Nintendo Switch"))
-        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms) == false)
     }
 
     /// A one-platform exclusive merges to itself. Reporting that as filled
@@ -426,13 +423,49 @@ struct Build34LibraryTests {
         #expect(game.platforms == ["Nintendo Switch"])
     }
 
-    /// A game that already has a merged list is not offered as work.
-    @Test func anAlreadyMergedListIsNotMissing() {
+    /// **Ball x Pit, 2026-08-31.** It had TWO platforms — Switch and iOS — and
+    /// the pass skipped it, truthfully reporting nothing to update, while a
+    /// per-game Refresh immediately added more. The old test was
+    /// `count <= 1`; a CSV row can carry two, and any partial list passes a
+    /// count test.
+    ///
+    /// `missingFields` no longer answers this at all — it cannot know how many
+    /// platforms a game shipped on. `plan` asks the question it CAN answer:
+    /// has anyone ever looked this game up?
+    @Test func aShortPlatformListIsWorthOneLookup() {
         let context = makeContext()
-        let game = Repository(context).addGame(name: "Crypt of the NecroDancer")
-        game.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
+        let repo = Repository(context)
 
-        #expect(MetadataRefresh.missingFields(of: game).contains(.platforms) == false)
+        let ballXPit = repo.addGame(name: "Ball x Pit")
+        ballXPit.platforms = ["Nintendo Switch", "iOS"]
+        let merged = repo.addGame(name: "Crypt of the NecroDancer")
+        merged.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
+
+        // Neither is "missing" a platform list — that is unknowable.
+        #expect(!MetadataRefresh.missingFields(of: ballXPit).contains(.platforms))
+        // But a two-entry list has plainly never seen IGDB's answer.
+        #expect(!MetadataRefresh.hasBeenAskedAbout(ballXPit))
+        #expect(MetadataRefresh.hasBeenAskedAbout(merged))
+    }
+
+    /// And the plan acts on it: a game with nothing else missing still earns
+    /// one lookup when its list is a fragment — then converges, because the
+    /// run remembers what it learned nothing from.
+    @Test func aCompleteGameWithAShortListIsStillLookedUpOnce() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Ball x Pit")
+        game.igdbID = 77
+        game.platforms = ["Nintendo Switch", "iOS"]
+        game.firstReleaseDate = Date(timeIntervalSince1970: 1_700_000_000)
+        game.coverImageID = "c"; game.genres = ["Action"]; game.themes = ["Action"]
+        game.gameModes = ["Single player"]; game.playerPerspectives = ["Side view"]
+        game.developers = ["Dev"]; game.publishers = ["Pub"]
+        game.franchise = "F"; game.summary = "S"; game.igdbSlug = "s"
+
+        #expect(MetadataRefresh.plan(for: [game]).fillable.count == 1)
+        // Asked already? Then it rests.
+        #expect(MetadataRefresh.plan(for: [game], checked: [game.id: .now]).fillable.isEmpty)
     }
 
     // MARK: Owning a game on more than one console
