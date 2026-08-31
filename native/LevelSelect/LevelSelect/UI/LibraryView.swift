@@ -460,8 +460,17 @@ struct LibraryTab: View {
 
     /// The systems in the library, one row per name the user actually sees.
     /// See `PlatformShort.systems(in:)` for why it groups.
+    ///
+    /// Built from the platform each game is YOURS on, not every platform it
+    /// was released for. `Game.platforms` carries IGDB's full list, so the
+    /// menu was offering Linux, Vita and PS2 off the back of one Switch copy
+    /// of Crypt of the NecroDancer — systems Tim has never owned a game on,
+    /// sitting in a list titled "your systems". The shelf beside it always
+    /// counted the owned platform only, so the two disagreed.
     private var allPlatforms: [(short: String, icon: String)] {
-        PlatformShort.systems(in: games.map(\.platforms))
+        PlatformShort.systems(in: games.compactMap {
+            PlatformPreference.owned($0.platforms).map { [$0] }
+        })
     }
 
     private var anyFilterActive: Bool {
@@ -492,9 +501,11 @@ struct LibraryTab: View {
         g.status != .wishlist
         && (statusFilter == nil || g.status == statusFilter)
         && (tagFilter == nil || g.userTags.contains(tagFilter!))
-        // Matched by displayed name, so picking "Switch 2" finds the games
-        // stored as "Nintendo Switch 2" too.
-        && (platformFilter == nil || PlatformShort.matches(g.platforms, short: platformFilter!))
+        // Matched on the platform the game is YOURS on, by displayed name —
+        // so picking "Switch 2" finds what is stored as "Nintendo Switch 2",
+        // and picking "Linux" does not find a Switch game that merely also
+        // shipped on Linux.
+        && (platformFilter == nil || PlatformShort.ownedMatches(g.platforms, short: platformFilter!))
         && (ignoringOwnership || ownershipFilter?.matches(g) ?? true)
         && (hidden.isEmpty || !hidden.contains(g.id.uuidString))
         && matchesSearch(g)
@@ -594,12 +605,15 @@ enum PlatformIcon {
         if p == "nes" || p.contains("nintendo entertainment")  { return "platform-nes" }
         if p.contains("gamecube")                              { return "platform-gamecube" }
         if p.contains("genesis") || p.contains("mega drive")   { return "platform-genesis" }
-        if p.contains("xbox 360")                              { return "platform-xbox360" }
-        if p.contains("xbox")                                  { return "platform-xbox" }
-        if p.contains("recalbox")                              { return "platform-recalbox" }
         // Order matters: more specific strings first, since these are
         // substring matches ("xbox series" before "xbox", "ps5" before "ps").
+        // This block used to violate its own rule — bare "xbox" sat above
+        // "xbox series", so every Series X|S got the 2001 original's icon and
+        // the platform-xbox-series art was unreachable.
+        if p.contains("xbox 360")                              { return "platform-xbox360" }
         if p.contains("xbox series")                           { return "platform-xbox-series" }
+        if p.contains("xbox")                                  { return "platform-xbox" }
+        if p.contains("recalbox")                              { return "platform-recalbox" }
         if p.contains("steam deck")                            { return "platform-steamdeck" }
         if p.contains("playstation 5") || p == "ps5"           { return "platform-ps5" }
         if p.contains("playstation 4") || p == "ps4"           { return "platform-ps4" }
@@ -706,8 +720,21 @@ enum PlatformShort {
 
     /// Whether any of these stored platforms is displayed as `short` — so
     /// picking "Switch 2" also finds what's stored as "Nintendo Switch 2".
+    ///
+    /// This asks about AVAILABILITY. For "is this game mine on that system",
+    /// which is what the library filter means, use `ownedMatches`.
     static func matches(_ platforms: [String], short: String) -> Bool {
         platforms.contains { name($0) == short }
+    }
+
+    /// Whether the platform this game is YOURS on is displayed as `short`.
+    ///
+    /// Position zero is the platform picked when the game was added — see
+    /// `PlatformPreference.owned`. Crypt of the NecroDancer lists eight
+    /// platforms and is owned on one; the library filter means the one.
+    static func ownedMatches(_ platforms: [String], short: String) -> Bool {
+        guard let owned = PlatformPreference.owned(platforms) else { return false }
+        return name(owned) == short
     }
 }
 

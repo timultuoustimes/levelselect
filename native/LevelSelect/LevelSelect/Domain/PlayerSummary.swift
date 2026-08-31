@@ -71,11 +71,23 @@ struct PlayerSummary {
         // blank header and no reason why.
         let playing = games.filter { $0.status == .playing }
         let mostRecent = recent.max(by: { $0.at < $1.at })?.game
+        // Most recently PLAYED first, not first-in-the-list.
+        //
+        // `playing.compactMap(\.backdropURLString).first` took whichever
+        // playing game the query happened to hand over first — the array is
+        // sorted by name — so with eleven games in progress the header showed
+        // an alphabetical accident. Tim, 08-31: the backdrop was a game he
+        // had not played this week, while the one he had just played sat in
+        // Continue Playing directly beneath it.
+        //
+        // The header is about how it is going, so it leads with the game you
+        // last actually touched, and only falls back to "something you are
+        // playing" when nothing has been played this week at all.
         summary.fallbackBackdrop =
-            playing.compactMap(\.backdropURLString).first
-            ?? mostRecent?.backdropURLString
-            ?? playing.compactMap(\.displayCoverURLString).first
+            mostRecent?.backdropURLString
             ?? mostRecent?.displayCoverURLString
+            ?? playing.compactMap(\.backdropURLString).first
+            ?? playing.compactMap(\.displayCoverURLString).first
 
         return summary
     }

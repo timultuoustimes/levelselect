@@ -49,6 +49,22 @@ final class Session {
         }
     }
 
+    /// The end time an editor should show, which is NOT `endDate`.
+    ///
+    /// `endDate` is when you stopped the clock; `accumulatedDuration` is what
+    /// you actually played, and the two diverge every time a session is paused
+    /// or ended stale. Real data, 2026-06-27: a session ran 20:30 → 08:30 with
+    /// **10 minutes** credited — a timer left going overnight. An editor that
+    /// derives duration from `endDate` shows 12 hours for that session, and
+    /// saving writes those 12 hours into the library's playtime.
+    ///
+    /// Every other surface in the app reports `elapsed()`. This makes the
+    /// editor agree with them, at the cost of collapsing a paused session's
+    /// span to its played time when it is saved — a span nothing displays.
+    var editableEnd: Date {
+        startDate.addingTimeInterval(elapsed())
+    }
+
     /// The last moment the user demonstrably acted on this session — started,
     /// paused, or resumed it. This, not `startDate`, is what "most recent
     /// intent" means: an old session RESUMED at 17:00 is a later user action

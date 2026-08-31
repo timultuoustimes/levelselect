@@ -86,8 +86,10 @@ struct EditSessionSheet: View {
     init(session: Session) {
         self.session = session
         _start = State(initialValue: session.startDate)
-        _end = State(initialValue: session.endDate
-                     ?? session.startDate.addingTimeInterval(session.accumulatedDuration))
+        // NOT `session.endDate` — see `Session.editableEnd`. The stored end
+        // is when the clock stopped, which for a paused or stale-ended
+        // session is much later than what was played.
+        _end = State(initialValue: session.editableEnd)
         _notes = State(initialValue: session.notes ?? "")
     }
 

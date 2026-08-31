@@ -161,6 +161,64 @@ struct Build34LibraryTests {
                 == PlatformRoute(platform: "Sega Genesis", ownership: nil))
     }
 
+    // MARK: Systems are the ones you own on
+
+    /// Crypt of the NecroDancer lists eight platforms and Tim owns it on one.
+    /// The filter menu was built from every platform every game was released
+    /// for, so it offered Linux, Vita and PS2 — systems he has never owned a
+    /// game on — in a list headed by his own library. The shelf beside it had
+    /// always counted the owned platform only, so the two disagreed on screen.
+    @Test func theSystemsListIsWhatYouOwnOnNotWhatExists() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        let necrodancer = repo.addGame(name: "Crypt of the NecroDancer")
+        // Position zero is the platform chosen when adding — see
+        // PlatformPreference.owned. The rest is IGDB's availability list.
+        necrodancer.platforms = ["Nintendo Switch", "PlayStation 4", "Linux",
+                                 "PC (Microsoft Windows)", "Mac", "PlayStation Vita"]
+
+        let systems = PlatformShort.systems(in: [necrodancer.platforms].compactMap {
+            PlatformPreference.owned($0).map { [$0] }
+        })
+        #expect(systems.map(\.short) == ["Switch"])
+    }
+
+    /// And the filter has to agree with that list: picking a system you merely
+    /// COULD have played it on must not return the game.
+    @Test func filteringByASystemYouDoNotOwnItOnFindsNothing() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Crypt of the NecroDancer")
+        game.platforms = ["Nintendo Switch", "Linux", "PlayStation Vita"]
+
+        #expect(PlatformShort.ownedMatches(game.platforms, short: "Switch"))
+        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Linux"))
+        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Vita"))
+
+        // `matches` still answers the availability question, for callers that
+        // genuinely mean it.
+        #expect(PlatformShort.matches(game.platforms, short: "Linux"))
+    }
+
+    /// A game with no platforms at all is nobody's system.
+    @Test func aGameWithNoPlatformsMatchesNoSystem() {
+        let context = makeContext()
+        let game = Repository(context).addGame(name: "Some Jam Game")
+        game.platforms = []
+
+        #expect(!PlatformShort.ownedMatches(game.platforms, short: "Switch"))
+    }
+
+    /// `platform-xbox-series` art shipped but was unreachable: bare "xbox"
+    /// sat above "xbox series" in a chain of substring matches, so every
+    /// Series X|S drew the 2001 original's console.
+    @Test func eachXboxGenerationGetsItsOwnIcon() {
+        #expect(PlatformIcon.assetName("Xbox Series X|S") == "platform-xbox-series")
+        #expect(PlatformIcon.assetName("Xbox 360") == "platform-xbox360")
+        #expect(PlatformIcon.assetName("Xbox One") == "platform-xbox")
+        #expect(PlatformIcon.assetName("Xbox") == "platform-xbox")
+    }
+
     // MARK: The menu bar
 
     /// ⌘1–⌘4 are assigned by tab-bar position, so the number pressed matches

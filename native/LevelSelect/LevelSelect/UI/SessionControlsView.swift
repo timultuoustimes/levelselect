@@ -229,9 +229,19 @@ struct SessionControlsView: View {
                         Text(Format.duration(s.elapsed()))
                             .font(.subheadline.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        // Only a stopped session opens the editor, so only a
+                        // stopped session gets the affordance that says so.
+                        // The live one sat here wearing a chevron under a
+                        // heading reading "tap to edit", and did nothing.
+                        if s.state == .stopped {
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        } else {
+                            Text(s.state == .running ? "running" : "paused")
+                                .font(.caption2)
+                                .foregroundStyle(LSTheme.accent)
+                        }
                     }
                     .contentShape(.rect)
                 }
