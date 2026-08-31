@@ -29,7 +29,26 @@ struct PlatformIconView: View {
     var body: some View {
         Group {
             if let asset = PlatformIcon.assetName(platform) {
-                Image(asset).resizable().scaledToFit()
+                Image(asset)
+                    .resizable()
+                    .scaledToFit()
+                    // ONE light rig for the whole set.
+                    //
+                    // Every icon used to carry its own baked contact shadow,
+                    // generated in a separate session — so direction, softness
+                    // and placement differed console to console, and five had
+                    // no shadow at all. Measured 2026-08-31: shadow alpha ran
+                    // 0 to 181 across thirty icons, which is what made them
+                    // read as "obviously generated". Tux's did not even sit
+                    // where the object met the ground.
+                    //
+                    // The baked shadows are stripped from the art now, and
+                    // this draws the only one. Derived from the alpha
+                    // silhouette, so it cannot drift: a new icon inherits the
+                    // set's lighting by existing. Scaled to `size` so a 24pt
+                    // toolbar icon and a 54pt shelf tile stay in proportion.
+                    .shadow(color: .black.opacity(0.5),
+                            radius: size * 0.07, y: size * 0.055)
             } else {
                 Image(systemName: "gamecontroller.fill")
                     .resizable().scaledToFit()
