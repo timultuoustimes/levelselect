@@ -339,6 +339,9 @@ struct WishlistTab: View {
         }
     }
 
+    /// What the library already knows about the Deku list. See `DekuMatch`.
+    private var known: [String: DekuMatch.Known] { DekuMatch.index(library) }
+
     private var visible: [DekuWishlistItem] {
         let base = searchText.isEmpty
             ? store.items
@@ -371,13 +374,17 @@ struct WishlistTab: View {
                 .buttonStyle(.plain)
                 .listRowBackground(Color.clear)
                 .contextMenu {
-                    Button {
-                        sheet = .addGame(item.name)
-                    } label: {
-                        // This row is already on a wishlist — the user's, on
-                        // Deku Deals. The action is bringing it into
-                        // LevelSelect, so that's what it says.
-                        Label("Add to LevelSelect", systemImage: "plus.square.on.square")
+                    // Offering "Add" for a game already here is how you end up
+                    // with two of it. The row says which, so the menu agrees.
+                    if known[DekuMatch.normalize(item.name)] == nil {
+                        Button {
+                            sheet = .addGame(item.name)
+                        } label: {
+                            // This row is already on a wishlist — the user's, on
+                            // Deku Deals. The action is bringing it into
+                            // LevelSelect, so that's what it says.
+                            Label("Add to LevelSelect", systemImage: "plus.square.on.square")
+                        }
                     }
                     Button {
                         if let url = item.url { openDeku(url) }
@@ -422,6 +429,13 @@ struct WishlistTab: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                // The list stops being a stranger.
+                if let match = known[DekuMatch.normalize(item.name)] {
+                    Label(match == .inLibrary ? "In your library" : "On your wishlist",
+                          systemImage: match == .inLibrary ? "checkmark.circle.fill" : "bag.fill")
+                        .font(.caption2)
+                        .foregroundStyle(match == .inLibrary ? .green : LSTheme.accent)
+                }
             }
             Spacer()
             Image(systemName: "chevron.right")

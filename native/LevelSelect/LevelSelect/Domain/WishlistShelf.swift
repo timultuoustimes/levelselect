@@ -12,16 +12,41 @@ import Foundation
 /// not out yet.** A game you could buy this afternoon and a game arriving in
 /// February are different kinds of wanting, and only one of them is waiting.
 enum WishlistShelf {
-    /// Games with a real release date still in the future, soonest first.
+    /// IGDB year-only precision lands on **1 January**, so a date cannot
+    /// always be compared as a day.
+    ///
+    /// The Ocarina of Time remake, added 2026-08-31: announced at the June
+    /// Direct for "late 2026", no date confirmed, so IGDB carries the year
+    /// alone — stored as 1 January 2026, which is eight months in the past.
+    /// Compared as a day it read as already out, filed under "Out now", and
+    /// the one genuinely awaited game on the wishlist was the one the feature
+    /// failed to catch.
+    ///
+    /// A game with a confirmed date gets an exact date from IGDB — Resident
+    /// Evil Requiem carries 27 February, Pragmata 17 April, and both correctly
+    /// read as released. So **year-only is itself the signal**: it means
+    /// nobody has announced a day, which for the current year or later means
+    /// it is still ahead.
+    static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let parts = calendar.dateComponents([.month, .day], from: date)
+        return parts.month == 1 && parts.day == 1
+    }
+
+    /// Games still ahead of you, soonest first.
     ///
     /// "Real" excludes the epoch artifact the CSV import left on a third of
     /// the library — see `MetadataRefresh.isMissing(_:)`. A 1970 date is a
     /// missing date, and a missing date is not an announcement.
     static func comingSoon(_ games: [Game], now: Date = .now) -> [Game] {
-        games
+        let thisYear = Calendar.current.component(.year, from: now)
+        return games
             .filter { game in
                 guard let date = game.firstReleaseDate,
                       !MetadataRefresh.isMissing(date) else { return false }
+                if isYearOnly(date) {
+                    // No day announced. This year or later is still ahead.
+                    return Calendar.current.component(.year, from: date) >= thisYear
+                }
                 return date > now
             }
             .sorted { ($0.firstReleaseDate ?? .distantFuture) < ($1.firstReleaseDate ?? .distantFuture) }
@@ -36,15 +61,17 @@ enum WishlistShelf {
         return games.filter { !soon.contains($0.id) }
     }
 
-    /// Month and year, never a day.
+    /// Exactly as much as is known, and no more.
     ///
-    /// IGDB stores a year-only release as the 1st of January, and the app has
-    /// no precision flag on `firstReleaseDate` to tell that apart from a game
-    /// genuinely launching on New Year's Day. Printing "1 January 2026" would
-    /// invent a precision the data does not have; "January 2026" is true
-    /// either way. Same reasoning as `CompletionEvent.datePrecision`, solved
-    /// by not asking the question.
+    /// A year-only date prints as the year. Printing "January 2026" for a game
+    /// arriving in November would be inventing a month out of a storage
+    /// convention — the same mistake as printing a day, one level up.
+    /// Otherwise month and year, never a day: `firstReleaseDate` carries no
+    /// precision flag, so a day would claim more than the data holds.
     static func releaseLabel(_ date: Date, calendar: Calendar = .current) -> String {
-        date.formatted(.dateTime.month(.wide).year())
+        if isYearOnly(date) {
+            return String(calendar.component(.year, from: date))
+        }
+        return date.formatted(.dateTime.month(.wide).year())
     }
 }

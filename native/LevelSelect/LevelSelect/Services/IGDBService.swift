@@ -18,6 +18,8 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     let playerPerspectives: [String]
     let developers: [String]
     let publishers: [String]
+    /// IGDB's `first_release_date`, kept whole. See `releaseDate`.
+    var releaseTimestamp: Double? = nil
 
     /// Human label for non-main game types (nil for main games).
     var typeLabel: String? {
@@ -44,8 +46,22 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
         coverImageID.map { "https://images.igdb.com/igdb/image/upload/t_cover_big/\($0).jpg" }
     }
 
+    /// The real release date when IGDB gave one, falling back to 1 January of
+    /// the year.
+    ///
+    /// IGDB sends `first_release_date` as a Unix timestamp and this type used
+    /// to keep only `Calendar.component(.year:)` of it, rebuilding a
+    /// 1-January date from the year alone — so **every release date in the
+    /// library was 1 January**, and the month and day were thrown away at
+    /// parse time on data the proxy had already fetched.
+    ///
+    /// Found 2026-08-31 through the wishlist's "coming soon" split, which
+    /// could not tell a February release from a November one because both were
+    /// stored as January. `releaseYear` stays as the fallback for rows written
+    /// before this and for games IGDB dates only by year.
     var releaseDate: Date? {
-        releaseYear.flatMap { DateComponents(calendar: .current, year: $0, month: 1, day: 1).date }
+        if let stamp = releaseTimestamp { return Date(timeIntervalSince1970: stamp) }
+        return releaseYear.flatMap { DateComponents(calendar: .current, year: $0, month: 1, day: 1).date }
     }
 }
 
@@ -233,7 +249,8 @@ enum IGDBService {
                 gameModes: (game_modes ?? []).map(\.name),
                 playerPerspectives: (player_perspectives ?? []).map(\.name),
                 developers: developers,
-                publishers: publishers
+                publishers: publishers,
+                releaseTimestamp: first_release_date
             )
         }
     }
