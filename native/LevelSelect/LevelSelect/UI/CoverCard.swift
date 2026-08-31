@@ -357,3 +357,55 @@ struct ContinueHeroCard: View {
         }
     }
 }
+
+/// Home's "Recently Beaten" shelf.
+///
+/// Deliberately simpler than `StatusCarousel`: no collapse, no "hide from
+/// Home", no "See all". It is a window rather than a category — it empties
+/// itself after a month, so the controls for living with a permanent shelf
+/// would be controls for a shelf that is already leaving. The permanent
+/// record is Library's Finished section.
+struct RecentlyBeatenShelf: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
+    let games: [Game]
+    var onOpen: (Game) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "flag.pattern.checkered")
+                    .foregroundStyle(LSTheme.accent)
+                Text("Recently Beaten")
+                    .font(.title3.bold())
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("(\(games.count))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(alignment: .top, spacing: 14) {
+                    ForEach(games) { game in
+                        BouncyTap {
+                            onOpen(game)
+                        } label: {
+                            CoverCard(game: game)
+                        }
+                        .gameContextMenu(game)
+                        .scrollTransition(axis: .horizontal) { content, phase in
+                            content
+                                .scaleEffect(phase.isIdentity ? 1 : 0.86)
+                                .opacity(phase.isIdentity ? 1 : 0.6)
+                                .rotation3DEffect(.degrees(phase.value * -12), axis: (x: 0, y: 1, z: 0))
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.viewAligned)
+        }
+    }
+}

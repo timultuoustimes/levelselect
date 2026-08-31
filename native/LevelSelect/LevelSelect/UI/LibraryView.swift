@@ -37,7 +37,13 @@ struct LibraryTab: View {
     @State private var newCollectionName = ""
     @AppStorage("libraryHideBundled") private var hideBundled = false
 
-    @AppStorage("librarySort") private var sortRaw = LibrarySort.status.rawValue
+    // Recently played, not status.
+    //
+    // Status-first opened the page on "Backlog (98)" — the pile, not the
+    // connection. Library is your games and your connection to them, and the
+    // games you actually touch are the ones that answer that. Status is one
+    // tap away and keeps its own grouping.
+    @AppStorage("librarySort") private var sortRaw = LibrarySort.recentlyPlayed.rawValue
     @AppStorage("libraryViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
     @AppStorage("libraryGridSize") private var gridSizeRaw = GridSize.medium.rawValue
 
@@ -142,6 +148,7 @@ struct LibraryTab: View {
             switch viewMode {
             case .grid: gridView
             case .list: listView
+            case .shelves: shelvesView
             }
         }
         .overlay {
@@ -227,6 +234,67 @@ struct LibraryTab: View {
         .scrollEdgeEffectStyle(.soft, for: .top)
     }
 
+    /// Home's shape, brought to Library as a CHOICE rather than a duplicate.
+    ///
+    /// Home's limited rows and "See all" stay Home's, because Home stops at
+    /// what is live and what is next. Here it is a third layout beside grid
+    /// and list — the same games, shelved — and "See all" lands in this tab's
+    /// own grid with that shelf's filter applied, rather than pushing a
+    /// separate list nobody can get back out of.
+    private var shelvesView: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+                systemsShelf
+                collectionShelf
+                ForEach(shelfGroups.indices, id: \.self) { i in
+                    let group = shelfGroups[i]
+                    VStack(alignment: .leading, spacing: 10) {
+                        sectionHeader(title: group.title, status: group.status,
+                                      platform: group.platform, count: group.items.count,
+                                      onSeeAll: { seeAll(group) })
+                            .padding(.horizontal)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(alignment: .top, spacing: 14) {
+                                ForEach(group.items.prefix(Self.shelfLimit)) { game in
+                                    NavigationLink(value: game) {
+                                        CoverCard(game: game)
+                                    }
+                                    .buttonStyle(PressableCardStyle())
+                                    .gameContextMenu(game)
+                                    .scrollTransition(axis: .horizontal) { content, phase in
+                                        content
+                                            .scaleEffect(phase.isIdentity ? 1 : 0.86)
+                                            .opacity(phase.isIdentity ? 1 : 0.6)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                            .scrollTargetLayout()
+                        }
+                        .scrollTargetBehavior(.viewAligned)
+                    }
+                }
+            }
+            .padding(.vertical, 10)
+        }
+        .scrollIndicators(.hidden)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+    }
+
+    /// Enough to browse, few enough that the shelf below it is still reachable.
+    private static let shelfLimit = 12
+
+    /// "See all" stays inside Library: it applies the shelf's own filter and
+    /// drops you into the grid, which is a place you can filter further and
+    /// get back out of.
+    private func seeAll(_ group: LibGroup) {
+        withAnimation {
+            if let status = group.status { statusFilter = status }
+            if let platform = group.platform { platformFilter = PlatformShort.name(platform) }
+            viewModeRaw = LibraryViewMode.grid.rawValue
+        }
+    }
+
     private func grid(_ items: [Game]) -> some View {
         LazyVGrid(
             columns: [GridItem(.adaptive(minimum: gridSize.minWidth), spacing: 12)],
@@ -283,22 +351,46 @@ struct LibraryTab: View {
         .scrollContentBackground(.hidden)
     }
 
-    private func sectionHeader(title: String, status: GameStatus?, platform: String? = nil, count: Int) -> some View {
-        HStack(spacing: 6) {
+    /// One header for grid, list and shelves.
+    ///
+    /// Sized and iconed to match Home, which is the app's reference for what a
+    /// shelf label looks like — but one step down (`.headline`, not
+    /// `.title3`). Home has four shelves and you scan between them; Library's
+    /// status sort can run to six sections plus systems and collections, and
+    /// at Home's size the labels start eating the grid they are labelling.
+    private func sectionHeader(title: String, status: GameStatus?, platform: String? = nil,
+                               count: Int, onSeeAll: (() -> Void)? = nil) -> some View {
+        HStack(spacing: 8) {
             if let asset = platform.flatMap(PlatformIcon.assetName) {
-                Image(asset).resizable().scaledToFit().frame(width: 24, height: 24)
+                Image(asset).resizable().scaledToFit().frame(width: 26, height: 26)
             } else if let status {
-                Circle().fill(status.color).frame(width: 8, height: 8)
+                Image(systemName: status.systemImage)
+                    .font(.subheadline)
+                    .foregroundStyle(status == .playing
+                                     ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(status.color))
+                    .frame(width: 26)
             } else {
                 Image(systemName: "gamecontroller.fill")
-                    .font(.caption2)
+                    .font(.subheadline)
                     .foregroundStyle(LSTheme.accent)
+                    .frame(width: 26)
             }
             Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.headline)
             Text("(\(count))")
-                .font(.caption)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+            if let onSeeAll {
+                Spacer()
+                // Only worth offering when the shelf is actually holding
+                // something back.
+                if count > Self.shelfLimit {
+                    Button("See all", action: onSeeAll)
+                        .font(.subheadline)
+                        .foregroundStyle(LSTheme.accent)
+                        .buttonStyle(.plain)
+                }
+            }
         }
         .padding(.top, 4)
     }
@@ -311,13 +403,24 @@ struct LibraryTab: View {
         let items: [Game]
     }
 
+    private var statusGroups: [LibGroup] {
+        GameStatus.displayOrder.filter { $0 != .wishlist }.compactMap { s in
+            let items = grouped[s] ?? []
+            return items.isEmpty ? nil : LibGroup(title: s.sectionTitle, status: s, items: items)
+        }
+    }
+
+    /// Shelves always group — a shelf without a label is just a row. When the
+    /// sort has no grouping of its own (A–Z, Recently Played…), status is the
+    /// fallback, since it is the vocabulary the rest of the app shelves by.
+    private var shelfGroups: [LibGroup] {
+        sectionGroups ?? statusGroups
+    }
+
     private var sectionGroups: [LibGroup]? {
         switch sort {
         case .status:
-            return GameStatus.displayOrder.filter { $0 != .wishlist }.compactMap { s in
-                let items = grouped[s] ?? []
-                return items.isEmpty ? nil : LibGroup(title: s.sectionTitle, status: s, items: items)
-            }
+            return statusGroups
         case .system:
             // Group by the game's most-preferred platform (Switch 2 → Switch →
             // PC → Mac → …), not IGDB's arbitrary first entry.
@@ -412,8 +515,9 @@ struct LibraryTab: View {
                 }
                 Divider()
                 Picker("View", selection: $viewModeRaw) {
-                    Label("Grid", systemImage: "square.grid.2x2").tag(LibraryViewMode.grid.rawValue)
-                    Label("List", systemImage: "list.bullet").tag(LibraryViewMode.list.rawValue)
+                    ForEach(LibraryViewMode.allCases, id: \.rawValue) { mode in
+                        Label(mode.label, systemImage: mode.icon).tag(mode.rawValue)
+                    }
                 }
                 if viewMode == .grid {
                     Picker("Grid Size", selection: $gridSizeRaw) {
@@ -539,12 +643,17 @@ struct LibraryTab: View {
             // Key computed once per game, not once per COMPARISON — the
             // comparator form rescanned every playthrough and session for both
             // operands on each of the O(n log n) comparisons.
+            //
+            // Name breaks the ties. Swift's sort is not stable, and most of a
+            // library has never been played — so without a second key those
+            // games shuffle between renders. Now that this is the DEFAULT
+            // sort, that is most of what you see.
             return visible.map { ($0, lastPlayed($0)) }
-                .sorted { $0.1 > $1.1 }
+                .sorted { ($0.1, $1.0.name) > ($1.1, $0.0.name) }
                 .map(\.0)
         case .mostPlayed:
             return visible.map { ($0, playtime($0)) }
-                .sorted { $0.1 > $1.1 }
+                .sorted { ($0.1, $1.0.name) > ($1.1, $0.0.name) }
                 .map(\.0)
         case .rating:
             return visible.sorted { ($0.rating ?? -1, $0.name) > ($1.rating ?? -1, $1.name) }
@@ -767,7 +876,25 @@ enum LibrarySearch {
     }
 }
 
-enum LibraryViewMode: String { case grid, list }
+enum LibraryViewMode: String, CaseIterable {
+    case grid, list, shelves
+
+    var label: String {
+        switch self {
+        case .grid: "Grid"
+        case .list: "List"
+        case .shelves: "Shelves"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .grid: "square.grid.2x2"
+        case .list: "list.bullet"
+        case .shelves: "rectangle.grid.1x2"
+        }
+    }
+}
 
 enum GridSize: String, CaseIterable {
     case large, medium, small

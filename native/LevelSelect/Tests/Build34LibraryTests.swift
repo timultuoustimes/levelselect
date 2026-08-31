@@ -219,6 +219,96 @@ struct Build34LibraryTests {
         #expect(PlatformIcon.assetName("Xbox") == "platform-xbox")
     }
 
+    // MARK: Library's defaults and layouts
+
+    /// Status-first opened the page on "Backlog (98)" — the pile, not the
+    /// connection. The default is the games you actually touch.
+    @Test func libraryOpensOnWhatYouHavePlayed() {
+        #expect(LibrarySort(rawValue: LibrarySort.recentlyPlayed.rawValue) == .recentlyPlayed)
+        #expect(LibraryViewMode.allCases.map(\.rawValue) == ["grid", "list", "shelves"])
+    }
+
+    /// Swift's sort is not stable, and most of a library has never been
+    /// played — so without a second key those games shuffle between renders.
+    /// Now that recently-played is the DEFAULT, that is most of what you see.
+    @Test func neverPlayedGamesHoldAStableOrder() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let names = ["Tunic", "Celeste", "Animal Well", "Hades", "Balatro"]
+        let games = names.map { repo.addGame(name: $0) }
+
+        // Same key for every one of them — the tie the comparator must break.
+        let keyed = games.map { ($0, Date.distantPast) }
+        let sorted = keyed.sorted { ($0.1, $1.0.name) > ($1.1, $0.0.name) }.map(\.0.name)
+
+        #expect(sorted == names.sorted())
+    }
+
+    // MARK: Recently beaten
+
+    /// Beating a game moved it out of Now Playing and Home said nothing —
+    /// the one moment the app is pointed at produced a disappearance.
+    @Test func aGameBeatenThisWeekShowsOnHome() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Under the Island", status: .completed)
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-2 * 86_400))
+        event.game = game
+        game.completionEvents = [event]
+        context.insert(event)
+
+        let beaten = RecentlyBeaten.games(from: [game])
+        #expect(beaten.map { $0.game.name } == ["Under the Island"])
+    }
+
+    /// It empties itself. A finish from last year is a fact about a
+    /// collection and belongs in Library's Finished shelf, not on Home.
+    @Test func anOldFinishDoesNotLingerOnHome() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Chrono Trigger", status: .completed)
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-400 * 86_400))
+        event.game = game
+        game.completionEvents = [event]
+        context.insert(event)
+
+        #expect(RecentlyBeaten.games(from: [game]).isEmpty)
+    }
+
+    /// Most recently finished first.
+    @Test func recentFinishesAreOrderedNewestFirst() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        let older = repo.addGame(name: "Older", status: .completed)
+        let olderEvent = CompletionEvent(date: Date.now.addingTimeInterval(-20 * 86_400))
+        olderEvent.game = older
+        older.completionEvents = [olderEvent]
+        context.insert(olderEvent)
+
+        let newer = repo.addGame(name: "Newer", status: .completed)
+        let newerEvent = CompletionEvent(date: Date.now.addingTimeInterval(-1 * 86_400))
+        newerEvent.game = newer
+        newer.completionEvents = [newerEvent]
+        context.insert(newerEvent)
+
+        #expect(RecentlyBeaten.games(from: [older, newer]).map { $0.game.name } == ["Newer", "Older"])
+    }
+
+    /// A deleted finish is not a finish.
+    @Test func aDeletedCompletionDoesNotCount() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Tunic", status: .completed)
+        let event = CompletionEvent(date: Date.now.addingTimeInterval(-86_400))
+        event.game = game
+        event.deletedAt = .now
+        game.completionEvents = [event]
+        context.insert(event)
+
+        #expect(RecentlyBeaten.games(from: [game]).isEmpty)
+    }
+
     // MARK: The menu bar
 
     /// ⌘1–⌘4 are assigned by tab-bar position, so the number pressed matches

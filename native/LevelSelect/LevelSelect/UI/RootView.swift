@@ -643,6 +643,14 @@ struct HomeTab: View {
                         )
                     }
                 }
+                // After what's live and what's next, because that is when it
+                // happened. Beating a game is the one event Home had no words
+                // for — the game simply left Now Playing and nothing marked
+                // it. Empties itself after a month; the permanent record is
+                // Library's Finished shelf.
+                if !recentlyBeaten.isEmpty {
+                    RecentlyBeatenShelf(games: recentlyBeaten) { path.append($0) }
+                }
                 hiddenStatusesFooter
                 // After the shelves, not above them: an ask, never a nag.
                 BetaQuestionCard()
@@ -666,6 +674,11 @@ struct HomeTab: View {
             // the toolbar at rest, which is a bug rather than an effect.
             .ignoresSafeArea(.container, edges: headerBleeds ? .top : [])
         }
+    }
+
+    /// Finished in the last month. See `RecentlyBeaten`.
+    private var recentlyBeaten: [Game] {
+        RecentlyBeaten.games(from: games).map(\.game)
     }
 
     /// First thing a new person sees, and the app's only onboarding — there is

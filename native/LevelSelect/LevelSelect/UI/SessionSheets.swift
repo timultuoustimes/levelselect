@@ -112,6 +112,25 @@ struct EditSessionSheet: View {
                     Button("Delete Session", role: .destructive) {
                         confirmingDelete = true
                     }
+                    // Attached to the BUTTON, not to the Form.
+                    //
+                    // On the Form, iOS 26 anchored the popover to the Form's
+                    // first item — so "Delete this session?" appeared as a
+                    // callout pointing at the Started date field, half over
+                    // the toolbar, nowhere near the control that raised it.
+                    // Anchored here it comes from the button you pressed.
+                    //
+                    // On the Button and not the Section: a presentation
+                    // modifier on a Section becomes one per child (see the
+                    // OverlappingTimerGuard notes), which is its own bug.
+                    .confirmationDialog("Delete this session?", isPresented: $confirmingDelete,
+                                        titleVisibility: .visible) {
+                        Button("Delete", role: .destructive) {
+                            Repository(context).deleteSession(session)
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
                 }
             }
             .navigationTitle("Edit Session")
@@ -129,14 +148,6 @@ struct EditSessionSheet: View {
                         dismiss()
                     }
                 }
-            }
-            .confirmationDialog("Delete this session?", isPresented: $confirmingDelete,
-                                titleVisibility: .visible) {
-                Button("Delete", role: .destructive) {
-                    Repository(context).deleteSession(session)
-                    dismiss()
-                }
-                Button("Cancel", role: .cancel) {}
             }
         }
     }
