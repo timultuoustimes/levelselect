@@ -1468,10 +1468,16 @@ struct GameDetailView: View {
                 labeledField("Developer", text: firstElementBinding(\.developers))
                 labeledField("Publisher", text: firstElementBinding(\.publishers))
             }
-            // A game IGDB knows carries IGDB's own platform list, so the
-            // catalog is the exception rather than the menu.
+            // MORE than one, not merely non-empty.
+            //
+            // A one-entry list is almost never IGDB's answer — it is the
+            // platform picked when the game was added, before any refresh
+            // merged the rest in. Celeste sat at ["Mac"] with a full IGDB
+            // record behind it, and treating that as authoritative hid the
+            // catalog behind a submenu on exactly the game that needed it
+            // most. Two or more means a merge has happened.
             PlatformEditor(platforms: $game.platforms,
-                           listIsAuthoritative: game.igdbID != nil && !game.platforms.isEmpty)
+                           listIsAuthoritative: game.igdbID != nil && game.platforms.count > 1)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)

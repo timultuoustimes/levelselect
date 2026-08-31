@@ -401,19 +401,24 @@ struct SettingsGroupHeader: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(.title3.bold())
             Text(subtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 14)
+        // No `listRowInsets` override and no `fixedSize`.
+        //
+        // Overriding the insets takes over ALL of them, and a 4pt leading
+        // inset put the text hard against the row's clip bounds: every
+        // WRAPPED line lost a sliver of its first glyph, which read as a
+        // stray vertical tick before the "H" of "How" and the "c" of "comes".
+        // The default row insets already align this with the cards below it.
+        .padding(.top, 16)
+        .padding(.bottom, 2)
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 4, trailing: 4))
         .accessibilityAddTraits(.isHeader)
     }
 }
