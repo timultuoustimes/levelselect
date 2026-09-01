@@ -47,7 +47,7 @@ struct ReleasesView: View {
     private var games: [WidgetUpcomingGame] {
         let all = (snapshot?.upcoming ?? [])
             .filter { ReleaseCountdown.days(until: $0.releaseDate) != nil }
-        return Array(all.prefix(family == .systemSmall ? 1 : family == .systemMedium ? 3 : 6))
+        return Array(all.prefix(family == .systemSmall ? 1 : family == .systemMedium ? 4 : 6))
     }
 
     var body: some View {
@@ -61,24 +61,39 @@ struct ReleasesView: View {
     }
 
     /// The small size answers one question, so it asks one: what is next.
+    ///
+    /// Cover beside the name, then the wait as the largest thing on the tile
+    /// with the date under it — the shape Tim pointed at: "a small release
+    /// date could be a single game and its release date." The number is the
+    /// headline because it is the part that changes.
     private func single(_ game: WidgetUpcomingGame) -> some View {
         Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
-            VStack(alignment: .leading, spacing: 7) {
-                header
-                CoverPoster(image: loadCover(game.coverFileName))
-                    .aspectRatio(0.72, contentMode: .fit)
-                    .frame(maxHeight: .infinity)
-                Text(countdown(game))
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(LSWidget.accent)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Text(game.name)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(1)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    CoverPoster(image: loadCover(game.coverFileName))
+                        .frame(width: 42, height: 56)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    Text(game.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.8)
+                    Spacer(minLength: 0)
+                }
+                Spacer(minLength: 0)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(countdown(game))
+                        .font(.system(size: 26, weight: .heavy))
+                        .foregroundStyle(LSWidget.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Text(ReleaseCountdown.dateLabel(game.releaseDate))
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
     }
 

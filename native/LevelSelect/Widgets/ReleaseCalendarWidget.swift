@@ -47,6 +47,8 @@ struct ReleaseCalendarWidgetView: View {
     var body: some View {
         if games.isEmpty {
             EmptyWidget()
+        } else if family == .systemLarge {
+            monthGrid
         } else {
             VStack(alignment: .leading, spacing: 7) {
                 Label("RELEASE CALENDAR", systemImage: "calendar")
@@ -93,6 +95,76 @@ struct ReleaseCalendarWidgetView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+    }
+}
+
+extension ReleaseCalendarWidgetView {
+    /// A real month, with covers standing where the numbers would be.
+    ///
+    /// The list says what is next; a grid says how a month is SHAPED — three
+    /// games in one week and nothing for a fortnight is a fact you can only
+    /// see laid out. Tim: "the calendar could be the list like you have it or
+    /// an actual month's calendar grid."
+    ///
+    /// Which month: the one the soonest release lands in, not necessarily
+    /// this one. A calendar showing an empty September while the thing you
+    /// are waiting for sits in November is a grid with the answer scrolled
+    /// off it.
+    var monthGrid: some View {
+        let cal = ReleaseCountdown.utc
+        let anchorDate = games.first?.releaseDate ?? .now
+        let monthStart = cal.date(from: cal.dateComponents([.year, .month], from: anchorDate))
+            ?? anchorDate
+        let dayCount = cal.range(of: .day, in: .month, for: monthStart)?.count ?? 30
+        // Weekday of the 1st, as an offset into a Sunday-first row.
+        let leading = (cal.component(.weekday, from: monthStart) - 1)
+
+        // Day number → the game landing on it.
+        var byDay: [Int: WidgetUpcomingGame] = [:]
+        for game in (snapshot?.upcoming ?? []) where
+            cal.isDate(game.releaseDate, equalTo: monthStart, toGranularity: .month) {
+            byDay[cal.component(.day, from: game.releaseDate)] = game
+        }
+
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "calendar")
+                Text(monthStart.formatted(Date.FormatStyle(timeZone: .gmt).month(.wide).year())
+                    .uppercased())
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.white.opacity(0.55))
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7),
+                      spacing: 3) {
+                ForEach(cal.veryShortStandaloneWeekdaySymbols, id: \.self) { day in
+                    Text(day)
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
+                ForEach(0..<leading, id: \.self) { _ in Color.clear.frame(height: 1) }
+                ForEach(1...dayCount, id: \.self) { day in
+                    if let game = byDay[day] {
+                        Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
+                            CoverPoster(image: loadCover(game.coverFileName))
+                                .aspectRatio(0.72, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 4)
+                                    .strokeBorder(LSWidget.accent, lineWidth: 1.5))
+                        }
+                    } else {
+                        Text("\(day)")
+                            .font(.system(size: 12, weight: .medium).monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.45))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 26)
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
