@@ -764,8 +764,27 @@ struct Repository {
         session.accumulatedDuration = clampedEnd.timeIntervalSince(start)
         session.notes = (notes?.isEmpty == true) ? nil : notes
         touch(session)
-        if let pt = session.playthrough { touch(pt) }
+        if let pt = session.playthrough {
+            // Editing can move a date EITHER way, so this one is recomputed
+            // rather than nudged — dragging the newest session back a week has
+            // to move "last played" back with it.
+            refreshLastPlayed(pt)
+            touch(pt)
+        }
         persist()
+    }
+
+    /// `lastPlayedAt` restated from the sessions that actually exist.
+    ///
+    /// It is a cache of "the newest session's start", and every write that can
+    /// remove or move a session has to restate it or it drifts — a deleted
+    /// most-recent session used to leave the playthrough claiming a date whose
+    /// session was gone.
+    private func refreshLastPlayed(_ pt: Playthrough) {
+        pt.lastPlayedAt = (pt.sessions ?? [])
+            .filter { $0.deletedAt == nil }
+            .map(\.startDate)
+            .max()
     }
 
     /// Remove a session from history (tombstoned so the removal syncs).
@@ -776,6 +795,7 @@ struct Repository {
             session.endDate = session.startDate
         }
         touch(session, at: date)
+        if let pt = session.playthrough { refreshLastPlayed(pt) }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         persist()
     }
@@ -809,7 +829,19 @@ struct Repository {
         session.notes = notes
         context.insert(session)
         session.playthrough = pt
-        pt.lastPlayedAt = date
+        // NEVER move "last played" backwards.
+        //
+        // This wrote `date` unconditionally, so logging a session you forgot
+        // from last month made the game look like that was the last time you
+        // touched it. The demo library exposed it plainly: sessions are seeded
+        // newest-first, so the final write was the OLDEST one and Hollow
+        // Knight's hero card read "last played 5 months ago" directly above a
+        // session list whose top row said two days.
+        //
+        // Back-filling history is not playing it. `lastPlayedAt` means the
+        // most recent time this playthrough was played, and a session added
+        // for an earlier date cannot change that.
+        pt.lastPlayedAt = max(pt.lastPlayedAt ?? date, date)
         touch(pt, at: date)
         persist()
         attachIfDetached(session, to: pt)
