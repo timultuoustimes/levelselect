@@ -4,7 +4,7 @@ import SwiftUI
 /// matching the web app's look (Tim: "purple as the main color, and I like
 /// the gradients").
 enum LSTheme {
-    static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)   // brand default accent
+    static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)
     static let purpleDeep = Color(red: 0.30, green: 0.16, blue: 0.55)
 
     /// The live accent — user's choice (synced) or the default purple.
@@ -41,6 +41,21 @@ enum LSTheme {
 
     /// Torch orange from the dungeon-door icon/wordmark artwork.
     static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
+
+    /// The accent a fresh install wears.
+    ///
+    /// Purple until 2026-09-01, and it was the wrong purple to put on this
+    /// background: the app's ground is a dark purple, so the default accent
+    /// was a lighter shade of the thing behind it and every tinted control
+    /// sat closer to its backdrop than it should. Tim: "The purple doesn't
+    /// have enough contrast on the dark purple background."
+    ///
+    /// Torch orange is already the brand's own colour -- it is what the
+    /// wordmark has always been lit with -- and being the ground's
+    /// complement rather than its neighbour, it separates from it at every
+    /// size. Anyone who has chosen an accent keeps theirs; this is only what
+    /// the app reaches for when nobody has said otherwise.
+    static let defaultAccent = torch
 
     /// Darker torch, used as the hard drop shadow under pixel type.
     static let torchShadow = Color(red: 0.54, green: 0.29, blue: 0.07)

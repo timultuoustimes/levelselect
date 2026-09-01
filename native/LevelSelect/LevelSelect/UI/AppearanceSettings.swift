@@ -60,7 +60,7 @@ struct AppearanceSettingsSection: View {
                      isCustom: settings?.accentHex != nil) {
                 ColorEditor(
                     title: "Accent color",
-                    defaultColor: LSTheme.purple,
+                    defaultColor: LSTheme.defaultAccent,
                     isCustomised: settings?.accentHex != nil,
                     color: accentBinding,
                     onReset: {
@@ -306,7 +306,7 @@ struct AppearanceSettingsSection: View {
 
     private var accentBinding: Binding<Color> {
         Binding(
-            get: { settings?.accentHex.flatMap { Color(hex: $0) } ?? LSTheme.purple },
+            get: { settings?.accentHex.flatMap { Color(hex: $0) } ?? LSTheme.defaultAccent },
             set: { color in
                 let s = ensureSettings()
                 s.accentHex = color.hexString()

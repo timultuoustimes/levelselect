@@ -6,7 +6,7 @@ import SwiftData
 /// synced ThemeSettings record on launch and whenever it changes.
 @MainActor
 enum ThemePalette {
-    private(set) static var accent: Color = LSTheme.purple
+    private(set) static var accent: Color = LSTheme.defaultAccent
     /// True once the user has picked their own accent. The wordmark keeps its
     /// brand torch-orange until then, so the default look is unchanged.
     private(set) static var accentIsCustom = false
@@ -90,7 +90,7 @@ enum ThemePalette {
 
     static func refresh(from settings: ThemeSettings?) {
         let custom = settings?.accentHex.flatMap { Color(hex: $0) }
-        accent = custom ?? LSTheme.purple
+        accent = custom ?? LSTheme.defaultAccent
         accentIsCustom = custom != nil
         onAccent = onColor(for: accent)
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
