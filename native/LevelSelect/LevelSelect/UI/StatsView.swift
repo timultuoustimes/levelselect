@@ -14,12 +14,77 @@ import SwiftData
 /// order (and subset) the user chose; new cards added in later builds append
 /// at their default position via `resolveOrder`, so a stored preference from
 /// an older build never hides a card it had no way to know about.
+/// What Stats is, said out loud.
+///
+/// Home is you, Library is your games and your connection to them, and Stats
+/// is your history — but the page had no way of saying so. Fourteen cards in
+/// one flat scroll read as fourteen charts rather than one account of how you
+/// play, and a reader looking for "how much have I finished this year" had to
+/// know which card that lived in.
+///
+/// So the cards are grouped by the question they answer about your history.
+/// The group is the app's framing and is fixed; the ORDER INSIDE a group
+/// stays the reader's, which is why the stored preference needs no migration
+/// — an existing arrangement survives as relative order within each group.
+enum StatsGroup: String, CaseIterable, Identifiable {
+    case played, finished, holdings
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .played:   "When you played"
+        case .finished: "What you finished"
+        case .holdings: "What your library is made of"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .played:   "stopwatch"
+        case .finished: "flag.checkered"
+        case .holdings: "square.grid.2x2"
+        }
+    }
+}
+
 enum StatsCard: String, CaseIterable, Identifiable {
     case overview, recent, ratings, library, monthly, streak
     case mostPlayed, systems, genres, series, tags, years, completions
     case raWall
 
     var id: String { rawValue }
+
+    /// Which question about your history this card answers.
+    var group: StatsGroup {
+        switch self {
+        case .overview, .recent, .monthly, .streak, .mostPlayed: .played
+        case .completions, .raWall:                              .finished
+        case .ratings, .library, .systems, .genres, .series, .tags, .years: .holdings
+        }
+    }
+
+    /// Named for the arrange sheet, where a row of bare words made every card
+    /// look alike — the game page's section list has carried icons since it
+    /// was built, and this is the same list of the same kind of thing.
+    var icon: String {
+        switch self {
+        case .overview:    "chart.bar.xaxis"
+        case .recent:      "clock"
+        case .ratings:     "star"
+        case .library:     "square.grid.2x2"
+        case .monthly:     "calendar"
+        case .streak:      "flame"
+        case .mostPlayed:  "trophy"
+        case .systems:     "gamecontroller"
+        case .genres:      "theatermasks"
+        case .series:      "books.vertical"
+        case .tags:        "tag"
+        case .years:       "calendar.badge.clock"
+        case .completions: "flag.checkered"
+        case .raWall:      "rosette"
+        }
+    }
 
     var displayName: String {
         switch self {
@@ -78,6 +143,19 @@ struct StatsTab: View {
     @AppStorage("statsHiddenCards") private var hiddenCardsRaw = ""
     @State private var arranging = false
 
+    /// Whether a card has anything to say. The conditions were inline in the
+    /// switch; a heading has to know them BEFORE its cards render, so they
+    /// live here and the switch draws unconditionally.
+    private func draws(_ card: StatsCard, top: [(Game, TimeInterval)]) -> Bool {
+        switch card {
+        case .ratings:     ratedCount > 0
+        case .mostPlayed:  !top.isEmpty
+        case .completions: !completionsByYear.isEmpty
+        case .raWall:      !raAwards.isEmpty
+        default:           true
+        }
+    }
+
     private var cardOrder: [StatsCard] { StatsCard.resolveOrder(stored: cardOrderRaw) }
     private var hiddenCards: Set<StatsCard> {
         Set(hiddenCardsRaw.split(separator: ",").compactMap { StatsCard(rawValue: String($0)) })
@@ -93,26 +171,38 @@ struct StatsTab: View {
                     // re-sorted it three times per render.
                     let sessions = allSessions
                     let top = topPlayed
-                    let visible = cardOrder.filter { !hiddenCards.contains($0) }
-                    ForEach(visible) { card in
-                        switch card {
-                        case .overview:    overviewCard(sessions: sessions)
-                        case .recent:      recentCard(sessions: sessions)
-                        case .ratings:     if ratedCount > 0 { ratingsCard }
-                        case .library:     statusBreakdownCard
-                        case .monthly:     monthlyCard(sessions: sessions)
-                        case .streak:      heatmapCard(sessions: sessions)
-                        case .mostPlayed:  if !top.isEmpty { topPlayedCard(top) }
-                        case .systems:     platformsCard
-                        case .genres:      sliceCard("Genres", icon: "theatermasks.fill", rows: topCounts(\.genres, limit: 8), kind: .genre)
-                        case .series:      franchisesCard
-                        case .tags:        sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
-                        case .years:       releaseYearsCard
-                        case .completions: if !completionsByYear.isEmpty { completionsCard }
-                        case .raWall:      if !raAwards.isEmpty { raWallCard }
+                    // Filtered by what will actually DRAW, not merely by what
+                    // is unhidden. Four of these cards render nothing without
+                    // data, so grouping on the unfiltered list would print a
+                    // heading like "What you finished" above empty space on
+                    // any library that has finished nothing yet — the page
+                    // announcing a section it does not have.
+                    let visible = cardOrder.filter { !hiddenCards.contains($0) && draws($0, top: top) }
+                    ForEach(StatsGroup.allCases) { group in
+                        let cards = visible.filter { $0.group == group }
+                        if !cards.isEmpty {
+                            StatsGroupHeader(group: group)
+                            ForEach(cards) { card in
+                                switch card {
+                                case .overview:    overviewCard(sessions: sessions)
+                                case .recent:      recentCard(sessions: sessions)
+                                case .ratings:     ratingsCard
+                                case .library:     statusBreakdownCard
+                                case .monthly:     monthlyCard(sessions: sessions)
+                                case .streak:      heatmapCard(sessions: sessions)
+                                case .mostPlayed:  topPlayedCard(top)
+                                case .systems:     platformsCard
+                                case .genres:      sliceCard("Genres", icon: "theatermasks.fill", rows: topCounts(\.genres, limit: 8), kind: .genre)
+                                case .series:      franchisesCard
+                                case .tags:        sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
+                                case .years:       releaseYearsCard
+                                case .completions: completionsCard
+                                case .raWall:      raWallCard
+                                }
+                            }
                         }
                     }
-                    if visible.isEmpty {
+                    if cardOrder.allSatisfy({ hiddenCards.contains($0) }) {
                         ContentUnavailableView("All cards hidden",
                                                systemImage: "rectangle.dashed",
                                                description: Text("Bring some back from Arrange."))
@@ -999,6 +1089,28 @@ private struct FlowCountRows: View {
 /// preferences rather than writing a copy of the defaults, so a future
 /// build's new cards appear for reset users exactly as they do for fresh
 /// installs.
+/// The heading above a run of cards.
+///
+/// Sized like Home's shelf headings rather than a caption: this is the page
+/// telling you what it is, which is the whole point of the pass.
+struct StatsGroupHeader: View {
+    let group: StatsGroup
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: group.icon)
+                .font(.headline)
+                .foregroundStyle(LSTheme.accent)
+            Text(group.displayName)
+                .font(.title3.bold())
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 10)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
 struct StatsArrangeSheet: View {
     @Binding var orderRaw: String
     @Binding var hiddenRaw: String
@@ -1012,18 +1124,26 @@ struct StatsArrangeSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(order) { card in
-                    HStack {
-                        Toggle(isOn: visibilityBinding(card)) {
-                            Text(card.displayName)
+                // One section per group, mirroring the page. A flat list of
+                // fourteen that produced a grouped page would be a sheet
+                // describing a screen that no longer exists — and dragging
+                // Ratings above Overview in it would appear to do nothing,
+                // because the page sorts by group first.
+                //
+                // So a card moves WITHIN its group, which is the only
+                // movement the page can honour.
+                ForEach(StatsGroup.allCases) { group in
+                    Section {
+                        ForEach(order.filter { $0.group == group }) { card in
+                            Toggle(isOn: visibilityBinding(card)) {
+                                Label(card.displayName, systemImage: card.icon)
+                            }
+                            .tint(LSTheme.accent)
                         }
-                        .tint(LSTheme.accent)
+                        .onMove { from, to in move(in: group, from: from, to: to) }
+                    } header: {
+                        Text(group.displayName)
                     }
-                }
-                .onMove { from, to in
-                    var cards = order
-                    cards.move(fromOffsets: from, toOffset: to)
-                    orderRaw = cards.map(\.rawValue).joined(separator: ",")
                 }
             }
             #if !os(macOS)
@@ -1048,6 +1168,18 @@ struct StatsArrangeSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    /// Apply a drag that happened inside one group's rows to the flat stored
+    /// order. The offsets are relative to that group, so the moved run is
+    /// spliced back over the slots the group already occupied and every other
+    /// card keeps its index.
+    private func move(in group: StatsGroup, from: IndexSet, to: Int) {
+        var groupCards = order.filter { $0.group == group }
+        groupCards.move(fromOffsets: from, toOffset: to)
+        var next = groupCards.makeIterator()
+        let rebuilt = order.map { $0.group == group ? (next.next() ?? $0) : $0 }
+        orderRaw = rebuilt.map(\.rawValue).joined(separator: ",")
     }
 
     private func visibilityBinding(_ card: StatsCard) -> Binding<Bool> {
