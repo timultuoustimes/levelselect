@@ -73,7 +73,7 @@ const sections = [
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
-    a: 'A full widget set lands in the next build. A field guide, ahead of it.' },
+    a: 'Home Screen, Lock Screen, and extra-large boards on iPad. Long-press to aim one.' },
   { id: 'shortcuts',         q: 'Can I use Siri for this?',
     a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
   { id: 'beaten',            q: 'I finished a game — what do I mark?',
@@ -124,26 +124,10 @@ if (sections.map((x) => x.id).join() !== ordered.join())
   description="How to use LevelSelect: where to begin, pasting a checklist into a tracker, Siri and Shortcuts, widgets, and getting your data out."
   current="docs"
 >
-<main class="wrap docs-layout">
-  <!-- One list, so the nav can never drift from the page it describes. Each
-       entry's `id` must match an <h2 id> below. -->
-  <nav class="toc" aria-label="On this page">
-    <p class="toc__title">On this page</p>
-    <ol>
-      {sections.map((x) => <li><a href={`#${x.id}`}>{x.q}</a></li>)}
-    </ol>
-  </nav>
-
-  <details class="toc-mobile">
-    <summary>Jump to a section</summary>
-    <ol>
-      {sections.map((x) => <li><a href={`#${x.id}`}>{x.q}</a></li>)}
-    </ol>
-  </details>
-
+<main class="wrap doc-page">
   <article class="doc">
     <h1>Help</h1>
-    <p class="stamp">Last updated 30 August 2026</p>
+    <p class="stamp">Last updated 1 September 2026</p>
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
@@ -341,9 +325,9 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'widgets')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
+    <p>Widgets live on the Home Screen and the Lock Screen, and at extra-large sizes on iPad:</p>
     <ul>
-      <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), the Now Playing shelf, <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system (with the section's own cover art at medium and large sizes), a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
+      <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system, carrying that section's own cover art at medium and large sizes &mdash; point one at <em>Now Playing</em> and you have a shelf of what you are playing, a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
       <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
       <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
       <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
@@ -478,77 +462,18 @@ if (sections.map((x) => x.id).join() !== ordered.join())
 </main>
 
 <style>
-  /* ---- navigation ------------------------------------------------------ */
+  /* ---- the page ------------------------------------------------------- */
 
-  /* A rail beside the text on wide screens, so the page's shape is visible
-     without scrolling it. Below 1100px there is not room for one without
-     squeezing the prose under 60 characters, so the phone gets a menu
-     instead — a rail that thin is worse than none. */
-  .docs-layout { position: relative; }
-
-  .toc { display: none; }
-
-  @media (min-width: 1100px) {
-    .docs-layout {
-      display: grid;
-      grid-template-columns: 15rem minmax(0, 1fr);
-      gap: 3rem;
-      align-items: start;
-      max-width: 66rem;
-    }
-    .toc {
-      display: block;
-      position: sticky;
-      /* Clear of the site header, with a little air. */
-      top: 5.5rem;
-      max-height: calc(100vh - 7rem);
-      overflow-y: auto;
-      font-size: .88rem;
-    }
-    .toc__title {
-      font-family: "Press Start 2P", monospace;
-      font-size: .52rem; letter-spacing: .1em; text-transform: uppercase;
-      color: var(--torch); margin: 0 0 .9rem;
-    }
-    .toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: .15rem; }
-    .toc a {
-      display: block; padding: .38rem .6rem; border-radius: 8px;
-      color: var(--muted); text-decoration: none; line-height: 1.35;
-      border-left: 2px solid transparent;
-    }
-    .toc a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
-    /* :target styles the section the URL points at — real state, no script. */
-    .toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .toc-mobile { display: none; }
-  }
-
-  /* The phone version: closed by default, so it costs one line of height and
-     opens to the whole map. A <details> needs no script and keeps working
-     with JS off, like the invite form's :has() rules. */
-  .toc-mobile {
-    margin: 1.4rem 0 0;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--surface);
-  }
-  .toc-mobile summary {
-    cursor: pointer; padding: .8rem 1rem; font-weight: 600;
-    list-style: none; display: flex; align-items: center; justify-content: space-between;
-  }
-  .toc-mobile summary::-webkit-details-marker { display: none; }
-  .toc-mobile summary::after {
-    content: "▾"; color: var(--torch); transition: transform .18s ease;
-  }
-  .toc-mobile[open] summary::after { transform: rotate(180deg); }
-  .toc-mobile ol {
-    list-style: none; margin: 0; padding: 0 .6rem .7rem;
-    display: grid; gap: .1rem;
-  }
-  .toc-mobile a {
-    display: block; padding: .5rem .6rem; border-radius: 8px;
-    color: var(--muted); text-decoration: none;
-  }
-  .toc-mobile a:hover { color: var(--ink); background: rgba(255,255,255,.05); }
+  /* There was a rail here, and a "jump to a section" menu under it on the
+     phone, both listing the same fourteen questions the page itself now
+     lists one screen below. A second copy of the list is not a way into it,
+     and a flat fourteen is the thing Tim bounced off in the first place:
+     "the nav doesn't really help if I don't know what I'm looking for."
+     The cards do that job. The rail's job was the reading measure, which
+     the page keeps — 48rem is what 66rem minus a 15rem rail and its gap
+     came to, so the prose is exactly as wide as it always was. */
+  .doc-page { position: relative; }
+  .doc { max-width: 48rem; margin-inline: auto; }
 
   /* Anchors must not land under the sticky site header. */
   .doc h2 { scroll-margin-top: 5rem; }
