@@ -153,16 +153,30 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 .composite { position: relative; margin-inline: auto; }
 .composite img { position: absolute; height: auto; }
 
-/* Hero: iPad landscape behind, iPhone in front-left. The iPad leans back a
-   hair and the phone forward — soft-3D, not a tornado. */
+/* Hero: iPad landscape behind, iPhone tilted in front-left.
+   MATCHED TO THE SOCIAL IMAGES (2026-09-01). `make-social-images.py` describes
+   its own layout as "the website hero's arrangement, which is the one Tim
+   settled on: the iPad is the DOMINANT device and the phone is smaller,
+   hanging low-left in front of it" — but the site did the opposite. At 76%/30%
+   the phone stood 0.96 of the container's height against the iPad's 0.91, so
+   the pair read as two devices competing rather than one product seen twice.
+
+   The numbers below are the social script's, converted: iPad at 0.94 of the
+   height budget and phone at 0.84, with the phone lifted 3% off the baseline
+   and overlapping the iPad by 44% of its own width. Only the phone tilts, and
+   it leans LEFT — top toward the iPad. The iPad is straight.
+
+   Geometry, so the next person can re-derive it: H = W / 1.56. iPad aspect
+   1.305 → width = 0.94H × 1.305 = 78.6%W. Phone aspect 0.49 → width =
+   0.84H × 0.49 = 26.4%W. Insetting both by 3.3% leaves exactly the 11.6%
+   overlap the social pair has. */
 .composite--hero { max-width: 940px; aspect-ratio: 1.56; }
 .composite--hero .c-ipad {
-  right: 0; top: 0; width: 76%;
-  transform: rotate(1.2deg);
+  right: 3.3%; top: 0; width: 78.6%;
   filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .5));
 }
 .composite--hero .c-phone {
-  left: 3%; bottom: 0; width: 30%; z-index: 2;
+  left: 3.3%; bottom: 3%; width: 26.4%; z-index: 2;
   transform: rotate(-2.4deg);
   filter: drop-shadow(0 34px 48px rgba(0, 0, 0, .62));
 }
@@ -196,8 +210,11 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   .hero .wrap { gap: 1rem; }
 
   .composite--hero { width: 100%; margin-inline: 0; aspect-ratio: 1.06; }
-  .composite--hero .c-ipad { width: 88%; top: 0; transform: rotate(1deg); }
-  .composite--hero .c-phone { width: 36%; left: 0; transform: rotate(-1deg); }
+  /* The stacking below is the narrow layout's own problem — see the notes
+     above it. Only the iPad's tilt goes, so "the iPad is straight, the phone
+     leans" holds at every width. */
+  .composite--hero .c-ipad { width: 88%; top: 0; right: 0; transform: none; }
+  .composite--hero .c-phone { width: 36%; left: 0; bottom: 0; transform: rotate(-1.5deg); }
 }
 
 .showcase { padding: var(--step) 0 calc(var(--step) * .5); }
