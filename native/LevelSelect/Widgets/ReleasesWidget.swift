@@ -71,13 +71,13 @@ struct ReleasesView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     CoverPoster(image: loadCover(game.coverFileName))
-                        .frame(width: 42, height: 56)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .frame(width: 54, height: 72)
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     Text(game.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(3)
-                        .minimumScaleFactor(0.8)
+                        .minimumScaleFactor(0.75)
                     Spacer(minLength: 0)
                 }
                 Spacer(minLength: 0)
@@ -105,16 +105,23 @@ struct ReleasesView: View {
     /// focused?" A wishlist is a wall of things you want the look of, so the
     /// art is the content and the countdown is the label on it.
     private var list: some View {
-        let columns = family == .systemLarge ? 3 : 3
-        return VStack(alignment: .leading, spacing: 8) {
+        // Fixed columns, not flexible ones. With `.flexible()` two games
+        // stretched to fill the whole width and pushed the header off the
+        // top — a widget with two things in it should look like a widget with
+        // two things in it, not like a poster.
+        let coverWidth: CGFloat = family == .systemLarge ? 78 : 62
+        return VStack(alignment: .leading, spacing: 7) {
             header
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
-                                     count: columns), spacing: 10) {
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(coverWidth), spacing: 9),
+                               count: family == .systemLarge ? 3 : 4),
+                alignment: .leading, spacing: 8
+            ) {
                 ForEach(games) { game in
                     Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
-                        VStack(spacing: 4) {
+                        VStack(spacing: 3) {
                             CoverPoster(image: loadCover(game.coverFileName))
-                                .aspectRatio(0.72, contentMode: .fit)
+                                .frame(width: coverWidth, height: coverWidth / 0.72)
                                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                             Text(countdown(game))
                                 .font(.system(size: 10, weight: .bold))
@@ -122,6 +129,7 @@ struct ReleasesView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                         }
+                        .frame(width: coverWidth)
                     }
                 }
             }

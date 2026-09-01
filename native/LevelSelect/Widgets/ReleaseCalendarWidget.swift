@@ -126,7 +126,16 @@ extension ReleaseCalendarWidgetView {
             byDay[cal.component(.day, from: game.releaseDate)] = game
         }
 
-        return VStack(alignment: .leading, spacing: 6) {
+        // Whole weeks, so the rows can share the height between them.
+        // A LazyVGrid sizes its rows to their content, which left the month
+        // packed into the top third of a large widget with the rest empty.
+        let cells = Array(repeating: 0, count: leading).map { _ in 0 }
+            + Array(1...dayCount)
+        let weeks = stride(from: 0, to: cells.count, by: 7).map {
+            Array(cells[$0..<min($0 + 7, cells.count)])
+        }
+
+        return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Image(systemName: "calendar")
                 Text(monthStart.formatted(Date.FormatStyle(timeZone: .gmt).month(.wide).year())
@@ -136,33 +145,39 @@ extension ReleaseCalendarWidgetView {
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(.white.opacity(0.55))
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 7),
-                      spacing: 3) {
+            HStack(spacing: 2) {
                 ForEach(cal.veryShortStandaloneWeekdaySymbols, id: \.self) { day in
                     Text(day)
                         .font(.system(size: 8, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.35))
-                }
-                ForEach(0..<leading, id: \.self) { _ in Color.clear.frame(height: 1) }
-                ForEach(1...dayCount, id: \.self) { day in
-                    if let game = byDay[day] {
-                        Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
-                            CoverPoster(image: loadCover(game.coverFileName))
-                                .aspectRatio(0.72, contentMode: .fit)
-                                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(LSWidget.accent, lineWidth: 1.5))
-                        }
-                    } else {
-                        Text("\(day)")
-                            .font(.system(size: 12, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.45))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 26)
-                    }
+                        .frame(maxWidth: .infinity)
                 }
             }
-            Spacer(minLength: 0)
+
+            ForEach(Array(weeks.enumerated()), id: \.offset) { _, week in
+                HStack(spacing: 2) {
+                    ForEach(Array(week.enumerated()), id: \.offset) { _, day in
+                        if day == 0 {
+                            Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if let game = byDay[day] {
+                            Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
+                                CoverPoster(image: loadCover(game.coverFileName))
+                                    .aspectRatio(0.72, contentMode: .fit)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(LSWidget.accent, lineWidth: 1.5))
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                        } else {
+                            Text("\(day)")
+                                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                                .foregroundStyle(.white.opacity(0.45))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
