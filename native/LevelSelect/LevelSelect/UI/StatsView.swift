@@ -58,15 +58,23 @@ enum StatsGroup: String, CaseIterable, Identifiable {
 enum StatsCard: String, CaseIterable, Identifiable {
     case overview, recent, ratings, library, monthly, streak
     case mostPlayed, systems, genres, series, tags, years, completions
-    case raWall
+    case latestFinishes, raWall
 
     var id: String { rawValue }
 
-    /// Which question about your history this card answers.
-    var group: StatsGroup {
+    /// Which question about your history this card answers, or `nil` for the
+    /// one card that answers all of them.
+    ///
+    /// Overview counts games, hours, sessions and percent-finished, so it sat
+    /// inside "Time" while half of it belonged to "Library". It is the summary
+    /// the three groups are a breakdown OF, so it stands above them, always
+    /// first and not reorderable -- the same treatment the game page gives its
+    /// header, and for the same reason.
+    var group: StatsGroup? {
         switch self {
-        case .overview, .recent, .monthly, .streak, .mostPlayed: .time
-        case .completions, .raWall:                              .finishes
+        case .overview: nil
+        case .recent, .monthly, .streak, .mostPlayed: .time
+        case .completions, .latestFinishes, .raWall:  .finishes
         case .ratings, .library, .systems, .genres, .series, .tags, .years: .library
         }
     }
@@ -88,8 +96,9 @@ enum StatsCard: String, CaseIterable, Identifiable {
         case .series:      "books.vertical"
         case .tags:        "tag"
         case .years:       "calendar.badge.clock"
-        case .completions: "flag.checkered"
-        case .raWall:      "rosette"
+        case .completions:    "flag.checkered"
+        case .latestFinishes: "checkmark.seal"
+        case .raWall:         "rosette"
         }
     }
 
@@ -107,8 +116,9 @@ enum StatsCard: String, CaseIterable, Identifiable {
         case .series:      "Series"
         case .tags:        "Tags"
         case .years:       "By Release Year"
-        case .completions: "Completions"
-        case .raWall:      "RA Masteries"
+        case .completions:    "Completions"
+        case .latestFinishes: "Latest Finishes"
+        case .raWall:         "RA Masteries"
         }
     }
 
@@ -157,8 +167,9 @@ struct StatsTab: View {
         switch card {
         case .ratings:     ratedCount > 0
         case .mostPlayed:  !top.isEmpty
-        case .completions: !completionsByYear.isEmpty
-        case .raWall:      !raAwards.isEmpty
+        case .completions:    !completionsByYear.isEmpty
+        case .latestFinishes: !latestFinishes.isEmpty
+        case .raWall:         !raAwards.isEmpty
         default:           true
         }
     }
@@ -185,13 +196,16 @@ struct StatsTab: View {
                     // any library that has finished nothing yet — the page
                     // announcing a section it does not have.
                     let visible = cardOrder.filter { !hiddenCards.contains($0) && draws($0, top: top) }
+                    if visible.contains(.overview) {
+                        overviewCard(sessions: sessions)
+                    }
                     ForEach(StatsGroup.allCases) { group in
-                        let cards = visible.filter { $0.group == group }
+                        let cards = visible.filter { $0.group == group }   // Overview's is nil
                         if !cards.isEmpty {
                             StatsGroupHeader(group: group)
                             ForEach(cards) { card in
                                 switch card {
-                                case .overview:    overviewCard(sessions: sessions)
+                                case .overview:    EmptyView()   // pinned above, outside every group
                                 case .recent:      recentCard(sessions: sessions)
                                 case .ratings:     ratingsCard
                                 case .library:     statusBreakdownCard
@@ -203,8 +217,9 @@ struct StatsTab: View {
                                 case .series:      franchisesCard
                                 case .tags:        sliceCard("Tags", icon: "tag.fill", rows: topCounts(\.userTags, limit: 12), kind: .tag)
                                 case .years:       releaseYearsCard
-                                case .completions: completionsCard
-                                case .raWall:      raWallCard
+                                case .completions:    completionsCard
+                                case .latestFinishes: latestFinishesCard
+                                case .raWall:         raWallCard
                                 }
                             }
                         }
@@ -257,36 +272,99 @@ struct StatsTab: View {
 
     // MARK: Cards
 
+    /// The summary the three groups break down.
+    ///
+    /// Four numbers separated by hairlines read as a status bar; pinned at the
+    /// top of the page it needed to read as the headline. Tiles with icons,
+    /// two across, which also stops "266h 36m" wrapping mid-figure the way it
+    /// did in a four-across strip on a phone.
     private func overviewCard(sessions: [Session]) -> some View {
-        // Four-across survives every regular size; at accessibility sizes it
-        // hyphenates every word, so the strip folds into a 2×2 grid.
-        Group {
-            if typeSize.isAccessibilitySize {
-                Grid(horizontalSpacing: 0, verticalSpacing: 14) {
-                    GridRow {
-                        stat(number: "\(games.count)", label: "Games")
-                        stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
-                    }
-                    GridRow {
-                        stat(number: "\(sessions.count)", label: "Sessions")
-                        stat(number: "\(Int((completionRate * 100).rounded()))%", label: "Finished")
-                    }
-                }
-            } else {
-                HStack(spacing: 0) {
-                    stat(number: "\(games.count)", label: "Games")
-                    divider
-                    stat(number: Format.duration(sessions.reduce(0) { $0 + $1.elapsed() }), label: "Played")
-                    divider
-                    stat(number: "\(sessions.count)", label: "Sessions")
-                    divider
-                    // Completed share of the library — the web's headline number.
-                    stat(number: "\(Int((completionRate * 100).rounded()))%", label: "Finished")
-                }
+        let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() })
+        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+            GridRow {
+                statTile("gamecontroller.fill", "\(games.count)", "Games")
+                statTile("clock.fill", played, "Played")
+            }
+            GridRow {
+                statTile("timer", "\(sessions.count)", "Sessions")
+                // Completed share of the library — the web's headline number.
+                statTile("flag.checkered", "\(Int((completionRate * 100).rounded()))%", "Finished")
             }
         }
         .frame(maxWidth: .infinity)
         .lsCard()
+    }
+
+    /// The five most recent finishes, whenever they were.
+    ///
+    /// "Finishes" was a heading over a single card for anyone without
+    /// RetroAchievements masteries, because Completions is a count by year and
+    /// counts are not the memory. This is the games themselves, and unlike
+    /// Home's Recently Beaten it has no window — a shelf that empties is right
+    /// for a prompt on Home and wrong for the page about your history.
+    private var latestFinishes: [(event: CompletionEvent, game: Game)] {
+        games.flatMap { game in
+            (game.completionEvents ?? [])
+                .filter { $0.deletedAt == nil }
+                .map { (event: $0, game: game) }
+        }
+        .sorted { $0.event.date > $1.event.date }
+        .prefix(5)
+        .map { $0 }
+    }
+
+    private var latestFinishesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Latest Finishes", systemImage: "checkmark.seal.fill")
+                .font(.headline)
+            ForEach(latestFinishes, id: \.event.id) { row in
+                NavigationLink(value: row.game) {
+                    HStack(spacing: 12) {
+                        CoverThumb(urlString: row.game.displayCoverURLString)
+                            .frame(width: 34, height: 45)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.game.name)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Text(row.event.labelText)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 6)
+                        Text(row.event.dateText)
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(row.game.name), \(row.event.labelText), \(row.event.dateText)")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .lsCard()
+    }
+
+    private func statTile(_ icon: String, _ number: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(LSTheme.accent)
+            Text(number)
+                .font(.title2.bold().monospacedDigit())
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(number)")
     }
 
     private func recentCard(sessions: [Session]) -> some View {
@@ -520,24 +598,57 @@ struct StatsTab: View {
     /// Fifteen weeks of days, GitHub-shaped: columns are weeks, rows are
     /// weekdays, intensity is minutes played. The one card that shows the
     /// *habit* rather than the totals.
+    /// Half a year, with the months named.
+    ///
+    /// Fifteen unlabelled weeks answered "have I played lately" and nothing
+    /// else — you could see a gap but not when it was, and a streak you were
+    /// proud of scrolled out of the window in under four months. Tim, against
+    /// a reading app that labels its months: "Can streaks fit more and have
+    /// month labels like this reading one?"
+    ///
+    /// Twenty-six weeks at a 10pt cell is the most that fits a phone's card
+    /// without the squares becoming specks: 26 × 10 + 25 × 3 = 335pt inside a
+    /// ~342pt card. The label row is drawn as one slot per week so it cannot
+    /// drift out of step with the grid, and each name is an overlay rather
+    /// than the slot's content, so "Sep" is free to overhang the 10pt column
+    /// it belongs to instead of being clipped to it.
     private func heatmapCard(sessions: [Session]) -> some View {
-        let cells = heatmapCells(sessions: sessions, weeks: 15)
+        let weeks = 26
+        let cell: CGFloat = 10
+        let gap: CGFloat = 3
+        let cells = heatmapCells(sessions: sessions, weeks: weeks)
         return VStack(alignment: .leading, spacing: 10) {
             Label("Streak", systemImage: "flame.fill")
                 .font(.headline)
-            HStack(alignment: .top, spacing: 3) {
-                ForEach(cells, id: \.first?.day) { week in
-                    VStack(spacing: 3) {
-                        ForEach(week, id: \.day) { cell in
-                            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                                .fill(heatColor(cell.minutes))
-                                .frame(width: 13, height: 13)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .bottom, spacing: gap) {
+                    ForEach(Array(cells.enumerated()), id: \.offset) { index, week in
+                        Color.clear
+                            .frame(width: cell, height: 12)
+                            .overlay(alignment: .leading) {
+                                if let name = monthLabel(at: index, in: cells) {
+                                    Text(name)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .fixedSize()
+                                }
+                            }
+                    }
+                }
+                HStack(alignment: .top, spacing: gap) {
+                    ForEach(cells, id: \.first?.day) { week in
+                        VStack(spacing: gap) {
+                            ForEach(week, id: \.day) { day in
+                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                    .fill(heatColor(day.minutes))
+                                    .frame(width: cell, height: cell)
+                            }
                         }
                     }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .center)
-            // 105 unlabeled squares is noise to a screen reader; the grid
+            // 182 unlabeled squares is noise to a screen reader; the grid
             // speaks as one summary and the legend stays visual-only.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(heatmapSummary(cells))
@@ -554,6 +665,24 @@ struct StatsTab: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .lsCard()
     }
+
+    /// A month is named above the first column that contains any of its days,
+    /// and never twice. The first column is skipped when it is a stub — a
+    /// label there would sit over a part-week and read as the month starting
+    /// later than it did.
+    private func monthLabel(at index: Int, in weeks: [[DayCell]]) -> String? {
+        guard let first = weeks[safe: index]?.first?.day else { return nil }
+        let cal = Calendar.current
+        let month = cal.component(.month, from: first)
+        if index == 0 {
+            return cal.component(.day, from: first) <= 7 ? Self.monthNames[month - 1] : nil
+        }
+        guard let previous = weeks[safe: index - 1]?.first?.day,
+              cal.component(.month, from: previous) != month else { return nil }
+        return Self.monthNames[month - 1]
+    }
+
+    private static let monthNames = Calendar.current.shortMonthSymbols
 
     private func heatmapSummary(_ cells: [[DayCell]]) -> String {
         let days = cells.flatMap(\.self)
@@ -1139,6 +1268,17 @@ struct StatsArrangeSheet: View {
                 //
                 // So a card moves WITHIN its group, which is the only
                 // movement the page can honour.
+                Section {
+                    Toggle(isOn: visibilityBinding(.overview)) {
+                        Label(StatsCard.overview.displayName, systemImage: StatsCard.overview.icon)
+                    }
+                    .tint(LSTheme.accent)
+                } header: {
+                    Text("Summary")
+                } footer: {
+                    Text("Always at the top, above the groups. It is the total the rest of the page breaks down.")
+                }
+
                 ForEach(StatsGroup.allCases) { group in
                     Section {
                         ForEach(order.filter { $0.group == group }) { card in
@@ -1200,5 +1340,13 @@ struct StatsArrangeSheet: View {
                 hiddenRaw = StatsCard.allCases.filter(set.contains)
                     .map(\.rawValue).joined(separator: ",")
             })
+    }
+}
+
+extension Array {
+    /// Bounds-checked access, for the heatmap's month labels reaching one
+    /// column back.
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
     }
 }
