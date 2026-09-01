@@ -82,7 +82,9 @@ struct MetadataRefreshTests {
         let filled = MetadataRefresh.fill(game, from: igdb())
 
         #expect(filled.contains(.releaseDate))
-        let year = Calendar.current.component(.year, from: game.firstReleaseDate!)
+        // UTC: a year-only date is stored as 1 January at UTC midnight, which
+        // the local calendar reads as the previous year west of Greenwich.
+        let year = ReleaseCountdown.utc.component(.year, from: game.firstReleaseDate!)
         #expect(year == 2018)
     }
 

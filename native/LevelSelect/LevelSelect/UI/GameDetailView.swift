@@ -1378,8 +1378,12 @@ struct GameDetailView: View {
                     // a fact about this one, so each is a way into the library
                     // filtered to it.
                     GridRow {
+                        // UTC, because a release date is a calendar date. A
+                        // year-only 2026 is stored at UTC midnight on 1
+                        // January, and the local calendar reads that as 2025
+                        // anywhere west of Greenwich.
                         infoCell("Released", game.firstReleaseDate.map {
-                            String(Calendar.current.component(.year, from: $0))
+                            String(ReleaseCountdown.utc.component(.year, from: $0))
                         }, kind: .year)
                         infoCell("Series", game.franchise, kind: .franchise)
                     }
@@ -1602,7 +1606,11 @@ struct GameDetailView: View {
     /// there's a Switch port. But the one you own is the one that's *yours*,
     /// and an undifferentiated row of three said nothing about which.
     private var platformsGroup: some View {
-        let mine = Set(game.ownedPlatformNames)
+        // Ownership you actually declared. `ownedPlatformNames` falls back to
+        // the first platform IGDB lists when you own none — fine for choosing
+        // an icon, and a lie on a badge that says MINE. Onimusha showed
+        // "Nintendo Switch 2 · MINE" for a wishlist game nobody had claimed.
+        let mine = Set(game.ownedPlatforms ?? [])
         return VStack(alignment: .leading, spacing: 6) {
             Text("Platforms").font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {

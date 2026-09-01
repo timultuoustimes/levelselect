@@ -232,8 +232,12 @@ struct Build34WishlistTests {
             themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
             releaseTimestamp: dec30.timeIntervalSince1970, releasePrecision: .year)
 
+        // Read in UTC, because that is what the placeholder now IS. It used to
+        // be built with the local calendar, which is how Onimusha ended up
+        // stored as 1 January 05:00Z and shown as "Released 2025" — a test
+        // asserting in local time agreed with the bug.
         let stored = padded.storableReleaseDate!
-        let parts = Calendar.current.dateComponents([.year, .month, .day], from: stored)
+        let parts = ReleaseCountdown.utc.dateComponents([.year, .month, .day], from: stored)
         #expect(parts.year == 2026)
         #expect(parts.month == 1)   // collapsed to the app's year-only shorthand
         #expect(parts.day == 1)

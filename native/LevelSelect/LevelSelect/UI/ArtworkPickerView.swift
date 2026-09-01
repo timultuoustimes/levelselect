@@ -89,6 +89,16 @@ struct ArtworkPickerView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            // A picker that lets you choose a logo and then draws the name
+            // anyway is the app keeping a secret. Tim picked one, saw no
+            // change, and reasonably read it as broken — the switch was off.
+            if role == .logo, !ThemePalette.showGameLogos {
+                Label("Game logos are turned off in Settings, so this will be saved but not shown.",
+                      systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote)
+                    .foregroundStyle(LSTheme.torch)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if isSet {
                 Button {
                     choose(nil)

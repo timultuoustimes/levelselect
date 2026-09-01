@@ -109,7 +109,7 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
               let match = platformReleases.first(where: {
                   PlatformIcon.consoleKey($0.platform) == PlatformIcon.consoleKey(platform)
               })
-        else { return storableReleaseDate }
+        else { return earliestAnnouncedDay ?? storableReleaseDate }
 
         let date = Date(timeIntervalSince1970: match.timestamp)
         guard match.precision.hasDay, !MetadataRefresh.isYearOnly(date) else {
@@ -135,10 +135,31 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
         // of the two padding days — a category-0 answer landing on
         // 31 December is a period boundary far more often than a launch.
         guard releasePrecision.hasDay, !MetadataRefresh.isYearOnly(date) else {
-            let year = Calendar.current.component(.year, from: date)
-            return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
+            let utc = ReleaseCountdown.utc
+            let year = utc.component(.year, from: date)
+            return DateComponents(calendar: utc, year: year, month: 1, day: 1).date
         }
         return date
+    }
+
+    /// The soonest platform release IGDB gives an exact day for.
+    ///
+    /// When you have not said which platform you will get a game on, a
+    /// day-precise platform entry beats IGDB's own summary. Onimusha: Way of
+    /// the Sword carries 3 September 2026 on every platform it ships on, while
+    /// `first_release_date` is coarse enough to pad to 1 January — so the app
+    /// stored "2026", filed a game two days out under "No date yet", and
+    /// disagreed with IGDB's own countdown on the same game's page.
+    ///
+    /// A CHOSEN platform still wins, even when its own entry is vague: if you
+    /// said Switch 2 and Switch 2 has no day, the honest answer is that nobody
+    /// has told you when YOUR copy arrives.
+    var earliestAnnouncedDay: Date? {
+        platformReleases
+            .filter(\.precision.hasDay)
+            .map { Date(timeIntervalSince1970: $0.timestamp) }
+            .filter { !MetadataRefresh.isYearOnly($0) }
+            .min()
     }
 
     var releaseDate: Date? {
