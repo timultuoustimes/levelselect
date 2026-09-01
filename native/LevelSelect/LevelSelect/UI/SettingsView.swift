@@ -108,6 +108,8 @@ struct SettingsView: View {
 
                 RetroAchievementsSettings()
 
+                ItchSettings()
+
                 ReleaseRemindersSettings()
 
                 DataSettingsSection()

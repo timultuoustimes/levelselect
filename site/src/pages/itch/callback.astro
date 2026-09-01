@@ -1,0 +1,63 @@
+---
+import Base from '../../layouts/Base.astro';
+
+/**
+ * The one page on this site that exists for the app rather than the reader.
+ *
+ * itch.io's OAuth is the implicit flow: the access token comes back in the URL
+ * FRAGMENT. A fragment never leaves the browser — it is not sent to the server
+ * and never appears in a request log — which is what makes this page safe, and
+ * also what makes it necessary. itch will only redirect to https, a loopback
+ * address, or a copy-paste screen, so a native app cannot be the target
+ * directly.
+ *
+ * So this page reads its own hash and bounces to `levelselect://itch/callback`
+ * with the fragment intact, where `ASWebAuthenticationSession` is waiting for
+ * it. The token passes through a browser and a URL scheme; it never touches
+ * Netlify, this site's build, or anything we run.
+ */
+---
+<Base
+  title="Connecting itch.io — LevelSelect"
+  description="Returning you to LevelSelect after connecting your itch.io account."
+>
+<main class="wrap doc-page">
+  <article class="doc">
+    <h1>Connecting itch.io</h1>
+    <p class="lede" id="status">Sending you back to LevelSelect…</p>
+    <p id="fallback" hidden>
+      If nothing happened, <a id="open" href="#">open LevelSelect</a> to finish connecting.
+      You can close this page afterwards.
+    </p>
+    <p class="stamp">
+      Nothing on this page is stored or sent anywhere. Your itch.io token stays
+      in the address bar and goes straight to the app.
+    </p>
+  </article>
+</main>
+</Base>
+
+<script>
+  // The hash is forwarded verbatim: the app checks `state` itself, so this
+  // page deliberately does not parse, validate, or keep any of it.
+  const hash = window.location.hash;
+  const target = `levelselect://itch/callback${hash}`;
+
+  const open = document.getElementById('open') as HTMLAnchorElement | null;
+  if (open) open.href = target;
+
+  if (hash.includes('access_token=')) {
+    window.location.replace(target);
+    // The redirect is silent when the app is not installed, so the manual
+    // route appears a moment later rather than leaving a dead page.
+    setTimeout(() => {
+      document.getElementById('fallback')?.removeAttribute('hidden');
+    }, 1200);
+  } else {
+    const status = document.getElementById('status');
+    if (status) {
+      status.textContent =
+        'This page finishes connecting an itch.io account to LevelSelect. Open it from the app rather than directly.';
+    }
+  }
+</script>
