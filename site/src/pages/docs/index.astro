@@ -67,7 +67,7 @@ const sections = [
   { id: 'notes',             q: 'Where do notes and “where I left off” go?',
     a: 'Any tracker item can carry a note — press and hold the row, then Edit item.' },
   { id: 'hints',             q: 'How do I avoid spoilers?',
-    a: 'Settings → Appearance turns off the hints that generated and imported lists carry.' },
+    a: 'Settings → Game pages & trackers turns off the hints a generated or imported list carries.' },
   { id: 'retroachievements', q: 'I want my retro achievements in here',
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
@@ -291,7 +291,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'hints')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p>Generated and imported checklists usually carry a hint or a location for each item — useful when you're hunting, spoilers when you're not. <strong>Settings &rarr; Appearance &rarr; Show item hints</strong> turns them off: rows become just their names, and location headings disappear too.</p>
+    <p>Generated and imported checklists usually carry a hint or a location for each item — useful when you're hunting, spoilers when you're not. <strong>Settings &rarr; Game pages &amp; trackers &rarr; Show tracker hints</strong> turns them off: rows become just their names, and location headings disappear too.</p>
     <p>When you actually want one hint, <strong>press and hold that row</strong> — a card shows that item's hint, location, and badge, and nothing else. One item at a time, so checking a single objective can't spoil the list below it. Your own notes on items always stay visible; they're yours, not hints.</p>
       </div>
     </details>
