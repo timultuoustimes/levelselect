@@ -91,41 +91,11 @@ enum WishlistShelf {
             .month(.abbreviated).day().year())
     }
 
-    /// How long until it lands — "Tomorrow", "in 6 days", "in 3 weeks".
-    ///
-    /// Counted in whole UTC days, not by subtracting instants. A release is a
-    /// calendar date, so "tomorrow" has to mean the next date on the calendar
-    /// rather than a point 24 hours away — otherwise a game landing tomorrow
-    /// morning reads as "Today" all of this evening.
-    ///
-    /// Deterministic on purpose. The previous version called
-    /// `.formatted(.relative(...))`, which measures against the real clock and
-    /// silently ignored the `from:` it was handed, so it could not be tested
-    /// and could not be reasoned about on either side of midnight.
+    /// See `ReleaseCountdown` — shared with the widgets so the shelf and the
+    /// Home Screen can never count to different days.
     static func countdown(to date: Date, from now: Date = .now) -> String? {
-        guard !isYearOnly(date) else { return nil }
-        let today = utc.startOfDay(for: now)
-        let landing = utc.startOfDay(for: date)
-        guard let days = utc.dateComponents([.day], from: today, to: landing).day,
-              days >= 0 else { return nil }
-        switch days {
-        case 0:      return "Today"
-        case 1:      return "Tomorrow"
-        case 2...13: return "in \(days) days"
-        case 14...59:
-            let weeks = days / 7
-            return "in \(weeks) week\(weeks == 1 ? "" : "s")"
-        default:
-            let months = max(2, Int((Double(days) / 30.44).rounded()))
-            return "in \(months) months"
-        }
+        ReleaseCountdown.countdown(to: date, from: now)
     }
 
-    /// How near a countdown stays useful.
-    ///
-    /// "in 6 days" tells you something you would act on; "in 11 months" tells
-    /// you less than the date does, and a wishlist full of them would read as
-    /// a page of vague waiting. Past this, the shelf goes back to printing the
-    /// date it knows.
-    static let countdownHorizon = 60
+    static let countdownHorizon = ReleaseCountdown.horizon
 }

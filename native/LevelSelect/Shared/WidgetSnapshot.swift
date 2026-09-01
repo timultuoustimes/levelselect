@@ -37,6 +37,19 @@ struct WidgetObjective: Codable, Hashable, Identifiable {
 }
 
 /// One game on the Now Playing shelf.
+/// A wanted game that has not come out yet.
+///
+/// The date travels, not the countdown text. A widget can be rendered hours
+/// after its snapshot was written, and a baked "in 2 days" would be wrong by
+/// then — so the countdown is computed at draw time from the date, by the same
+/// `ReleaseCountdown` the wishlist uses.
+struct WidgetUpcomingGame: Codable, Hashable, Identifiable {
+    var id: String
+    var name: String
+    var coverFileName: String?
+    var releaseDate: Date
+}
+
 struct WidgetShelfGame: Codable, Hashable, Identifiable {
     var id: String
     var name: String
@@ -138,6 +151,8 @@ struct WidgetSnapshot: Codable, Hashable {
     /// app's own store — so the accent travels here with everything else the
     /// app already tells them.
     var accentHex: String? = nil
+    /// Wishlist games with a real date still ahead, soonest first.
+    var upcoming: [WidgetUpcomingGame] = []
     /// Average seconds per week over the four *finished* weeks before this
     /// one — the gauge's "my own pace" reference.
     var weeklyAverageSeconds: Double = 0
@@ -197,9 +212,11 @@ struct WidgetSnapshot: Codable, Hashable {
         collections: [WidgetCollectionRef] = [],
         platformIcons: [String: String] = [:],
         lastTicked: String? = nil,
-        accentHex: String? = nil
+        accentHex: String? = nil,
+        upcoming: [WidgetUpcomingGame] = []
     ) {
         self.accentHex = accentHex
+        self.upcoming = upcoming
         self.lastTicked = lastTicked
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
@@ -246,6 +263,7 @@ struct WidgetSnapshot: Codable, Hashable {
         libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
         accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
+        upcoming = try c.decodeIfPresent([WidgetUpcomingGame].self, forKey: .upcoming) ?? []
         weeklyAverageSeconds = try c.decodeIfPresent(Double.self, forKey: .weeklyAverageSeconds) ?? 0
         completedCount = try c.decodeIfPresent(Int.self, forKey: .completedCount) ?? 0
         libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount) ?? 0

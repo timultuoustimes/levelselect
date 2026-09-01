@@ -88,6 +88,19 @@ enum WidgetBridge {
         // twelve, because the iPad extra-large shelf shows a wall of twelve
         // covers. The phone widgets still take their four or eight off the
         // top, so they see the same games they always did.
+        // What you are waiting for. `WishlistShelf.comingSoon` is the same
+        // filter the wishlist's own shelf uses, so the widget can never show a
+        // game the app has moved to "No date yet" or "Out now" — including the
+        // year-only placeholders IGDB pads to 1 January and 31 December.
+        let upcoming: [WidgetUpcomingGame] = WishlistShelf
+            .comingSoon(games.filter { $0.status == .wishlist })
+            .prefix(8)
+            .compactMap { g in
+                guard let date = g.firstReleaseDate else { return nil }
+                return WidgetUpcomingGame(id: g.id.uuidString, name: g.name,
+                                          coverFileName: coverName(g), releaseDate: date)
+            }
+
         let shelfStatuses: [GameStatus] = [.playing, .paused, .queued]
         let nowPlaying: [WidgetShelfGame] = shelfStatuses
             .flatMap { status in
@@ -248,7 +261,8 @@ enum WidgetBridge {
             // the widgets fall back to the same default the app does rather
             // than to a copy of today's hue that would go stale the next time
             // the default changes.
-            accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil
+            accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil,
+            upcoming: upcoming
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }

@@ -161,6 +161,10 @@ targets:
       # no UI) — the watch surfaces failures via the same shared state.
       - path: LevelSelect/Persistence/PersistenceMonitor.swift
       - path: LevelSelect/Domain
+      # Domain's date rules delegate here, and the watch compiles Domain.
+      # Foundation only — the rest of Shared/ imports WidgetKit and has no
+      # business on a watch, so this is the one file rather than the folder.
+      - path: Shared/ReleaseCountdown.swift
       # Foundation-only value types Repository references (no UI).
       - path: LevelSelect/Services/IGDBService.swift
       - path: LevelSelect/Services/YouTubeService.swift

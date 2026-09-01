@@ -17,6 +17,7 @@ struct LevelSelectWidgets: WidgetBundle {
         HeatmapWidget()
         FinishedShareWidget()
         LauncherWidget()
+        ReleasesWidget()
         LockRectangularWidget()
         LockInlineWidget()
         CompletionCircularWidget()
