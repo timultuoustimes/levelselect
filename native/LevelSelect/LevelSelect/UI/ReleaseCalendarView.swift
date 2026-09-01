@@ -46,12 +46,17 @@ struct ReleaseCalendarView: View {
                     description: Text("Wishlist games with an announced date show up here, month by month."))
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18, pinnedViews: [.sectionHeaders]) {
+                    // No padding on the stack: a pinned header needs a
+                    // background that reaches both edges, and an inset stack
+                    // gave it a band that stopped short of them while rows
+                    // slid past underneath. The rows carry the inset instead.
+                    LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
                         ForEach(months, id: \.start) { month in
                             Section {
                                 ForEach(month.games) { game in
                                     NavigationLink(value: game) { row(game) }
                                         .buttonStyle(.plain)
+                                        .padding(.horizontal)
                                 }
                             } header: {
                                 monthHeader(month.start, count: month.games.count)
@@ -63,13 +68,14 @@ struct ReleaseCalendarView: View {
                                 ForEach(undated) { game in
                                     NavigationLink(value: game) { row(game) }
                                         .buttonStyle(.plain)
+                                        .padding(.horizontal)
                                 }
                             } header: {
                                 monthHeader(nil, count: undated.count)
                             }
                         }
                     }
-                    .padding()
+                    .padding(.vertical)
                 }
             }
         }
@@ -91,7 +97,11 @@ struct ReleaseCalendarView: View {
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 6)
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Opaque and full-bleed, so rows disappear UNDER the header rather
+        // than showing through a band that ends before the screen does.
         .background(LSTheme.background)
     }
 

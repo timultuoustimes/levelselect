@@ -18,6 +18,7 @@ struct LevelSelectWidgets: WidgetBundle {
         FinishedShareWidget()
         LauncherWidget()
         ReleasesWidget()
+        ReleaseCalendarWidget()
         LockRectangularWidget()
         LockInlineWidget()
         CompletionCircularWidget()

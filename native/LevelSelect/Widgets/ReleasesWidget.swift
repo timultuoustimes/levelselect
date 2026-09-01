@@ -82,23 +82,31 @@ struct ReleasesView: View {
         }
     }
 
+    /// Covers, with the wait written on them.
+    ///
+    /// This was a list: a 26pt thumbnail, a name, and a countdown in a row.
+    /// That is the calendar widget's job, and doing it twice made the pair
+    /// redundant — Tim: "can the other widget be brought to be more art
+    /// focused?" A wishlist is a wall of things you want the look of, so the
+    /// art is the content and the countdown is the label on it.
     private var list: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let columns = family == .systemLarge ? 3 : 3
+        return VStack(alignment: .leading, spacing: 8) {
             header
-            ForEach(games) { game in
-                Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
-                    HStack(spacing: 9) {
-                        CoverPoster(image: loadCover(game.coverFileName))
-                            .frame(width: 26, height: 35)
-                        Text(game.name)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                        Spacer(minLength: 6)
-                        Text(countdown(game))
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(LSWidget.accent)
-                            .lineLimit(1)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8),
+                                     count: columns), spacing: 10) {
+                ForEach(games) { game in
+                    Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
+                        VStack(spacing: 4) {
+                            CoverPoster(image: loadCover(game.coverFileName))
+                                .aspectRatio(0.72, contentMode: .fit)
+                                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                            Text(countdown(game))
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(LSWidget.accent)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
                     }
                 }
             }
