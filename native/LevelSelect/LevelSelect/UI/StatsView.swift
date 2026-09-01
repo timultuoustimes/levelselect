@@ -27,23 +27,30 @@ import SwiftData
 /// stays the reader's, which is why the stored preference needs no migration
 /// — an existing arrangement survives as relative order within each group.
 enum StatsGroup: String, CaseIterable, Identifiable {
-    case played, finished, holdings
+    case time, finishes, library
 
     var id: String { rawValue }
 
+    /// One plain noun each.
+    ///
+    /// These started as the questions they answer -- "When you played",
+    /// "What your library is made of" -- which explained the grouping at the
+    /// cost of narrating it every time you scrolled past. Tim: "the headers
+    /// feel too wordy and over explanatory." A heading is a label, not a
+    /// caption; the cards underneath already say what they are.
     var displayName: String {
         switch self {
-        case .played:   "When you played"
-        case .finished: "What you finished"
-        case .holdings: "What your library is made of"
+        case .time:     "Time"
+        case .finishes: "Finishes"
+        case .library:  "Library"
         }
     }
 
     var icon: String {
         switch self {
-        case .played:   "stopwatch"
-        case .finished: "flag.checkered"
-        case .holdings: "square.grid.2x2"
+        case .time:     "stopwatch"
+        case .finishes: "flag.checkered"
+        case .library:  "square.grid.2x2"
         }
     }
 }
@@ -58,9 +65,9 @@ enum StatsCard: String, CaseIterable, Identifiable {
     /// Which question about your history this card answers.
     var group: StatsGroup {
         switch self {
-        case .overview, .recent, .monthly, .streak, .mostPlayed: .played
-        case .completions, .raWall:                              .finished
-        case .ratings, .library, .systems, .genres, .series, .tags, .years: .holdings
+        case .overview, .recent, .monthly, .streak, .mostPlayed: .time
+        case .completions, .raWall:                              .finishes
+        case .ratings, .library, .systems, .genres, .series, .tags, .years: .library
         }
     }
 
@@ -72,7 +79,7 @@ enum StatsCard: String, CaseIterable, Identifiable {
         case .overview:    "chart.bar.xaxis"
         case .recent:      "clock"
         case .ratings:     "star"
-        case .library:     "square.grid.2x2"
+        case .library:     "circle.grid.2x2"
         case .monthly:     "calendar"
         case .streak:      "flame"
         case .mostPlayed:  "trophy"
@@ -91,7 +98,7 @@ enum StatsCard: String, CaseIterable, Identifiable {
         case .overview:    "Overview"
         case .recent:      "Recent Play"
         case .ratings:     "Ratings"
-        case .library:     "Library"
+        case .library:     "By Status"
         case .monthly:     "By Month"
         case .streak:      "Streak"
         case .mostPlayed:  "Most Played"
@@ -312,7 +319,7 @@ struct StatsTab: View {
             statusBreakdownBars
         } back: {
             VStack(alignment: .leading, spacing: 10) {
-                Label("Library", systemImage: "books.vertical.fill")
+                Label("By Status", systemImage: "circle.grid.2x2.fill")
                     .font(.headline)
                 StatsPie(slices: statusSlices,
                          centerTitle: "Games",
@@ -323,7 +330,7 @@ struct StatsTab: View {
 
     private var statusBreakdownBars: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Library", systemImage: "books.vertical.fill")
+            Label("By Status", systemImage: "circle.grid.2x2.fill")
                 .font(.headline)
             ForEach(GameStatus.displayOrder, id: \.self) { status in
                 let count = statusCounts[status] ?? 0
