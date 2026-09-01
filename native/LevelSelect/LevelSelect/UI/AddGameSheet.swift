@@ -126,6 +126,11 @@ struct AddGameSheet: View {
             #else
             .listStyle(.insetGrouped)
             #endif
+            // The search results list painted its own opaque grey over the
+            // frosted sheet, which is why only the strip around the search
+            // field looked translucent and everything below it did not.
+            .scrollContentBackground(.hidden)
+            .listRowBackground(AddSheetCard())
         }
         .task(id: searchText) {
             // Debounce; .task(id:) cancels the previous search automatically.
@@ -284,6 +289,7 @@ private struct ConfirmAddView: View {
     @State private var showingAbout = false
     @State private var zoomed: ZoomTarget?
     @State private var browsing: DekuLinkTarget?
+    @State private var trailer: TrailerTarget?
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -431,9 +437,10 @@ private struct ConfirmAddView: View {
                 // Deciding whether this is the right game is the job of this
                 // screen, and being thrown out of it to check a price or a
                 // release date is how you lose the search you just did.
-                if let video = game.videoIDs.first,
-                   let url = URL(string: "https://www.youtube.com/embed/\(video)?playsinline=1&autoplay=1") {
-                    Button { browsing = DekuLinkTarget(url: url) } label: {
+                if let video = game.videoIDs.first {
+                    Button {
+                        trailer = TrailerTarget(youtubeID: video, title: game.name)
+                    } label: {
                         Label("Watch the trailer", systemImage: "play.rectangle.fill")
                     }
                 }
@@ -483,15 +490,19 @@ private struct ConfirmAddView: View {
         // grouped Form reads as Settings, and this is the screen where you
         // look at a game — Tim: "It's also a boring default grey, like the
         // settings menu... Can it be a slight glass?"
+        // No `lsBackground()` here on purpose. An opaque ground painted
+        // inside the sheet sits ON TOP of `presentationBackground`, so the
+        // frosting had nothing to frost — the sheet was translucent in name
+        // and grey on screen. The material is the background now.
         .scrollContentBackground(.hidden)
         .listRowBackground(AddSheetCard())
-        .lsBackground()
                 .sheet(item: $zoomed) { RemoteImageViewer(url: $0.url) }
-        .sheet(item: $browsing) { target in
-            NavigationStack {
-                InAppBrowser(url: target.url)
-            }
-        }
+        // The same modifier the game page uses, so a link opens the same way
+        // from both — Tim: "Igdb and Deku both open a little differently than
+        // they open straight from the game's page." That one is Safari's own
+        // compact bar; mine was a full navigation bar around a web view.
+        .dekuBrowser(target: $browsing)
+        .sheet(item: $trailer) { TrailerSheet(youtubeID: $0.youtubeID, title: $0.title) }
         .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus

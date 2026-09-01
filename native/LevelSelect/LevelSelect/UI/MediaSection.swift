@@ -14,7 +14,7 @@ struct ScreenshotStrip: View {
     @Environment(\.modelContext) private var context
     @State private var imageIDs: [String] = []
     @State private var videoIDs: [String] = []
-    @State private var browsing: DekuLinkTarget?
+    @State private var trailer: TrailerTarget?
     @State private var loaded = false
     @State private var viewing: ScreenshotItem?
     @State private var viewingLocal: GameImage?
@@ -119,9 +119,7 @@ struct ScreenshotStrip: View {
                             HStack(spacing: 10) {
                                 ForEach(videoIDs, id: \.self) { id in
                                     Button {
-                                        browsing = URL(string:
-                                            "https://www.youtube.com/embed/\(id)?playsinline=1&autoplay=1")
-                                            .map(DekuLinkTarget.init(url:))
+                                        trailer = TrailerTarget(youtubeID: id, title: game.name)
                                     } label: {
                                         AsyncImage(url: URL(string:
                                             "https://img.youtube.com/vi/\(id)/hqdefault.jpg")) { image in
@@ -149,9 +147,7 @@ struct ScreenshotStrip: View {
         }
         .task { await load() }
         .task(id: photoItem) { await ingestPickedPhoto() }
-        .sheet(item: $browsing) { target in
-            NavigationStack { InAppBrowser(url: target.url) }
-        }
+        .sheet(item: $trailer) { TrailerSheet(youtubeID: $0.youtubeID, title: $0.title) }
         .sheet(item: $viewing) { item in
             // One viewer for the app: the add screen needed the same thing,
             // and two of these drift until one loses the pinch gesture.
