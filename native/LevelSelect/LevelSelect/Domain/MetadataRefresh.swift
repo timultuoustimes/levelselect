@@ -54,10 +54,20 @@ enum MetadataRefresh {
     /// "12 November 2026" is strictly better information about the same event.
     /// Past years are excluded: most of the retro library is year-only and
     /// none of it is going to be announced.
+    /// Compared in UTC on BOTH sides.
+    ///
+    /// It used to read the year with the local calendar, and a 1 January
+    /// placeholder is stored at UTC midnight — so anywhere west of Greenwich
+    /// it read as 31 December of the year BEFORE, the predicate returned
+    /// false, and the one field whose whole purpose is to be re-asked was
+    /// never asked again. Same bug as the wishlist printing "Feb 26" for a
+    /// 27 February launch, surviving in a place that had no display to give
+    /// it away.
     static func awaitsAnnouncedDate(_ date: Date?, now: Date = .now,
                                     calendar: Calendar = .current) -> Bool {
         guard let date, !isMissing(date), isYearOnly(date) else { return false }
-        return calendar.component(.year, from: date) >= calendar.component(.year, from: now)
+        let utc = ReleaseCountdown.utc
+        return utc.component(.year, from: date) >= utc.component(.year, from: now)
     }
 
     /// Is this release date absent — either genuinely nil, or the epoch
@@ -291,6 +301,17 @@ enum MetadataRefresh {
     /// short enough that new IGDB data eventually arrives on its own.
     static let recheckAfter: TimeInterval = 30 * 24 * 3600
 
+    /// How long to leave a game whose date has not been announced yet.
+    ///
+    /// A month is right for "IGDB has no cover for this" — that answer rarely
+    /// changes. It is exactly wrong for a date nobody has given, because that
+    /// is the one field whose whole nature is that it changes, and it changes
+    /// on a publisher's schedule rather than ours. Onimusha: Way of the Sword
+    /// was asked about, answered with a year, marked checked, and would have
+    /// stayed "No date yet" through its own launch — IGDB had 3 September the
+    /// whole time.
+    static let recheckAwaitingDateAfter: TimeInterval = 24 * 3600
+
     /// Sort a library into work, unmatchable, and already-complete.
     ///
     /// Deleted games are skipped — deletion is soft here, and a refresh has no
@@ -316,7 +337,11 @@ enum MetadataRefresh {
                 plan.informationalOnly += 1
                 continue
             }
-            if let asked = checked[game.id], now.timeIntervalSince(asked) < recheckAfter {
+            // A game waiting on an announcement gets asked again the next
+            // day; everything else keeps the month.
+            let wait = awaitsAnnouncedDate(game.firstReleaseDate, now: now)
+                ? recheckAwaitingDateAfter : recheckAfter
+            if let asked = checked[game.id], now.timeIntervalSince(asked) < wait {
                 plan.recentlyChecked += 1
                 continue
             }
@@ -359,11 +384,11 @@ enum MetadataRefresh {
         var filled: Set<Field> = []
 
         if isMissing(game.firstReleaseDate),
-           let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+           let date = igdb.storableReleaseDate(on: game.chosenPlatform) {
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
         } else if awaitsAnnouncedDate(game.firstReleaseDate),
-                  let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform),
+                  let date = igdb.storableReleaseDate(on: game.chosenPlatform),
                   !isYearOnly(date),
                   Calendar.current.component(.year, from: date)
                     == Calendar.current.component(.year, from: game.firstReleaseDate!) {

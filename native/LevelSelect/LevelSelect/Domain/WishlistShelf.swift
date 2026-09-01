@@ -48,8 +48,13 @@ enum WishlistShelf {
             return .outNow
         }
         if isYearOnly(date) {
-            let year = calendar.component(.year, from: date)
-            return year >= calendar.component(.year, from: now) ? .noDateYet : .outNow
+            // UTC on both sides, for the same reason `awaitsAnnouncedDate`
+            // needs it: a 1 January placeholder is stored at UTC midnight and
+            // reads as the previous year in any western timezone, which filed
+            // this year's unannounced games under "Out now".
+            let utc = ReleaseCountdown.utc
+            return utc.component(.year, from: date)
+                >= utc.component(.year, from: now) ? .noDateYet : .outNow
         }
         return date > now ? .comingSoon : .outNow
     }

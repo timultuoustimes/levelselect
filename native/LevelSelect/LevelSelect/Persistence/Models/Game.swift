@@ -181,6 +181,19 @@ final class Game {
     /// a badge. The first you own, which for pre-V3 data is position zero.
     var primaryOwnedPlatform: String? { ownedPlatformNames.first }
 
+    /// The platform you actually said you have this on, or nil.
+    ///
+    /// `primaryOwnedPlatform` GUESSES — it falls back to the first platform
+    /// IGDB lists when you own none, which is right for drawing an icon and
+    /// wrong for storing a release date. A wishlist game is owned nowhere, so
+    /// that guess was picking an arbitrary platform's release entry; when that
+    /// entry was quarter- or year-precise the app stored 1 January and filed a
+    /// dated game under "No date yet" while another platform had the day.
+    var chosenPlatform: String? {
+        guard let owned = ownedPlatforms, let first = owned.first, !first.isEmpty else { return nil }
+        return first
+    }
+
     // Relationships — all optional (CloudKit requires optional relationships).
     @Relationship(deleteRule: .cascade, inverse: \Playthrough.game)
     var playthroughs: [Playthrough]?

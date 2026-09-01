@@ -468,3 +468,51 @@ struct ReleaseCountdownTests {
         #expect(WishlistShelf.countdown(to: day(2027, 1, 1), from: day(2026, 9, 1)) == nil)
     }
 }
+
+@Suite("A date nobody has announced yet")
+struct AwaitingDateTests {
+    private func date(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        return utc.date(from: DateComponents(year: y, month: m, day: d))!
+    }
+
+    /// The bug Onimusha hit: asked yesterday, answered with a year, marked
+    /// checked — and under one interval for everything it would have stayed
+    /// "No date yet" through its own launch.
+    @Test("A game awaiting a date is asked again the next day")
+    func awaitingDateRechecksSoon() {
+        let game = Game(name: "Onimusha: Way of the Sword")
+        game.igdbID = 1
+        game.firstReleaseDate = date(2026, 1, 1)     // IGDB's year-only answer
+        let askedYesterday = [game.id: Date(timeIntervalSinceNow: -36 * 3600)]
+
+        let plan = MetadataRefresh.plan(for: [game], checked: askedYesterday)
+        #expect(plan.fillable.contains { $0.id == game.id })
+        #expect(plan.recentlyChecked == 0)
+    }
+
+    @Test("A game missing something else still waits a month")
+    func othersKeepTheMonth() {
+        let game = Game(name: "Killer7")
+        game.igdbID = 2
+        game.firstReleaseDate = date(2005, 6, 9)     // a real day, long past
+        let askedYesterday = [game.id: Date(timeIntervalSinceNow: -36 * 3600)]
+
+        let plan = MetadataRefresh.plan(for: [game], checked: askedYesterday)
+        #expect(!plan.fillable.contains { $0.id == game.id })
+    }
+
+    /// A wishlist game is owned nowhere, so the app must not let a guessed
+    /// platform choose the date — that is what filed a dated game as undated.
+    @Test("A platform you have not chosen never picks the date")
+    func guessedPlatformDoesNotPickTheDate() {
+        let game = Game(name: "Onimusha: Way of the Sword")
+        game.platforms = ["PC (Microsoft Windows)", "PlayStation 5"]
+        #expect(game.chosenPlatform == nil)
+        #expect(game.primaryOwnedPlatform == "PC (Microsoft Windows)")
+
+        game.ownedPlatforms = ["PlayStation 5"]
+        #expect(game.chosenPlatform == "PlayStation 5")
+    }
+}
