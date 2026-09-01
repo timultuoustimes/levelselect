@@ -10,7 +10,6 @@ struct LevelSelectWidgets: WidgetBundle {
         CommandBoardWidget()
         ShelfXLWidget()
         WhereYouStandWidget()
-        NowPlayingShelfWidget()
         ObjectivesWidget()
         CompletionRingWidget()
         WeekStatWidget()
