@@ -197,8 +197,8 @@ enum IGDBService {
 
     private static let fields = """
         fields name, slug, summary, game_type, cover.image_id, franchises.name, collection.name, \
-        first_release_date, release_dates.category, release_dates.date, \
-        release_dates.platform.name, \
+        first_release_date, release_dates.category, release_dates.date_format, \
+        release_dates.date, release_dates.platform.name, \
         platforms.name, genres.name, themes.name, game_modes.name, \
         player_perspectives.name, involved_companies.developer, involved_companies.publisher, \
         involved_companies.company.name;
@@ -334,6 +334,11 @@ enum IGDBService {
         struct ReleaseDate: Decodable {
             let category: Int?
             let date: Double?
+            /// What `category` used to be. IGDB stopped answering with
+            /// `category` — every row now comes back with it nil — and moved
+            /// the precision to `date_format`. Both are read, so this keeps
+            /// working whichever one an endpoint decides to send.
+            let date_format: Int?
             struct Platform: Decodable { let name: String? }
             let platform: Platform?
         }
@@ -354,7 +359,7 @@ enum IGDBService {
             let match = dates
                 .filter { $0.date != nil }
                 .min { abs(($0.date ?? 0) - first) < abs(($1.date ?? 0) - first) }
-            return precision(for: match?.category)
+            return match.map { precision(of: $0) } ?? .unknown
         }
 
         static func precision(for category: Int?) -> IGDBGame.ReleasePrecision {
@@ -366,6 +371,26 @@ enum IGDBService {
             case 7: return .tbd
             default: return .unknown
             }
+        }
+
+        /// The precision of one release row, from whichever field IGDB sent.
+        ///
+        /// When it sends neither, the timestamp is judged on its own. That is
+        /// the case that mattered: IGDB now returns `category` as nil on every
+        /// row, so every date read as `.unknown`, and an exact day was thrown
+        /// away and padded to 1 January. Onimusha: Way of the Sword came back
+        /// with a real timestamp on all four of its platforms and the app
+        /// filed it as undated.
+        ///
+        /// Judging the timestamp is safe because the thing being guarded
+        /// against has a shape: IGDB pads an imprecise date to the boundary of
+        /// its period, which is 1 January or 31 December. A timestamp landing
+        /// anywhere else was not padded, so it is a day someone published.
+        static func precision(of row: ReleaseDate) -> IGDBGame.ReleasePrecision {
+            if let category = row.category { return precision(for: category) }
+            if let format = row.date_format { return precision(for: format) }
+            guard let stamp = row.date else { return .unknown }
+            return MetadataRefresh.isYearOnly(Date(timeIntervalSince1970: stamp)) ? .year : .day
         }
 
         func toGame() -> IGDBGame {
@@ -400,7 +425,7 @@ enum IGDBService {
                     guard let name = row.platform?.name, let stamp = row.date else { return nil }
                     return IGDBGame.PlatformRelease(
                         platform: name, timestamp: stamp,
-                        precision: Self.precision(for: row.category))
+                        precision: Self.precision(of: row))
                 }
             )
         }

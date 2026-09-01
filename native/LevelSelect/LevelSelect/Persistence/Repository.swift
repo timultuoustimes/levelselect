@@ -93,6 +93,15 @@ struct Repository {
         game.publishers = igdb.publishers
         if let platform, !platform.isEmpty {
             game.platforms = [platform] + igdb.platforms.filter { $0 != platform }
+            // The choice is RECORDED, not just used once.
+            //
+            // The date above was resolved from this platform and then the
+            // choice was thrown away, so `chosenPlatform` came back nil and
+            // the next refresh resolved the date from IGDB's coarse summary
+            // instead — the app quietly disagreeing with itself about which
+            // platform a game is. For a wishlist game this is the platform you
+            // are waiting on; it becomes the one you own when you buy it.
+            game.ownedPlatforms = [platform]
         } else {
             game.platforms = igdb.platforms
         }

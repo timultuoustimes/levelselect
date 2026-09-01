@@ -265,6 +265,8 @@ private struct ConfirmAddView: View {
 
     @State private var status: GameStatus = .playing
     @State private var ownership: [String] = []
+    @State private var preview = GamePreview()
+    @State private var showingAbout = false
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -278,6 +280,31 @@ private struct ConfirmAddView: View {
         ["Nintendo Switch 2", "Nintendo Switch"].filter { extra in
             !game.platforms.contains { $0.caseInsensitiveCompare(extra) == .orderedSame }
         }
+    }
+
+    /// The platform currently chosen, as the date resolver sees it.
+    private var chosen: String? {
+        let name = platform == customOption
+            ? customPlatform.trimmingCharacters(in: .whitespaces) : platform
+        return name.isEmpty ? nil : name
+    }
+
+    /// What this platform means for when you get it.
+    ///
+    /// The picker was already deciding the stored date and never said so, so
+    /// choosing PC over Switch 2 silently changed a game's release by months
+    /// with nothing on screen. It is the reason the picker is here, so it says
+    /// what it is doing.
+    private var releaseLine: (text: String, isCountdown: Bool)? {
+        guard let date = game.storableReleaseDate(on: chosen),
+              !MetadataRefresh.isMissing(date) else { return nil }
+        if let soon = ReleaseCountdown.countdown(to: date) {
+            return ("Releases \(ReleaseCountdown.dateLabel(date)) · \(soon)", true)
+        }
+        if ReleaseCountdown.isYearOnly(date) {
+            return ("No date announced for this platform — \(ReleaseCountdown.dateLabel(date))", false)
+        }
+        return ("Released \(ReleaseCountdown.dateLabel(date))", false)
     }
 
     var body: some View {
@@ -320,11 +347,72 @@ private struct ConfirmAddView: View {
                     Text("Owned").font(.caption).foregroundStyle(.secondary)
                     OwnershipControl(ownership: $ownership)
                 }
+                if let line = releaseLine {
+                    Label(line.text, systemImage: line.isCountdown ? "calendar.badge.clock" : "calendar")
+                        .font(.footnote)
+                        .foregroundStyle(line.isCountdown ? LSTheme.accent : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } footer: {
                 if !extraPlatforms.isEmpty {
                     Text("Platform list from IGDB — sometimes incomplete; pick or type the real one.")
                 }
             }
+
+            if let summary = game.summary, !MetadataRefresh.isMissing(summary: summary) {
+                Section("About") {
+                    Text(summary)
+                        .font(.footnote)
+                        .lineLimit(showingAbout ? nil : 4)
+                    Button(showingAbout ? "Less" : "More") { showingAbout.toggle() }
+                        .font(.footnote)
+                }
+            }
+
+            if !preview.screenshotIDs.isEmpty {
+                Section("Screenshots") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(preview.screenshotIDs, id: \.self) { id in
+                                AsyncImage(url: URL(string:
+                                    "https://images.igdb.com/igdb/image/upload/t_screenshot_med/\(id).jpg")) { image in
+                                    image.resizable().aspectRatio(contentMode: .fill)
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 8).fill(.quaternary)
+                                }
+                                .frame(width: 160, height: 90)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                        }
+                    }
+                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 0))
+                }
+            }
+
+            if let video = preview.videoIDs.first,
+               let url = URL(string: "https://www.youtube.com/watch?v=\(video)") {
+                Section {
+                    Link(destination: url) {
+                        Label("Watch the trailer", systemImage: "play.rectangle.fill")
+                    }
+                }
+            }
+
+            if !game.developers.isEmpty || !game.publishers.isEmpty || !game.genres.isEmpty {
+                Section("Game info") {
+                    if !game.developers.isEmpty {
+                        LabeledContent("Developer", value: game.developers.joined(separator: ", "))
+                    }
+                    if !game.publishers.isEmpty {
+                        LabeledContent("Publisher", value: game.publishers.joined(separator: ", "))
+                    }
+                    if !game.genres.isEmpty {
+                        LabeledContent("Genre", value: game.genres.joined(separator: ", "))
+                    }
+                }
+                .font(.footnote)
+            }
+
             Section {
                 // Follows the status, but only for Wishlist. Every other
                 // status describes a game you have, so "Library" is the right
@@ -341,6 +429,7 @@ private struct ConfirmAddView: View {
                 Button("Back to search", action: onBack)
             }
         }
+        .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus
             // Default: highest-preference platform (Switch 2 → Switch → PC)
