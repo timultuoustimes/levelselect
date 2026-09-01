@@ -419,3 +419,52 @@ struct Build34WishlistTests {
         #expect(!label.contains(" 1 "))
     }
 }
+
+@Suite("Release countdown")
+struct ReleaseCountdownTests {
+    /// UTC, because a release is a calendar date and the shelf counts days.
+    private static let utc: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }()
+
+    private func day(_ y: Int, _ m: Int, _ d: Int, hour: Int = 0) -> Date {
+        Self.utc.date(from: DateComponents(year: y, month: m, day: d, hour: hour))!
+    }
+
+    @Test("A release later today reads Today, not in 0 days")
+    func today() {
+        let now = day(2026, 9, 1, hour: 2)
+        #expect(WishlistShelf.countdown(to: day(2026, 9, 1, hour: 23), from: now) == "Today")
+    }
+
+    /// The bug a duration-based countdown always has: at 11pm, a game landing
+    /// nine hours later is under 24 hours away and would round to "Today".
+    @Test("Tomorrow is the next calendar date, not 24 hours away")
+    func tomorrowCrossesMidnight() {
+        let now = day(2026, 9, 1, hour: 23)
+        #expect(WishlistShelf.countdown(to: day(2026, 9, 2, hour: 8), from: now) == "Tomorrow")
+    }
+
+    @Test("Days, then weeks, then months")
+    func units() {
+        let now = day(2026, 9, 1)
+        #expect(WishlistShelf.countdown(to: day(2026, 9, 7), from: now) == "in 6 days")
+        #expect(WishlistShelf.countdown(to: day(2026, 9, 15), from: now) == "in 2 weeks")
+        #expect(WishlistShelf.countdown(to: day(2027, 2, 27), from: now) == "in 6 months")
+    }
+
+    @Test("A date already gone counts to nothing")
+    func past() {
+        #expect(WishlistShelf.countdown(to: day(2026, 8, 30), from: day(2026, 9, 1)) == nil)
+    }
+
+    /// A year-only date is a placeholder, and counting to 31 December would
+    /// invent a precision the app deliberately refuses elsewhere.
+    @Test("A year with no day never counts down")
+    func yearOnly() {
+        #expect(WishlistShelf.countdown(to: day(2026, 12, 31), from: day(2026, 9, 1)) == nil)
+        #expect(WishlistShelf.countdown(to: day(2027, 1, 1), from: day(2026, 9, 1)) == nil)
+    }
+}

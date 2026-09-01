@@ -322,8 +322,20 @@ struct WishlistTab: View {
     }
 
     /// What the shelf can honestly print for this game.
+    ///
+    /// A near release says how long you are waiting; a far one says when.
+    /// "in 6 days" is something you would act on, and "in 11 months" tells you
+    /// less than "Feb 27, 2027" does — so the countdown only runs inside the
+    /// horizon and the date takes over beyond it.
     private func dateLabel(_ game: Game) -> String? {
         guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else { return nil }
+        if let soon = WishlistShelf.countdown(to: date),
+           let days = WishlistShelf.utc.dateComponents(
+               [.day], from: WishlistShelf.utc.startOfDay(for: .now),
+               to: WishlistShelf.utc.startOfDay(for: date)).day,
+           days <= WishlistShelf.countdownHorizon {
+            return soon
+        }
         return WishlistShelf.releaseLabel(date)
     }
 
