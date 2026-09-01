@@ -13,6 +13,8 @@ struct ScreenshotStrip: View {
 
     @Environment(\.modelContext) private var context
     @State private var imageIDs: [String] = []
+    @State private var videoIDs: [String] = []
+    @State private var browsing: DekuLinkTarget?
     @State private var loaded = false
     @State private var viewing: ScreenshotItem?
     @State private var viewingLocal: GameImage?
@@ -91,13 +93,54 @@ struct ScreenshotStrip: View {
                                 Button {
                                     viewing = ScreenshotItem(imageID: id)
                                 } label: {
-                                    shot(id, size: "t_screenshot_med")
-                                        .frame(width: 200, height: 112)
-                                        .clipShape(.rect(cornerRadius: 8))
+                                    shot(id, size: "t_screenshot_big")
+                                        .frame(width: 248, height: 140)
+                                        .clipShape(.rect(cornerRadius: 10))
+                                        .overlay(RoundedRectangle(cornerRadius: 10)
+                                            .strokeBorder(.white.opacity(0.08), lineWidth: 1))
                                 }
                                 .buttonStyle(.plain)
                                 .accessibilityLabel("Screenshot")
                                 .accessibilityHint("Opens full size")
+                            }
+                        }
+                    }
+
+                    // Trailers, the same ones the add screen shows. The game
+                    // page had every other kind of media IGDB publishes and
+                    // not this one, so the only way to watch a trailer for a
+                    // game you already own was to leave the app.
+                    if !videoIDs.isEmpty {
+                        Text("Trailers")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(videoIDs, id: \.self) { id in
+                                    Button {
+                                        browsing = URL(string:
+                                            "https://www.youtube.com/embed/\(id)?playsinline=1&autoplay=1")
+                                            .map(DekuLinkTarget.init(url:))
+                                    } label: {
+                                        AsyncImage(url: URL(string:
+                                            "https://img.youtube.com/vi/\(id)/hqdefault.jpg")) { image in
+                                            image.resizable().aspectRatio(contentMode: .fill)
+                                        } placeholder: {
+                                            RoundedRectangle(cornerRadius: 10).fill(.quaternary)
+                                        }
+                                        .frame(width: 248, height: 140)
+                                        .clipShape(.rect(cornerRadius: 10))
+                                        .overlay {
+                                            Image(systemName: "play.circle.fill")
+                                                .font(.system(size: 38))
+                                                .foregroundStyle(.white.opacity(0.92))
+                                                .shadow(radius: 6)
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel("Trailer")
+                                }
                             }
                         }
                     }
@@ -106,6 +149,9 @@ struct ScreenshotStrip: View {
         }
         .task { await load() }
         .task(id: photoItem) { await ingestPickedPhoto() }
+        .sheet(item: $browsing) { target in
+            NavigationStack { InAppBrowser(url: target.url) }
+        }
         .sheet(item: $viewing) { item in
             // One viewer for the app: the add screen needed the same thing,
             // and two of these drift until one loses the pinch gesture.
@@ -149,6 +195,13 @@ struct ScreenshotStrip: View {
         guard !loaded else { return }
         defer { loaded = true }
         guard let igdbID = game.igdbID else { return }
+        // Videos first, and outside the screenshot cache's early return —
+        // that cache only ever held image ids, so returning from it skipped
+        // the trailers entirely on every visit after the first.
+        // From the game record, not a `game_videos` lookup — that endpoint
+        // came back empty through the proxy, and the main query already
+        // carries `videos.video_id` for every screen that needs it.
+        videoIDs = (try? await IGDBService.lookup(id: igdbID))??.videoIDs ?? []
         if let hit = Self.cache[igdbID] {
             imageIDs = hit
             return

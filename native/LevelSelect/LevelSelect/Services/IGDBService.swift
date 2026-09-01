@@ -24,6 +24,8 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     var releasePrecision: ReleasePrecision = .unknown
     /// Every dated release IGDB lists, per platform. See `release(on:)`.
     var platformReleases: [PlatformRelease] = []
+    /// YouTube ids, trailers first.
+    var videoIDs: [String] = []
 
     /// One platform's release, with IGDB's own precision for it.
     struct PlatformRelease: Hashable, Sendable {
@@ -200,7 +202,8 @@ enum IGDBService {
         first_release_date, release_dates.category, release_dates.date_format, \
         release_dates.date, release_dates.platform.name, \
         platforms.name, genres.name, themes.name, game_modes.name, \
-        player_perspectives.name, involved_companies.developer, involved_companies.publisher, \
+        player_perspectives.name, videos.video_id, videos.name, \
+        involved_companies.developer, involved_companies.publisher, \
         involved_companies.company.name;
         """
 
@@ -343,6 +346,8 @@ enum IGDBService {
             let platform: Platform?
         }
         let release_dates: [ReleaseDate]?
+        struct Video: Decodable { let video_id: String?; let name: String? }
+        let videos: [Video]?
 
         /// How precise IGDB's own answer is for the earliest release.
         ///
@@ -426,7 +431,17 @@ enum IGDBService {
                     return IGDBGame.PlatformRelease(
                         platform: name, timestamp: stamp,
                         precision: Self.precision(of: row))
-                }
+                },
+                videoIDs: {
+                    let rows = videos ?? []
+                    let trailers = rows.filter {
+                        ($0.name ?? "").localizedCaseInsensitiveContains("trailer")
+                    }
+                    let rest = rows.filter { row in
+                        !trailers.contains { $0.video_id == row.video_id }
+                    }
+                    return (trailers + rest).compactMap(\.video_id)
+                }()
             )
         }
     }

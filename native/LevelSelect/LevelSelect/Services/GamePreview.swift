@@ -1,6 +1,6 @@
 import Foundation
 
-/// Enough of a game to tell whether it is the one you meant.
+/// The screenshots for a game, fetched only when one is opened.
 ///
 /// Search returns a name, a cover and a year, which is enough to disambiguate
 /// a sequel and not enough for anything else. Tim: *"I should be able to see
@@ -12,11 +12,7 @@ import Foundation
 /// chose.
 struct GamePreview: Sendable {
     var screenshotIDs: [String] = []
-    /// YouTube ids, trailer first — IGDB names its trailer rows, and a
-    /// gameplay video is a better preview than a teaser when both exist.
-    var videoIDs: [String] = []
-
-    var isEmpty: Bool { screenshotIDs.isEmpty && videoIDs.isEmpty }
+    var isEmpty: Bool { screenshotIDs.isEmpty }
 }
 
 @MainActor
@@ -32,21 +28,8 @@ enum GamePreviewService {
         async let shots = IGDBService.raw(
             endpoint: "screenshots",
             query: "fields image_id; where game = \(igdbID); limit 6;")
-        // `name` comes along so a trailer can be preferred over a teaser.
-        async let clips = IGDBService.raw(
-            endpoint: "game_videos",
-            query: "fields video_id, name; where game = \(igdbID); limit 6;")
-
         var preview = GamePreview()
         preview.screenshotIDs = (await shots).compactMap { $0["image_id"] as? String }
-        let rows = await clips
-        let trailers = rows.filter {
-            (($0["name"] as? String) ?? "").localizedCaseInsensitiveContains("trailer")
-        }
-        preview.videoIDs = (trailers + rows.filter { row in
-            !trailers.contains { ($0["video_id"] as? String) == (row["video_id"] as? String) }
-        }).compactMap { $0["video_id"] as? String }
-
         cache[igdbID] = preview
         return preview
     }

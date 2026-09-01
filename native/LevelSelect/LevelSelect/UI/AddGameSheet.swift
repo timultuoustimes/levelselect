@@ -55,6 +55,13 @@ struct AddGameSheet: View {
             }
         }
         .tint(LSTheme.accent)
+        // The whole sheet, not just its rows. Tim: "Can the entire menu be
+        // slightly translucent, like a frosted glass?" — the library behind it
+        // staying faintly visible is what makes this read as a layer over your
+        // games rather than a separate grey screen.
+        #if !os(macOS)
+        .presentationBackground(.ultraThinMaterial)
+        #endif
     }
 
     // MARK: Search stage
@@ -71,7 +78,7 @@ struct AddGameSheet: View {
                 if isSearching { ProgressView().controlSize(.small) }
             }
             .padding(12)
-            .background(.quaternary.opacity(0.5), in: .rect(cornerRadius: 12))
+            .background(AddSheetCard(cornerRadius: 12))
             .padding()
 
             List {
@@ -138,17 +145,25 @@ struct AddGameSheet: View {
         } label: {
             HStack(spacing: 12) {
                 CoverThumb(urlString: game.coverURLString)
-                    .frame(width: 40, height: 53)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(game.name).font(.subheadline.weight(.medium)).lineLimit(2)
+                    .frame(width: 54, height: 72)
+                    .coverGloss(cornerRadius: 6)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(game.name).font(.subheadline.weight(.semibold)).lineLimit(2)
+                    if let year = game.releaseYear {
+                        Text(String(year)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    // The systems it is on, drawn rather than spelled out.
+                    // "PC (Microsoft Windows) +3" is the longest way to say
+                    // something a row of icons says at a glance.
                     HStack(spacing: 4) {
-                        if let year = game.releaseYear { Text(String(year)) }
-                        if let first = PlatformPreference.sorted(game.platforms).first {
-                            Text("· \(first)\(game.platforms.count > 1 ? " +\(game.platforms.count - 1)" : "")")
+                        ForEach(PlatformPreference.sorted(game.platforms).prefix(4), id: \.self) { p in
+                            PlatformIconView(platform: p, size: 19)
+                        }
+                        if game.platforms.count > 4 {
+                            Text("+\(game.platforms.count - 4)")
+                                .font(.caption2).foregroundStyle(.tertiary)
                         }
                     }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
                 }
                 Spacer()
                 if let type = game.typeLabel {
@@ -268,6 +283,7 @@ private struct ConfirmAddView: View {
     @State private var preview = GamePreview()
     @State private var showingAbout = false
     @State private var zoomed: ZoomTarget?
+    @State private var browsing: DekuLinkTarget?
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -410,11 +426,24 @@ private struct ConfirmAddView: View {
                 }
             }
 
-            if let video = preview.videoIDs.first,
-               let url = URL(string: "https://www.youtube.com/watch?v=\(video)") {
-                Section {
-                    Link(destination: url) {
+            Section {
+                // Opened in the app's own browser, not handed to Safari.
+                // Deciding whether this is the right game is the job of this
+                // screen, and being thrown out of it to check a price or a
+                // release date is how you lose the search you just did.
+                if let video = game.videoIDs.first,
+                   let url = URL(string: "https://www.youtube.com/embed/\(video)?playsinline=1&autoplay=1") {
+                    Button { browsing = DekuLinkTarget(url: url) } label: {
                         Label("Watch the trailer", systemImage: "play.rectangle.fill")
+                    }
+                }
+                Button { browsing = DekuLinkTarget(url: DekuLinks.search(for: game.name)) } label: {
+                    Label("Look it up on Deku Deals", systemImage: "tag.fill")
+                }
+                if let slug = game.slug,
+                   let url = URL(string: "https://www.igdb.com/games/\(slug)") {
+                    Button { browsing = DekuLinkTarget(url: url) } label: {
+                        Label("Open the IGDB page", systemImage: "arrow.up.right.square")
                     }
                 }
             }
@@ -455,9 +484,14 @@ private struct ConfirmAddView: View {
         // look at a game — Tim: "It's also a boring default grey, like the
         // settings menu... Can it be a slight glass?"
         .scrollContentBackground(.hidden)
-        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+        .listRowBackground(AddSheetCard())
         .lsBackground()
-        .sheet(item: $zoomed) { RemoteImageViewer(url: $0.url) }
+                .sheet(item: $zoomed) { RemoteImageViewer(url: $0.url) }
+        .sheet(item: $browsing) { target in
+            NavigationStack {
+                InAppBrowser(url: target.url)
+            }
+        }
         .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus

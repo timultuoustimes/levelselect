@@ -125,6 +125,13 @@ private struct DekuWebView {
     func makeWebView(coordinator: Coordinator) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()   // persistent — sign-in sticks
+        #if os(iOS)
+        // The add screen opens trailers through this pane. Without these a
+        // YouTube embed refuses to start until it is taken fullscreen, which
+        // reads as a dead player rather than a video.
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        #endif
         let view = WKWebView(frame: .zero, configuration: config)
         view.load(URLRequest(url: url))
         coordinator.lastCommanded = url
