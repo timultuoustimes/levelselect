@@ -175,6 +175,16 @@ struct WishlistTab: View {
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
+                    // Pushed, not presented: it is another way of reading the
+                    // same wishlist, and tapping a game from it should lead
+                    // onward to that game the way every other list here does.
+                    NavigationLink {
+                        ReleaseCalendarView()
+                    } label: {
+                        Label("Release calendar", systemImage: "calendar")
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
                     Button {
                         sheet = .addGame("")
                     } label: {

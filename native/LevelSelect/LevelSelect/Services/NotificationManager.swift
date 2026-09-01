@@ -77,8 +77,8 @@ enum NotificationManager {
         content.categoryIdentifier = categoryID
         // A six-hour runaway timer is inflating real data RIGHT NOW — that's
         // what Time Sensitive exists for. Lets the reminder break through
-        // silent mode and Focus (the user can veto per-app in Settings).
-        content.interruptionLevel = .timeSensitive
+        // silent mode and Focus, unless the user has turned that off.
+        content.interruptionLevel = interruptionLevel
 
         let request = UNNotificationRequest(
             identifier: prefix + sessionID.uuidString,
@@ -105,6 +105,28 @@ enum NotificationManager {
             return stored == 0 ? 1 : stored          // 0 means "never set"
         }
         set { UserDefaults.standard.set(newValue, forKey: "releaseLeadDays") }
+    }
+
+    /// Whether the app's reminders break through silent mode and Focus.
+    ///
+    /// Defaults ON, because both things the app says are time-sensitive by
+    /// nature: a runaway timer is inflating real data RIGHT NOW, and a
+    /// release you have been waiting months for is only news on the day. iOS
+    /// still gates this behind its own per-app permission, so this is the
+    /// app's half of a two-part opt-in — and it is a toggle rather than a
+    /// constant so anyone who finds it intrusive can put it back in the queue
+    /// with everything else.
+    @MainActor
+    static var breaksThroughFocus: Bool {
+        get {
+            UserDefaults.standard.object(forKey: "notificationsBreakFocus") as? Bool ?? true
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "notificationsBreakFocus") }
+    }
+
+    @MainActor
+    static var interruptionLevel: UNNotificationInterruptionLevel {
+        breaksThroughFocus ? .timeSensitive : .active
     }
 
     @MainActor
@@ -145,6 +167,7 @@ enum NotificationManager {
                         .map { "Out \($0.replacingOccurrences(of: "in ", with: "in ")) — \(ReleaseCountdown.dateLabel(game.releaseDate))." }
                         ?? "Out \(ReleaseCountdown.dateLabel(game.releaseDate))."
                 content.sound = .default
+                content.interruptionLevel = interruptionLevel
 
                 let parts = Calendar.current.dateComponents(
                     [.year, .month, .day, .hour, .minute], from: fireAt)

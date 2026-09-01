@@ -17,6 +17,7 @@ struct ReleaseRemindersSettings: View {
 
     @State private var on = NotificationManager.releaseRemindersOn
     @State private var leadDays = NotificationManager.releaseLeadDays
+    @State private var breaksThrough = NotificationManager.breaksThroughFocus
 
     /// What the setting will actually do, counted from the wishlist.
     private var upcoming: [Game] {
@@ -45,8 +46,18 @@ struct ReleaseRemindersSettings: View {
                     reschedule()
                 }
             }
+            // Governs the still-playing reminder too, which is why it sits
+            // outside the release toggle: that one is scheduled whenever a
+            // timer runs, so hiding this behind "tell me when a game arrives"
+            // would bury the only control over it.
+            Toggle("Break through silent mode and Focus", isOn: $breaksThrough)
+                .tint(LSTheme.accent)
+                .onChange(of: breaksThrough) { _, value in
+                    NotificationManager.breaksThroughFocus = value
+                    reschedule()
+                }
         } header: {
-            Text("Releases")
+            Text("Notifications")
         } footer: {
             if on {
                 // The count is the honest answer to "will this ever fire".
@@ -58,6 +69,7 @@ struct ReleaseRemindersSettings: View {
             } else {
                 Text("A game you are waiting for is the one thing the app knows about before you do.")
             }
+            Text("Breaking through applies to the still-playing reminder as well. iOS asks separately before it will allow it.")
         }
     }
 
