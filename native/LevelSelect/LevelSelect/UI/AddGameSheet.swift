@@ -267,6 +267,7 @@ private struct ConfirmAddView: View {
     @State private var ownership: [String] = []
     @State private var preview = GamePreview()
     @State private var showingAbout = false
+    @State private var zoomed: ZoomTarget?
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -311,8 +312,19 @@ private struct ConfirmAddView: View {
         Form {
             Section {
                 HStack(spacing: 14) {
-                    CoverThumb(urlString: game.coverURLString)
-                        .frame(width: 70, height: 93)
+                    // Big enough to judge, and tappable, because deciding
+                    // "is this the right game" is what this screen is for.
+                    Button {
+                        zoomed = game.coverImageID
+                            .flatMap { URL(string: "https://images.igdb.com/igdb/image/upload/t_720p/\($0).jpg") }
+                            .map(ZoomTarget.init)
+                    } label: {
+                        CoverThumb(urlString: game.coverURLString)
+                            .frame(width: 110, height: 147)
+                            .coverGloss(cornerRadius: 8)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(game.coverImageID == nil)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(game.name).font(.headline)
                         HStack(spacing: 4) {
@@ -374,14 +386,23 @@ private struct ConfirmAddView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
                             ForEach(preview.screenshotIDs, id: \.self) { id in
-                                AsyncImage(url: URL(string:
-                                    "https://images.igdb.com/igdb/image/upload/t_screenshot_med/\(id).jpg")) { image in
-                                    image.resizable().aspectRatio(contentMode: .fill)
-                                } placeholder: {
-                                    RoundedRectangle(cornerRadius: 8).fill(.quaternary)
+                                Button {
+                                    zoomed = URL(string:
+                                        "https://images.igdb.com/igdb/image/upload/t_1080p/\(id).jpg")
+                                        .map(ZoomTarget.init)
+                                } label: {
+                                    AsyncImage(url: URL(string:
+                                        "https://images.igdb.com/igdb/image/upload/t_screenshot_big/\(id).jpg")) { image in
+                                        image.resizable().aspectRatio(contentMode: .fill)
+                                    } placeholder: {
+                                        RoundedRectangle(cornerRadius: 10).fill(.quaternary)
+                                    }
+                                    .frame(width: 248, height: 140)
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 10)
+                                        .strokeBorder(.white.opacity(0.08), lineWidth: 1))
                                 }
-                                .frame(width: 160, height: 90)
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -429,6 +450,14 @@ private struct ConfirmAddView: View {
                 Button("Back to search", action: onBack)
             }
         }
+        // The app's own ground, with the rows as glass on top of it. A system
+        // grouped Form reads as Settings, and this is the screen where you
+        // look at a game — Tim: "It's also a boring default grey, like the
+        // settings menu... Can it be a slight glass?"
+        .scrollContentBackground(.hidden)
+        .listRowBackground(Rectangle().fill(.ultraThinMaterial))
+        .lsBackground()
+        .sheet(item: $zoomed) { RemoteImageViewer(url: $0.url) }
         .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus

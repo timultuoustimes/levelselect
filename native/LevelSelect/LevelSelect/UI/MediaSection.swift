@@ -107,7 +107,10 @@ struct ScreenshotStrip: View {
         .task { await load() }
         .task(id: photoItem) { await ingestPickedPhoto() }
         .sheet(item: $viewing) { item in
-            ScreenshotViewer(imageID: item.imageID)
+            // One viewer for the app: the add screen needed the same thing,
+            // and two of these drift until one loses the pinch gesture.
+            RemoteImageViewer(url: URL(string:
+                "https://images.igdb.com/igdb/image/upload/t_1080p/\(item.imageID).jpg"))
         }
         .sheet(item: $viewingLocal) { image in
             LocalImageViewer(image: image)
@@ -206,27 +209,3 @@ private struct ScreenshotItem: Identifiable {
     var id: String { imageID }
 }
 
-/// Full-size screenshot, dismissed the way every sheet is.
-private struct ScreenshotViewer: View {
-    let imageID: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            AsyncImage(url: URL(string: "https://images.igdb.com/igdb/image/upload/t_1080p/\(imageID).jpg")) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFit()
-                } else {
-                    ProgressView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.black)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
