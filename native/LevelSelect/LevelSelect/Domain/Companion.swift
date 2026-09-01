@@ -38,7 +38,7 @@ struct Companion: Codable, Hashable, Identifiable, Sendable {
 
 extension Array where Element == Companion {
     /// Stored as JSON in a `Data` column, the same way video parts and status
-    /// colours already are — one additive field per model instead of a table.
+    /// colors already are — one additive field per model instead of a table.
     var encoded: Data? {
         let kept = filter { !$0.isEmpty }
         guard !kept.isEmpty else { return nil }

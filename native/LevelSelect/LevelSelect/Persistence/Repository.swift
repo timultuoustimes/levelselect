@@ -81,7 +81,9 @@ struct Repository {
         game.coverImageID = igdb.coverImageID
         game.coverURLString = igdb.coverURLString
         game.franchise = igdb.franchise
-        game.firstReleaseDate = igdb.releaseDate
+        // The platform just chosen on the confirm screen IS the date choice —
+        // a game out on PC and coming to Switch 2 has two different answers.
+        game.firstReleaseDate = igdb.storableReleaseDate(on: platform)
         game.summary = igdb.summary
         game.genres = igdb.genres
         game.themes = igdb.themes
@@ -101,12 +103,27 @@ struct Repository {
 
     /// Re-pull metadata from IGDB by id — fixes legacy data (summaries the web
     /// app capped at 200 chars, bad release dates) and refreshes dev/genre/etc.
-    /// Never touches user data (status, rating, ownership, notes) or the user's
-    /// chosen `platforms`.
+    /// Never touches user data (status, rating, ownership, notes).
+    ///
+    /// It used to skip `platforms` entirely, because position zero is the
+    /// platform you own and replacing the array would throw that away. The
+    /// cost was that a game kept whatever list it was born with forever:
+    /// Cities: Skylines, added on Mac, knew about Mac and nothing else, and
+    /// Refresh changed nothing — so there was no way to say you also had it on
+    /// Switch except by typing consoles in by hand from a menu offering every
+    /// console ever made. Merged now: your platform stays first, IGDB fills in
+    /// the rest, and anything you added yourself survives.
     func refreshFromIGDB(_ game: Game) async {
         guard let id = game.igdbID, let igdb = try? await IGDBService.lookup(id: id) else { return }
         if let s = igdb.summary, !s.isEmpty { game.summary = s }
-        if let date = igdb.releaseDate { game.firstReleaseDate = date }
+        // Only a real day is stored as a day. An imprecise IGDB answer is
+        // normalised to 1 January of its year, which is the app's existing
+        // shorthand for "the year is all we know" — see
+        // `MetadataRefresh.isYearOnly`. Storing IGDB's padded 30 December
+        // would make the wishlist promise a launch day nobody announced.
+        if let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+            game.firstReleaseDate = date
+        }
         if let f = igdb.franchise { game.franchise = f }
         if let cover = igdb.coverImageID { game.coverImageID = cover; game.coverURLString = igdb.coverURLString }
         if !igdb.developers.isEmpty { game.developers = igdb.developers }
@@ -115,9 +132,13 @@ struct Repository {
         if !igdb.themes.isEmpty { game.themes = igdb.themes }
         if !igdb.gameModes.isEmpty { game.gameModes = igdb.gameModes }
         if !igdb.playerPerspectives.isEmpty { game.playerPerspectives = igdb.playerPerspectives }
+        if !igdb.platforms.isEmpty {
+            game.platforms = MetadataRefresh.mergedPlatforms(existing: game.platforms, igdb: igdb.platforms)
+        }
         touch(game)
         persist()
     }
+
 
     // MARK: Library-wide metadata fill
 
@@ -442,7 +463,7 @@ struct Repository {
     static let raPlaythroughName = "RetroAchievements"
 
     /// Written into the record's notes when sync creates it, and required to
-    /// recognise it again.
+    /// recognize it again.
     ///
     /// The name alone was not enough, and the failure was the dangerous
     /// direction. A user who names an ordinary run "RetroAchievements" before
@@ -584,7 +605,7 @@ struct Repository {
             // means to run two timers on one device, and there is nothing
             // ambiguous to ask about. (A session with no recorded origin
             // predates Schema V2; treated as ours, which keeps the old
-            // behaviour for legacy records rather than prompting about a
+            // behavior for legacy records rather than prompting about a
             // device we can't name.)
             let isOurs = (active.originDevice ?? thisDevice) == thisDevice
             if isOurs || policy == .keepNewest {
@@ -743,8 +764,27 @@ struct Repository {
         session.accumulatedDuration = clampedEnd.timeIntervalSince(start)
         session.notes = (notes?.isEmpty == true) ? nil : notes
         touch(session)
-        if let pt = session.playthrough { touch(pt) }
+        if let pt = session.playthrough {
+            // Editing can move a date EITHER way, so this one is recomputed
+            // rather than nudged — dragging the newest session back a week has
+            // to move "last played" back with it.
+            refreshLastPlayed(pt)
+            touch(pt)
+        }
         persist()
+    }
+
+    /// `lastPlayedAt` restated from the sessions that actually exist.
+    ///
+    /// It is a cache of "the newest session's start", and every write that can
+    /// remove or move a session has to restate it or it drifts — a deleted
+    /// most-recent session used to leave the playthrough claiming a date whose
+    /// session was gone.
+    private func refreshLastPlayed(_ pt: Playthrough) {
+        pt.lastPlayedAt = (pt.sessions ?? [])
+            .filter { $0.deletedAt == nil }
+            .map(\.startDate)
+            .max()
     }
 
     /// Remove a session from history (tombstoned so the removal syncs).
@@ -755,6 +795,7 @@ struct Repository {
             session.endDate = session.startDate
         }
         touch(session, at: date)
+        if let pt = session.playthrough { refreshLastPlayed(pt) }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         persist()
     }
@@ -788,7 +829,19 @@ struct Repository {
         session.notes = notes
         context.insert(session)
         session.playthrough = pt
-        pt.lastPlayedAt = date
+        // NEVER move "last played" backwards.
+        //
+        // This wrote `date` unconditionally, so logging a session you forgot
+        // from last month made the game look like that was the last time you
+        // touched it. The demo library exposed it plainly: sessions are seeded
+        // newest-first, so the final write was the OLDEST one and Hollow
+        // Knight's hero card read "last played 5 months ago" directly above a
+        // session list whose top row said two days.
+        //
+        // Back-filling history is not playing it. `lastPlayedAt` means the
+        // most recent time this playthrough was played, and a session added
+        // for an earlier date cannot change that.
+        pt.lastPlayedAt = max(pt.lastPlayedAt ?? date, date)
         touch(pt, at: date)
         persist()
         attachIfDetached(session, to: pt)
@@ -1581,7 +1634,7 @@ struct Repository {
         var data = schema.jsonData
         var rescued = 0
         // Id is derived from the original rather than random, so a second
-        // rescue of the same item is recognisable — but `addingGoal` appends
+        // rescue of the same item is recognizable — but `addingGoal` appends
         // unconditionally, so the skip has to happen here.
         var present = Set(TrackerSchemaJSON.categories(from: data).flatMap(\.items).map(\.id))
         for item in items {
@@ -2635,7 +2688,7 @@ struct Repository {
         // Whose decision this is, is now the user's. Under `.ask` the overlap
         // is LEFT INTACT for the prompt to surface — closing it here first is
         // exactly the silent decision this replaced. `.keepNewest` is the old
-        // automatic behaviour, still available, now chosen. `.keepBoth` leaves
+        // automatic behavior, still available, now chosen. `.keepBoth` leaves
         // them alone permanently.
         guard running.count > 1, overlappingTimerPolicy == .keepNewest
         else { return repaired }

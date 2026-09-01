@@ -50,27 +50,32 @@ made for them, or the ask reads as a contradiction.
 Plain text — App Store Connect renders no markdown (no `**`, no `-` bullets
 that need styling; hyphens are fine as literal characters).
 
-> FIRST, A SMALL ASK (about 30 seconds)
+**"What to Test" is capped at 4,000 characters**, and this header costs about
+490 of them. Build 33's notes came in at 5,098 and had to be cut back on the
+spot — write to the budget rather than trimming afterwards. Roughly: header
+490, framing 500, what's new 1,600, fixes 350, what to poke at 500, known
+150.
+
+Shortened 2026-08-30 (build 33). The long version was around 150 words and
+sat above the thing testers actually opened the notes to read. Every
+load-bearing part survives: the privacy distinction FIRST, both switches with
+the note that the second is hidden until the first is on, that it is
+anonymous and reversible, and the consequence — no report exists without it.
+What went was the throat-clearing.
+
+> FIRST, A SMALL ASK (30 seconds)
 >
-> LevelSelect has no accounts, no ads, and no analytics of its own. That
-> isn't changing. It also means that if the app crashes on your device, I
-> have no way of ever knowing it happened.
->
-> Apple has a channel for exactly this, and it doesn't involve the app
-> collecting anything:
+> LevelSelect has no accounts, no ads and no analytics of its own, and that
+> isn't changing. It also means a crash on your device is invisible to me
+> unless you lend me Apple's own channel for it — which collects nothing
+> through the app.
 >
 > Settings > Privacy & Security > Analytics & Improvements
 > 1. Turn on "Share iPhone Analytics"
-> 2. Then turn on "Share With App Developers"
+> 2. Turn on "Share With App Developers" (it only appears once the first is on)
 >
-> The second switch only appears once the first one is on.
->
-> That sends Apple's anonymous crash reports my way — no personal data,
-> nothing tied to you, nothing the app itself can see, and you can switch it
-> back off whenever you like. If you hit a crash and this is off, the report
-> simply doesn't exist, so this is genuinely the only way I can fix it.
->
-> Thank you — it makes a real difference to a beta this small.
+> Anonymous, nothing tied to you, nothing the app itself can see, and off
+> again whenever you like. Without it, a crash report simply doesn't exist.
 
 ## Framing screenshots (the `frames` CLI)
 
@@ -148,7 +153,7 @@ Video framing needs `brew install ffmpeg`; not installed, not needed yet.
 >   pressing and holding a cover. It goes to Recently Deleted in Settings
 >   either way.
 > - Settings has been reorganised, and the reset buttons are now separate
->   (colours, background, and rating labels reset independently, under
+>   (colors, background, and rating labels reset independently, under
 >   "Reset"). They only appear when you have actually changed something.
 > - ON IPAD: please try a game page in landscape, especially if your
 >   tracker layout is set to Compact. The art at the top was sitting in the
@@ -185,7 +190,7 @@ Video framing needs `brew install ffmpeg`; not installed, not needed yet.
 > - Tags: start typing one and your existing tags are suggested underneath.
 >   Settings > Manage Tags to rename, merge (rename one onto another), or
 >   remove a tag everywhere.
-> - Two new game page backgrounds (accent colour, plain) in Appearance.
+> - Two new game page backgrounds (accent color, plain) in Appearance.
 >
 > If you have two devices, the star names and the start dates are the two
 > things most worth checking sync.

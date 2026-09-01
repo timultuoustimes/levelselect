@@ -129,7 +129,7 @@ enum PlatformPreference {
     /// `addGame(from:platform:)` stores the platform picked on the confirm
     /// screen at the FRONT of the list, so position zero is a record of an
     /// answer the user gave, not a guess. `sorted()` is a guess: a fixed taste
-    /// ranking that put PC above Xbox 360 and so labelled a 360 copy of Skyrim
+    /// ranking that put PC above Xbox 360 and so labeled a 360 copy of Skyrim
     /// "PC" on the game page, in the library row, and in the platform grouping.
     ///
     /// A record beats a heuristic, always. `sorted()` stays for the places

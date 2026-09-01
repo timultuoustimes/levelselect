@@ -222,7 +222,7 @@ struct RootView: View {
             let statusOK = statuses.contains(g.status.rawValue)
                 || (includeCompleted && g.status == .completed)
             let platformOK = platform == nil
-                || PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other") == platform
+                || PlatformShort.ownedMatches(g.ownedPlatformNames, short: platform!)
             return statusOK && platformOK && g.status != .abandoned && g.status != .wishlist
         }
         if let pick = candidates.randomElement() {
@@ -473,7 +473,7 @@ struct HomeTab: View {
                 // the window toolbar sits outside the TabView on macOS, so
                 // whatever `.tint` the tab tree carries does not reliably
                 // reach it.
-                // Coloured EXPLICITLY, not via tint.
+                // Colored EXPLICITLY, not via tint.
                 //
                 // Library's sort/filter/add take the accent from the same
                 // inherited `.tint` these buttons get — Library sets none of
@@ -481,7 +481,7 @@ struct HomeTab: View {
                 // toolbar tint to a `Menu`'s symbol and ignores it for a plain
                 // `Button`'s. Neither `.tint` nor `.buttonStyle(.bordered)`
                 // moved them; `foregroundStyle` on the label does, because it
-                // stops asking and just says the colour.
+                // stops asking and just says the color.
                 ToolbarItem(placement: Self.trailing) {
                     Button { showingSettings = true } label: {
                         Label("Settings", systemImage: "gearshape")
@@ -536,6 +536,10 @@ struct HomeTab: View {
         .onChange(of: nav.pendingGameID) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingContinue) { _, _ in consumePendingNavigation() }
         .onChange(of: nav.pendingRoute) { _, _ in consumePendingNavigation() }
+        // Menu bar (Mac and iPad). See LevelSelectCommands.
+        .onChange(of: nav.addGameRequest) { _, _ in showingAdd = true }
+        .onChange(of: nav.csvImportRequest) { _, _ in showingCSVImport = true }
+        .onChange(of: nav.settingsRequest) { _, _ in showingSettings = true }
     }
 
     /// Push a game the navigator asked for (deep link or App Intent).
@@ -639,6 +643,14 @@ struct HomeTab: View {
                         )
                     }
                 }
+                // After what's live and what's next, because that is when it
+                // happened. Beating a game is the one event Home had no words
+                // for — the game simply left Now Playing and nothing marked
+                // it. Empties itself after a month; the permanent record is
+                // Library's Finished shelf.
+                if !recentlyBeaten.isEmpty {
+                    RecentlyBeatenShelf(games: recentlyBeaten) { path.append($0) }
+                }
                 hiddenStatusesFooter
                 // After the shelves, not above them: an ask, never a nag.
                 BetaQuestionCard()
@@ -662,6 +674,11 @@ struct HomeTab: View {
             // the toolbar at rest, which is a bug rather than an effect.
             .ignoresSafeArea(.container, edges: headerBleeds ? .top : [])
         }
+    }
+
+    /// Finished in the last month. See `RecentlyBeaten`.
+    private var recentlyBeaten: [Game] {
+        RecentlyBeaten.games(from: games).map(\.game)
     }
 
     /// First thing a new person sees, and the app's only onboarding — there is

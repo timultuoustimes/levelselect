@@ -9,6 +9,16 @@ const rendered = await Promise.all(
   entries.map(async (entry) => ({ entry, Content: (await render(entry)).Content }))
 );
 
+/**
+ * A release needs a name you can link at.
+ *
+ * The roadmap points here to say "this one shipped, in this build" — a
+ * promise is worth more when you can read what became of it. The id is
+ * derived rather than added to the frontmatter so a new entry cannot forget
+ * to have one: 0.1.0-34 becomes build-34, and 0.1.0-beta becomes build-beta.
+ */
+const anchorFor = (id: string) => `build-${id.split('-').pop()}`;
+
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 ---
@@ -36,7 +46,7 @@ const fmt = (d: Date) =>
     </div>
 
     {rendered.map(({ entry, Content }, i) => (
-      <section class="release" data-release data-open={i === 0 ? 'true' : 'false'}>
+      <section class="release" id={anchorFor(entry.id)} data-release data-open={i === 0 ? 'true' : 'false'}>
         <button class="release__top" data-release-toggle aria-expanded={i === 0 ? 'true' : 'false'}>
           <span class="release__caret" aria-hidden="true">›</span>
           <span class="release__head">
@@ -64,6 +74,25 @@ const fmt = (d: Date) =>
   const bar = document.querySelector('[data-filters]') as HTMLElement | null;
   if (bar) bar.hidden = false;
 
+  // Follow a link to one release.
+  //
+  // Only the newest is open, so landing on #build-28 from the roadmap would
+  // otherwise show a closed title and look like the link was broken. Opening
+  // the target is the whole point of having linked to it.
+  const openRelease = (hash: string) => {
+    const el = hash && document.querySelector(hash);
+    if (!(el instanceof HTMLElement) || !el.matches('[data-release]')) return;
+    const body = el.querySelector('[data-release-body]') as HTMLElement;
+    const btn = el.querySelector('[data-release-toggle]') as HTMLElement;
+    el.dataset.open = 'true';
+    btn?.setAttribute('aria-expanded', 'true');
+    if (body) body.hidden = false;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  openRelease(location.hash);
+  window.addEventListener('hashchange', () => openRelease(location.hash));
+
   // Expand / collapse
   document.querySelectorAll('[data-release-toggle]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -76,12 +105,35 @@ const fmt = (d: Date) =>
     });
   });
 
-  // Filter by change kind. The markdown renders <h3>New</h3> etc. followed by a
-  // <ul>, so each list is tagged from the heading above it.
+  // Filter by change kind.
+  //
+  // This used to take the kind from the heading TEXT, expecting <h3>New</h3>,
+  // <h3>Improved</h3>, <h3>Fixed</h3>. No entry has ever been written that way
+  // — they use descriptive headings like "A profile" and "Smaller things",
+  // which is the better writing and the reason the changelog reads like prose
+  // rather than a release note. So `kind` was always something like
+  // "a profile", nothing ever matched a chip, and picking anything but
+  // Everything emptied the page. The chips have never worked.
+  //
+  // A heading now declares its kind with a trailing marker the reader never
+  // sees — "### Smaller things [improved]" — and anything untagged is `new`,
+  // which is what a section describing a feature is. Explicit beats inferring
+  // intent from prose: "Smaller things" holds fixes in one entry and polish in
+  // another, and no heuristic can tell them apart.
+  const KINDS = ['new', 'improved', 'fixed'];
   document.querySelectorAll('.release__content').forEach((content) => {
-    let kind = 'other';
+    let kind = 'new';
     [...content.children].forEach((el) => {
-      if (el.tagName === 'H3') kind = el.textContent!.trim().toLowerCase();
+      if (el.tagName === 'H3') {
+        const text = el.textContent!.trim();
+        const tag = text.match(/\s*\[(\w+)\]$/);
+        if (tag && KINDS.includes(tag[1].toLowerCase())) {
+          kind = tag[1].toLowerCase();
+          el.textContent = text.slice(0, tag.index).trim();
+        } else {
+          kind = 'new';
+        }
+      }
       (el as HTMLElement).dataset.kind = kind;
     });
   });
@@ -141,6 +193,8 @@ const fmt = (d: Date) =>
     margin-bottom: .7rem;
     overflow: hidden;
     transition: opacity 200ms ease;
+    /* A release linked from the roadmap must not land under the site header. */
+    scroll-margin-top: 5rem;
   }
   .release[data-empty='true'] { opacity: .35; }
 
@@ -168,7 +222,7 @@ const fmt = (d: Date) =>
   .release__body { padding: 0 1.05rem 1rem 2.4rem; }
   .release__summary { color: var(--ink); margin: 0 0 .9rem; }
 
-  /* The markdown's own <h3>New/Improved/Fixed</h3> become coloured labels. */
+  /* The markdown's own <h3>New/Improved/Fixed</h3> become colored labels. */
   .release__content :global(h3) {
     font-size: .74rem; text-transform: uppercase; letter-spacing: .07em;
     color: var(--muted); margin: 1.3rem 0 .4rem;

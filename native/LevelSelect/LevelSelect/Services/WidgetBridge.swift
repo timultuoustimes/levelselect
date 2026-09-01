@@ -133,7 +133,7 @@ enum WidgetBridge {
                     id: g.id.uuidString, name: g.name,
                     coverFileName: g.displayCoverURLString.map { coverFileName(for: $0) },
                     statusRaw: g.status.rawValue,
-                    platform: PlatformShort.name(PlatformPreference.owned(g.platforms) ?? "Other"))
+                    platform: PlatformShort.name(g.primaryOwnedPlatform ?? "Other"))
             }
         let libraryPlatforms = Array(Set(shufflePool.map(\.platform))).sorted()
 
@@ -172,7 +172,7 @@ enum WidgetBridge {
         // Short platform name → console icon asset, for launcher portals.
         var platformIcons: [String: String] = [:]
         for g in games {
-            guard let raw = PlatformPreference.owned(g.platforms) else { continue }
+            guard let raw = g.primaryOwnedPlatform else { continue }
             let short = PlatformShort.name(raw)
             if platformIcons[short] == nil, let asset = PlatformIcon.assetName(raw) {
                 platformIcons[short] = asset
@@ -202,7 +202,7 @@ enum WidgetBridge {
                         .sorted { activityKey($0) > activityKey($1) }.prefix(8).map { $0 }
                 case "platform":
                     shown = games.filter {
-                        PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other") == parts[1]
+                        PlatformShort.ownedMatches($0.ownedPlatformNames, short: parts[1])
                     }
                     .sorted { activityKey($0) > activityKey($1) }.prefix(8).map { $0 }
                 case "collection":

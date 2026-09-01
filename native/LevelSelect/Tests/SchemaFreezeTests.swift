@@ -147,7 +147,7 @@ struct SchemaFreezeTests {
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             // backdropURLString/logoURLString/images added 2026-08-28 build 32
             // (artwork roles + user-added images).
-            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
+            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownedPlatforms,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
             "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",

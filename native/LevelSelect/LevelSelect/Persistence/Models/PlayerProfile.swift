@@ -55,7 +55,7 @@ final class PlayerProfile {
     /// needs exactly one plain BYTES field.
     var avatarData: Data?
 
-    /// How the name on Home is coloured: nil or "" plain, "accent" to follow
+    /// How the name on Home is colored: nil or "" plain, "accent" to follow
     /// the accent as it changes, otherwise a hex.
     ///
     /// Per-profile rather than per-device, because it is part of how you look

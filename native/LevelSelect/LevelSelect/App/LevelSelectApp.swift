@@ -19,7 +19,7 @@ struct LevelSelectApp: App {
                 // Hiding the window toolbar background to get glass took the
                 // window's own ground with it — the toolbar material was what
                 // made the window solid — so the empty state rendered on the
-                // system's default window colour, a flat grey. `lsBackground()`
+                // system's default window color, a flat gray. `lsBackground()`
                 // lives inside the NavigationStack and never reached the
                 // window itself.
                 #if os(macOS)
@@ -37,5 +37,6 @@ struct LevelSelectApp: App {
                 }
         }
         .modelContainer(library.container)
+        .commands { LevelSelectCommands() }
     }
 }

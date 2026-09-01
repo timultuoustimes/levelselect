@@ -1045,10 +1045,10 @@ struct GameDetailView: View {
     /// able to tell.
     ///
     /// The shape is Tim's: the cover and a narrow facts panel sit side by side
-    /// in the art, and the game's name runs underneath them both, centred and
+    /// in the art, and the game's name runs underneath them both, centered and
     /// large. An earlier pass had the name beside the cover on a full-width
     /// card it half-overlapped, which gave the title only the column left over
-    /// after a 132pt cover — so a wordmark that is the most recognisable thing
+    /// after a 132pt cover — so a wordmark that is the most recognizable thing
     /// about a game got the smallest space on the page. Below, it gets the
     /// whole width.
     private var layout: GamePageLayout { ThemePalette.gamePageLayout }
@@ -1076,12 +1076,12 @@ struct GameDetailView: View {
                     factsPanel(fills: true)
                 }
             } else {
-                // Two spacers, so the pair is CENTRED rather than left-flush.
+                // Two spacers, so the pair is CENTERED rather than left-flush.
                 // The panel takes the width its words need; without that it
                 // stretched to the page margin and carried a stripe of empty
                 // haze past the end of its own longest line. Hugging on the
                 // right alone then left the pair ending short while the title
-                // beneath it was centred — two alignments at once.
+                // beneath it was centered — two alignments at once.
                 //
                 // Both spacers collapse when space is tight, so a long
                 // platform name still gets the room.
@@ -1178,7 +1178,7 @@ struct GameDetailView: View {
         .padding(.top, 4)
     }
 
-    /// The box on a shelf. One large cover, centred, and everything else
+    /// The box on a shelf. One large cover, centered, and everything else
     /// beneath it — the arrangement a physical game has when you pick it up.
     ///
     /// Nothing sits beside the cover, which is what lets it be this big: at
@@ -1231,7 +1231,7 @@ struct GameDetailView: View {
                 Image(systemName: game.status.systemImage)
                     .foregroundStyle(game.status.color)
                 Text(game.status.label)
-                if let platform = PlatformPreference.owned(game.platforms) {
+                if let platform = game.primaryOwnedPlatform {
                     Text("·").foregroundStyle(.tertiary)
                     PlatformIconView(platform: platform, size: 20)
                     Text(PlatformShort.name(platform)).foregroundStyle(.secondary)
@@ -1468,7 +1468,19 @@ struct GameDetailView: View {
                 labeledField("Developer", text: firstElementBinding(\.developers))
                 labeledField("Publisher", text: firstElementBinding(\.publishers))
             }
-            PlatformEditor(platforms: $game.platforms)
+            // MORE than one, not merely non-empty.
+            //
+            // A one-entry list is almost never IGDB's answer — it is the
+            // platform picked when the game was added, before any refresh
+            // merged the rest in. Celeste sat at ["Mac"] with a full IGDB
+            // record behind it, and treating that as authoritative hid the
+            // catalog behind a submenu on exactly the game that needed it
+            // most. Two or more means a merge has happened.
+            PlatformEditor(platforms: $game.platforms,
+                           owned: Binding(
+                            get: { game.ownedPlatformNames },
+                            set: { game.ownedPlatforms = $0 }),
+                           listIsAuthoritative: game.igdbID != nil && game.platforms.count > 1)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)
@@ -1502,7 +1514,7 @@ struct GameDetailView: View {
         )
     }
 
-    /// A labelled value, tappable when there's a slice of the library behind
+    /// A labeled value, tappable when there's a slice of the library behind
     /// it. Styled the same either way — the panel is a reference table first,
     /// and making every field look like a button would turn it into a menu.
     @ViewBuilder
@@ -1590,12 +1602,13 @@ struct GameDetailView: View {
     /// there's a Switch port. But the one you own is the one that's *yours*,
     /// and an undifferentiated row of three said nothing about which.
     private var platformsGroup: some View {
-        let mine = PlatformPreference.owned(game.platforms)
+        let mine = Set(game.ownedPlatformNames)
         return VStack(alignment: .leading, spacing: 6) {
             Text("Platforms").font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {
-                ForEach(game.platforms, id: \.self) { platform in
-                    if platform == mine {
+                ForEach(PlatformShort.ownedFirst(game.platforms,
+                                                 owned: game.ownedPlatformNames), id: \.self) { platform in
+                    if mine.contains(platform) {
                         HStack(spacing: 5) {
                             PlatformIconView(platform: platform, size: 14)
                             Text(platform)

@@ -62,13 +62,22 @@ struct CollectionCard: View {
                     }
                 }
                 .shadow(color: .black.opacity(0.4), radius: 5, y: 3)
-            Text(collection.name)
-                .font(.footnote.weight(.medium))
-                .lineLimit(2, reservesSpace: true)
-                .multilineTextAlignment(.leading)
-            Text("\(members.count) game\(members.count == 1 ? "" : "s")")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            // `reservesSpace` held a second line open under every name so the
+            // counts lined up across the row — which meant a one-line name
+            // like "Six That Made Me" pushed "2 games" a whole line clear of
+            // it, and the count read as belonging to nothing. Coupling the
+            // label to its name matters more here than aligning labels to each
+            // other; the row is top-aligned, so uneven card heights cost
+            // nothing.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(collection.name)
+                    .font(.footnote.weight(.medium))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                Text("\(members.count) game\(members.count == 1 ? "" : "s")")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
         .frame(width: 122, alignment: .leading)
     }
@@ -295,7 +304,7 @@ struct CollectionMembersPicker: View {
     ///
     /// The old row was a 40pt thumbnail, a name, and a dot at the far right —
     /// three glances to answer "is this one in?". Box art is how anyone
-    /// actually recognises a game, and a ring around it answers the question
+    /// actually recognizes a game, and a ring around it answers the question
     /// in the same look.
     private func cell(_ game: Game, selected: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {

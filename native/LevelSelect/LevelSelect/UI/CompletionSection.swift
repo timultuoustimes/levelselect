@@ -290,7 +290,7 @@ struct MarkCompletionSheet: View {
                     return
                 }
                 if platform.isEmpty {
-                    platform = PlatformPreference.owned(game.platforms) ?? ""
+                    platform = game.primaryOwnedPlatform ?? ""
                 }
                 // Today's credits almost always cap the run you're on;
                 // "Just the game" stays one tap away for history.

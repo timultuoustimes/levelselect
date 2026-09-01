@@ -197,9 +197,9 @@ struct StatsTab: View {
             Label("Recent Play", systemImage: "clock.fill")
                 .font(.headline)
             HStack(spacing: 0) {
-                stat(number: Format.duration(playtime(in: sessions, since: startOfWeek)), label: "This week")
+                stat(number: Format.duration(playtime(in: sessions, since: startOfWeek)), label: "Last 7 days")
                 divider
-                stat(number: Format.duration(playtime(in: sessions, since: startOfMonth)), label: "This month")
+                stat(number: Format.duration(playtime(in: sessions, since: startOfMonth)), label: "Last 30 days")
             }
             .frame(maxWidth: .infinity)
         }
@@ -738,13 +738,23 @@ struct StatsTab: View {
         sessions.filter { $0.startDate >= date }.reduce(0) { $0 + $1.elapsed() }
     }
 
-    private var startOfWeek: Date {
-        Calendar.current.dateInterval(of: .weekOfYear, for: .now)?.start ?? .now
-    }
+    /// Rolling windows, not calendar ones — and labelled as such.
+    ///
+    /// These were `dateInterval(of: .weekOfYear)` and `.month`, which is
+    /// defensible in isolation and nonsense side by side: on the 1st of a
+    /// month "this month" is a few hours old while "this week" reaches back
+    /// into the last one, so the pair read **5h 59m this week / 0s this
+    /// month**. Every month, for its first week, that stat looked broken.
+    ///
+    /// It also disagreed with Home, which has always used a rolling seven days
+    /// (`PlayerSummary`). Same words, different number, one tab apart.
+    ///
+    /// Rolling fixes both and never resets to zero overnight. The by-month
+    /// chart further down stays calendar-based, because there the months ARE
+    /// the subject.
+    private var startOfWeek: Date { Date.now.addingTimeInterval(-7 * 86_400) }
 
-    private var startOfMonth: Date {
-        Calendar.current.dateInterval(of: .month, for: .now)?.start ?? .now
-    }
+    private var startOfMonth: Date { Date.now.addingTimeInterval(-30 * 86_400) }
 
     private var statusCounts: [GameStatus: Int] {
         Dictionary(grouping: games, by: \.status).mapValues(\.count)
@@ -835,7 +845,11 @@ struct StatsTab: View {
 
     /// Counted like the library groups: one preferred platform per game.
     private var platformCounts: [(String, Int)] {
-        let names = games.map { PlatformShort.name(PlatformPreference.owned($0.platforms) ?? "Other") }
+        // The PRIMARY, not every console you own it on: a chart of "games per
+        // system" that counted one game twice would not sum to the library,
+        // and a bar chart carries no room to explain that. Revisit with the
+        // Stats identity pass, where the framing can be chosen deliberately.
+        let names = games.map { PlatformShort.name($0.primaryOwnedPlatform ?? "Other") }
         return Dictionary(grouping: names) { $0 }.mapValues(\.count)
             .sorted { ($0.value, $1.key) > ($1.value, $0.key) }
     }

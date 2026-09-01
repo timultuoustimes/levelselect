@@ -54,7 +54,7 @@ struct TrackerDiff: Hashable, Sendable {
 
 /// How an incoming schema should be folded into the stored one.
 enum TrackerMergeMode: Hashable, Sendable {
-    /// Incoming wins outright. Today's regeneration behaviour — Personal Goals
+    /// Incoming wins outright. Today's regeneration behavior — Personal Goals
     /// are still carried across, everything else is replaced.
     case replace
     /// Keep everything already there and append everything new. Never removes,
@@ -93,7 +93,7 @@ enum TrackerMerge {
     /// Match key for a name or id. Case-, diacritic- and punctuation-
     /// insensitive, so `"Boss: False Knight"`, `"boss-false-knight"` and
     /// `"false knight"` all collapse together. This is what lets a
-    /// regeneration that renamed every id still be recognised as the same
+    /// regeneration that renamed every id still be recognized as the same
     /// content rather than reported as a wholesale replacement.
     static func matchKey(_ value: String) -> String {
         value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)

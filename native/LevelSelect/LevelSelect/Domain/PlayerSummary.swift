@@ -24,10 +24,15 @@ struct PlayerSummary {
     /// from. The game you're on now, or failing that the last one you touched.
     var fallbackBackdrop: String?
 
-    /// Below this, a ribbon reads as a mistake rather than a pattern — two
-    /// covers tilted behind a portrait look like a layout bug. Fall back to
-    /// one game's artwork instead, which is a composition rather than a gap.
-    static let minimumRibbon = 3
+    /// Two, not three.
+    ///
+    /// This was three on the theory that two tilted covers read as a layout
+    /// bug rather than a pattern. Tim's real week, 08-31, settled it against
+    /// that: he played Skate Story and finished Under the Island, and the
+    /// header showed only Skate Story — the finish was simply absent from the
+    /// picture of his week. A quiet week is still a week, and showing half of
+    /// it is worse than showing two covers.
+    static let minimumRibbon = 2
 
     var usesRibbon: Bool { recentCovers.count >= Self.minimumRibbon }
 
@@ -54,6 +59,22 @@ struct PlayerSummary {
                     }
                 }
             }
+
+            // Finishing a game counts as a week with that game in it, whether
+            // or not a timer was running for it.
+            //
+            // Tim beat Under the Island on the 25th and it was missing from
+            // the header on the 31st, because the week was built from sessions
+            // alone. A finish is the most memorable thing that can happen to a
+            // game, and plenty of them are recorded by marking them rather
+            // than by running a clock — most of the app's own history predates
+            // its timer. It contributes no seconds, only presence.
+            for event in (game.completionEvents ?? []) where event.deletedAt == nil {
+                guard event.date >= weekAgo, event.date <= now else { continue }
+                if event.date > (latestThisWeek ?? .distantPast) {
+                    latestThisWeek = event.date
+                }
+            }
             if let at = latestThisWeek { recent.append((game, at)) }
         }
 
@@ -71,11 +92,23 @@ struct PlayerSummary {
         // blank header and no reason why.
         let playing = games.filter { $0.status == .playing }
         let mostRecent = recent.max(by: { $0.at < $1.at })?.game
+        // Most recently PLAYED first, not first-in-the-list.
+        //
+        // `playing.compactMap(\.backdropURLString).first` took whichever
+        // playing game the query happened to hand over first — the array is
+        // sorted by name — so with eleven games in progress the header showed
+        // an alphabetical accident. Tim, 08-31: the backdrop was a game he
+        // had not played this week, while the one he had just played sat in
+        // Continue Playing directly beneath it.
+        //
+        // The header is about how it is going, so it leads with the game you
+        // last actually touched, and only falls back to "something you are
+        // playing" when nothing has been played this week at all.
         summary.fallbackBackdrop =
-            playing.compactMap(\.backdropURLString).first
-            ?? mostRecent?.backdropURLString
-            ?? playing.compactMap(\.displayCoverURLString).first
+            mostRecent?.backdropURLString
             ?? mostRecent?.displayCoverURLString
+            ?? playing.compactMap(\.backdropURLString).first
+            ?? playing.compactMap(\.displayCoverURLString).first
 
         return summary
     }

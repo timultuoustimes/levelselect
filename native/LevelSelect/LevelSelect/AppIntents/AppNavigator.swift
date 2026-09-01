@@ -24,7 +24,7 @@ final class AppNavigator {
     /// tree is keyed off it — and re-keying a view destroys it. Bumping this
     /// on every theme edit tore down the whole TabView mid-edit, which reset
     /// HomeTab's `@State` and slammed the Settings sheet shut. Tapping any
-    /// colour, or moving any slider in the colour picker, threw you back to
+    /// color, or moving any slider in the color picker, threw you back to
     /// Home before you could choose: the first touch was the last one.
     ///
     /// The real fix is making `ThemePalette` observable so views re-render
@@ -83,5 +83,51 @@ final class AppNavigator {
 
     func go(to tab: LSTab) {
         selectedTab = tab
+    }
+
+    // MARK: Menu bar requests
+    //
+    // The menu bar lives in the Scene, outside the view tree that owns these
+    // sheets, so a command raises a request here and the view consumes it.
+    //
+    // Counters, not Bools: pressing ⌘N twice has to open the sheet twice, and
+    // setting a Bool that is already true changes nothing — so the second
+    // press would be silently swallowed.
+    var addGameRequest = 0
+    var csvImportRequest = 0
+    var settingsRequest = 0
+    var newCollectionRequest = 0
+    var clearFiltersRequest = 0
+
+    func requestAddGame() { addGameRequest += 1 }
+    func requestCSVImport() { csvImportRequest += 1 }
+    func requestSettings() { settingsRequest += 1 }
+
+    /// Both of these act on the Library, so they take you there first —
+    /// a new collection appearing on a tab that cannot show it, or filters
+    /// clearing out of sight, would read as the command having done nothing.
+    func requestNewCollection() {
+        selectedTab = .library
+        newCollectionRequest += 1
+    }
+
+    /// ⌘F focuses the search field on the tab you are already on — Library
+    /// and Wishlist each have their own, and jumping you to Library from a
+    /// wishlist you were searching would be the wrong kind of helpful.
+    ///
+    /// From Home or Stats, which have no search, it goes to Library: that way
+    /// ⌘F always means "find a game" rather than sometimes meaning nothing.
+    var searchRequest = 0
+
+    func requestSearch() {
+        if selectedTab != .library && selectedTab != .wishlist {
+            selectedTab = .library
+        }
+        searchRequest += 1
+    }
+
+    func requestClearFilters() {
+        selectedTab = .library
+        clearFiltersRequest += 1
     }
 }

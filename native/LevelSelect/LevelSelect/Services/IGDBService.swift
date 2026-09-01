@@ -18,6 +18,34 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     let playerPerspectives: [String]
     let developers: [String]
     let publishers: [String]
+    /// IGDB's `first_release_date`, kept whole. See `releaseDate`.
+    var releaseTimestamp: Double? = nil
+    /// How much of that timestamp IGDB actually knows. See `ReleasePrecision`.
+    var releasePrecision: ReleasePrecision = .unknown
+    /// Every dated release IGDB lists, per platform. See `release(on:)`.
+    var platformReleases: [PlatformRelease] = []
+
+    /// One platform's release, with IGDB's own precision for it.
+    struct PlatformRelease: Hashable, Sendable {
+        let platform: String
+        let timestamp: Double
+        let precision: ReleasePrecision
+    }
+
+    /// What IGDB's date actually claims.
+    ///
+    /// IGDB pads imprecise dates to real timestamps: a year-only entry can
+    /// arrive as **30 December**, a quarter as the last day of that quarter.
+    /// Without this the app cannot tell "launches 30 December" from "sometime
+    /// in 2026", and it printed the former for the Ocarina of Time remake,
+    /// which has no announced date at all.
+    enum ReleasePrecision: String, Codable, Sendable {
+        case day, month, quarter, year, tbd, unknown
+
+        /// Whether a day may be shown. Only IGDB's own exact-day category
+        /// earns that; everything else is a placeholder wearing a date.
+        var hasDay: Bool { self == .day }
+    }
 
     /// Human label for non-main game types (nil for main games).
     var typeLabel: String? {
@@ -44,8 +72,68 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
         coverImageID.map { "https://images.igdb.com/igdb/image/upload/t_cover_big/\($0).jpg" }
     }
 
+    /// The real release date when IGDB gave one, falling back to 1 January of
+    /// the year.
+    ///
+    /// IGDB sends `first_release_date` as a Unix timestamp and this type used
+    /// to keep only `Calendar.component(.year:)` of it, rebuilding a
+    /// 1-January date from the year alone — so **every release date in the
+    /// library was 1 January**, and the month and day were thrown away at
+    /// parse time on data the proxy had already fetched.
+    ///
+    /// Found 2026-08-31 through the wishlist's "coming soon" split, which
+    /// could not tell a February release from a November one because both were
+    /// stored as January. `releaseYear` stays as the fallback for rows written
+    /// before this and for games IGDB dates only by year.
+    /// The date as the app should STORE it.
+    ///
+    /// A precise day is kept whole. Anything vaguer collapses to 1 January of
+    /// its year — the shorthand the rest of the app already reads as "the year
+    /// is all we know" (`MetadataRefresh.isYearOnly`). That keeps one
+    /// convention rather than introducing a second kind of fuzzy date, and it
+    /// means an imprecise answer can never be mistaken for a launch day.
+    /// The date to store for someone who owns — or intends to buy — this game
+    /// on `platform`.
+    ///
+    /// `first_release_date` is the EARLIEST across every platform, so a game
+    /// that reached PC in 2025 and arrives on Switch 2 in 2026 reads as
+    /// released. For a wishlist that is the wrong answer in exactly the case
+    /// the wishlist exists for. Tim's framing, 2026-08-31: *"letting them pick
+    /// the game and then the platform they want it for, which in turn is
+    /// choosing the date."*
+    ///
+    /// Falls back to the aggregate when IGDB lists no date for that platform,
+    /// or when no platform has been chosen.
+    func storableReleaseDate(on platform: String?) -> Date? {
+        guard let platform,
+              let match = platformReleases.first(where: {
+                  PlatformIcon.consoleKey($0.platform) == PlatformIcon.consoleKey(platform)
+              })
+        else { return storableReleaseDate }
+
+        let date = Date(timeIntervalSince1970: match.timestamp)
+        guard match.precision.hasDay, !MetadataRefresh.isYearOnly(date) else {
+            let year = Calendar.current.component(.year, from: date)
+            return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
+        }
+        return date
+    }
+
+    var storableReleaseDate: Date? {
+        guard let date = releaseDate else { return nil }
+        // IGDB's own category is trusted, EXCEPT when the day it gives is one
+        // of the two padding days — a category-0 answer landing on
+        // 31 December is a period boundary far more often than a launch.
+        guard releasePrecision.hasDay, !MetadataRefresh.isYearOnly(date) else {
+            let year = Calendar.current.component(.year, from: date)
+            return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
+        }
+        return date
+    }
+
     var releaseDate: Date? {
-        releaseYear.flatMap { DateComponents(calendar: .current, year: $0, month: 1, day: 1).date }
+        if let stamp = releaseTimestamp { return Date(timeIntervalSince1970: stamp) }
+        return releaseYear.flatMap { DateComponents(calendar: .current, year: $0, month: 1, day: 1).date }
     }
 }
 
@@ -78,7 +166,9 @@ enum IGDBService {
 
     private static let fields = """
         fields name, slug, summary, game_type, cover.image_id, franchises.name, collection.name, \
-        first_release_date, platforms.name, genres.name, themes.name, game_modes.name, \
+        first_release_date, release_dates.category, release_dates.date, \
+        release_dates.platform.name, \
+        platforms.name, genres.name, themes.name, game_modes.name, \
         player_perspectives.name, involved_companies.developer, involved_companies.publisher, \
         involved_companies.company.name;
         """
@@ -207,6 +297,45 @@ enum IGDBService {
         let game_modes: [Named]?
         let player_perspectives: [Named]?
         let involved_companies: [Involved]?
+        /// IGDB's own precision for each regional release. `category` is the
+        /// date-format enum: 0 = exact day, 1 = month, 2 = year, 3–6 = a
+        /// quarter, 7 = TBD.
+        struct ReleaseDate: Decodable {
+            let category: Int?
+            let date: Double?
+            struct Platform: Decodable { let name: String? }
+            let platform: Platform?
+        }
+        let release_dates: [ReleaseDate]?
+
+        /// How precise IGDB's own answer is for the earliest release.
+        ///
+        /// `first_release_date` is an aggregate with no precision attached, and
+        /// **IGDB pads an imprecise date to a real timestamp** — a year-only
+        /// entry can arrive as 30 December. So the day alone cannot be trusted:
+        /// the Ocarina of Time remake, announced for "late 2026" with no date,
+        /// came through as 30 December 2026 and the wishlist printed it as a
+        /// launch day. The matching `release_dates` row carries the truth.
+        static func precision(of first: Double?,
+                              in dates: [ReleaseDate]?) -> IGDBGame.ReleasePrecision {
+            guard let first, let dates, !dates.isEmpty else { return .unknown }
+            // The row the aggregate came from — the earliest matching date.
+            let match = dates
+                .filter { $0.date != nil }
+                .min { abs(($0.date ?? 0) - first) < abs(($1.date ?? 0) - first) }
+            return precision(for: match?.category)
+        }
+
+        static func precision(for category: Int?) -> IGDBGame.ReleasePrecision {
+            switch category {
+            case 0: return .day
+            case 1: return .month
+            case 2: return .year
+            case 3, 4, 5, 6: return .quarter
+            case 7: return .tbd
+            default: return .unknown
+            }
+        }
 
         func toGame() -> IGDBGame {
             var developers: [String] = []
@@ -233,7 +362,15 @@ enum IGDBService {
                 gameModes: (game_modes ?? []).map(\.name),
                 playerPerspectives: (player_perspectives ?? []).map(\.name),
                 developers: developers,
-                publishers: publishers
+                publishers: publishers,
+                releaseTimestamp: first_release_date,
+                releasePrecision: Self.precision(of: first_release_date, in: release_dates),
+                platformReleases: (release_dates ?? []).compactMap { row in
+                    guard let name = row.platform?.name, let stamp = row.date else { return nil }
+                    return IGDBGame.PlatformRelease(
+                        platform: name, timestamp: stamp,
+                        precision: Self.precision(for: row.category))
+                }
             )
         }
     }
@@ -262,10 +399,10 @@ enum IGDBImageType {
     static let keyArtWithoutLogo = 2
     static let keyArtWithLogo = 3
 
-    /// Colour first — it's the cut a game is recognised by. White and black
+    /// Color first — it's the cut a game is recognized by. White and black
     /// are the same wordmark drawn for a light or dark ground, and they earn
     /// their place: the header lays the logo over artwork, where a white cut
-    /// often reads better than the colour one.
+    /// often reads better than the color one.
     ///
     /// An earlier pass shipped only `7`, inferred from one game's aspect
     /// ratio and alpha channel before this lookup was reachable. The

@@ -11,7 +11,7 @@ import Foundation
 ///
 /// Resolution order, highest priority first:
 ///   1. The game's own `logoURLString` — an explicit per-game choice always wins.
-///   2. IGDB, in its own preference order: colour, then white, then black.
+///   2. IGDB, in its own preference order: color, then white, then black.
 ///   3. SteamGridDB, which has logos for a great many games IGDB doesn't.
 ///   4. Nothing, and the header draws the game's name as text.
 ///

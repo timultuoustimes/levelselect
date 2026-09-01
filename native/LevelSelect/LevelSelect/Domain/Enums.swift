@@ -108,13 +108,13 @@ enum TrackerDisplay: String, Codable, CaseIterable, Sendable {
 /// String-raw, so a future case costs no schema version. The FIELD holding it
 /// on `ThemeSettings` did cost one; the cases won't.
 enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
-    /// Build 32: art at full strength, cover and facts panel centred in it,
+    /// Build 32: art at full strength, cover and facts panel centered in it,
     /// the game's logo across the full width underneath.
     case showcase
     /// What the app had before: cover on the left, the facts beside it, the
     /// name as text, and the art faded well back because the words sit on it.
     case classic
-    /// The box on a shelf: one large cover centred, everything else beneath
+    /// The box on a shelf: one large cover centered, everything else beneath
     /// it. The art stays well back here for the same reason it does in
     /// classic — the words sit on it — and because a backdrop competing with
     /// a 190pt cover of the same game is the one thing this layout must not do.
@@ -141,7 +141,7 @@ enum GamePageLayout: String, Codable, CaseIterable, Sendable, Identifiable {
         switch self {
         case .showcase: "The game's art fills the top, with its logo underneath."
         case .classic:  "Cover beside the details, name as text, art kept well back."
-        case .coverLed: "One large cover, centred, with everything else beneath it."
+        case .coverLed: "One large cover, centered, with everything else beneath it."
         case .compact:  "No art. Small cover, and the sections start right away."
         }
     }

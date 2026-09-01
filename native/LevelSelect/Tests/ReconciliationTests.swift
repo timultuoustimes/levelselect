@@ -677,7 +677,7 @@ struct ReconciliationTests {
         #expect(repo.runningSessions(in: game).count == 2)
     }
 
-    /// The old automatic behaviour still exists — as something chosen.
+    /// The old automatic behavior still exists — as something chosen.
     @Test func keepNewestPolicyRestoresAutomaticResolution() {
         let (repo, game) = self.game(named: "Hades")
         let pt = repo.ensureDefaultPlaythrough(for: game)

@@ -960,7 +960,7 @@ resized and renamed derivatives.
   soft key light from the upper left.
 - **Heavily rounded, beveled edges** — every hard corner of the real hardware is softened. This is the
   claymorphic part: the object reads as molded from a soft solid rather than assembled from panels.
-- **Authentic but slightly desaturated hardware colors** (the SNES is its real off-white grey with the
+- **Authentic but slightly desaturated hardware colors** (the SNES is its real off-white gray with the
   lilac/violet buttons and slot cover — note how well that lilac happens to sit next to the brand
   purple).
 - **A soft contact shadow** grounding the object, and where the hardware has a controller, it is

@@ -36,7 +36,7 @@ struct ProfileHeader: View {
 
     /// No art means no art band. Reserving the full height for a flat tint
     /// gives a new user — or anyone who hasn't played in a week — 168pt of
-    /// empty colour above their own name, which reads as a broken image
+    /// empty color above their own name, which reads as a broken image
     /// rather than a quiet week.
     private var hasArt: Bool { Self.drawsArt(profile: profile, summary: summary) }
 
@@ -144,10 +144,10 @@ struct ProfileHeader: View {
             .clipped()
         }
         .frame(height: Self.artHeight + topOverscan)
-        // A MASK, not a colour overlay — the same technique the game page
-        // uses. Painting the page colour on top would be wrong the moment
+        // A MASK, not a color overlay — the same technique the game page
+        // uses. Painting the page color on top would be wrong the moment
         // someone changes their page background, since the header would then
-        // fade to a colour the page no longer is.
+        // fade to a color the page no longer is.
         //
         // Holds through the top half and clears by the bottom, so the portrait
         // and the name sit on the page rather than on the art.
@@ -313,7 +313,7 @@ struct ProfileHeader: View {
         }
         // Liquid Glass rather than a flat white wash. The band sits directly
         // under the art, so it should pick up what is behind it instead of
-        // laying an opaque grey slab over the bottom of the ribbon.
+        // laying an opaque gray slab over the bottom of the ribbon.
         .glassEffect(.regular, in: .rect(cornerRadius: 13))
         .padding(.horizontal, 16)
     }
@@ -628,7 +628,7 @@ struct ProfileEditor: View {
     ///
     /// **Opaque** — a photo, or a wide painting of a whole scene — gets the
     /// positioning step, because something has to choose which square of a
-    /// 16:9 image survives and the person is better at that than a centre
+    /// 16:9 image survives and the person is better at that than a center
     /// crop. The character is rarely in the middle.
     ///
     /// Nobody is asked which of these they want. The image already knows.

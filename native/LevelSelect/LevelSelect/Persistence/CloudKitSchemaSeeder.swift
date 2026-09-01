@@ -1,4 +1,4 @@
-#if LEGACY_IMPORT   // developer-only, same gate as the legacy import
+#if DEV_TOOLS   // developer-only; never in a Release build
 import Foundation
 import SwiftData
 import CoreGraphics
@@ -98,7 +98,7 @@ enum CloudKitSchemaSeeder {
     /// inline. Without this row, Production has no BYTES field and every
     /// small image fails to sync forever.
     ///
-    /// 8x8 flat colour, a few hundred bytes — far below any plausible
+    /// 8x8 flat color, a few hundred bytes — far below any plausible
     /// threshold, in the way `largeSeedImage` is far above one. The point of
     /// both is to be unambiguous.
     static var smallSeedImage: Data {
@@ -161,6 +161,10 @@ enum CloudKitSchemaSeeder {
         game.trackerDisplayRaw = TrackerDisplay.inline.rawValue
         game.showItemHintsOverride = true
         game.platforms = [marker]
+        // Schema V3. CloudKit types a field from what it observes, so a field
+        // never written is a field the container has never heard of — and
+        // writes to it fail forever after with CKErrorDomain error 2.
+        game.ownedPlatforms = [marker]
         game.ownership = [Ownership.physical.rawValue]
         game.userTags = [marker]
         game.genres = [marker]

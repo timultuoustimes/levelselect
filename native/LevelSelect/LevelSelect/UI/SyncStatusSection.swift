@@ -64,7 +64,7 @@ struct SyncStatusSection: View {
             // than "another device". iOS won't tell an app the name you gave
             // this device — it reports the model — so it's set here.
             // The app used to resolve two-device timer conflicts silently.
-            // This is that decision, handed back — with the old behaviour
+            // This is that decision, handed back — with the old behavior
             // still available as one of the choices.
             Picker("Timers on two devices", selection: Binding(
                 get: { repo.overlappingTimerPolicy },

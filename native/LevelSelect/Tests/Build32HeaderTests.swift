@@ -242,7 +242,7 @@ struct HeaderHandleTests {
     }
 
     /// A near-miss typo is NOT the same handle, and the app must not pretend
-    /// it is — two rows here is correct behaviour on bad data, and the fix
+    /// it is — two rows here is correct behavior on bad data, and the fix
     /// belongs in the editor, not in a fuzzy match.
     @Test func aTypoIsADifferentHandle() {
         let p = PlayerProfile()
@@ -350,9 +350,26 @@ struct PlayerSummaryTests {
         #expect(s.totalSeconds == 3600 + 7200)
     }
 
-    /// Two covers tilted behind a portrait look like a layout bug rather than
-    /// a pattern, so a quiet week must fall back to one game's art.
-    @Test func aQuietWeekFallsBackToOneGame() {
+    /// The floor moved from three to two on 2026-08-31, and this test moved
+    /// with it. The old rule said two tilted covers read as a layout bug; the
+    /// real week that settled it was Tim's — one game played, one finished,
+    /// and a header that showed only the first. Half a week is worse than two
+    /// covers. **One** game is the fallback case now.
+    @Test func aWeekWithOneGameFallsBackToItsArt() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let ctx = makeContext()
+        let game = makeGame("A", status: .playing, sessions: [(recent, 600)], in: ctx)
+        game.coverURLString = "https://example.com/a.jpg"
+
+        let s = PlayerSummary.make(from: [game], now: now)
+        #expect(s.recentCovers.count == 1)
+        #expect(!s.usesRibbon)
+        #expect(s.fallbackBackdrop == "https://example.com/a.jpg")
+    }
+
+    /// And two now makes a ribbon.
+    @Test func twoGamesInAWeekMakeARibbon() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let recent = now.addingTimeInterval(-1 * 24 * 3600)
         let ctx = makeContext()
@@ -365,7 +382,7 @@ struct PlayerSummaryTests {
 
         let s = PlayerSummary.make(from: games, now: now)
         #expect(s.recentCovers.count == 2)
-        #expect(!s.usesRibbon)          // two is below the floor
+        #expect(s.usesRibbon)
     }
 
     @Test func aBusyWeekUsesTheRibbonMostRecentFirst() {
@@ -396,7 +413,7 @@ struct PlayerSummaryTests {
     }
 }
 
-@Suite("Profile name colour")
+@Suite("Profile name color")
 @MainActor
 struct ProfileNameColorTests {
 
@@ -409,7 +426,7 @@ struct ProfileNameColorTests {
     }
 
     /// "Accent" must FOLLOW the accent rather than freeze a copy of it — that
-    /// is the whole difference between it and picking the same colour by hand.
+    /// is the whole difference between it and picking the same color by hand.
     @Test func accentModeTracksTheLiveAccent() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5A34D"
@@ -441,7 +458,7 @@ struct ProfileNameColorTests {
 
     /// Garbage in storage falls back rather than rendering an invisible name.
     @Test func nonsenseFallsBack() {
-        #expect(ProfileNameColor.resolve("not a colour") == .primary)
+        #expect(ProfileNameColor.resolve("not a color") == .primary)
     }
 }
 
@@ -475,5 +492,79 @@ extension PlayerSummaryTests {
         g.coverURLString = "https://example.com/cover.jpg"
         g.backdropURLString = "https://example.com/backdrop.jpg"
         #expect(PlayerSummary.make(from: [g]).fallbackBackdrop == "https://example.com/backdrop.jpg")
+    }
+}
+
+@Suite("Session history")
+@MainActor
+struct SessionHistoryTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// Sessions on the given days, all in one playthrough.
+    private func sessions(_ days: [Int], in context: ModelContext,
+                          from anchor: Date) -> [Session] {
+        let game = Game(name: "Long one")
+        context.insert(game)
+        let pt = Playthrough()
+        context.insert(pt)
+        pt.game = game
+        let made = days.map { day -> Session in
+            let s = Session()
+            context.insert(s)
+            s.startDate = anchor.addingTimeInterval(-Double(day) * 86_400)
+            s.endDate = s.startDate.addingTimeInterval(3600)
+            s.accumulatedDuration = 3600
+            s.state = .stopped
+            s.playthrough = pt
+            return s
+        }
+        pt.sessions = made
+        return made
+    }
+
+    /// A 63-hour game is the case this screen exists for: five rows on the
+    /// game page, and everything older unreachable until now.
+    @Test func groupsByMonthNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)   // mid-Jan 2027
+        let ctx = makeContext()
+        // Today, last month, and three months back.
+        let made = sessions([0, 40, 100], in: ctx, from: anchor)
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 3)
+        // Newest month leads, and the dates descend.
+        #expect(months[0].start > months[1].start)
+        #expect(months[1].start > months[2].start)
+    }
+
+    /// Sessions in the same month collapse into one section, and the section
+    /// carries that month's total — the question a month grouping invites.
+    @Test func oneSectionPerMonthWithItsOwnTotal() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([0, 1, 2], in: ctx, from: anchor)   // same month
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 1)
+        #expect(months[0].sessions.count == 3)
+        #expect(months[0].total == 3 * 3600)
+    }
+
+    /// Within a month, newest first — the query sorts, but grouping must not
+    /// undo it, and `Dictionary(grouping:)` gives no order guarantee.
+    @Test func sessionsInsideAMonthStayNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([5, 1, 3], in: ctx, from: anchor)
+        let inside = SessionMonth.group(made)[0].sessions
+        #expect(inside[0].startDate > inside[1].startDate)
+        #expect(inside[1].startDate > inside[2].startDate)
+    }
+
+    @Test func noSessionsIsNoMonths() {
+        #expect(SessionMonth.group([]).isEmpty)
     }
 }

@@ -6,9 +6,9 @@ import SwiftUI
 struct OwnershipControl: View {
     /// Bound to `Game.ownership` (array of raw `Ownership` values).
     @Binding var ownership: [String]
-    /// Centred on the game page, where the header above it is centred too.
+    /// Centered on the game page, where the header above it is centered too.
     /// Left-aligned everywhere else — in the Add Game form these are one field
-    /// among many, and a centred row of chips in a column of left-aligned
+    /// among many, and a centered row of chips in a column of left-aligned
     /// labels reads as a mistake.
     var centered = false
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -29,7 +29,7 @@ struct OwnershipControl: View {
             // for larger text should get larger text, on a second row.
             FlowLayout(spacing: 6) { chips(font: .caption, hPad: 8) }
         } else {
-            // `ViewThatFits` measures instead of guessing. Four labelled chips
+            // `ViewThatFits` measures instead of guessing. Four labeled chips
             // fit one line on a 430pt Max and don't on a 393pt phone, so this
             // row broke on some hardware and not others — and the previous fix
             // (a minimum scale factor) couldn't help, because the layout

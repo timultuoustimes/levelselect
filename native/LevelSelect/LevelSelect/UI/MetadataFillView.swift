@@ -73,6 +73,13 @@ struct MetadataFillView: View {
         if plan.recentlyChecked > 0 {
             parts.append("\(plan.recentlyChecked) were looked up in the last month and IGDB had nothing to add; they'll be asked again when that's stale.")
         }
+        // Platforms are never in the list above, because whether a platform
+        // list is short or simply complete is not knowable without asking —
+        // see `MetadataRefresh.missingFields`. Without this line some of the
+        // games in the count have no visible reason to be there.
+        if plan.platformOnly > 0 {
+            parts.append("\(plan.platformOnly) look complete but have a short platform list, which can't be told apart from an unfinished one without asking.")
+        }
         return parts.joined(separator: " ")
     }
 

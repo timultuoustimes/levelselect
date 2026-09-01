@@ -52,7 +52,7 @@ enum TrackerListParser {
     struct Result: Sendable {
         var categories: [ParsedCategory] = []
         var format: Format = .empty
-        /// Non-fatal notes — lines skipped, columns not recognised. Reported
+        /// Non-fatal notes — lines skipped, columns not recognized. Reported
         /// rather than swallowed, same as the CSV importer.
         var warnings: [String] = []
 
@@ -101,11 +101,11 @@ enum TrackerListParser {
         let rawHeaders = cells(lines[headerIdx])
         let map = ColumnMap(headers: rawHeaders.map { $0.lowercased() })
         if map.name == nil {
-            result.warnings.append("No name column recognised — used the first column.")
+            result.warnings.append("No name column recognized — used the first column.")
         }
         // Quote the header as the user actually wrote it, not lowercased.
         for unknown in map.unrecognised(rawHeaders) {
-            result.warnings.append("Column “\(unknown)” wasn't recognised and was ignored.")
+            result.warnings.append("Column “\(unknown)” wasn't recognized and was ignored.")
         }
 
         var items: [ParsedItem] = []

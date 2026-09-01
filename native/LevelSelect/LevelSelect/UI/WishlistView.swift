@@ -79,10 +79,28 @@ struct WishlistTab: View {
     @State private var paneURL: URL = DekuLinks.home
     @State private var sidebarShowsSite = false
     @State private var urlInput = ""
+    /// Driven by ⌘F from the menu bar. See LevelSelectCommands — Wishlist has
+    /// its own search, so ⌘F focuses THIS one rather than sending you away.
+    @FocusState private var searchFocused: Bool
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Scales with text size for the same reason the other browsing grids do.
     @ScaledMetric(relativeTo: .caption2) private var cellWidth: CGFloat = 105
+
+    // Deliberately NOT Library's keys. The wishlist is a handful of games you
+    // are deciding about; Library is a shelf of 174 you are looking through.
+    // Wanting big covers here and a dense grid there is a coherent taste, and
+    // sharing one key would make it unexpressible.
+    @AppStorage("wishlistViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
+    @AppStorage("wishlistGridSize") private var gridSizeRaw = GridSize.medium.rawValue
+
+    private var viewMode: LibraryViewMode {
+        // Shelves is Library's answer to grouping. The wishlist always groups
+        // — by whether a game is out — so the mode would mean nothing here.
+        let stored = LibraryViewMode(rawValue: viewModeRaw) ?? .grid
+        return stored == .shelves ? .grid : stored
+    }
+    private var gridSize: GridSize { GridSize(rawValue: gridSizeRaw) ?? .medium }
 
     private var isSplit: Bool { horizontalSizeClass == .regular }
 
@@ -94,7 +112,16 @@ struct WishlistTab: View {
                         yours
                         Divider()
                         dekuSidebar
-                            .frame(width: 380)
+                            // Narrower until it has something to show.
+                            //
+                            // 380pt is the width of Deku's LIST — covers,
+                            // prices, names. Unconnected, the same 380pt held
+                            // a "paste your link here" card, so on a Mac
+                            // window half the tab was setup instructions
+                            // sitting beside six games. An invitation can be
+                            // an invitation without taking a list's worth of
+                            // room.
+                            .frame(width: store.isConfigured ? 380 : 260)
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -112,6 +139,8 @@ struct WishlistTab: View {
             .navigationTitle("Wishlist")
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .searchable(text: $searchText, prompt: "Search wishlist")
+            .searchFocused($searchFocused)
+            .onChange(of: AppNavigator.shared.searchRequest) { _, _ in searchFocused = true }
             // Glass, like Home — see LibraryView.
             #if os(macOS)
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
@@ -124,8 +153,25 @@ struct WishlistTab: View {
                                 Label(option.label, systemImage: option.systemImage).tag(option)
                             }
                         }
+                        Divider()
+                        Picker("View", selection: $viewModeRaw) {
+                            // No Shelves: the wishlist always groups by
+                            // whether a game is out, so the mode has nothing
+                            // left to mean here.
+                            ForEach(LibraryViewMode.allCases.filter { $0 != .shelves },
+                                    id: \.rawValue) { mode in
+                                Label(mode.label, systemImage: mode.icon).tag(mode.rawValue)
+                            }
+                        }
+                        if viewMode == .grid {
+                            Picker("Grid Size", selection: $gridSizeRaw) {
+                                ForEach(GridSize.allCases, id: \.rawValue) { size in
+                                    Text(size.label).tag(size.rawValue)
+                                }
+                            }
+                        }
                     } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                        Label("Sort & View", systemImage: "arrow.up.arrow.down")
                     }
                 }
                 ToolbarItem(placement: .primaryAction) {
@@ -197,28 +243,116 @@ struct WishlistTab: View {
                 }
                 .padding(.top, 40)
             } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("\(mine.count) \(mine.count == 1 ? "game" : "games")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 12)],
-                              spacing: 16) {
-                        ForEach(mine) { game in
-                            NavigationLink(value: game) {
-                                LibraryGridCell(game: game, size: .medium)
-                            }
-                            .buttonStyle(PressableCardStyle())
-                            .gameContextMenu(game)
+                VStack(alignment: .leading, spacing: 18) {
+                    // Coming soon leads, because it is the only thing in the
+                    // app that is about the future. Headings appear only when
+                    // there is a distinction to draw — one section with a
+                    // label above it is a label for nothing.
+                    let soon = WishlistShelf.comingSoon(mine)
+                    let undated = WishlistShelf.noDateYet(mine)
+                    let out = WishlistShelf.outNow(mine)
+                    let sections = [soon, undated, out].filter { !$0.isEmpty }
+                    if sections.count > 1 {
+                        if !soon.isEmpty {
+                            section("Coming soon", soon, showsDate: true, icon: "calendar")
                         }
+                        if !undated.isEmpty {
+                            // NOT "unannounced" — these games are very much
+                            // announced, which is why they are on a wishlist.
+                            // It is the DATE nobody has given yet.
+                            section("No date yet", undated, showsDate: false, icon: "calendar.badge.clock")
+                        }
+                        if !out.isEmpty {
+                            // Released games carry their date too — knowing a
+                            // wanted game came out in February is the same
+                            // kind of useful as knowing one lands in November.
+                            section("Out now", out, showsDate: true, icon: "bag")
+                        }
+                    } else {
+                        // "6 games" is a measurement. Every other tab's
+                        // heading says what the things ARE — Now Playing,
+                        // Always Around — and this is the one tab whose
+                        // contents are defined by not being yours yet.
+                        Text("\(mine.count) \(mine.count == 1 ? "game" : "games") you want")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal)
+                        grid(mine, showsDate: true)
                     }
-                    .padding(.horizontal)
                 }
                 .padding(.vertical)
             }
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func section(_ title: String, _ games: [Game],
+                         showsDate: Bool, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.subheadline)
+                    .foregroundStyle(LSTheme.accent)
+                    .frame(width: 22)
+                Text(title).font(.headline)
+                Text("(\(games.count))")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal)
+            grid(games, showsDate: showsDate)
+        }
+    }
+
+    @ViewBuilder
+    private func grid(_ games: [Game], showsDate: Bool) -> some View {
+        if viewMode == .list {
+            VStack(spacing: 0) {
+                ForEach(games) { game in
+                    NavigationLink(value: game) { GameRow(game: game) }
+                        .buttonStyle(.plain)
+                        .gameContextMenu(game)
+                }
+            }
+            .padding(.horizontal)
+        } else {
+            coverGrid(games, showsDate: showsDate)
+        }
+    }
+
+    /// What the shelf can honestly print for this game.
+    private func dateLabel(_ game: Game) -> String? {
+        guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else { return nil }
+        return WishlistShelf.releaseLabel(date)
+    }
+
+    /// A year with no day behind it. Drawn in the quieter colour, because
+    /// Tim's note is exactly right: *"'by December 31' is technically correct,
+    /// but it just reads as a definitive date."* A bare year in secondary grey
+    /// does not make that promise; an accent-coloured day does.
+    private func isApproximate(_ game: Game) -> Bool {
+        guard let date = game.firstReleaseDate else { return true }
+        return WishlistShelf.isYearOnly(date)
+    }
+
+    private func coverGrid(_ games: [Game], showsDate: Bool) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: max(gridSize.minWidth, 76)), spacing: 12)],
+                  spacing: 16) {
+            ForEach(games) { game in
+                NavigationLink(value: game) {
+                    LibraryGridCell(
+                        game: game, size: gridSize,
+                        subtitle: showsDate ? dateLabel(game) : nil,
+                        // Approximate dates read quieter than announced ones,
+                        // so a year does not look like a launch day.
+                        subtitleTint: isApproximate(game) ? .secondary : LSTheme.accent)
+                }
+                .buttonStyle(PressableCardStyle())
+                .gameContextMenu(game)
+            }
+        }
+        .padding(.horizontal)
     }
 
     // MARK: Deku
@@ -277,6 +411,9 @@ struct WishlistTab: View {
         }
     }
 
+    /// What the library already knows about the Deku list. See `DekuMatch`.
+    private var known: [String: DekuMatch.Known] { DekuMatch.index(library) }
+
     private var visible: [DekuWishlistItem] {
         let base = searchText.isEmpty
             ? store.items
@@ -309,13 +446,17 @@ struct WishlistTab: View {
                 .buttonStyle(.plain)
                 .listRowBackground(Color.clear)
                 .contextMenu {
-                    Button {
-                        sheet = .addGame(item.name)
-                    } label: {
-                        // This row is already on a wishlist — the user's, on
-                        // Deku Deals. The action is bringing it into
-                        // LevelSelect, so that's what it says.
-                        Label("Add to LevelSelect", systemImage: "plus.square.on.square")
+                    // Offering "Add" for a game already here is how you end up
+                    // with two of it. The row says which, so the menu agrees.
+                    if known[DekuMatch.normalize(item.name)] == nil {
+                        Button {
+                            sheet = .addGame(item.name)
+                        } label: {
+                            // This row is already on a wishlist — the user's, on
+                            // Deku Deals. The action is bringing it into
+                            // LevelSelect, so that's what it says.
+                            Label("Add to LevelSelect", systemImage: "plus.square.on.square")
+                        }
                     }
                     Button {
                         if let url = item.url { openDeku(url) }
@@ -360,6 +501,13 @@ struct WishlistTab: View {
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                // The list stops being a stranger.
+                if let match = known[DekuMatch.normalize(item.name)] {
+                    Label(match == .inLibrary ? "In your library" : "On your wishlist",
+                          systemImage: match == .inLibrary ? "checkmark.circle.fill" : "bag.fill")
+                        .font(.caption2)
+                        .foregroundStyle(match == .inLibrary ? .green : LSTheme.accent)
+                }
             }
             Spacer()
             Image(systemName: "chevron.right")

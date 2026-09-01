@@ -1,26 +1,40 @@
 ---
 import Base from '../../layouts/Base.astro';
 
+const shipped = [
+  { t: 'Library and Wishlist, with an identity of their own', build: 34,
+    d: 'Status, system and ownership all on screen, and a wishlist that knows what is out.' },
+  { t: 'Every platform a game came out on', build: 34,
+    d: 'Mark the ones you own it on, rather than the app knowing only the one you typed.' },
+  { t: 'Your own cover art', build: 31,
+    d: 'The cover can be the one your copy had.' },
+  { t: 'A safety net for deletions', build: 28,
+    d: 'Recently Deleted and a restore path, so nothing is ever one tap from gone.' },
+  { t: 'Deeper stats', build: 27,
+    d: 'Your habits by year, by genre, by system — and cards you can rearrange.' },
+  { t: 'Build a tracker piece by piece', build: 25,
+    d: 'Fill one category at a time instead of waiting on one generation that can fail entirely.' },
+];
+
 const horizons = [
   {
     key: 'now',
     name: 'Now',
     note: 'being worked on',
-    colour: '#30D158',
+    color: '#30D158',
     items: [
       { t: 'Settling the beta', d: 'Making the things people use every day dependable before adding more.' },
       { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
       { t: 'Mac polish', d: "Underway. The Mac app has the new design and reachable settings now; the details still lag the iPhone." },
-      { t: 'Library, Wishlist and Stats', d: "Home and the game page have an identity now. The other three pages are next in line for the same treatment." },
+      { t: 'Stats', d: "Home, the game page, Library and Wishlist all have an identity of their own now. Stats is the last page still waiting for the same treatment." },
     ],
   },
   {
     key: 'next',
     name: 'Next',
     note: 'planned',
-    colour: '#0A84FF',
+    color: '#0A84FF',
     items: [
-      { t: 'Every platform a game came out on', d: "Mark the ones you own it on or played it on, instead of the app knowing only the one you typed." },
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
       { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
       { t: 'A notebook, not just a tracker', d: 'Somewhere to write about a game and read it back later, in the order it happened.' },
@@ -32,7 +46,7 @@ const horizons = [
     key: 'exploring',
     name: 'Exploring',
     note: 'no commitment',
-    colour: '#BF5AF2',
+    color: '#BF5AF2',
     items: [
       { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
@@ -57,19 +71,39 @@ const notPlanned = [
 <main class="wrap">
   <article class="doc doc--wide">
     <h1>Roadmap</h1>
-    <p class="stamp">Last reviewed 28 August 2026 &middot; a direction, not a set of promises</p>
+    <p class="stamp">Last reviewed 1 September 2026 &middot; a direction, not a set of promises</p>
 
     <div class="board">
+      {/* First, because the board reads left to right from done to maybe, and
+          a column of things that actually happened is what gives the three
+          columns of intentions beside it any weight. Every card is a link into
+          the build that delivered it — a kept promise you can go and read. */}
+      <section class="col">
+        <header class="col__head">
+          <span class="col__dot" style="background:#FF9F0A"></span>
+          <h2 class="col__name">Shipped</h2>
+          <span class="col__note">done</span>
+          <span class="col__n">{shipped.length}</span>
+        </header>
+        {shipped.map((item) => (
+          <a class="rcard rcard--done" style="--stripe:#FF9F0A" href={`/changelog/#build-${item.build}`}>
+            <b>{item.t}</b>
+            <span>{item.d}</span>
+            <span class="rcard__build">Build {item.build} &rarr;</span>
+          </a>
+        ))}
+      </section>
+
       {horizons.map((h) => (
         <section class="col">
           <header class="col__head">
-            <span class="col__dot" style={`background:${h.colour}`}></span>
+            <span class="col__dot" style={`background:${h.color}`}></span>
             <h2 class="col__name">{h.name}</h2>
             <span class="col__note">{h.note}</span>
             <span class="col__n">{h.items.length}</span>
           </header>
           {h.items.map((item) => (
-            <div class="rcard" style={`--stripe:${h.colour}`}>
+            <div class="rcard" style={`--stripe:${h.color}`}>
               <b>{item.t}</b>
               <span>{item.d}</span>
             </div>
@@ -108,7 +142,20 @@ const notPlanned = [
 
   .board { display: grid; gap: 1.6rem; margin-top: 1.8rem; }
   @media (min-width: 860px) {
-    .board { grid-template-columns: repeat(3, 1fr); gap: 1.4rem; align-items: start; }
+    .board { grid-template-columns: repeat(2, 1fr); gap: 1.4rem; align-items: start; }
+  }
+  @media (min-width: 1180px) {
+    .board { grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+  }
+
+  /* A shipped card is a link; it must not read as a dead card, or as a button. */
+  .rcard--done { text-decoration: none; color: inherit; display: block; }
+  .rcard--done:hover { background: rgba(255, 255, 255, .07); border-color: #FF9F0A; }
+  .rcard--done:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .rcard__build {
+    display: block; margin-top: .45rem;
+    font-size: .72rem; font-weight: 700; letter-spacing: .02em;
+    color: #FF9F0A;
   }
 
   .col__head {
@@ -139,7 +186,7 @@ const notPlanned = [
     overflow: hidden;
   }
   /* A stripe rather than a full tint — the status stays legible when three
-     columns sit side by side without three coloured blocks fighting. */
+     columns sit side by side without three colored blocks fighting. */
   .rcard::before {
     content: ''; position: absolute; left: 0; top: 0; bottom: 0;
     width: 3px; background: var(--stripe, var(--muted));

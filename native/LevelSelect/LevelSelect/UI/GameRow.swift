@@ -19,7 +19,7 @@ struct GameRow: View {
                     Text(game.status.label)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    if let platform = PlatformPreference.owned(game.platforms) {
+                    if let platform = game.primaryOwnedPlatform {
                         Text("·").font(.caption).foregroundStyle(.tertiary)
                         PlatformIconView(platform: platform, size: 15)
                         Text(PlatformShort.name(platform))

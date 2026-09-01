@@ -34,6 +34,47 @@ enum MetadataRefresh {
     /// the epoch once a timezone is applied to it.
     static let epochArtifactWindow: TimeInterval = 172_800
 
+    /// IGDB year-only precision lands on **1 January**, so a date that falls
+    /// there almost certainly means "sometime that year" rather than New
+    /// Year's Day. Lives here because date precision is this type's business;
+    /// `WishlistShelf` reads it to decide what it can honestly print.
+    static func isYearOnly(_ date: Date, calendar: Calendar = .current) -> Bool {
+        // Compared in UTC, because IGDB stamps release dates at UTC midnight
+        // and a local calendar would see 31 December as the 30th.
+        var utc = calendar
+        utc.timeZone = TimeZone(identifier: "UTC") ?? .gmt
+        let parts = utc.dateComponents([.month, .day], from: date)
+        // BOTH ends of the year are placeholders. 1 January is the app's own
+        // shorthand for "the year is all we know"; **31 December is IGDB's** —
+        // it pads a year-only or fourth-quarter release to the last day of the
+        // period. The Ocarina of Time remake, which has no announced date at
+        // all, arrived as 31 December 2026 and the wishlist printed it as a
+        // launch day. Tim: *"'by December 31' is technically correct, but it
+        // just reads as a definitive date."*
+        //
+        // A game genuinely launching on either day is misfiled as year-only.
+        // That trade is deliberate: the cost is showing "2026" instead of a
+        // day, against promising a launch date nobody has given.
+        return (parts.month == 1 && parts.day == 1)
+            || (parts.month == 12 && parts.day == 31)
+    }
+
+    /// A year-only date for the current year or later is **upgradeable**: the
+    /// game is coming and nobody has announced a day yet, so IGDB may know one
+    /// tomorrow even though the field is not empty.
+    ///
+    /// The one deliberate exception to additive-only, and it is narrow on
+    /// purpose. Release dates are fetched, never typed — nothing the user
+    /// wrote can be sitting in the field — and replacing "1 January 2026" with
+    /// "12 November 2026" is strictly better information about the same event.
+    /// Past years are excluded: most of the retro library is year-only and
+    /// none of it is going to be announced.
+    static func awaitsAnnouncedDate(_ date: Date?, now: Date = .now,
+                                    calendar: Calendar = .current) -> Bool {
+        guard let date, !isMissing(date), isYearOnly(date) else { return false }
+        return calendar.component(.year, from: date) >= calendar.component(.year, from: now)
+    }
+
     /// Is this release date absent — either genuinely nil, or the epoch
     /// placeholder that renders as 1969?
     ///
@@ -64,11 +105,21 @@ enum MetadataRefresh {
     /// Absent by design:
     ///
     /// - `name` — the user's, and never empty anyway.
-    /// - `platforms` — the exact field Tim is hand-correcting, and today it
-    ///   conflates "released on" with "I own it on". Writing IGDB's full
-    ///   platform list into a game that says "Switch" would reintroduce the
-    ///   vocabulary split the filter work is cleaning up. Splitting the two
-    ///   meanings is a V3 item; until then this pass stays out.
+    /// - ~~`platforms`~~ — **admitted 2026-08-31.** It was excluded because
+    ///   writing IGDB's full list into a game that says "Switch" would
+    ///   reintroduce the vocabulary split, and because position zero is the
+    ///   ownership record. Both are handled now: the write is a MERGE that
+    ///   keeps position zero and dedupes by `PlatformIcon.consoleKey`, so one
+    ///   console cannot appear twice under two spellings and the platform you
+    ///   own is never moved. The field still conflates "released on" with "I
+    ///   own it on" — that split is the V3 `ownedPlatforms` item — but filling
+    ///   the availability half does not make the conflation worse.
+    ///
+    ///   Worth doing because of who has the gap: games added through IGDB
+    ///   search already arrive with the full list (`addGame(from:platform:)`
+    ///   stores `[chosen] + igdb.platforms`). Only the CSV and legacy-import
+    ///   paths write a single entry — which is Tim's library, and almost
+    ///   nobody else's.
     /// - status, rating, review, notes, ownership, tags — user data. A
     ///   metadata refresh has no business anywhere near them.
     enum Field: String, CaseIterable, Sendable {
@@ -83,6 +134,7 @@ enum MetadataRefresh {
         case franchise
         case summary
         case slug
+        case platforms
 
         /// Plural, for "119 games are missing a release date".
         var label: String {
@@ -98,6 +150,7 @@ enum MetadataRefresh {
             case .franchise:          "a series"
             case .summary:            "a description"
             case .slug:               "an IGDB link"
+            case .platforms:          "a platform list nobody has checked"
             }
         }
 
@@ -116,21 +169,47 @@ enum MetadataRefresh {
             case .franchise:          "series"
             case .summary:            "description"
             case .slug:               "IGDB link"
+            case .platforms:          "platform list"
             }
         }
 
         /// Report order — most visible problem first. The 1969 dates are the
         /// reason this exists, so they lead.
         static let reportOrder: [Field] = [
-            .releaseDate, .cover, .genres, .developers, .publishers,
+            .releaseDate, .cover, .platforms, .genres, .developers, .publishers,
             .themes, .gameModes, .playerPerspectives, .franchise, .summary, .slug,
         ]
+    }
+
+    /// Availability from IGDB, ownership from the user, neither overwriting
+    /// the other.
+    ///
+    /// - **Position zero is preserved.** It is the record of a choice, and
+    ///   every label, grouping and filter in the app reads it as "the one you
+    ///   own". Nothing here may move it.
+    /// - The user's spelling wins on collision. Someone who stored "PC" must
+    ///   not end up with both "PC" and "PC (Microsoft Windows)" — two rows for
+    ///   one console is the exact bug `PlatformShort` exists to prevent.
+    ///   Sameness is `PlatformIcon.consoleKey`: the artwork IS the identity.
+    /// - Hand-added platforms IGDB has never heard of survive. Emulation and
+    ///   unlisted ports are real, and a refresh that silently deleted them
+    ///   would punish the people most likely to run it.
+    static func mergedPlatforms(existing: [String], igdb: [String]) -> [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        for platform in existing + igdb
+        where seen.insert(PlatformIcon.consoleKey(platform)).inserted {
+            out.append(platform)
+        }
+        return out
     }
 
     /// Which of the fillable fields this game currently has nothing in.
     static func missingFields(of game: Game) -> Set<Field> {
         var missing: Set<Field> = []
-        if isMissing(game.firstReleaseDate) { missing.insert(.releaseDate) }
+        if isMissing(game.firstReleaseDate) || awaitsAnnouncedDate(game.firstReleaseDate) {
+            missing.insert(.releaseDate)
+        }
         if (game.coverImageID ?? "").isEmpty && (game.coverURLString ?? "").isEmpty {
             missing.insert(.cover)
         }
@@ -142,7 +221,19 @@ enum MetadataRefresh {
         if game.publishers.isEmpty { missing.insert(.publishers) }
         if (game.franchise ?? "").isEmpty { missing.insert(.franchise) }
         if isMissing(summary: game.summary) { missing.insert(.summary) }
-        if (game.igdbSlug ?? "").isEmpty { missing.insert(.slug) }
+        // Platforms are deliberately NOT decided here — see `plan`.
+        //
+        // No count means "complete": only IGDB knows how many platforms a game
+        // shipped on, so any threshold is a guess about someone else's data.
+        // This used to read `count <= 1`, on the theory that one entry meant
+        // "never merged". Ball x Pit had TWO — Switch and iOS — so the pass
+        // skipped it and truthfully reported nothing to update, while a
+        // per-game Refresh immediately added more.
+        //
+        // Making it always-missing was worse: a library could then never be
+        // complete, and the pass would re-ask every game forever. The question
+        // is not "is this list short" but "has anyone ever asked", which is a
+        // fact about the RUN rather than the game, and `plan` holds it.
         return missing
     }
 
@@ -167,6 +258,10 @@ enum MetadataRefresh {
         var recentlyChecked: Int = 0
         /// How many games lack each field, across the whole library.
         var missingCounts: [Field: Int] = [:]
+        /// Games in `fillable` whose ONLY reason to be looked up is a platform
+        /// list too short to trust. They appear in no `missingCounts` row, so
+        /// the report has to name them separately or they are unexplained.
+        var platformOnly: Int = 0
 
         var isEmpty: Bool { fillable.isEmpty }
 
@@ -196,6 +291,14 @@ enum MetadataRefresh {
     /// never make a game "fillable" on their own: 69 series-less games
     /// permanently demanding a lookup was the sheet crying wolf.
     static let informational: Set<Field> = [.franchise]
+
+    /// A cheap "this list did not come from an importer" test, used only to
+    /// keep the FIRST pass over a fresh library from looking up every game
+    /// that obviously already has IGDB's answer. Deliberately generous: a
+    /// wrong guess here costs one lookup, which the run then remembers.
+    static func hasBeenAskedAbout(_ game: Game) -> Bool {
+        game.platforms.count >= 3
+    }
 
     /// How long "IGDB had nothing to add" stays believed before a game is
     /// worth asking about again. Upstream data does grow — a month is long
@@ -238,6 +341,21 @@ enum MetadataRefresh {
                 plan.unmatched.append(game)
             }
         }
+
+        // A game nothing is missing from is still worth ONE lookup if IGDB has
+        // never been asked about it, because its platform list may be a
+        // fragment nobody can measure — see `missingFields`. Bounded, and it
+        // converges: the run marks every game it learns nothing new from, so
+        // the second pass over a library reports it complete and makes no
+        // requests at all.
+        for game in library where game.deletedAt == nil
+        && game.igdbID != nil && checked[game.id] == nil {
+            guard !plan.fillable.contains(where: { $0.id == game.id }) else { continue }
+            guard !MetadataRefresh.hasBeenAskedAbout(game) else { continue }
+            plan.complete = max(0, plan.complete - 1)
+            plan.platformOnly += 1
+            plan.fillable.append(game)
+        }
         return plan
     }
 
@@ -255,7 +373,17 @@ enum MetadataRefresh {
     static func fill(_ game: Game, from igdb: IGDBGame) -> Set<Field> {
         var filled: Set<Field> = []
 
-        if isMissing(game.firstReleaseDate), let date = igdb.releaseDate {
+        if isMissing(game.firstReleaseDate),
+           let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+            game.firstReleaseDate = date
+            filled.insert(.releaseDate)
+        } else if awaitsAnnouncedDate(game.firstReleaseDate),
+                  let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform),
+                  !isYearOnly(date),
+                  Calendar.current.component(.year, from: date)
+                    == Calendar.current.component(.year, from: game.firstReleaseDate!) {
+            // The day got announced. Same year only, so a fuzzy answer can
+            // never quietly move a game into a different one.
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
         }
@@ -296,6 +424,19 @@ enum MetadataRefresh {
         if isMissing(summary: game.summary), let summary = igdb.summary, !summary.isEmpty {
             game.summary = summary
             filled.insert(.summary)
+        }
+        // Same reasoning as `missingFields`: merge whenever IGDB has anything,
+        // and let the "did it actually grow" check below decide whether that
+        // counted as filling a field.
+        if !igdb.platforms.isEmpty {
+            let merged = mergedPlatforms(existing: game.platforms, igdb: igdb.platforms)
+            // Only a real gain counts. A one-platform exclusive merges to
+            // itself, and reporting that as a filled field would make the
+            // pass claim work it did not do.
+            if merged.count > game.platforms.count {
+                game.platforms = merged
+                filled.insert(.platforms)
+            }
         }
         if (game.igdbSlug ?? "").isEmpty, let slug = igdb.slug, !slug.isEmpty {
             game.igdbSlug = slug

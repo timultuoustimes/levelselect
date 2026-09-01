@@ -5,7 +5,7 @@ import SwiftData
 
 /// Build 31 — the notebook batch: spans on beaten records, star names,
 /// previously-owned, game-page section arranging, and the tag vocabulary
-/// tools. Each test pins the behaviour the feature's note promised.
+/// tools. Each test pins the behavior the feature's note promised.
 @MainActor
 struct Build31Tests {
 

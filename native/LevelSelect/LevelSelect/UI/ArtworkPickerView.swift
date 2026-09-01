@@ -479,8 +479,8 @@ struct ArtworkPickerView: View {
         igdbShots = (await shots).compactMap { $0["image_id"] as? String }
 
         let art = await artworks
-        // Logos in IGDB's own preference order — colour, then the white and
-        // black cuts — so the most recognisable one leads rather than whatever
+        // Logos in IGDB's own preference order — color, then the white and
+        // black cuts — so the most recognizable one leads rather than whatever
         // order the rows arrived in.
         igdbLogos = IGDBImageType.logos.flatMap { type in
             art.filter { $0["image_type"] as? Int == type }

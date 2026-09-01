@@ -48,9 +48,15 @@ enum LSTheme {
     /// Wordmark tint: the brand torch orange by default, following the user's
     /// accent once they've chosen one.
     @MainActor
-    static var wordmark: Color {
-        ThemePalette.accentIsCustom ? ThemePalette.accent : torch
-    }
+    /// Always torch orange. The wordmark is the brand, not the theme.
+    ///
+    /// It used to follow a custom accent, on the same rule as `working` below.
+    /// That rule is right for anything reading as *the app doing something*
+    /// and wrong for the logotype: an app whose name changes colour with a
+    /// preference has a name that means less each time it changes. Every other
+    /// piece of chrome still follows the accent — this one stopped, so that
+    /// there is one fixed point.
+    static var wordmark: Color { torch }
 
     /// Anything that reads as the app *working* — the generation card's torch,
     /// its shimmer, its warning line. Same rule as the wordmark: brand orange
