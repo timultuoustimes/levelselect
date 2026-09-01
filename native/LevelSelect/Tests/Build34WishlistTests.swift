@@ -520,3 +520,48 @@ struct AwaitingDateTests {
         #expect(game.chosenPlatform == "PlayStation 5")
     }
 }
+
+@Suite("Release reminders", .serialized)
+@MainActor
+struct ReleaseReminderTests {
+    /// A release stamped at UTC midnight, the way IGDB sends them.
+    private func release(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        ReleaseCountdown.utc.date(from: DateComponents(year: y, month: m, day: d))!
+    }
+
+    /// The reminder is about a DAY, so it fires in the morning of that day —
+    /// not at the release instant, which for a UTC-midnight stamp is the
+    /// small hours anywhere west of Greenwich.
+    @Test("A day-before reminder fires at 9am the day before")
+    func dayBefore() throws {
+        let fire = try #require(
+            NotificationManager.fireDate(for: release(2026, 9, 4), leadDays: 1))
+        let parts = Calendar.current.dateComponents([.year, .month, .day, .hour], from: fire)
+        #expect(parts.year == 2026)
+        #expect(parts.month == 9)
+        #expect(parts.day == 3)
+        #expect(parts.hour == 9)
+    }
+
+    /// The release read as a local calendar day. Reading it as an instant
+    /// would land 4 September at 8pm on 3 September in Eastern time and fire
+    /// the "out today" reminder a day early.
+    @Test("On-the-day fires the morning of the release, in local time")
+    func onTheDay() throws {
+        let fire = try #require(
+            NotificationManager.fireDate(for: release(2026, 9, 4), leadDays: 0))
+        let parts = Calendar.current.dateComponents([.month, .day, .hour], from: fire)
+        #expect(parts.month == 9)
+        #expect(parts.day == 4)
+        #expect(parts.hour == 9)
+    }
+
+    @Test("A week's lead crosses the month boundary correctly")
+    func weekBefore() throws {
+        let fire = try #require(
+            NotificationManager.fireDate(for: release(2026, 9, 4), leadDays: 7))
+        let parts = Calendar.current.dateComponents([.month, .day], from: fire)
+        #expect(parts.month == 8)
+        #expect(parts.day == 28)
+    }
+}

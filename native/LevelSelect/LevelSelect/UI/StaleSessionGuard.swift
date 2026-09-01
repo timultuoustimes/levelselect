@@ -99,6 +99,19 @@ struct StaleSessionGuard: ViewModifier {
             threshold: Self.threshold
         )
 
+        // Release reminders reconcile in the same pass and for the same
+        // reason: a wishlist game can arrive from another device, a date can
+        // move, and a game can be bought — all of which happen while the app
+        // is closed, and none of which the scheduling side would ever hear
+        // about on its own.
+        NotificationManager.syncReleaseReminders(
+            upcoming: WishlistShelf
+                .comingSoon(games.filter { $0.status == .wishlist })
+                .compactMap { game in
+                    guard let date = game.firstReleaseDate else { return nil }
+                    return (id: game.id, name: game.name, releaseDate: date)
+                })
+
         guard stale == nil else { return }
         stale = candidates.first {
             $0.elapsed() > Self.threshold && !snoozed.contains($0.id)

@@ -108,6 +108,8 @@ struct SettingsView: View {
 
                 RetroAchievementsSettings()
 
+                ReleaseRemindersSettings()
+
                 DataSettingsSection()
 
                 SettingsGroupHeader(
