@@ -209,12 +209,23 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   .hero .door { width: 88px; }
   .hero .wrap { gap: 1rem; }
 
-  .composite--hero { width: 100%; margin-inline: 0; aspect-ratio: 1.06; }
-  /* The stacking below is the narrow layout's own problem — see the notes
-     above it. Only the iPad's tilt goes, so "the iPad is straight, the phone
-     leans" holds at every width. */
-  .composite--hero .c-ipad { width: 88%; top: 0; right: 0; transform: none; }
-  .composite--hero .c-phone { width: 36%; left: 0; bottom: 0; transform: rotate(-1.5deg); }
+  /* ONE arrangement at every width (2026-09-01).
+     The overrides that used to live here — a 1.06 container with the iPad at
+     88% and the phone at 36% — put the phone at 0.78 of the height against the
+     iPad's 0.72, the same inversion just removed from the desktop rule. So a
+     phone showed the pair competing while the social card showed them
+     composed, which is what Tim was seeing.
+
+     Dropping them costs nothing the notes above were protecting. Those notes
+     are about HEIGHT: the composite stood ~90% of the viewport and pushed the
+     page down. The shared arrangement is SHORTER, not taller — a 1.56
+     container is 250px tall on a 390px column where the old 1.06 one was 368.
+
+     What it does cost is size: the phone goes from 36% of the width to 26.4%.
+     That is the honest price of one composition rather than two, and the shape
+     still reads at that size. Bleed the container wider here if it turns out
+     not to. */
+  .composite--hero { width: 100%; margin-inline: 0; }
 }
 
 .showcase { padding: var(--step) 0 calc(var(--step) * .5); }
