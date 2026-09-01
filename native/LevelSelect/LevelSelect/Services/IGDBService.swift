@@ -113,8 +113,18 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
 
         let date = Date(timeIntervalSince1970: match.timestamp)
         guard match.precision.hasDay, !MetadataRefresh.isYearOnly(date) else {
-            let year = Calendar.current.component(.year, from: date)
-            return DateComponents(calendar: .current, year: year, month: 1, day: 1).date
+            // Built in UTC, like every other release date in the app.
+            //
+            // This wrote LOCAL midnight, so Onimusha's placeholder was stored
+            // as 1 January 05:00Z from Eastern time. Read back with the UTC
+            // rules everything else uses, a local-midnight 1 January is 31
+            // December of the previous year anywhere EAST of Greenwich — which
+            // still reads as year-only, by luck, but reads as the WRONG year,
+            // so `awaitsAnnouncedDate` would answer no and the game would
+            // never be asked about again.
+            let utc = ReleaseCountdown.utc
+            let year = utc.component(.year, from: date)
+            return DateComponents(calendar: utc, year: year, month: 1, day: 1).date
         }
         return date
     }
