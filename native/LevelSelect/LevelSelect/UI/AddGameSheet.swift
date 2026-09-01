@@ -60,7 +60,14 @@ struct AddGameSheet: View {
         // staying faintly visible is what makes this read as a layer over your
         // games rather than a separate grey screen.
         #if !os(macOS)
-        .presentationBackground(.ultraThinMaterial)
+        // A tint, not a material. `.ultraThinMaterial` blurs what is behind
+        // it, and this app's ground is a near-uniform dark purple — so the
+        // blur had almost nothing to sample and read as flat grey however
+        // translucent it technically was. A 62% fill of the app's own ground
+        // lets the shapes behind actually show, which is what Tim asked for:
+        // "I am wanting to be able to see through a little bit to the app
+        // page behind it."
+        .presentationBackground(LSTheme.background.opacity(0.62))
         #endif
     }
 
@@ -289,7 +296,7 @@ private struct ConfirmAddView: View {
     @State private var showingAbout = false
     @State private var zoomed: ZoomTarget?
     @State private var browsing: DekuLinkTarget?
-    @State private var trailer: TrailerTarget?
+    @State private var playingTrailer: String?
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -438,10 +445,30 @@ private struct ConfirmAddView: View {
                 // screen, and being thrown out of it to check a price or a
                 // release date is how you lose the search you just did.
                 if let video = game.videoIDs.first {
-                    Button {
-                        trailer = TrailerTarget(youtubeID: video, title: game.name)
-                    } label: {
-                        Label("Watch the trailer", systemImage: "play.rectangle.fill")
+                    // Inline, the way `VideoPlayerDock` plays a guide on the
+                    // game page — 16:9 in the flow with a close button, not a
+                    // sheet over it. Tim: "That's not how videos render in the
+                    // app already."
+                    if playingTrailer == video {
+                        ZStack(alignment: .topTrailing) {
+                            TrailerPlayer(youtubeID: video)
+                                .aspectRatio(16 / 9, contentMode: .fit)
+                                .background(.black)
+                            Button { playingTrailer = nil } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption.weight(.bold))
+                                    .padding(7)
+                                    .background(.black.opacity(0.55), in: .circle)
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(8)
+                        }
+                        .listRowInsets(EdgeInsets())
+                    } else {
+                        Button { playingTrailer = video } label: {
+                            Label("Watch the trailer", systemImage: "play.rectangle.fill")
+                        }
                     }
                 }
                 Button { browsing = DekuLinkTarget(url: DekuLinks.search(for: game.name)) } label: {
@@ -502,7 +529,6 @@ private struct ConfirmAddView: View {
         // they open straight from the game's page." That one is Safari's own
         // compact bar; mine was a full navigation bar around a web view.
         .dekuBrowser(target: $browsing)
-        .sheet(item: $trailer) { TrailerSheet(youtubeID: $0.youtubeID, title: $0.title) }
         .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus

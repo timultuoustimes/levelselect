@@ -69,40 +69,4 @@ extension TrailerPlayer: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {}
 }
 #endif
-
-/// A trailer in a sheet, sized like the video it holds.
-struct TrailerSheet: View {
-    let youtubeID: String
-    let title: String
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            VStack {
-                Spacer(minLength: 0)
-                TrailerPlayer(youtubeID: youtubeID)
-                    .aspectRatio(16 / 9, contentMode: .fit)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.black)
-            .navigationTitle(title)
-            #if !os(macOS)
-            .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-/// `.sheet(item:)` needs identity, and a YouTube id is one.
-struct TrailerTarget: Identifiable {
-    let youtubeID: String
-    let title: String
-    var id: String { youtubeID }
-}
 #endif

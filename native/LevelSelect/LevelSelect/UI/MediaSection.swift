@@ -14,7 +14,7 @@ struct ScreenshotStrip: View {
     @Environment(\.modelContext) private var context
     @State private var imageIDs: [String] = []
     @State private var videoIDs: [String] = []
-    @State private var trailer: TrailerTarget?
+    @State private var playingTrailer: String?
     @State private var loaded = false
     @State private var viewing: ScreenshotItem?
     @State private var viewingLocal: GameImage?
@@ -110,6 +110,22 @@ struct ScreenshotStrip: View {
                     // page had every other kind of media IGDB publishes and
                     // not this one, so the only way to watch a trailer for a
                     // game you already own was to leave the app.
+                    if let playing = playingTrailer {
+                        ZStack(alignment: .topTrailing) {
+                            TrailerPlayer(youtubeID: playing)
+                                .aspectRatio(16 / 9, contentMode: .fit)
+                                .background(.black)
+                            Button { playingTrailer = nil } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption.weight(.bold))
+                                    .padding(7)
+                                    .background(.black.opacity(0.55), in: .circle)
+                                    .foregroundStyle(.white)
+                            }
+                            .buttonStyle(.plain)
+                            .padding(8)
+                        }
+                    }
                     if !videoIDs.isEmpty {
                         Text("Trailers")
                             .font(.caption)
@@ -119,7 +135,7 @@ struct ScreenshotStrip: View {
                             HStack(spacing: 10) {
                                 ForEach(videoIDs, id: \.self) { id in
                                     Button {
-                                        trailer = TrailerTarget(youtubeID: id, title: game.name)
+                                        playingTrailer = id
                                     } label: {
                                         AsyncImage(url: URL(string:
                                             "https://img.youtube.com/vi/\(id)/hqdefault.jpg")) { image in
@@ -147,7 +163,6 @@ struct ScreenshotStrip: View {
         }
         .task { await load() }
         .task(id: photoItem) { await ingestPickedPhoto() }
-        .sheet(item: $trailer) { TrailerSheet(youtubeID: $0.youtubeID, title: $0.title) }
         .sheet(item: $viewing) { item in
             // One viewer for the app: the add screen needed the same thing,
             // and two of these drift until one loses the pinch gesture.
