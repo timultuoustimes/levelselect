@@ -58,6 +58,8 @@ const sections = [
     a: 'Settings → Your profile. It draws nothing on Home until you put something in it.' },
   { id: 'layouts',           q: 'Can I change how a game page looks?',
     a: 'Settings → Game page layout. Four arrangements of the same page.' },
+  { id: 'colors',            q: 'Can I change the colors?',
+    a: 'Settings → Accent color, or any status color. Swatches, sliders, or a hex field.' },
   { id: 'paste',             q: 'I have a checklist from a wiki',
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
@@ -68,18 +70,16 @@ const sections = [
     a: 'Settings → Appearance turns off the hints that generated and imported lists carry.' },
   { id: 'retroachievements', q: 'I want my retro achievements in here',
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
-  { id: 'beaten',            q: 'I finished a game — what do I mark?',
-    a: 'Beating it and finishing your tracker are different things, and both are recorded.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently.' },
-  { id: 'shortcuts',         q: 'Can I use Siri for this?',
-    a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
-  { id: 'stats',             q: 'What do the charts show?',
-    a: 'Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
-  { id: 'colors',            q: 'Can I change the colors?',
-    a: 'Settings → Accent color, or any status color. Swatches, sliders, or a hex field.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
     a: 'A full widget set lands in the next build. A field guide, ahead of it.' },
+  { id: 'shortcuts',         q: 'Can I use Siri for this?',
+    a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
+  { id: 'beaten',            q: 'I finished a game — what do I mark?',
+    a: 'Beating it and finishing your tracker are different things, and both are recorded.' },
+  { id: 'stats',             q: 'What do the charts show?',
+    a: 'Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
   { id: 'data',              q: 'How do I get my data out?',
     a: 'Settings → Your data → Export library writes a readable JSON file of everything.' },
 ];
@@ -93,13 +93,31 @@ const sections = [
  * anyone who would rather scan it.
  */
 const moments = [
-  { t: 'I just finished a game',        ids: ['beaten', 'stats'] },
-  { t: 'My playtime looks wrong',       ids: ['sessions'] },
-  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'hints'] },
-  { t: 'I am just setting up',          ids: ['profile', 'layouts', 'colors'] },
-  { t: 'I want it outside the app',     ids: ['widgets', 'shortcuts'] },
-  { t: 'I want my data out',            ids: ['data'] },
+  { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements'] },
+  { t: 'My playtime looks wrong',         ids: ['sessions'] },
+  { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
+  { t: 'I just finished a game',          ids: ['beaten', 'stats'] },
+  { t: 'I want my data out',              ids: ['data'] },
 ];
+
+/**
+ * The two lists are one list.
+ *
+ * The cards are the way in now, so a question no card points at is a question
+ * nobody finds — it exists only for whoever scrolls the whole reference, which
+ * is the wall of text this page was rebuilt to stop being. And Tim's rule for
+ * the reference below is that it runs in the order the cards do.
+ *
+ * Both hold only while somebody remembers, so neither is left to memory: the
+ * order below IS the card order, and a section belonging to no card fails the
+ * build rather than quietly going missing.
+ */
+const ordered = moments.flatMap((m) => m.ids);
+const orphans = sections.filter((x) => !ordered.includes(x.id)).map((x) => x.q);
+if (orphans.length) throw new Error(`Help: no card points at ${orphans.join(', ')}`);
+if (sections.map((x) => x.id).join() !== ordered.join())
+  throw new Error('Help: the reference is not in card order');
 ---
 <Base
   title="Help — LevelSelect"
@@ -161,7 +179,7 @@ const moments = [
 
     <p class="divider"><span>Everything, in order</span></p>
 
-<details class="qa" id="profile" name="qa" data-qa>
+    <details class="qa" id="profile" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'profile')!.q}</span>
         <span class="qa__a">{sections.find((x) => x.id === 'profile')!.a}</span>
@@ -199,6 +217,18 @@ const moments = [
 
     <h3>Logos</h3>
     <p>Game pages fetch a wordmark on their own, from IGDB first and SteamGridDB after, and fall back to the game's name as text when neither has one. <strong>Settings &rarr; Use game logos</strong> turns it off if you would rather always read the name. You can still choose a specific logo per game from that game's artwork picker, and an explicit choice always wins.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="colors" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'colors')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'colors')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
+    <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
+    <p>Kept colors live on the device. Your accent and status colors sync.</p>
       </div>
     </details>
 
@@ -294,17 +324,6 @@ const moments = [
       </div>
     </details>
 
-    <details class="qa" id="beaten" name="qa" data-qa>
-      <summary class="qa__s">
-        <span class="qa__q">{sections.find((x) => x.id === 'beaten')!.q}</span>
-        <span class="qa__a">{sections.find((x) => x.id === 'beaten')!.a}</span>
-      </summary>
-      <div class="qa__body">
-    <p>Beating a game and finishing every item on your tracker are different achievements, and LevelSelect records them separately. On any game's page, in the <strong>Beaten</strong> section, mark <em>Beat the game</em>, <em>100%</em>, <em>New Game+</em>, or your own words. "100%" means everything on <em>your</em> list, the one you chose to keep; it doesn't claim a platinum.</p>
-    <p>Dates are stored only as precisely as you know them: an exact day for last night's credits, a month for "sometime that spring," a bare year for the game you beat in 2011 — and shown exactly that vaguely, because the app doesn't pretend to know more than you told it. Logging your history needs no sessions and no retroactive box-ticking. A beat can point at the playthrough it capped; that run wears a checkered flag, and Stats' <strong>Beaten &amp; Completed</strong> card opens each year into the actual list of what you finished.</p>
-      </div>
-    </details>
-
     <details class="qa" id="sessions" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'sessions')!.q}</span>
@@ -313,6 +332,23 @@ const moments = [
       <div class="qa__body">
     <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
     <p>They're deliberately separate. A run doesn't start a timer, and a session doesn't record a run, so your playtime never gets inflated by counting attempts. Run logging is off until you turn it on for a game — the Tracker section's <strong>Build</strong> menu, <em>Log Runs for This Game</em> — because plenty of games deserve a tracker without one. Once it's on, the Runs section carries its own controls, including switching it back off.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="widgets" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'widgets')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'widgets')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
+    <ul>
+      <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), the Now Playing shelf, <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system (with the section's own cover art at medium and large sizes), a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
+      <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
+      <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
+      <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
+      <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
+    </ul>
       </div>
     </details>
 
@@ -332,6 +368,17 @@ const moments = [
       </div>
     </details>
 
+    <details class="qa" id="beaten" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'beaten')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'beaten')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Beating a game and finishing every item on your tracker are different achievements, and LevelSelect records them separately. On any game's page, in the <strong>Beaten</strong> section, mark <em>Beat the game</em>, <em>100%</em>, <em>New Game+</em>, or your own words. "100%" means everything on <em>your</em> list, the one you chose to keep; it doesn't claim a platinum.</p>
+    <p>Dates are stored only as precisely as you know them: an exact day for last night's credits, a month for "sometime that spring," a bare year for the game you beat in 2011 — and shown exactly that vaguely, because the app doesn't pretend to know more than you told it. Logging your history needs no sessions and no retroactive box-ticking. A beat can point at the playthrough it capped; that run wears a checkered flag, and Stats' <strong>Beaten &amp; Completed</strong> card opens each year into the actual list of what you finished.</p>
+      </div>
+    </details>
+
     <details class="qa" id="stats" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'stats')!.q}</span>
@@ -341,35 +388,6 @@ const moments = [
     <p>Every card that shows a breakdown can be turned over. Tap the chart icon in its corner and the card flips between bars and a donut &mdash; Library, Ratings, By System, Genres and Tags. Your choice is remembered per card, and it is kept on the device rather than synced, like the order of the cards themselves.</p>
     <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
     <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>
-      </div>
-    </details>
-
-    <details class="qa" id="colors" name="qa" data-qa>
-      <summary class="qa__s">
-        <span class="qa__q">{sections.find((x) => x.id === 'colors')!.q}</span>
-        <span class="qa__a">{sections.find((x) => x.id === 'colors')!.a}</span>
-      </summary>
-      <div class="qa__body">
-    <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
-    <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
-    <p>Kept colors live on the device. Your accent and status colors sync.</p>
-      </div>
-    </details>
-
-    <details class="qa" id="widgets" name="qa" data-qa>
-      <summary class="qa__s">
-        <span class="qa__q">{sections.find((x) => x.id === 'widgets')!.q}</span>
-        <span class="qa__a">{sections.find((x) => x.id === 'widgets')!.a}</span>
-      </summary>
-      <div class="qa__body">
-    <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
-    <ul>
-      <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), the Now Playing shelf, <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system (with the section's own cover art at medium and large sizes), a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
-      <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
-      <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
-      <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
-      <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
-    </ul>
       </div>
     </details>
 
@@ -407,6 +425,8 @@ const moments = [
   const open = (hash: string) => {
     const el = hash && document.querySelector(hash);
     if (!(el instanceof HTMLDetailsElement)) return;
+    document.querySelectorAll<HTMLDetailsElement>('.qa[open]')
+      .forEach((d) => { if (d !== el) d.open = false; });
     el.open = true;
     el.scrollIntoView({ block: 'start', behavior: 'smooth' });
   };
@@ -426,6 +446,34 @@ const moments = [
       open(hash);
     });
   });
+  // Tapping the next question should not move the page under your thumb.
+  //
+  // Only one answer stays open, so opening the question below a long one
+  // deletes that long one from above it, and every pixel it occupied comes off
+  // the scroll position — the row you tapped leaps upward and you land further
+  // down the list than where you were reading. Tim, opening the question
+  // directly beneath a long answer: "collapsing is a little finnicky."
+  //
+  // The tapped row is the anchor. The toggle is done by hand so that closing
+  // the old answer, opening the new one and measuring the difference all
+  // happen in one synchronous step — reading the rect forces the layout, so
+  // the correction lands in the same frame as the toggle and nothing is ever
+  // painted at the wrong offset. (A requestAnimationFrame would be a frame
+  // late, and does not run at all in a backgrounded tab.)
+  document.querySelectorAll<HTMLElement>('.qa__s').forEach((s) => {
+    s.addEventListener('click', (e) => {
+      const row = s.parentElement as HTMLDetailsElement;
+      e.preventDefault();
+      const before = row.getBoundingClientRect().top;
+      const wasOpen = row.open;
+      document.querySelectorAll<HTMLDetailsElement>('.qa[open]')
+        .forEach((d) => { if (d !== row) d.open = false; });
+      row.open = !wasOpen;
+      const drift = row.getBoundingClientRect().top - before;
+      if (drift) window.scrollBy({ top: drift, behavior: 'instant' });
+    });
+  });
+
 </script>
 </main>
 
