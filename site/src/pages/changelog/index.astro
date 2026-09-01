@@ -76,12 +76,35 @@ const fmt = (d: Date) =>
     });
   });
 
-  // Filter by change kind. The markdown renders <h3>New</h3> etc. followed by a
-  // <ul>, so each list is tagged from the heading above it.
+  // Filter by change kind.
+  //
+  // This used to take the kind from the heading TEXT, expecting <h3>New</h3>,
+  // <h3>Improved</h3>, <h3>Fixed</h3>. No entry has ever been written that way
+  // — they use descriptive headings like "A profile" and "Smaller things",
+  // which is the better writing and the reason the changelog reads like prose
+  // rather than a release note. So `kind` was always something like
+  // "a profile", nothing ever matched a chip, and picking anything but
+  // Everything emptied the page. The chips have never worked.
+  //
+  // A heading now declares its kind with a trailing marker the reader never
+  // sees — "### Smaller things [improved]" — and anything untagged is `new`,
+  // which is what a section describing a feature is. Explicit beats inferring
+  // intent from prose: "Smaller things" holds fixes in one entry and polish in
+  // another, and no heuristic can tell them apart.
+  const KINDS = ['new', 'improved', 'fixed'];
   document.querySelectorAll('.release__content').forEach((content) => {
-    let kind = 'other';
+    let kind = 'new';
     [...content.children].forEach((el) => {
-      if (el.tagName === 'H3') kind = el.textContent!.trim().toLowerCase();
+      if (el.tagName === 'H3') {
+        const text = el.textContent!.trim();
+        const tag = text.match(/\s*\[(\w+)\]$/);
+        if (tag && KINDS.includes(tag[1].toLowerCase())) {
+          kind = tag[1].toLowerCase();
+          el.textContent = text.slice(0, tag.index).trim();
+        } else {
+          kind = 'new';
+        }
+      }
       (el as HTMLElement).dataset.kind = kind;
     });
   });
