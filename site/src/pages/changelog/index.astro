@@ -9,6 +9,16 @@ const rendered = await Promise.all(
   entries.map(async (entry) => ({ entry, Content: (await render(entry)).Content }))
 );
 
+/**
+ * A release needs a name you can link at.
+ *
+ * The roadmap points here to say "this one shipped, in this build" — a
+ * promise is worth more when you can read what became of it. The id is
+ * derived rather than added to the frontmatter so a new entry cannot forget
+ * to have one: 0.1.0-34 becomes build-34, and 0.1.0-beta becomes build-beta.
+ */
+const anchorFor = (id: string) => `build-${id.split('-').pop()}`;
+
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 ---
@@ -36,7 +46,7 @@ const fmt = (d: Date) =>
     </div>
 
     {rendered.map(({ entry, Content }, i) => (
-      <section class="release" data-release data-open={i === 0 ? 'true' : 'false'}>
+      <section class="release" id={anchorFor(entry.id)} data-release data-open={i === 0 ? 'true' : 'false'}>
         <button class="release__top" data-release-toggle aria-expanded={i === 0 ? 'true' : 'false'}>
           <span class="release__caret" aria-hidden="true">›</span>
           <span class="release__head">
@@ -63,6 +73,25 @@ const fmt = (d: Date) =>
 <script>
   const bar = document.querySelector('[data-filters]') as HTMLElement | null;
   if (bar) bar.hidden = false;
+
+  // Follow a link to one release.
+  //
+  // Only the newest is open, so landing on #build-28 from the roadmap would
+  // otherwise show a closed title and look like the link was broken. Opening
+  // the target is the whole point of having linked to it.
+  const openRelease = (hash: string) => {
+    const el = hash && document.querySelector(hash);
+    if (!(el instanceof HTMLElement) || !el.matches('[data-release]')) return;
+    const body = el.querySelector('[data-release-body]') as HTMLElement;
+    const btn = el.querySelector('[data-release-toggle]') as HTMLElement;
+    el.dataset.open = 'true';
+    btn?.setAttribute('aria-expanded', 'true');
+    if (body) body.hidden = false;
+    el.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  };
+
+  openRelease(location.hash);
+  window.addEventListener('hashchange', () => openRelease(location.hash));
 
   // Expand / collapse
   document.querySelectorAll('[data-release-toggle]').forEach((btn) => {
@@ -164,6 +193,8 @@ const fmt = (d: Date) =>
     margin-bottom: .7rem;
     overflow: hidden;
     transition: opacity 200ms ease;
+    /* A release linked from the roadmap must not land under the site header. */
+    scroll-margin-top: 5rem;
   }
   .release[data-empty='true'] { opacity: .35; }
 
