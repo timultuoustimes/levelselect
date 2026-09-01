@@ -98,3 +98,59 @@ struct LastPlayedTests {
         #expect(pt.lastPlayedAt == nil)
     }
 }
+
+
+/// Home and Stats have to mean the same thing by "a week".
+@MainActor
+struct RecentPlayWindowTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// Stats used calendar windows while Home used a rolling seven days, so on
+    /// the 1st of a month the pair read "5h 59m this week / 0s this month" —
+    /// a month containing less than the week inside it — and Home reported a
+    /// different "this week" from Stats one tab over.
+    @Test func aMonthNeverHoldsLessThanTheWeekInsideIt() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+
+        // Two days ago — inside both windows however the calendar falls.
+        _ = repo.logManualSession(on: pt, duration: 2 * 3600,
+                                  date: Date.now.addingTimeInterval(-2 * 86_400))
+        // Twenty days ago — inside the month only.
+        _ = repo.logManualSession(on: pt, duration: 3 * 3600,
+                                  date: Date.now.addingTimeInterval(-20 * 86_400))
+
+        let week = Date.now.addingTimeInterval(-7 * 86_400)
+        let month = Date.now.addingTimeInterval(-30 * 86_400)
+        let sessions = (pt.sessions ?? []).filter { $0.deletedAt == nil }
+        let inWeek = sessions.filter { $0.startDate >= week }.reduce(0) { $0 + $1.elapsed() }
+        let inMonth = sessions.filter { $0.startDate >= month }.reduce(0) { $0 + $1.elapsed() }
+
+        #expect(inWeek == 2 * 3600)
+        #expect(inMonth == 5 * 3600)
+        #expect(inMonth >= inWeek, "the longer window must always contain the shorter one")
+    }
+
+    /// And Stats' seven days is the same seven days Home counts.
+    @Test func homeAndStatsAgreeOnAWeek() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.logManualSession(on: pt, duration: 90 * 60,
+                                  date: Date.now.addingTimeInterval(-3 * 86_400))
+
+        let summary = PlayerSummary.make(from: [game])
+        let week = Date.now.addingTimeInterval(-7 * 86_400)
+        let statsWeek = (pt.sessions ?? [])
+            .filter { $0.deletedAt == nil && $0.startDate >= week }
+            .reduce(0) { $0 + $1.elapsed() }
+
+        #expect(summary.weekSeconds == statsWeek)
+    }
+}
