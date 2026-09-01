@@ -386,3 +386,22 @@ footer a:hover { color: var(--ink); }
   .torchlight { animation: none; opacity: .34; }
   html { scroll-behavior: auto; }
 }
+
+
+/* ── Help: what just happened ───────────────────────
+   The moments strip. A list of fourteen sections still asks you to choose
+   from fourteen; these are the states people are actually IN when they come
+   looking, each opening onto the two or three answers that apply. */
+.moments { list-style: none; padding: 0; margin: 0 0 .5rem;
+  display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.moment { border: 1px solid rgba(255,255,255,.09); border-radius: 14px;
+  padding: .85rem .95rem; background: rgba(255,255,255,.03); }
+.moment__t { display: block; font-size: .98rem; margin-bottom: .35rem; }
+.moment__links { display: flex; flex-direction: column; gap: .15rem; }
+.moment__links a { font-size: .86rem; color: var(--muted); text-decoration: none; }
+.moment__links a:hover, .moment__links a:focus-visible { color: var(--torch); text-decoration: underline; }
+
+/* The answer, before the explanation. The page used to make you read ~240
+   words to find out whether a section was the one you wanted. */
+.doc .answer { font-size: 1.02rem; color: var(--text); margin-top: -.2rem; }
+.doc .answer + p { margin-top: .7rem; }

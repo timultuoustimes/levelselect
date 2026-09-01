@@ -33,21 +33,72 @@ const steps = [
  * there is one place to change and the nav cannot describe a page that no
  * longer exists.
  */
+/**
+ * The reference sections, in page order.
+ *
+ * Labelled as QUESTIONS, not features — the change that matters here.
+ *
+ * Every label used to name the answer: "RetroAchievements", "Sessions and runs
+ * are different things", "Beaten is a moment; 100% is your list". Good
+ * sentences, and useless as navigation: you can only recognise them as
+ * relevant once you already understand the distinction, which is the thing you
+ * came to learn. The nav asked you to do the categorising before it would help
+ * — and that first decision is where people leave. Tim, who has ADHD, on this
+ * page: "the nav doesn't really help if I don't know what I'm looking for…
+ * I am likely to bounce off of rather than actually try to find what I'm
+ * wanting."
+ *
+ * `q` drives the rail, the phone menu AND the heading, so what you clicked is
+ * what you land on. `a` is the one-sentence answer under the heading: the page
+ * used to make you read ~240 words to find out whether a section was the one
+ * you wanted, and now you can scan all fourteen answers in less than that.
+ */
 const sections = [
-  { id: 'profile',           label: 'Your profile' },
-  { id: 'layouts',           label: 'Game page layouts' },
-  { id: 'paste',             label: 'Pasting a checklist' },
-  { id: 'regenerating',      label: 'Regenerating safely' },
-  { id: 'notes',             label: 'Notes & where you left off' },
-  { id: 'hints',             label: 'Playing blind' },
-  { id: 'retroachievements', label: 'RetroAchievements' },
-  { id: 'beaten',            label: 'Beaten vs 100%' },
-  { id: 'sessions',          label: 'Sessions & runs' },
-  { id: 'shortcuts',         label: 'Siri & Shortcuts' },
-  { id: 'stats',             label: 'Stats, bars and pies' },
-  { id: 'colors',            label: 'Colors' },
-  { id: 'widgets',           label: 'Widgets' },
-  { id: 'data',              label: 'Getting your data out' },
+  { id: 'profile',           q: 'How do I set up my profile?',
+    a: 'Settings → Your profile. It draws nothing on Home until you put something in it.' },
+  { id: 'layouts',           q: 'Can I change how a game page looks?',
+    a: 'Settings → Game page layout. Four arrangements of the same page.' },
+  { id: 'paste',             q: 'I have a checklist from a wiki',
+    a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
+  { id: 'regenerating',      q: 'Will regenerating lose my progress?',
+    a: 'No. The button tells you what it is about to do, and a long-press changes it for one run.' },
+  { id: 'notes',             q: 'Where do notes and “where I left off” go?',
+    a: 'Any tracker item can carry a note — press and hold the row, then Edit item.' },
+  { id: 'hints',             q: 'How do I avoid spoilers?',
+    a: 'Settings → Appearance turns off the hints that generated and imported lists carry.' },
+  { id: 'retroachievements', q: 'I want my retro achievements in here',
+    a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
+  { id: 'beaten',            q: 'I finished a game — what do I mark?',
+    a: 'Beating it and finishing your tracker are different things, and both are recorded.' },
+  { id: 'sessions',          q: 'Why is my playtime wrong?',
+    a: 'A session is time played; a run is one attempt at something. They count differently.' },
+  { id: 'shortcuts',         q: 'Can I use Siri for this?',
+    a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
+  { id: 'stats',             q: 'What do the charts show?',
+    a: 'Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
+  { id: 'colors',            q: 'Can I change the colors?',
+    a: 'Settings → Accent color, or any status color. Swatches, sliders, or a hex field.' },
+  { id: 'widgets',           q: 'I want it on my Home Screen',
+    a: 'A full widget set lands in the next build. A field guide, ahead of it.' },
+  { id: 'data',              q: 'How do I get my data out?',
+    a: 'Settings → Your data → Export library writes a readable JSON file of everything.' },
+];
+
+/**
+ * The front door: what just happened, rather than what it is called.
+ *
+ * A list of fourteen still asks you to choose from fourteen. These are the
+ * moments people are actually in when they come looking, and each one opens
+ * onto the two or three answers that apply. The full list stays below for
+ * anyone who would rather scan it.
+ */
+const moments = [
+  { t: 'I just finished a game',        ids: ['beaten', 'stats'] },
+  { t: 'My playtime looks wrong',       ids: ['sessions'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'hints'] },
+  { t: 'I am just setting up',          ids: ['profile', 'layouts', 'colors'] },
+  { t: 'I want it outside the app',     ids: ['widgets', 'shortcuts'] },
+  { t: 'I want my data out',            ids: ['data'] },
 ];
 ---
 <Base
@@ -61,14 +112,14 @@ const sections = [
   <nav class="toc" aria-label="On this page">
     <p class="toc__title">On this page</p>
     <ol>
-      {sections.map((x) => <li><a href={`#${x.id}`}>{x.label}</a></li>)}
+      {sections.map((x) => <li><a href={`#${x.id}`}>{x.q}</a></li>)}
     </ol>
   </nav>
 
   <details class="toc-mobile">
     <summary>Jump to a section</summary>
     <ol>
-      {sections.map((x) => <li><a href={`#${x.id}`}>{x.label}</a></li>)}
+      {sections.map((x) => <li><a href={`#${x.id}`}>{x.q}</a></li>)}
     </ol>
   </details>
 
@@ -92,9 +143,26 @@ const sections = [
       ))}
     </ol>
 
-    <p class="divider"><span>Then, when you need it</span></p>
+    <p class="divider"><span>Or start from what just happened</span></p>
 
-<h2 id="profile">Your profile</h2>
+    <ul class="moments">
+      {moments.map((m) => (
+        <li class="moment">
+          <b class="moment__t">{m.t}</b>
+          <span class="moment__links">
+            {m.ids.map((id) => {
+              const s = sections.find((x) => x.id === id)!;
+              return <a href={`#${id}`}>{s.q}</a>;
+            })}
+          </span>
+        </li>
+      ))}
+    </ul>
+
+    <p class="divider"><span>Everything, in order</span></p>
+
+<h2 id="profile">{sections.find((x) => x.id === 'profile')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'profile')!.a}</p>
     <p><strong>Settings &rarr; Your profile.</strong> A picture, a name, and your handles. It draws nothing on Home until you put something in it, so an empty profile costs you no space.</p>
 
     <h3>The picture</h3>
@@ -108,7 +176,8 @@ const sections = [
     <h3>Your name, and its color</h3>
     <p>Use a handle as your name and the two stay linked &mdash; rename the handle and the name follows. The name can take a color of its own, and choosing <em>Accent</em> keeps it matched to your accent as you change it, rather than freezing a copy of whatever it is today.</p>
 
-    <h2 id="layouts">Game page layouts</h2>
+    <h2 id="layouts">{sections.find((x) => x.id === 'layouts')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'layouts')!.a}</p>
     <p><strong>Settings &rarr; Game page layout.</strong> Four arrangements of the same page:</p>
     <ul>
       <li><strong>Showcase</strong> &mdash; the art fills the top with the logo underneath. The most visual.</li>
@@ -121,7 +190,8 @@ const sections = [
     <h3>Logos</h3>
     <p>Game pages fetch a wordmark on their own, from IGDB first and SteamGridDB after, and fall back to the game's name as text when neither has one. <strong>Settings &rarr; Use game logos</strong> turns it off if you would rather always read the name. You can still choose a specific logo per game from that game's artwork picker, and an explicit choice always wins.</p>
 
-    <h2 id="paste">Pasting a checklist into a tracker</h2>
+    <h2 id="paste">{sections.find((x) => x.id === 'paste')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'paste')!.a}</p>
     <p>Most games worth tracking already have a good checklist somewhere — a wiki table, a forum post, a guide. <strong>Tracker &rarr; Paste a List</strong> turns one into real tracker categories. Nothing is sent anywhere, no AI is involved, and nothing is invented: every item comes from your text. It does interpret as it reads — stripping list syntax, working out which part of a line is the name and which is the location — and the rest of this section explains exactly how, so you can predict what it will do.</p>
 
     <h3>Two formats work</h3>
@@ -152,7 +222,8 @@ const sections = [
     <h3>Imported lists are protected</h3>
     <p>Anything you paste in is <strong>locked</strong>: regenerating that game's tracker later won't remove or replace it. You brought that list deliberately, so nothing automatic gets to overrule it.</p>
 
-    <h2 id="regenerating">Regenerating a tracker safely</h2>
+    <h2 id="regenerating">{sections.find((x) => x.id === 'regenerating')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'regenerating')!.a}</p>
     <p>The generate button tells you what it's going to do, and you can change it for a single run by long-pressing.</p>
     <ul>
       <li><strong>Add New Only</strong> (the default) — keeps everything you have and adds what's missing. It never removes or overwrites anything already in your tracker.</li>
@@ -162,31 +233,37 @@ const sections = [
     <p>Generation doesn't name things identically each time, so an item can come back with a different internal id. LevelSelect follows those renames by matching names and carries your progress across, telling you how many it moved — matching is careful but not psychic, so the review screen is there to check before a Replace. If something you'd worked on genuinely isn't in the new tracker, you're offered the chance to keep it as a personal goal rather than losing it.</p>
     <p>Your own notes stay yours: no merge mode rewrites them, and a Replace carries each note across wherever its item can still be matched.</p>
 
-    <h2 id="notes">Your own notes, and where you left off</h2>
+    <h2 id="notes">{sections.find((x) => x.id === 'notes')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'notes')!.a}</p>
     <p>Any tracker item can carry <strong>your own note</strong> — press and hold the row and choose <em>Edit item</em>. It's for the thing the checklist can't know: which NPC you were mid-quest with, where you'd stashed the key, what you meant to try next. The note shows on the item itself, in your accent color, marked as yours rather than as more of whatever generated the list. Regenerating the tracker never touches it.</p>
     <p>The same sheet is where you rename an item to whatever you actually call it, and record where it is.</p>
     <p><strong>Where you left off</strong> sits at the top of the Tracker section: the last thing you ticked, when you ticked it, and your note about it if you wrote one. It's there for the game you haven't opened in three weeks — a percentage tells you how far you got, but not what you were <em>doing</em>. It records the moment you ticked something, so editing an old item later won't push it to the front. The same line appears on the Continue Playing card and its widget, so the answer reaches you before you open the app.</p>
 
     <p>Finishes can be corrected, too: tap any entry under <strong>Beaten</strong> to fix a date you now remember better, change what it was, or add who you played it with. <strong>Played with</strong> is written down and nothing more — the app has no accounts and shares nothing — so a couch co-op finish remembers who was there.</p>
 
-    <h2 id="hints">Playing blind: hiding hints</h2>
+    <h2 id="hints">{sections.find((x) => x.id === 'hints')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'hints')!.a}</p>
     <p>Generated and imported checklists usually carry a hint or a location for each item — useful when you're hunting, spoilers when you're not. <strong>Settings &rarr; Appearance &rarr; Show item hints</strong> turns them off: rows become just their names, and location headings disappear too.</p>
     <p>When you actually want one hint, <strong>press and hold that row</strong> — a card shows that item's hint, location, and badge, and nothing else. One item at a time, so checking a single objective can't spoil the list below it. Your own notes on items always stay visible; they're yours, not hints.</p>
 
-    <h2 id="retroachievements">RetroAchievements</h2>
+    <h2 id="retroachievements">{sections.find((x) => x.id === 'retroachievements')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'retroachievements')!.a}</p>
     <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
     <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. Stats gains a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
 
-    <h2 id="beaten">Beaten is a moment; 100% is your list</h2>
+    <h2 id="beaten">{sections.find((x) => x.id === 'beaten')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'beaten')!.a}</p>
     <p>Beating a game and finishing every item on your tracker are different achievements, and LevelSelect records them separately. On any game's page, in the <strong>Beaten</strong> section, mark <em>Beat the game</em>, <em>100%</em>, <em>New Game+</em>, or your own words. "100%" means everything on <em>your</em> list, the one you chose to keep; it doesn't claim a platinum.</p>
     <p>Dates are stored only as precisely as you know them: an exact day for last night's credits, a month for "sometime that spring," a bare year for the game you beat in 2011 — and shown exactly that vaguely, because the app doesn't pretend to know more than you told it. Logging your history needs no sessions and no retroactive box-ticking. A beat can point at the playthrough it capped; that run wears a checkered flag, and Stats' <strong>Beaten &amp; Completed</strong> card opens each year into the actual list of what you finished.</p>
 
-    <h2 id="sessions">Sessions and runs are different things</h2>
+    <h2 id="sessions">{sections.find((x) => x.id === 'sessions')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'sessions')!.a}</p>
     <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
     <p>They're deliberately separate. A run doesn't start a timer, and a session doesn't record a run, so your playtime never gets inflated by counting attempts. Run logging is off until you turn it on for a game — the Tracker section's <strong>Build</strong> menu, <em>Log Runs for This Game</em> — because plenty of games deserve a tracker without one. Once it's on, the Runs section carries its own controls, including switching it back off.</p>
 
-    <h2 id="shortcuts">Siri, Shortcuts, and your games by name</h2>
+    <h2 id="shortcuts">{sections.find((x) => x.id === 'shortcuts')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'shortcuts')!.a}</p>
     <p>Every game in your library is a real entity in the Shortcuts app, Siri, and Spotlight — not just the app itself, each <em>game</em>. That means:</p>
     <ul>
       <li><strong>"Play Hollow Knight in LevelSelect"</strong> starts a timed session for that game — from Siri, without opening anything. "Open <em>game</em> in LevelSelect" jumps to its page.</li>
@@ -195,17 +272,20 @@ const sections = [
     </ul>
     <p>Nothing to set up — the shortcuts register themselves when the app is installed. Open the Shortcuts app and search LevelSelect to see the full set.</p>
 
-    <h2 id="stats">Stats, bars and pies</h2>
+    <h2 id="stats">{sections.find((x) => x.id === 'stats')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'stats')!.a}</p>
     <p>Every card that shows a breakdown can be turned over. Tap the chart icon in its corner and the card flips between bars and a donut &mdash; Library, Ratings, By System, Genres and Tags. Your choice is remembered per card, and it is kept on the device rather than synced, like the order of the cards themselves.</p>
     <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
     <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>
 
-    <h2 id="colors">Colors</h2>
+    <h2 id="colors">{sections.find((x) => x.id === 'colors')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'colors')!.a}</p>
     <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
     <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
     <p>Kept colors live on the device. Your accent and status colors sync.</p>
 
-    <h2 id="widgets">Widgets</h2>
+    <h2 id="widgets">{sections.find((x) => x.id === 'widgets')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'widgets')!.a}</p>
     <p>The next build brings a full widget set. A field guide, ahead of it landing:</p>
     <ul>
       <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), the Now Playing shelf, <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system (with the section's own cover art at medium and large sizes), a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
@@ -215,7 +295,8 @@ const sections = [
       <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
     </ul>
 
-    <h2 id="data">Getting your data out</h2>
+    <h2 id="data">{sections.find((x) => x.id === 'data')!.q}</h2>
+    <p class="answer">{sections.find((x) => x.id === 'data')!.a}</p>
     <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
     <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, and collections — each record with its stable id — plus your appearance settings as a single preferences block.</p>
     <p><strong>And it comes back:</strong> Import LevelSelect export (same screen) reads the file and restores whatever your library is missing — never touching what's already there, so an old export merges safely onto a current library, and importing twice changes nothing. One honest caveat remains: map images are saved as links rather than embedded. Alongside it, Recently Deleted holds everything you delete until <em>you</em> decide otherwise — restore with a tap, or use the app's only permanent delete, which lives there and nowhere else.</p>
