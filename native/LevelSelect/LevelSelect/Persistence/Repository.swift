@@ -177,11 +177,17 @@ struct Repository {
         /// Fillable games this run did not reach, because the per-run request
         /// budget ran out. Running again picks them up.
         var deferred = 0
+        /// Covers found on SteamGridDB for games IGDB has never heard of.
+        var coversFound = 0
         /// Games missing something with no `igdbID` to look up. Never guessed
         /// at — see `MetadataRefresh.Plan.unmatched`.
         var unmatched = 0
 
-        var didAnything: Bool { gamesUpdated > 0 }
+        /// Covers count. A run that found nothing on IGDB but drew three
+        /// hand-added games their first artwork did something, and reporting
+        /// "nothing changed" over a library that visibly just changed is the
+        /// report contradicting the screen behind it.
+        var didAnything: Bool { gamesUpdated > 0 || coversFound > 0 }
     }
 
     /// Fill every empty metadata field in the library from IGDB, in batches.
@@ -290,6 +296,18 @@ struct Repository {
             persist()
             progress(Double(index + 1) / Double(scheduled.count))
         }
+
+        // Covers for the games IGDB cannot help with. Runs after the IGDB
+        // pass rather than beside it, so a game that just gained a cover from
+        // its own entry is no longer a candidate here.
+        //
+        // Not on the watch, which compiles Repository but none of the artwork
+        // services — and has no business spending a phone's network budget
+        // fetching pictures it draws at 40pt.
+        #if !os(watchOS)
+        result.coversFound = await CoverArt.fill(library, repository: self)
+        persist()
+        #endif
 
         return result
     }

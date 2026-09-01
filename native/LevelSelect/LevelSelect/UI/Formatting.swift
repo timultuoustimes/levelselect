@@ -117,6 +117,11 @@ enum PlatformPreference {
         if p.contains("mac") { return 3 }
         // Emulation frontends rank LAST so the original hardware leads (e.g.
         // Sonic 2 on Genesis + Recalbox → Genesis).
+        // A storefront ranks below the hardware it runs on: a game held on
+        // both PC and itch.io is a PC game you happened to buy on itch, and
+        // the shelf should say PC. When itch is the ONLY platform — the usual
+        // case for these — it leads by default.
+        if p.contains("itch") { return 150 }
         if p.contains("recalbox") || p.contains("retroarch")
             || p.contains("batocera") || p.contains("emudeck") || p.contains("emulationstation") {
             return 200

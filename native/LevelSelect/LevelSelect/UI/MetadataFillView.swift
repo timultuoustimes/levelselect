@@ -220,6 +220,15 @@ struct MetadataFillView: View {
                         Text("\(result.releaseDatesFixed)").monospacedDigit()
                     }
                 }
+                // Named separately from "fields filled": these came from
+                // SteamGridDB, for games IGDB has no entry for at all, and
+                // folding them into the IGDB count would credit the wrong
+                // source for the one thing it could not do.
+                if result.coversFound > 0 {
+                    LabeledContent("Covers found (SteamGridDB)") {
+                        Text("\(result.coversFound)").monospacedDigit()
+                    }
+                }
             } else {
                 Label("Nothing changed", systemImage: "minus.circle")
                 Text("IGDB had nothing to add to the \(result.gamesAttempted) game\(result.gamesAttempted == 1 ? "" : "s") looked up.")

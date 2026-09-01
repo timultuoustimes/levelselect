@@ -33,6 +33,7 @@ struct RootView: View {
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
+            .releaseRemindersPrompt()
             .overlappingTimerGuard()
             .id(nav.themeRevision)
 

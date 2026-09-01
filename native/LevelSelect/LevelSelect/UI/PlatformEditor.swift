@@ -12,6 +12,10 @@ enum PlatformCatalog {
         "Wii U", "Wii", "GameCube", "N64", "SNES", "NES",
         "3DS", "DS", "GBA", "Game Boy Color", "Game Boy",
         "Genesis", "Saturn", "Dreamcast", "Recalbox", "iOS", "Android",
+        // A storefront, not a machine — and the one platform whose games
+        // routinely have no IGDB entry at all, which is exactly why it has to
+        // be nameable by hand.
+        "itch.io",
     ]
 
     /// Two spellings of the same console collapse to one key (so "Switch" and
