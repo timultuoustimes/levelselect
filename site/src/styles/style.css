@@ -405,3 +405,28 @@ footer a:hover { color: var(--ink); }
    words to find out whether a section was the one you wanted. */
 .doc .answer { font-size: 1.02rem; color: var(--text); margin-top: -.2rem; }
 .doc .answer + p { margin-top: .7rem; }
+
+
+/* ── Help: one question, one line, until you ask for more ──
+   Collapsed by default so the whole reference is scannable in a screen or
+   two. Expanded, following a question was a one-way trip — you landed deep in
+   the page and had to scroll back up through everything to reach a second
+   one, which is the cost that makes people give up rather than ask again. */
+.qa { border-top: 1px solid var(--line); padding: .1rem 0; scroll-margin-top: 4.5rem; }
+.qa[open] { padding-bottom: 1rem; }
+.qa__s { cursor: pointer; list-style: none; padding: .95rem 1.9rem .95rem 0;
+  position: relative; display: block; }
+.qa__s::-webkit-details-marker { display: none; }
+.qa__q { display: block; font-size: 1.06rem; font-weight: 650; color: var(--text); }
+.qa__a { display: block; font-size: .92rem; color: var(--muted); margin-top: .2rem; }
+/* The marker turns rather than swapping glyph, so the row does not reflow. */
+.qa__s::after {
+  content: ""; position: absolute; right: .35rem; top: 1.35rem;
+  width: .5rem; height: .5rem; border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  transition: transform .18s ease;
+}
+.qa[open] > .qa__s::after { transform: rotate(-135deg); }
+.qa__s:hover .qa__q, .qa__s:focus-visible .qa__q { color: var(--torch); }
+.qa__body > *:first-child { margin-top: .2rem; }
+@media (prefers-reduced-motion: reduce) { .qa__s::after { transition: none; } }
