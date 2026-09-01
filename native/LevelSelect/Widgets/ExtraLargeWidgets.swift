@@ -56,7 +56,7 @@ struct CommandBoardView: View {
                         HStack(spacing: 7) {
                             ProgressView(value: Double(s.completionDone),
                                          total: Double(max(1, s.completionTotal)))
-                                .tint(LSWidget.purple)
+                                .tint(LSWidget.accent)
                             Text("\(s.completionDone)/\(s.completionTotal)")
                                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(.white.opacity(0.6))
@@ -124,7 +124,7 @@ struct CommandBoardView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
-                .background(renderingMode == .fullColor ? LSWidget.purple : .white.opacity(0.24),
+                .background(renderingMode == .fullColor ? LSWidget.accent : .white.opacity(0.24),
                             in: RoundedRectangle(cornerRadius: 11))
             }
             .buttonStyle(.plain)
@@ -194,7 +194,7 @@ struct CommandBoardView: View {
         return HStack(alignment: .bottom, spacing: 6) {
             ForEach(Array(weekly.enumerated()), id: \.offset) { idx, secs in
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(idx == weekly.count - 1 ? LSWidget.purple : LSWidget.purple.opacity(0.45))
+                    .fill(idx == weekly.count - 1 ? LSWidget.accent : LSWidget.accent.opacity(0.45))
                     .frame(height: max(4, CGFloat(secs / peak) * 40))
                     .frame(maxWidth: .infinity)
             }
@@ -320,7 +320,7 @@ struct WhereYouStandView: View {
                 if let done = game.done, let total = game.total, total > 0 {
                     HStack(spacing: 8) {
                         ProgressView(value: Double(done), total: Double(max(1, total)))
-                            .tint(LSWidget.purple)
+                            .tint(LSWidget.accent)
                         Text("\(done)/\(total)")
                             .font(.system(size: 10, weight: .semibold).monospacedDigit())
                             .foregroundStyle(.white.opacity(0.55))

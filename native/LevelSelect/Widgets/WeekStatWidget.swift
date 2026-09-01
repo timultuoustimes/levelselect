@@ -38,7 +38,7 @@ struct WeekStatSmall: View {
                     let isToday = idx == weekly.count - 1
                     VStack(spacing: 4) {
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(isToday ? LSWidget.torch : LSWidget.purple.opacity(0.75))
+                            .fill(isToday ? LSWidget.accent : LSWidget.accent.opacity(0.40))
                             .frame(height: max(3, CGFloat(secs / peak) * 42))
                         Text(dayIndexLetter(idx, count: weekly.count))
                             .font(.system(size: 8, weight: .semibold))

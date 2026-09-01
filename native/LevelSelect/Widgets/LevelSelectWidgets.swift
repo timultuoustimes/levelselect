@@ -28,15 +28,13 @@ struct LevelSelectWidgets: WidgetBundle {
     }
 }
 
-private let lsPurple = Color(red: 0.58, green: 0.36, blue: 0.98)
-
 struct SessionLiveActivity: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: SessionActivityAttributes.self) { context in
             // Lock Screen / banner
             LockScreenSessionView(context: context)
                 .activityBackgroundTint(Color(red: 0.10, green: 0.07, blue: 0.18))
-                .activitySystemActionForegroundColor(lsPurple)
+                .activitySystemActionForegroundColor(LSWidget.accent)
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
@@ -46,7 +44,7 @@ struct SessionLiveActivity: Widget {
                             .lineLimit(1)
                     } icon: {
                         Image(systemName: "gamecontroller.fill")
-                            .foregroundStyle(lsPurple)
+                            .foregroundStyle(LSWidget.accent)
                     }
                 }
                 DynamicIslandExpandedRegion(.trailing) {
@@ -62,7 +60,7 @@ struct SessionLiveActivity: Widget {
                                 .font(.caption.weight(.semibold))
                         }
                         .buttonStyle(.bordered)
-                        .tint(lsPurple)
+                        .tint(LSWidget.accent)
 
                         Button(intent: StopSessionIntent(sessionID: context.attributes.sessionID)) {
                             Label("Stop", systemImage: "stop.fill")
@@ -74,7 +72,7 @@ struct SessionLiveActivity: Widget {
                 }
             } compactLeading: {
                 Image(systemName: "gamecontroller.fill")
-                    .foregroundStyle(lsPurple)
+                    .foregroundStyle(LSWidget.accent)
             } compactTrailing: {
                 if context.state.isRunning {
                     timer(context)
@@ -86,7 +84,7 @@ struct SessionLiveActivity: Widget {
                 }
             } minimal: {
                 Image(systemName: "gamecontroller.fill")
-                    .foregroundStyle(lsPurple)
+                    .foregroundStyle(LSWidget.accent)
             }
         }
     }
@@ -115,7 +113,7 @@ struct LockScreenSessionView: View {
         HStack(spacing: 12) {
             Image(systemName: "gamecontroller.fill")
                 .font(.title2)
-                .foregroundStyle(lsPurple)
+                .foregroundStyle(LSWidget.accent)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(context.attributes.gameName)
@@ -144,7 +142,7 @@ struct LockScreenSessionView: View {
                         Image(systemName: context.state.isRunning ? "pause.fill" : "play.fill")
                     }
                     .buttonStyle(.bordered)
-                    .tint(lsPurple)
+                    .tint(LSWidget.accent)
 
                     Button(intent: StopSessionIntent(sessionID: context.attributes.sessionID)) {
                         Image(systemName: "stop.fill")

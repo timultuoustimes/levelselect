@@ -142,7 +142,7 @@ struct RunTrackerView: View {
         VStack(spacing: 8) {
             Image(systemName: "flag.checkered")
                 .font(.system(size: 22))
-                .foregroundStyle(LSWidget.purple)
+                .foregroundStyle(LSWidget.accent)
             Text("No runs tracked yet")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.75))

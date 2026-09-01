@@ -19,6 +19,34 @@ enum LSWidget {
 
     static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
     static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)
+
+    /// The accent a widget should tint with.
+    ///
+    /// Widgets used a fixed purple, so choosing an accent changed the app and
+    /// left the Home Screen alone — and once the default became torch, a Lock
+    /// Screen timer was a different colour from the app that started it. The
+    /// snapshot carries the chosen accent now, and `nil` means "no choice",
+    /// which resolves to the same default the app uses rather than to a stale
+    /// copy of whatever that default was on the day this shipped.
+    ///
+    /// Read as a static rather than threaded through the views because two
+    /// places that need it cannot be reached from a snapshot: the Live
+    /// Activity has attributes and no snapshot, and `ShufflerEntry` carries
+    /// only its pick. Cached against the snapshot file's modification date, so
+    /// a render costs one `stat` rather than a JSON decode, and changing your
+    /// accent invalidates it the moment the app rewrites the file.
+    nonisolated(unsafe) private static var cachedAccent: (stamp: Date, color: Color)?
+
+    static var accent: Color {
+        guard let url = WidgetShared.snapshotURL,
+              let stamp = (try? FileManager.default
+                  .attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+        else { return torch }
+        if let cached = cachedAccent, cached.stamp == stamp { return cached.color }
+        let colour = WidgetSnapshot.load()?.accentHex.flatMap { Color(hex: $0) } ?? torch
+        cachedAccent = (stamp, colour)
+        return colour
+    }
     static let navy = Color(red: 0.094, green: 0.075, blue: 0.176)
     static let navyDeep = Color(red: 0.043, green: 0.031, blue: 0.098)
     static let green = Color(red: 0.29, green: 0.87, blue: 0.50)
@@ -206,7 +234,7 @@ struct CoverPoster: View {
                             .fill(LSWidget.navyDeep)
                         Image(systemName: "gamecontroller.fill")
                             .font(.system(size: 22))
-                            .foregroundStyle(LSWidget.purple.opacity(0.6))
+                            .foregroundStyle(LSWidget.accent.opacity(0.6))
                     }
                 }
             }
@@ -335,7 +363,7 @@ struct EmptyWidget: View {
         VStack(spacing: 6) {
             Image(systemName: "gamecontroller")
                 .font(.system(size: 22))
-                .foregroundStyle(LSWidget.purple)
+                .foregroundStyle(LSWidget.accent)
             Text("No active game")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.8))

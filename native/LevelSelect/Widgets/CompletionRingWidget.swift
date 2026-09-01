@@ -33,7 +33,7 @@ struct CompletionRingSmall: View {
             VStack(spacing: 8) {
                 Image(systemName: "checklist")
                     .font(.system(size: 22))
-                    .foregroundStyle(LSWidget.purple)
+                    .foregroundStyle(LSWidget.accent)
                 Text(snapshot == nil ? "No active game" : "No tracker yet")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))

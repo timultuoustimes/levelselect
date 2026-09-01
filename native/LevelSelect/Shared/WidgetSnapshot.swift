@@ -133,6 +133,11 @@ struct WidgetSnapshot: Codable, Hashable {
     /// Minutes played per day, oldest → newest, today last (16 weeks' worth).
     /// Feeds the heatmap widget, the streak, and the week gauge.
     var dailyMinutes: [Double] = []
+    /// The accent the user chose, as "#RRGGBB", or nil when they have not
+    /// chosen one. Widgets cannot read ThemeSettings — it is SwiftData in the
+    /// app's own store — so the accent travels here with everything else the
+    /// app already tells them.
+    var accentHex: String? = nil
     /// Average seconds per week over the four *finished* weeks before this
     /// one — the gauge's "my own pace" reference.
     var weeklyAverageSeconds: Double = 0
@@ -191,8 +196,10 @@ struct WidgetSnapshot: Codable, Hashable {
         completedCount: Int = 0, libraryCount: Int = 0,
         collections: [WidgetCollectionRef] = [],
         platformIcons: [String: String] = [:],
-        lastTicked: String? = nil
+        lastTicked: String? = nil,
+        accentHex: String? = nil
     ) {
+        self.accentHex = accentHex
         self.lastTicked = lastTicked
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
         self.isPlaying = isPlaying; self.isPaused = isPaused
@@ -238,6 +245,7 @@ struct WidgetSnapshot: Codable, Hashable {
         shufflePool = try c.decodeIfPresent([WidgetPoolGame].self, forKey: .shufflePool) ?? []
         libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
+        accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
         weeklyAverageSeconds = try c.decodeIfPresent(Double.self, forKey: .weeklyAverageSeconds) ?? 0
         completedCount = try c.decodeIfPresent(Int.self, forKey: .completedCount) ?? 0
         libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount) ?? 0

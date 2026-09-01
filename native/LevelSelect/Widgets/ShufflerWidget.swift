@@ -293,7 +293,7 @@ private struct EmptyShuffle: View {
         VStack(spacing: 6) {
             Image(systemName: "dice")
                 .font(.system(size: 22))
-                .foregroundStyle(LSWidget.purple)
+                .foregroundStyle(LSWidget.accent)
             Text("Nothing to pick from")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.8))

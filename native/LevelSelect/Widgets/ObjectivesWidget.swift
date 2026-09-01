@@ -91,7 +91,7 @@ private struct EmptyObjectives: View {
         VStack(spacing: 8) {
             Image(systemName: "checklist")
                 .font(.system(size: 26))
-                .foregroundStyle(LSWidget.purple)
+                .foregroundStyle(LSWidget.accent)
             Text(snapshot == nil ? "No active game" : "No tracker yet")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.8))

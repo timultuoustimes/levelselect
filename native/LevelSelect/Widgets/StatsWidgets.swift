@@ -60,10 +60,10 @@ struct HeatmapWidgetView: View {
     private func heat(_ minutes: Double) -> Color {
         switch minutes {
         case ..<1:   .white.opacity(0.07)
-        case ..<20:  LSWidget.purple.opacity(0.30)
-        case ..<60:  LSWidget.purple.opacity(0.55)
-        case ..<120: LSWidget.purple.opacity(0.80)
-        default:     LSWidget.purple
+        case ..<20:  LSWidget.accent.opacity(0.30)
+        case ..<60:  LSWidget.accent.opacity(0.55)
+        case ..<120: LSWidget.accent.opacity(0.80)
+        default:     LSWidget.accent
         }
     }
 }

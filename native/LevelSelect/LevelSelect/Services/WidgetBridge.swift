@@ -243,7 +243,12 @@ enum WidgetBridge {
             libraryCount: games.count,
             collections: collectionRefs,
             platformIcons: platformIcons,
-            lastTicked: lastTickedName(game: game, playthrough: pt)
+            lastTicked: lastTickedName(game: game, playthrough: pt),
+            // Only a CHOSEN accent travels. nil means "no choice", which lets
+            // the widgets fall back to the same default the app does rather
+            // than to a copy of today's hue that would go stale the next time
+            // the default changes.
+            accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil
         )
         return BuildResult(snapshot: snapshot, covers: covers)
     }

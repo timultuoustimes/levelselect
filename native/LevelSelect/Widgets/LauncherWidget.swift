@@ -319,7 +319,7 @@ struct LauncherSmallView: View {
             VStack(spacing: 6) {
                 Image(systemName: "arrow.up.forward.app")
                     .font(.system(size: 22))
-                    .foregroundStyle(LSWidget.purple)
+                    .foregroundStyle(LSWidget.accent)
                 Text("Pick a destination")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.8))
