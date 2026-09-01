@@ -1,4 +1,4 @@
-#if LEGACY_IMPORT   // developer-only, same gate as the legacy import
+#if DEV_TOOLS   // developer-only; never in a Release build
 import Foundation
 import SwiftData
 import CoreGraphics

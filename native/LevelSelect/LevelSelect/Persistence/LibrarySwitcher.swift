@@ -49,7 +49,7 @@ final class LibrarySwitcher {
     private(set) var container: ModelContainer
 
     private init() {
-        #if LEGACY_IMPORT
+        #if DEV_TOOLS
         let active = UserDefaults.standard.bool(forKey: Self.defaultsKey)
         #else
         // Release builds have no demo library at all, so they can never come

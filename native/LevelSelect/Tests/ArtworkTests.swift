@@ -322,7 +322,7 @@ struct SeedImageSizeTests {
     /// Core Data's external-storage threshold sits near 100KB. These assert
     /// the seeds are unambiguously either side of it, not merely different.
     @Test func seedImagesStraddleTheExternalStorageThreshold() throws {
-        #if LEGACY_IMPORT
+        #if DEV_TOOLS
         let large = CloudKitSchemaSeeder.largeSeedImage
         let small = CloudKitSchemaSeeder.smallSeedImage
 

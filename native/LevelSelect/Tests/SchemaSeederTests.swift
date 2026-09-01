@@ -1,4 +1,4 @@
-#if LEGACY_IMPORT
+#if DEV_TOOLS
 import Testing
 import Foundation
 import SwiftData

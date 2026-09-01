@@ -106,7 +106,7 @@ targets:
         # read it exist in Debug only. Release builds — every TestFlight and
         # App Store build — ship neither.
         Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LEGACY_IMPORT"
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEV_TOOLS"
         Release:
           # Drops legacy-import.json from the Copy Resources phase.
           EXCLUDED_SOURCE_FILE_NAMES: "legacy-import.json"
@@ -231,7 +231,7 @@ targets:
         # Mirror the app target so tests can cover the developer-only code
         # (legacy importer, CloudKit schema seeder) that Release compiles out.
         Debug:
-          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LEGACY_IMPORT"
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEV_TOOLS"
 
 schemes:
   LevelSelect:
