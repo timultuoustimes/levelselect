@@ -59,7 +59,12 @@ extension LSWidget {
     /// The same ground the app draws, from the same function — so a widget
     /// beside the app is the same colour rather than a good match.
     static var ground: LinearGradient {
-        LSTheme.ground(tintedBy: WidgetSnapshot.load()?.backgroundHex.flatMap { Color(hex: $0) })
+        // The scheme is passed EXPLICITLY, never inherited. See
+        // LSTheme.ground(tintedBy:scheme:) — a container background cannot
+        // see the environment override, so relying on it left the ground
+        // resolving against the phone while the text followed the app.
+        LSTheme.ground(tintedBy: WidgetSnapshot.load()?.backgroundHex.flatMap { Color(hex: $0) },
+                       scheme: appearance.colorScheme)
     }
 }
 

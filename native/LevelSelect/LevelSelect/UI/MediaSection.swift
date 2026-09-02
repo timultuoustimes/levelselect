@@ -227,7 +227,10 @@ struct ScreenshotStrip: View {
 
 /// Full-size view of an image the user added, with its caption editable —
 /// the caption is the notebook part ("the cart I traded away").
-private struct LocalImageViewer: View {
+///
+/// Not private: the journal shows the same pictures and needs the same
+/// viewer. Two of these would drift until one lost the caption field.
+struct LocalImageViewer: View {
     @Bindable var image: GameImage
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss

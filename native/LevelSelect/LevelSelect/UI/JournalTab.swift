@@ -90,6 +90,8 @@ struct JournalTimeline: View {
     /// The memory being written or edited. `.some(nil)` means a new one, which
     /// is why this is a double optional rather than a Bool beside a Memory?.
     @State private var editingMemory: Memory??
+    /// A picture being looked at full size.
+    @State private var viewingImage: GameImage?
 
     var body: some View {
         // Built once per pass and held in a `let`, the same shape StatsCards
@@ -103,7 +105,8 @@ struct JournalTimeline: View {
                         JournalPeriodHeader(period: period)
                         ForEach(period.entries) { entry in
                             JournalRow(entry: entry, editing: $editing,
-                                       editingMemory: $editingMemory)
+                                       editingMemory: $editingMemory,
+                                       viewingImage: $viewingImage)
                         }
                     }
                 }
@@ -120,6 +123,7 @@ struct JournalTimeline: View {
             set: { if !$0 { editingMemory = nil } })) {
             MemorySheet(existing: editingMemory ?? nil)
         }
+        .sheet(item: $viewingImage) { LocalImageViewer(image: $0) }
         .toolbar {
             Button {
                 editingMemory = .some(nil)
@@ -163,26 +167,68 @@ private struct JournalRow: View {
     let entry: JournalEntry
     @Binding var editing: Session?
     @Binding var editingMemory: Memory??
+    @Binding var viewingImage: GameImage?
 
     var body: some View {
-        NavigationLink(value: entry.game) {
-            HStack(alignment: .top, spacing: 12) {
-                if let game = entry.game {
-                    CoverThumb(urlString: game.displayCoverURLString)
-                        .frame(width: 44, height: 59)
-                        .clipShape(.rect(cornerRadius: 6))
-                        .coverGloss()
-                } else if entry.kind == .memory {
-                    // "First LAN party" has no cover to show, and a row that
-                    // simply loses its leading column reads as broken rather
-                    // than as a different kind of thing.
-                    RoundedRectangle(cornerRadius: 6)
+        // **A memory row is a Button, not a NavigationLink.**
+        //
+        // It was a NavigationLink(value: entry.game), and a memory has no
+        // game — a link with a nil value is DISABLED, so the whole row drew
+        // greyed out. Tim: "it feels weird that it's greyed out like it's not
+        // real or not accessible." It was not accessible; it was switched off.
+        //
+        // It also wants somewhere different to go. The subject of a memory row
+        // is the memory, so tapping it opens the memory rather than whatever
+        // game happens to be attached.
+        Group {
+            if let memory = entry.memory {
+                Button { editingMemory = .some(memory) } label: { rowContent }
+            } else {
+                NavigationLink(value: entry.game) { rowContent }
+            }
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if let session = entry.session {
+                Button {
+                    editing = session
+                } label: {
+                    Label(entry.note == nil ? "Add a note" : "Edit note",
+                          systemImage: "square.and.pencil")
+                }
+            }
+            if let memory = entry.memory {
+                Button {
+                    editingMemory = .some(memory)
+                } label: {
+                    Label("Edit memory", systemImage: "square.and.pencil")
+                }
+            }
+        }
+    }
+
+    /// The row itself, so both the Button and the NavigationLink can wear it.
+    private var rowContent: some View {
+        HStack(alignment: .top, spacing: 12) {
+                if entry.kind == .memory {
+                    // **A circle, not a cover-shaped rectangle.** A memory is
+                    // not a game, and dressing it in box art said it was one
+                    // that had simply failed to load its cover. Tim: "these
+                    // memories/journal entries should have their own icon
+                    // that's not in a game art frame." The column keeps its
+                    // 44pt width so rows still line up.
+                    Circle()
                         .fill(LSTheme.accent.opacity(0.16))
-                        .frame(width: 44, height: 59)
+                        .frame(width: 44, height: 44)
                         .overlay {
                             Image(systemName: "sparkles")
                                 .foregroundStyle(LSTheme.accent)
                         }
+                } else if let game = entry.game {
+                    CoverThumb(urlString: game.displayCoverURLString)
+                        .frame(width: 44, height: 59)
+                        .clipShape(.rect(cornerRadius: 6))
+                        .coverGloss()
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -222,9 +268,12 @@ private struct JournalRow: View {
                             HStack(spacing: 8) {
                                 ForEach(entry.images) { image in
                                     if let data = image.data {
-                                        LocalArtworkThumb(data: data, contentMode: .fill)
-                                            .frame(width: 72, height: 72)
-                                            .clipShape(.rect(cornerRadius: 8))
+                                        Button { viewingImage = image } label: {
+                                            LocalArtworkThumb(data: data, contentMode: .fill)
+                                                .frame(width: 72, height: 72)
+                                                .clipShape(.rect(cornerRadius: 8))
+                                        }
+                                        .buttonStyle(.plain)
                                     }
                                 }
                             }
@@ -244,28 +293,6 @@ private struct JournalRow: View {
                 }
                 Spacer(minLength: 0)
             }
-            .lsCard()
-        }
-        .buttonStyle(.plain)
-        // Tapping still goes to the game — that is what a row about a game
-        // should do. Writing is the long-press, which is where this app
-        // already puts a row's secondary verbs.
-        .contextMenu {
-            if let session = entry.session {
-                Button {
-                    editing = session
-                } label: {
-                    Label(entry.note == nil ? "Add a note" : "Edit note",
-                          systemImage: "square.and.pencil")
-                }
-            }
-            if let memory = entry.memory {
-                Button {
-                    editingMemory = .some(memory)
-                } label: {
-                    Label("Edit memory", systemImage: "square.and.pencil")
-                }
-            }
-        }
+        .lsCard()
     }
 }

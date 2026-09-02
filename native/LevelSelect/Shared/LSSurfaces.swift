@@ -50,18 +50,31 @@ enum LSTheme {
     /// not two colours; it is one hue at two brightnesses — so deriving the
     /// second stop reproduces the look that was already tuned, rather than
     /// inventing a new one.
-    static func ground(tintedBy tint: Color?) -> LinearGradient {
+    /// - Parameter scheme: nil resolves per the environment. **A widget must
+    ///   pass one explicitly**: WidgetKit hoists `containerBackground` out of
+    ///   the view's environment, so a dynamic colour there never sees a
+    ///   `.environment(\.colorScheme,)` override and resolves against the
+    ///   system instead. That produced the exact bug it looks like — a Light
+    ///   app on a Dark phone drawing dark-mode ground under light-mode text.
+    static func ground(tintedBy tint: Color?, scheme: ColorScheme? = nil) -> LinearGradient {
         let hue = tint?.lsHueSaturation
+        func pick(_ light: Color, _ dark: Color) -> Color {
+            switch scheme {
+            case .light: light
+            case .dark:  dark
+            default:     .lsDynamic(light: light, dark: dark)
+            }
+        }
         return LinearGradient(
             colors: [
-                .lsDynamic(light: shade(hue, brightness: 0.97, saturation: 0.06,
-                                        fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
-                           dark:  shade(hue, brightness: 0.16, saturation: 0.55,
-                                        fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
-                .lsDynamic(light: shade(hue, brightness: 0.88, saturation: 0.10,
-                                        fallback: Color(red: 0.88, green: 0.86, blue: 0.94)),
-                           dark:  shade(hue, brightness: 0.07, saturation: 0.60,
-                                        fallback: Color(red: 0.05, green: 0.04, blue: 0.09))),
+                pick(shade(hue, brightness: 0.97, saturation: 0.06,
+                           fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
+                     shade(hue, brightness: 0.16, saturation: 0.55,
+                           fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
+                pick(shade(hue, brightness: 0.88, saturation: 0.10,
+                           fallback: Color(red: 0.88, green: 0.86, blue: 0.94)),
+                     shade(hue, brightness: 0.07, saturation: 0.60,
+                           fallback: Color(red: 0.05, green: 0.04, blue: 0.09))),
             ],
             startPoint: .top, endPoint: .bottom
         )
