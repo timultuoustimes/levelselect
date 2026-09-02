@@ -24,12 +24,21 @@ struct RootView: View {
         ZStack {
             TabView(selection: Binding(get: { nav.selectedTab },
                                        set: { nav.selectedTab = $0 })) {
-                Tab("Home", systemImage: "house.fill", value: LSTab.home) { HomeTab() }
+                // A scroll, not a house — and the pair is the point.
+                //
+                // The app icon is literally a checklist scroll in a dungeon
+                // door, so the scroll is this app's own vocabulary rather than
+                // a borrowed one. Tim: *"Home is really the active running
+                // log."* An open scroll is a list still being worked through;
+                // a closed book is a history already written. Open and closed
+                // is the whole distinction between these two tabs, and the
+                // glyphs now carry it.
+                Tab("Home", systemImage: "scroll.fill", value: LSTab.home) { HomeTab() }
                 Tab("Library", systemImage: "square.grid.2x2.fill", value: LSTab.library) { LibraryTab() }
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
                 Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
-                Tab("Journal", systemImage: "scroll.fill", value: LSTab.journal) { JournalTab() }
+                Tab("Journal", systemImage: "book.closed.fill", value: LSTab.journal) { JournalTab() }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
