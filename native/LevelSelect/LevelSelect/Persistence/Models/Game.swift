@@ -131,6 +131,22 @@ final class Game {
         }
     }
 
+    /// Have you finished this game — **whatever it says now**.
+    ///
+    /// Status is where a game *currently sits*; finishing is something that
+    /// *happened*, and the two stopped agreeing the moment `oldFavorite`
+    /// existed. Sonic 2 is beaten and will be beaten again; filing it under
+    /// Old Favorite must not un-beat it, and counting `status == .completed`
+    /// did exactly that — the finished percentage fell when a game moved.
+    ///
+    /// A completion event is the real record, so it wins. The status is kept
+    /// as a fallback because plenty of games were marked Completed before
+    /// there was any event to record: 13 of Tim's 21 on the day this shipped.
+    var isFinished: Bool {
+        if (completionEvents ?? []).contains(where: { $0.deletedAt == nil }) { return true }
+        return status == .completed
+    }
+
     /// Images that haven't been soft-deleted, newest first.
     var liveImages: [GameImage] {
         (images ?? []).filter { $0.deletedAt == nil }

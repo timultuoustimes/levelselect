@@ -610,3 +610,66 @@ struct Build36MemoryTimelineTests {
         #expect(future.detailLine == nil)
     }
 }
+
+/// Build 36 — Old Favorite is beaten-agnostic, and finishing had to stop
+/// meaning "the status currently says Completed".
+@MainActor
+struct Build36OldFavoriteTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// **The bug the status would otherwise have caused.** Sonic 2 is beaten
+    /// and will be beaten again. Moving it to Old Favorite must not un-beat
+    /// it — counting `status == .completed` made the finished percentage fall
+    /// when a game simply moved shelves.
+    @Test func aBeatenGameStaysFinishedAfterMovingToOldFavorite() {
+        let context = makeContext()
+        let game = Game(name: "Sonic the Hedgehog 2", status: .completed)
+        let finish = CompletionEvent(date: .now, label: .cleared)
+        context.insert(game)
+        context.insert(finish)
+        finish.game = game
+        #expect(game.isFinished)
+
+        game.status = .oldFavorite
+        #expect(game.isFinished, "A completion event is the record; the status is only where it sits now.")
+    }
+
+    /// The fallback, for the games marked Completed before there was any event
+    /// to record — 13 of Tim's 21 on the day this shipped.
+    @Test func statusAloneStillCountsAsFinished() {
+        let game = Game(name: "An old import", status: .completed)
+        #expect(game.isFinished)
+    }
+
+    /// And a game nobody ever finished is not finished, whatever else is true.
+    @Test func anOldFavoriteWithNoFinishIsNotFinished() {
+        let game = Game(name: "Awesome Possum", status: .oldFavorite)
+        #expect(!game.isFinished)
+    }
+
+    /// A deleted completion event does not keep a game finished — Recently
+    /// Deleted has to mean something.
+    @Test func aDeletedFinishDoesNotCount() {
+        let context = makeContext()
+        let game = Game(name: "Barkley Shut Up and Jam", status: .oldFavorite)
+        let finish = CompletionEvent(date: .now, label: .cleared)
+        finish.deletedAt = .now
+        context.insert(game)
+        context.insert(finish)
+        finish.game = game
+        #expect(!game.isFinished)
+    }
+
+    /// The status carries no claim about finishing in either direction — which
+    /// is the whole point of it, and the thing its blurb has to keep saying.
+    @Test func oldFavoriteSaysNothingAboutFinishing() {
+        #expect(!GameStatus.oldFavorite.blurb.lowercased().contains("never"))
+        #expect(!GameStatus.oldFavorite.blurb.lowercased().contains("unfinished"))
+        // It is the pair to `ongoing`, and the two must stay distinguishable:
+        // one has no ending, the other has one that does not matter.
+        #expect(GameStatus.ongoing.blurb != GameStatus.oldFavorite.blurb)
+    }
+}

@@ -993,7 +993,7 @@ struct StatsCards: View {
 
     private var completionRate: Double {
         guard !games.isEmpty else { return 0 }
-        return Double(games.filter { $0.status == .completed }.count) / Double(games.count)
+        return Double(games.filter(\.isFinished).count) / Double(games.count)
     }
 
     private var ratedCount: Int { games.filter { ($0.rating ?? 0) > 0 }.count }

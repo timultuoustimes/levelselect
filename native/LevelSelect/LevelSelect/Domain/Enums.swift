@@ -39,13 +39,23 @@ enum GameStatus: String, Codable, CaseIterable, Sendable {
         case .backlog:     "Yours, and not started yet."
         case .wishlist:    "Not yours yet."
         case .completed:   "You finished it."
-        // The one this set was missing, and the gap it fills is precise.
-        // Every other status here sits on a progress axis; `ongoing` escapes
-        // by saying no finish line exists. These games HAVE one — you're
-        // simply not walking toward it, and that isn't a verdict on the game.
-        // Tim: "I'm not going to beat a game like Barkley Shut Up and Jam,
-        // but I don't feel like I've abandoned them."
-        case .oldFavorite: "Played to bits, never finished, still loved."
+        // The one this set was missing, and it is the ONLY status that does
+        // not sit on the progress axis at all.
+        //
+        // `ongoing` escapes that axis by saying no finish line exists —
+        // Minecraft, a city builder. This one escapes differently: the finish
+        // line **exists and is beside the point**. That is why it has to stay
+        // silent on whether you reached it. Tim's two examples are the whole
+        // argument, and they sit at opposite ends of the old axis:
+        //
+        //   Sonic 2         beaten, and he will beat it again
+        //   Awesome Possum  never beaten, and never will be
+        //
+        // Same relationship. Filing the first under Completed and the second
+        // under Abandoned would split one feeling in half and call the second
+        // one a failure. So the blurb is deliberately parallel to `ongoing`'s
+        // — the two off-axis statuses should read as the pair they are.
+        case .oldFavorite: "It has an ending — you'll play it again anyway."
         case .shelved:     "Set aside, no plans either way."
         case .abandoned:   "It lost you, and you're not going back."
         }
