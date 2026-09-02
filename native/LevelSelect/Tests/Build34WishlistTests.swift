@@ -565,3 +565,93 @@ struct ReleaseReminderTests {
         #expect(parts.day == 28)
     }
 }
+
+@Suite("Dates stored per platform (Schema V4)")
+struct PlatformReleaseTests {
+    private func day(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        ReleaseCountdown.utc.date(from: DateComponents(year: y, month: m, day: d))!
+    }
+
+    private func game() -> Game {
+        let g = Game(name: "Onimusha: Way of the Sword")
+        g.platforms = ["PC (Microsoft Windows)", "Nintendo Switch 2"]
+        g.platformReleases = [
+            .init(platform: "PC (Microsoft Windows)", date: day(2026, 9, 4), hasDay: true),
+            .init(platform: "Nintendo Switch 2", date: day(2027, 3, 1), hasDay: true),
+        ]
+        return g
+    }
+
+    /// The reason Option B exists: one game, two true answers.
+    @Test("The date follows the platform you chose")
+    func followsTheChoice() {
+        let g = game()
+        g.ownedPlatforms = ["Nintendo Switch 2"]
+        #expect(g.effectiveReleaseDate == day(2027, 3, 1))
+
+        // Changed at READ time — no refetch, which a single stored field
+        // could never do.
+        g.ownedPlatforms = ["PC (Microsoft Windows)"]
+        #expect(g.effectiveReleaseDate == day(2026, 9, 4))
+    }
+
+    /// The app's own short names have to find IGDB's long ones.
+    @Test("Matched on console key, not string equality")
+    func matchesShortNames() {
+        let g = game()
+        g.ownedPlatforms = ["Switch 2"]
+        #expect(g.effectiveReleaseDate == day(2027, 3, 1))
+    }
+
+    @Test("No platform chosen falls back to the soonest announced day")
+    func noChoice() {
+        let g = game()
+        #expect(g.chosenPlatform == nil)
+        #expect(g.effectiveReleaseDate == day(2026, 9, 4))
+    }
+
+    /// Every game written before V4, and every hand-added one, has no stored
+    /// releases at all — those must keep working unchanged.
+    @Test("A game with no stored releases still uses firstReleaseDate")
+    func preV4() {
+        let g = Game(name: "Killer7")
+        g.firstReleaseDate = day(2005, 6, 9)
+        #expect(g.platformReleases.isEmpty)
+        #expect(g.effectiveReleaseDate == day(2005, 6, 9))
+    }
+
+    /// A vague date for YOUR platform beats a precise one for a platform you
+    /// did not pick: "nobody has said when your copy arrives" is the truth.
+    @Test("A chosen platform with no announced day does not borrow another's")
+    func vagueForMine() {
+        let g = Game(name: "Onimusha: Way of the Sword")
+        g.ownedPlatforms = ["Nintendo Switch 2"]
+        g.platformReleases = [
+            .init(platform: "PC (Microsoft Windows)", date: day(2026, 9, 4), hasDay: true),
+            .init(platform: "Nintendo Switch 2", date: day(2026, 1, 1), hasDay: false),
+        ]
+        #expect(g.effectiveReleaseDate == day(2026, 1, 1))
+        #expect(ReleaseCountdown.isYearOnly(g.effectiveReleaseDate!))
+    }
+
+    @Test("Upcoming lists only real days still ahead, soonest first")
+    func upcoming() {
+        let g = game()
+        let ahead = g.upcomingReleases(now: day(2026, 9, 1))
+        #expect(ahead.map(\.platform) == ["PC (Microsoft Windows)", "Nintendo Switch 2"])
+
+        let later = g.upcomingReleases(now: day(2026, 12, 1))
+        #expect(later.map(\.platform) == ["Nintendo Switch 2"])
+    }
+
+    /// The blob round-trips, because it is what CloudKit will carry.
+    @Test("Stored releases survive encoding")
+    func roundTrip() {
+        let g = game()
+        let data = g.platformReleasesData
+        #expect(data != nil)
+        let restored = Game(name: "x")
+        restored.platformReleasesData = data
+        #expect(restored.platformReleases == g.platformReleases)
+    }
+}

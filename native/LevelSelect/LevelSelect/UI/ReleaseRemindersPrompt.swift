@@ -48,7 +48,7 @@ struct ReleaseRemindersPrompt: ViewModifier {
         guard !asked,
               !NotificationManager.releaseRemindersOn,
               let game = firstUpcoming,
-              let date = game.firstReleaseDate,
+              let date = game.effectiveReleaseDate,
               ReleaseCountdown.countdown(to: date) != nil
         else { return }
         asked = true
@@ -56,7 +56,7 @@ struct ReleaseRemindersPrompt: ViewModifier {
     }
 
     private func message(for game: Game) -> String {
-        guard let date = game.firstReleaseDate,
+        guard let date = game.effectiveReleaseDate,
               let soon = ReleaseCountdown.countdown(to: date) else {
             return "\(game.name) is the first thing on your wishlist with a release date."
         }
@@ -71,7 +71,7 @@ struct ReleaseRemindersPrompt: ViewModifier {
             upcoming: WishlistShelf
                 .comingSoon(games.filter { $0.status == .wishlist })
                 .compactMap { game in
-                    guard let date = game.firstReleaseDate else { return nil }
+                    guard let date = game.effectiveReleaseDate else { return nil }
                     return (id: game.id, name: game.name, releaseDate: date)
                 })
     }

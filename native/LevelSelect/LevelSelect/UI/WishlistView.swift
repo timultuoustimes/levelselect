@@ -338,7 +338,7 @@ struct WishlistTab: View {
     /// less than "Feb 27, 2027" does — so the countdown only runs inside the
     /// horizon and the date takes over beyond it.
     private func dateLabel(_ game: Game) -> String? {
-        guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else { return nil }
+        guard let date = game.effectiveReleaseDate, !MetadataRefresh.isMissing(date) else { return nil }
         if let soon = WishlistShelf.countdown(to: date),
            let days = WishlistShelf.utc.dateComponents(
                [.day], from: WishlistShelf.utc.startOfDay(for: .now),
@@ -354,7 +354,7 @@ struct WishlistTab: View {
     /// but it just reads as a definitive date."* A bare year in secondary grey
     /// does not make that promise; an accent-coloured day does.
     private func isApproximate(_ game: Game) -> Bool {
-        guard let date = game.firstReleaseDate else { return true }
+        guard let date = game.effectiveReleaseDate else { return true }
         return WishlistShelf.isYearOnly(date)
     }
 

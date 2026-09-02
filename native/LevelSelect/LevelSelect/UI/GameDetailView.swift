@@ -1633,6 +1633,29 @@ struct GameDetailView: View {
                     }
                 }
             }
+
+            // Schema V4's whole point. A game can be out on one machine and
+            // months away on another, and until the dates were stored per
+            // platform the app could only ever say one of those things.
+            let upcoming = game.upcomingReleases()
+            if !upcoming.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(upcoming, id: \.platform) { release in
+                        HStack(spacing: 6) {
+                            PlatformIconView(platform: release.platform, size: 13)
+                            Text(PlatformShort.name(release.platform))
+                            Text(ReleaseCountdown.dateLabel(release.date))
+                                .foregroundStyle(.secondary)
+                            if let soon = ReleaseCountdown.countdown(to: release.date) {
+                                Text("· \(soon)").foregroundStyle(LSTheme.accent)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
     }
 

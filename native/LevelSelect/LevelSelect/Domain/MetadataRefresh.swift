@@ -383,6 +383,13 @@ enum MetadataRefresh {
     static func fill(_ game: Game, from igdb: IGDBGame) -> Set<Field> {
         var filled: Set<Field> = []
 
+        // Additive like everything else here, but unconditional: this is a
+        // record of what IGDB currently says, not a user field, and a game
+        // whose Switch 2 date got announced this week should gain it.
+        if !igdb.storedPlatformReleases.isEmpty {
+            game.platformReleases = igdb.storedPlatformReleases
+        }
+
         if isMissing(game.firstReleaseDate),
            let date = igdb.storableReleaseDate(on: game.chosenPlatform) {
             game.firstReleaseDate = date

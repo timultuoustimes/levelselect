@@ -43,7 +43,10 @@ enum WishlistShelf {
 
     static func shelf(for game: Game, now: Date = .now,
                       calendar: Calendar = .current) -> Shelf {
-        guard let date = game.firstReleaseDate, !MetadataRefresh.isMissing(date) else {
+        // `effectiveReleaseDate`, not `firstReleaseDate`: V4 stores a date per
+        // platform, so the shelf answers for the platform YOU chose rather
+        // than for whichever one IGDB's summary happened to describe.
+        guard let date = game.effectiveReleaseDate, !MetadataRefresh.isMissing(date) else {
             // No date at all is not a promise of one.
             return .outNow
         }
@@ -63,7 +66,7 @@ enum WishlistShelf {
     /// will experience them in.
     static func comingSoon(_ games: [Game], now: Date = .now) -> [Game] {
         games.filter { shelf(for: $0, now: now) == .comingSoon }
-            .sorted { ($0.firstReleaseDate ?? .distantFuture) < ($1.firstReleaseDate ?? .distantFuture) }
+            .sorted { ($0.effectiveReleaseDate ?? .distantFuture) < ($1.effectiveReleaseDate ?? .distantFuture) }
     }
 
     /// Announced, no date. Alphabetical, because there is no other order —

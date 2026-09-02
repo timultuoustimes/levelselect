@@ -76,7 +76,7 @@ struct ReleaseRemindersSettings: View {
     private func reschedule() {
         NotificationManager.syncReleaseReminders(
             upcoming: upcoming.compactMap { game in
-                guard let date = game.firstReleaseDate else { return nil }
+                guard let date = game.effectiveReleaseDate else { return nil }
                 return (id: game.id, name: game.name, releaseDate: date)
             })
     }

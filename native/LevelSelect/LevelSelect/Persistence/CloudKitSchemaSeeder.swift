@@ -165,6 +165,12 @@ enum CloudKitSchemaSeeder {
         // never written is a field the container has never heard of — and
         // writes to it fail forever after with CKErrorDomain error 2.
         game.ownedPlatforms = [marker]
+        // Schema V4. A Data blob types as BYTES from any non-empty value, so
+        // one small encoded array is enough — unlike GameImage.data, which
+        // needed a large value too because externalStorage retypes by size.
+        game.platformReleases = [
+            StoredPlatformRelease(platform: marker, date: .init(timeIntervalSince1970: 0), hasDay: true)
+        ]
         game.ownership = [Ownership.physical.rawValue]
         game.userTags = [marker]
         game.genres = [marker]

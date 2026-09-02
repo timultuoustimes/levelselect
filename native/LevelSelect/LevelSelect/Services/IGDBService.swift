@@ -144,6 +144,19 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
         return date
     }
 
+    /// Every platform date, in the shape the app stores. Schema V4.
+    ///
+    /// `platformReleases` is the API's own answer and is thrown away after one
+    /// date is picked from it; this is the same data on its way to disk, so a
+    /// game can carry all of them.
+    var storedPlatformReleases: [StoredPlatformRelease] {
+        platformReleases.map {
+            StoredPlatformRelease(platform: $0.platform,
+                                  date: Date(timeIntervalSince1970: $0.timestamp),
+                                  hasDay: $0.precision.hasDay)
+        }
+    }
+
     /// The soonest platform release IGDB gives an exact day for.
     ///
     /// When you have not said which platform you will get a game on, a

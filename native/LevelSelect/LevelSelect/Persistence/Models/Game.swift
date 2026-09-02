@@ -22,6 +22,22 @@ final class Game {
     var igdbID: Int?
     var igdbSlug: String?
     var firstReleaseDate: Date?
+    /// Every date IGDB gives for this game, keyed by platform. Schema V4.
+    ///
+    /// `firstReleaseDate` holds ONE answer, and a game out on PC and coming
+    /// to Switch 2 has two true ones — a single field cannot say that, and
+    /// picking a winner is what made the app's date depend on a platform the
+    /// user may never have chosen.
+    ///
+    /// JSON in a `Data` blob, like `ThemeSettings.statusColorsData`: the shape
+    /// is a map from platform name to a date and a precision, and storing it
+    /// as one field means a game with releases on six platforms costs one
+    /// CloudKit column rather than a related record per platform.
+    ///
+    /// `firstReleaseDate` stays and stays authoritative for the shelf, the
+    /// countdown and the widgets — this is the fuller answer behind it, not a
+    /// replacement. Optional because every game written before V4 has none.
+    var platformReleasesData: Data?
     var franchise: String?
     var coverURLString: String?
     var coverImageID: String?

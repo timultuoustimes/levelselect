@@ -96,7 +96,9 @@ enum WidgetBridge {
             .comingSoon(games.filter { $0.status == .wishlist })
             .prefix(8)
             .compactMap { g in
-                guard let date = g.firstReleaseDate else { return nil }
+                // The widget counts to the same day the wishlist does, which
+                // since V4 means the date for the platform you chose.
+                guard let date = g.effectiveReleaseDate else { return nil }
                 return WidgetUpcomingGame(id: g.id.uuidString, name: g.name,
                                           coverFileName: coverName(g), releaseDate: date)
             }

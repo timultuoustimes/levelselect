@@ -108,7 +108,7 @@ struct StaleSessionGuard: ViewModifier {
             upcoming: WishlistShelf
                 .comingSoon(games.filter { $0.status == .wishlist })
                 .compactMap { game in
-                    guard let date = game.firstReleaseDate else { return nil }
+                    guard let date = game.effectiveReleaseDate else { return nil }
                     return (id: game.id, name: game.name, releaseDate: date)
                 })
 

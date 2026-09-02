@@ -84,6 +84,10 @@ struct Repository {
         // The platform just chosen on the confirm screen IS the date choice —
         // a game out on PC and coming to Switch 2 has two different answers.
         game.firstReleaseDate = igdb.storableReleaseDate(on: platform)
+        // Schema V4: keep ALL of them. IGDB sends a date per platform and the
+        // app used to resolve one and throw the rest away, which is why "out
+        // on PC, coming to Switch 2" could never be said.
+        game.platformReleases = igdb.storedPlatformReleases
         game.summary = igdb.summary
         game.genres = igdb.genres
         game.themes = igdb.themes

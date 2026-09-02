@@ -146,8 +146,11 @@ struct SchemaFreezeTests {
             "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             // backdropURLString/logoURLString/images added 2026-08-28 build 32
-            // (artwork roles + user-added images).
-            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownedPlatforms,ownership,pinned,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
+            // (artwork roles + user-added images). platformReleasesData added
+            // 2026-09-02 build 35 (Option B — every platform's date, because
+            // "out on PC, coming to Switch 2" is one game with two true
+            // answers). Seed-and-promote before any build that writes it.
+            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownedPlatforms,ownership,pinned,platformReleasesData,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
             "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
