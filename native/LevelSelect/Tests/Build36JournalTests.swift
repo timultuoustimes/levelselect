@@ -356,3 +356,116 @@ struct Build36SessionNoteTests {
         #expect(session.notes == "Stopped for dinner halfway.")
     }
 }
+
+/// Build 36 — memories: the records that reach back further than the app does.
+@MainActor
+struct Build36MemoryTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func utc(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        ReleaseCountdown.utc.date(from: DateComponents(year: y, month: m, day: d)) ?? .now
+    }
+
+    /// **The rule the whole fuzzy-date design rests on.** A model that
+    /// round-trips "Christmas 1995 or 1996" into "Dec 1995 – Jan 1997" has
+    /// destroyed the entry and made it slightly wrong in the same step.
+    @Test func typedWordsAreShownVerbatim() {
+        let memory = Memory(title: "Got a Sega Genesis",
+                            kind: "acquired",
+                            earliest: utc(1995, 12, 1),
+                            latest: utc(1997, 1, 31),
+                            precision: nil,
+                            whenText: "Christmas 1995 or 1996")
+        #expect(memory.dateText == "Christmas 1995 or 1996")
+        #expect(memory.isUncertain)
+    }
+
+    /// The refinement, not a contradiction: re-rendering is correct for
+    /// PRECISION, verbatim is correct for UNCERTAINTY. A date that was picked
+    /// rather than described has no words to preserve, so storing a copy would
+    /// only give the two a chance to disagree.
+    @Test func aPickedDateRendersFromItsPrecision() {
+        let yearOnly = Memory(title: "Beat it sometime that year",
+                              earliest: utc(2011, 1, 1),
+                              latest: utc(2011, 12, 31),
+                              precision: "year")
+        #expect(yearOnly.dateText == "2011")
+        #expect(!yearOnly.isUncertain)
+    }
+
+    /// Whitespace is not words — it must not beat the renderable interval.
+    @Test func blankWordsFallBackToThePrecision() {
+        let memory = Memory(title: "A memory",
+                            earliest: utc(2011, 1, 1),
+                            latest: utc(2011, 12, 31),
+                            precision: "year",
+                            whenText: "   ")
+        #expect(memory.dateText == "2011")
+    }
+
+    /// Narrowing the interval as evidence arrives — a photo's EXIF, say — must
+    /// never overwrite the sentence. "Christmas 1995, confirmed by photo" is
+    /// the right outcome; "December 25, 1995" is not.
+    @Test func narrowingTheIntervalLeavesTheWordsAlone() {
+        let memory = Memory(title: "Got a Sega Genesis",
+                            kind: "acquired",
+                            earliest: utc(1995, 12, 1),
+                            latest: utc(1997, 1, 31),
+                            precision: nil,
+                            whenText: "Christmas 1995 or 1996")
+        memory.earliest = utc(1995, 12, 25)
+        memory.latest = utc(1995, 12, 25)
+        #expect(memory.dateText == "Christmas 1995 or 1996")
+    }
+
+    /// A memory need not be about a game at all — "first LAN party" has
+    /// neither a game nor a console, and that is the point of the model.
+    @Test func aMemoryCanStandAloneWithNoGame() {
+        let context = makeContext()
+        let memory = Memory(title: "First LAN party", earliest: utc(2001, 6, 1),
+                            latest: utc(2001, 6, 30), precision: "month")
+        context.insert(memory)
+        #expect(memory.game == nil)
+        #expect(memory.dateText.contains("2001"))
+    }
+
+    /// **Deleting a game must not erase your memory of owning it.** The
+    /// relationship is nullify rather than cascade, and it exists at all
+    /// because CloudKit refuses to load a store with an inverse-less
+    /// relationship — Memory.game on its own took the container down.
+    @Test func deletingAGameLeavesTheMemoryStanding() throws {
+        let context = makeContext()
+        let game = Game(name: "Columns")
+        let memory = Memory(title: "Came with the Genesis", kind: "acquired")
+        context.insert(game)
+        context.insert(memory)
+        memory.game = game
+
+        context.delete(game)
+        try context.save()
+
+        let survivors = try context.fetch(FetchDescriptor<Memory>())
+        #expect(survivors.count == 1)
+        #expect(survivors.first?.title == "Came with the Genesis")
+        #expect(survivors.first?.game == nil)
+    }
+
+    /// Ownership is a chain of events, not a current value — which is what
+    /// lets it express owning the same thing twice with a gap in the middle,
+    /// the story Game.ownership's chip array cannot tell.
+    @Test func ownershipIsAChainOfDatedEvents() {
+        let context = makeContext()
+        for (kind, year) in [("acquired", 1995), ("sold", 2004), ("acquired", 2026)] {
+            let event = Memory(title: "\(kind) \(year)", kind: kind,
+                               earliest: utc(year, 1, 1), latest: utc(year, 12, 31),
+                               precision: "year")
+            context.insert(event)
+        }
+        let chain = (try? context.fetch(FetchDescriptor<Memory>()))?
+            .sorted { $0.earliest < $1.earliest } ?? []
+        #expect(chain.map(\.kind) == ["acquired", "sold", "acquired"])
+    }
+}

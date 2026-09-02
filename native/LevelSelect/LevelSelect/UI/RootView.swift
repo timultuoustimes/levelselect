@@ -34,7 +34,12 @@ struct RootView: View {
                 // is the whole distinction between these two tabs, and the
                 // glyphs now carry it.
                 Tab("Home", systemImage: "scroll.fill", value: LSTab.home) { HomeTab() }
-                Tab("Library", systemImage: "square.grid.2x2.fill", value: LSTab.library) { LibraryTab() }
+                // A shelf, not a grid. The grid named a LAYOUT — and Library
+                // has three of them — so the icon was advertising one setting
+                // as the tab's identity. Spines on a shelf are what a
+                // collection actually looks like, which is the same reason
+                // the systems shelf draws real console art.
+                Tab("Library", systemImage: "books.vertical.fill", value: LSTab.library) { LibraryTab() }
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
                 Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }

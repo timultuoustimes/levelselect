@@ -232,6 +232,19 @@ final class Game {
     /// restores a game with its pictures rather than holes.
     @Relationship(deleteRule: .cascade, inverse: \GameImage.game)
     var images: [GameImage]?
+    /// Memories that mention this game. Schema V5.
+    ///
+    /// **Nullify, not cascade** — and the difference is the whole point of the
+    /// model. "Traded this away in 2004" is a thing that happened to *you*;
+    /// removing the game from your library must not delete your memory of
+    /// owning it. A memory is allowed to have no game, so losing the link
+    /// leaves a valid record rather than a broken one.
+    ///
+    /// It exists at all because CloudKit refuses to load a store where any
+    /// relationship lacks an inverse — `Memory.game` on its own took the
+    /// container down at launch.
+    @Relationship(deleteRule: .nullify, inverse: \Memory.game)
+    var memories: [Memory]?
 
     init(
         id: UUID = UUID(),

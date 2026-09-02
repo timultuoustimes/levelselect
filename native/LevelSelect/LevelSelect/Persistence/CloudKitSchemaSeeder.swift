@@ -397,6 +397,32 @@ enum CloudKitSchemaSeeder {
         context.insert(smallImage)
         smallImage.game = game
 
+        // --- Memory (V5) ---
+        //
+        // Every field is written, including the ones a real memory usually
+        // leaves nil: CloudKit creates a field the first time it SEES a value,
+        // so a property never populated here has no column in Production and
+        // fails to sync forever after. `place`, `whenText` and `platform` are
+        // exactly the optional-in-practice fields that would be missed.
+        let memory = Memory(title: marker,
+                            kind: "acquired",
+                            earliest: now,
+                            latest: now,
+                            precision: "year",
+                            whenText: marker)
+        memory.userID = UUID()
+        memory.deletedAt = now
+        memory.legacyID = marker
+        memory.body = marker
+        memory.place = marker
+        memory.platform = marker
+        memory.companions = [Companion(name: marker, handle: marker)]
+        context.insert(memory)
+        memory.game = game
+        // The relationship itself needs seeding, not just the two models —
+        // `CD_GameImage.memory` is its own CloudKit field.
+        smallImage.memory = memory
+
         // --- GameCollection ---
         let collection = GameCollection(name: marker, isBundle: true, sortIndex: 1)
         collection.userID = UUID()
@@ -516,6 +542,7 @@ enum CloudKitSchemaSeeder {
         purgeAll(TrackerItemDetail.self) { $0.legacyID == marker }
         purgeAll(EarnedBadge.self) { $0.legacyID == marker }
         purgeAll(GameImage.self) { $0.legacyID == marker }
+        purgeAll(Memory.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(PlayerProfile.self) { $0.displayName == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }

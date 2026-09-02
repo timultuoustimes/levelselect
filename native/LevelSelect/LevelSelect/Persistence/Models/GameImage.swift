@@ -54,6 +54,16 @@ final class GameImage {
     var addedAt: Date = Date.now
     var game: Game?
 
+    /// The memory this picture belongs to, when it belongs to one. Schema V5.
+    ///
+    /// Reused rather than given its own model, which is Tim's call and the
+    /// cheap one: the ingest path, the export path and — the part that
+    /// actually matters — **the CloudKit asset fields are already deployed**,
+    /// so a photo of Christmas 1995 costs no new binary field. Build 32 lost a
+    /// full promote cycle to `externalStorage` retyping BYTES vs ASSET; not
+    /// doing that twice is worth more than a tidy model name.
+    var memory: Memory?
+
     init(id: UUID = UUID(), role: ArtworkRole = .gallery, data: Data? = nil) {
         self.id = id
         self.createdAt = .now
