@@ -295,7 +295,7 @@ struct LauncherSmallView: View {
                     .shadow(color: .black.opacity(0.45), radius: 8, y: 4)
                 Text(target.name)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
             .padding(2)
@@ -306,7 +306,7 @@ struct LauncherSmallView: View {
                 Spacer(minLength: 0)
                 Text(target.name)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(target.subtitle)
                     .font(.system(size: 10, weight: .medium))

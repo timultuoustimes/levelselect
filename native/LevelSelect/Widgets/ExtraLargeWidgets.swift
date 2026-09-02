@@ -45,7 +45,7 @@ struct CommandBoardView: View {
                     StatusPill(snapshot: s)
                     Text(s.gameName)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                     if let last = s.lastPlayedAt {
                         Text("Last played \(last.formatted(.relative(presentation: .named))) · \(lsPlaytime(s.playtimeSeconds))")
@@ -121,7 +121,7 @@ struct CommandBoardView: View {
                     Text(s.isPaused ? "Resume" : "Start Session")
                         .font(.system(size: 13, weight: .bold))
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 9)
                 .background(renderingMode == .fullColor ? LSWidget.accent : .white.opacity(0.24),
@@ -157,7 +157,7 @@ struct CommandBoardView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(lsHours(s.weeklyTotalSeconds))
                             .font(.system(size: 24, weight: .heavy))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         if s.gamesPlayedThisWeek > 0 {
                             Text("· \(s.gamesPlayedThisWeek) game\(s.gamesPlayedThisWeek == 1 ? "" : "s")")
                                 .font(.system(size: 11, weight: .medium))
@@ -175,7 +175,7 @@ struct CommandBoardView: View {
                             .overlay {
                                 Text("\(Int((Double(s.completionDone) / Double(max(1, s.completionTotal)) * 100).rounded()))%")
                                     .font(.system(size: 15, weight: .bold).monospacedDigit())
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(.primary)
                             }
                         Text(s.gameName)
                             .font(.system(size: 9, weight: .medium))
@@ -315,7 +315,7 @@ struct WhereYouStandView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(game.name)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 if let done = game.done, let total = game.total, total > 0 {
                     HStack(spacing: 8) {

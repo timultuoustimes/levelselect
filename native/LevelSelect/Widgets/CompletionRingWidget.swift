@@ -15,7 +15,7 @@ struct CompletionRingSmall: View {
                     VStack(spacing: 0) {
                         Text("\(Int((progress * 100).rounded()))%")
                             .font(.system(size: 24, weight: .heavy).monospacedDigit())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Text("\(snapshot.completionDone)/\(snapshot.completionTotal)")
                             .font(.system(size: 11, weight: .medium).monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -24,7 +24,7 @@ struct CompletionRingSmall: View {
                 .frame(width: 88, height: 88)
                 Text(snapshot.gameName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

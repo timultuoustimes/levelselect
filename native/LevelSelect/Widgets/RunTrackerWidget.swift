@@ -61,7 +61,7 @@ struct RunTrackerView: View {
             Spacer(minLength: 6)
             Text(run.name)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             HStack(spacing: 8) {
                 record(run)
@@ -87,7 +87,7 @@ struct RunTrackerView: View {
                 if run.inProgress { inRunPill } else { labelPill("RUNS", color: LSWidget.torch) }
                 Text(run.name)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text("\(run.total) run\(run.total == 1 ? "" : "s") logged")
                     .font(.system(size: 11))
@@ -103,7 +103,7 @@ struct RunTrackerView: View {
                 VStack(spacing: 0) {
                     Text("\(Int((run.winRate * 100).rounded()))%")
                         .font(.system(size: 17, weight: .heavy).monospacedDigit())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                     Text("win")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundStyle(.secondary)

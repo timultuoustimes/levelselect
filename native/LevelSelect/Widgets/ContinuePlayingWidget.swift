@@ -166,7 +166,7 @@ struct ContinuePlayingSmall: View {
                 Spacer(minLength: 0)
                 Text(snapshot.gameName)
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(subtitle(snapshot))
                     .font(.system(size: 11, weight: .medium).monospacedDigit())
@@ -207,7 +207,7 @@ struct ContinuePlayingSmall: View {
 
     private func statusColor(_ s: WidgetSnapshot) -> Color {
         if s.isPlaying { return LSWidget.green }
-        return s.playtimeSeconds > 0 ? .white.opacity(0.6) : LSWidget.torch
+        return s.playtimeSeconds > 0 ? Color.secondary : LSWidget.torch
     }
 }
 
@@ -259,7 +259,7 @@ struct ContinuePlayingMedium: View {
                     StatusPill(snapshot: snapshot)
                     Text(snapshot.gameName)
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
                         .padding(.top, 4)
                     Text(metaLine(snapshot))

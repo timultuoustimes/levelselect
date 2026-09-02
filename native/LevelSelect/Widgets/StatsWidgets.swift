@@ -24,7 +24,7 @@ struct HeatmapWidgetView: View {
                     .foregroundStyle(.secondary)
                 Text("\(streak) day\(streak == 1 ? "" : "s")")
                     .font(.system(size: 11, weight: .bold).monospacedDigit())
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                 Spacer()
                 if let total = snapshot?.weeklyTotalSeconds, total > 0 {
                     Text("\(lsHours(total)) this week")
@@ -59,7 +59,7 @@ struct HeatmapWidgetView: View {
 
     private func heat(_ minutes: Double) -> Color {
         switch minutes {
-        case ..<1:   .white.opacity(0.07)
+        case ..<1:   LSTheme.cardFill
         case ..<20:  LSWidget.accent.opacity(0.30)
         case ..<60:  LSWidget.accent.opacity(0.55)
         case ..<120: LSWidget.accent.opacity(0.80)
@@ -97,7 +97,7 @@ struct FinishedShareView: View {
                     VStack(spacing: 0) {
                         Text("\(Int((Double(done) / Double(total) * 100).rounded()))%")
                             .font(.system(size: 17, weight: .heavy).monospacedDigit())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Text("\(done)/\(total)")
                             .font(.system(size: 9, weight: .semibold).monospacedDigit())
                             .foregroundStyle(.secondary)

@@ -75,7 +75,7 @@ struct ReleasesView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     Text(game.name)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .lineLimit(3)
                         .minimumScaleFactor(0.75)
                     Spacer(minLength: 0)

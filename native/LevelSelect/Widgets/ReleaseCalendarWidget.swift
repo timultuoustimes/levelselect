@@ -79,7 +79,7 @@ struct ReleaseCalendarWidgetView: View {
 
                             Text(game.name)
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
 
                             Spacer(minLength: 4)

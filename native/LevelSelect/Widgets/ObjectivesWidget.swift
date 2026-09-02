@@ -50,7 +50,7 @@ struct ObjectivesLargeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(s.gameName)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     ProgressView(value: Double(s.completionDone), total: Double(max(1, s.completionTotal)))
@@ -70,11 +70,11 @@ struct ObjectivesLargeView: View {
             HStack(spacing: 10) {
                 Image(systemName: item.done ? "checkmark.square.fill" : "square")
                     .font(.system(size: 17, weight: .medium))
-                    .foregroundStyle(item.done ? LSWidget.green : .white.opacity(0.45))
+                    .foregroundStyle(item.done ? AnyShapeStyle(LSWidget.green) : AnyShapeStyle(.tertiary))
                 Text(item.name)
                     .font(.system(size: 13))
-                    .foregroundStyle(item.done ? .white.opacity(0.45) : .white.opacity(0.92))
-                    .strikethrough(item.done, color: .white.opacity(0.4))
+                    .foregroundStyle(item.done ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+                    .strikethrough(item.done, color: .secondary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }

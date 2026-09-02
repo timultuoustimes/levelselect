@@ -29,7 +29,8 @@ struct RingView: View {
     let progress: Double        // 0…1
     var lineWidth: CGFloat = 8
     var tint: Color = LSWidget.torch
-    var track: Color = Color.white.opacity(0.14)
+    /// The unfilled part of the ring — a surface, so it follows the theme.
+    var track: Color = LSTheme.cardFill
 
     var body: some View {
         ZStack {
