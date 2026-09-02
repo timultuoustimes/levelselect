@@ -29,7 +29,10 @@ struct ColorWheel: View {
             // corners do not touch — a corner that overlaps the ring steals
             // touches meant for the hue.
             let inner = side - ring * 2
-            let square = inner * 0.72
+            // 0.68 rather than the geometric fit: the knob is drawn centred on
+            // the square's edge, so it needs room to sit outside without
+            // landing on the ring and stealing its touches.
+            let square = inner * 0.68
 
             ZStack {
                 hueRing(side: side, thickness: ring)
@@ -63,9 +66,12 @@ struct ColorWheel: View {
                         let dx = value.location.x - center.x
                         let dy = value.location.y - center.y
                         guard dx != 0 || dy != 0 else { return }
-                        // atan2 gives −π…π from the positive x-axis; the ring
-                        // is drawn from the top, hence the quarter turn.
-                        var angle = atan2(dy, dx) + .pi / 2
+                        // **No quarter turn.** `AngularGradient` starts at 3
+                        // o'clock, not 12 — correcting for a top start put the
+                        // knob 90° from its own colour, orange sitting in the
+                        // magenta. atan2 measures from the same positive
+                        // x-axis, so the two already agree.
+                        var angle = atan2(dy, dx)
                         if angle < 0 { angle += 2 * .pi }
                         hue = angle / (2 * .pi)
                     })
@@ -73,7 +79,8 @@ struct ColorWheel: View {
 
     private func ringKnob(side: CGFloat, thickness: CGFloat) -> some View {
         let radius = (side - thickness) / 2
-        let angle = hue * 2 * .pi - .pi / 2
+        // Matches the gradient's 3 o'clock origin — see the drag handler.
+        let angle = hue * 2 * .pi
         return Circle()
             .fill(Color(hue: hue, saturation: 1, brightness: 1))
             .overlay(Circle().strokeBorder(.white, lineWidth: 3))

@@ -98,8 +98,9 @@ struct ColorEditor: View {
                     .padding(.bottom, 28)
 
                     ColorWheel(hue: $hue, saturation: $saturation, brightness: $brightness)
-                        .padding(.horizontal, 8)
-                        .padding(.bottom, 28)
+                        .padding(.horizontal, 12)
+                        // Clears the page dots, which draw over the content.
+                        .padding(.bottom, 36)
                 }
                 #if !os(macOS)
                 .tabViewStyle(.page)

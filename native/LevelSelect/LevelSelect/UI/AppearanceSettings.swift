@@ -60,6 +60,22 @@ struct AppearanceSettingsSection: View {
 
     private var personalization: some View {
         Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Appearance")
+                Picker("Appearance", selection: Binding(
+                    get: { LSAppearance(raw: settings?.appearanceRaw) },
+                    set: { pick in
+                        let s = ensureSettings()
+                        s.appearanceRaw = pick.rawValue
+                        save(s)
+                    })) {
+                    ForEach(LSAppearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            .padding(.vertical, 2)
+
             colorRow("Accent color", swatch: LSTheme.accent,
                      isCustom: settings?.accentHex != nil) {
                 ColorEditor(
@@ -172,17 +188,6 @@ struct AppearanceSettingsSection: View {
             .onChange(of: starNamesExpanded) { _, open in
                 if open { loadStarDrafts() } else { commitStarNames() }
             }
-
-            Picker("Appearance", selection: Binding(
-                get: { LSAppearance(raw: settings?.appearanceRaw) },
-                set: { pick in
-                    let s = ensureSettings()
-                    s.appearanceRaw = pick.rawValue
-                    save(s)
-                })) {
-                ForEach(LSAppearance.allCases) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
 
             // The app says what each status means; this is where you disagree.
             // One person's "Abandoned" is another's "played it to bits", and
