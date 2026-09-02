@@ -673,3 +673,72 @@ struct Build36OldFavoriteTests {
         #expect(GameStatus.ongoing.blurb != GameStatus.oldFavorite.blurb)
     }
 }
+
+/// Build 36 — beaten is a play event, completed is a shelf, and replays.
+@MainActor
+struct Build36BeatenVsCompletedTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func game(_ context: ModelContext, _ name: String,
+                      _ status: GameStatus) -> (Game, Playthrough) {
+        let game = Game(name: name, status: status)
+        let playthrough = Playthrough()
+        playthrough.game = game
+        context.insert(game); context.insert(playthrough)
+        return (game, playthrough)
+    }
+
+    /// **Replaying an old favorite must not overwrite what you said it was.**
+    /// Tim: "a beaten game might not be completed if I want to go back and do
+    /// more or play it again." Old Favorite makes no claim about finishing, so
+    /// a finish has nothing there to correct.
+    @Test func beatingAnOldFavoriteAgainLeavesItAnOldFavorite() {
+        let context = makeContext()
+        let (sonic, playthrough) = game(context, "Sonic the Hedgehog 2", .oldFavorite)
+        Repository(context).addCompletion(to: sonic, label: .cleared,
+                                          playthrough: playthrough)
+        #expect(sonic.status == .oldFavorite)
+        #expect(sonic.isFinished)
+    }
+
+    /// The same exemption `ongoing` already had, unchanged.
+    @Test func beatingAnAlwaysAroundGameLeavesItAlone() {
+        let context = makeContext()
+        let (game, playthrough) = game(context, "Minecraft", .ongoing)
+        Repository(context).addCompletion(to: game, label: .cleared,
+                                          playthrough: playthrough)
+        #expect(game.status == .ongoing)
+    }
+
+    /// The ordinary case still works: beat what you were playing and it moves.
+    @Test func beatingSomethingYouWerePlayingMovesItToCompleted() {
+        let context = makeContext()
+        let (game, playthrough) = game(context, "Hollow Knight", .playing)
+        Repository(context).addCompletion(to: game, label: .cleared,
+                                          playthrough: playthrough)
+        #expect(game.status == .completed)
+    }
+
+    /// **A game keeps every beating it ever got.** Beaten is append-only, so a
+    /// replay adds to the record rather than replacing it — the first time
+    /// stays true no matter how many times you go back.
+    @Test func aReplayAddsAFinishRatherThanReplacingOne() {
+        let context = makeContext()
+        let (sonic, first) = game(context, "Sonic the Hedgehog 2", .oldFavorite)
+        let repo = Repository(context)
+        let long_ago = Date(timeIntervalSince1970: 757_382_400)   // 1994
+        repo.addCompletion(to: sonic, label: .cleared, date: long_ago, playthrough: first)
+
+        let replay = Playthrough()
+        replay.game = sonic
+        context.insert(replay)
+        repo.addCompletion(to: sonic, label: .cleared, playthrough: replay)
+
+        let finishes = (sonic.completionEvents ?? []).filter { $0.deletedAt == nil }
+        #expect(finishes.count == 2)
+        #expect(finishes.contains { $0.date == long_ago }, "The first time has to survive the second.")
+    }
+}

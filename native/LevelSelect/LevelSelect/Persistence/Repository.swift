@@ -2127,11 +2127,21 @@ struct Repository {
         event.platform = platform
         event.notes = notes
         event.companions = playedWith
-        // Any finish-shaped label moves the game to Completed — but never
-        // back: a historical "beat it in 2011" on a game you're replaying
-        // shouldn't yank it off the Playing shelf.
+        // Any finish-shaped label moves the game to Completed — except off
+        // the two statuses that are not on the finishing axis at all.
+        //
+        // Tim's distinction, and the model already had it: **beaten is a play
+        // event, completed is a shelf.** "I got to the ending" is something
+        // that happened, recorded here and kept forever; "I got to the ending
+        // and I'm done with it" is where the game sits now. A game can be
+        // beaten without being done — that is the entire idea of Old Favorite,
+        // and replaying Sonic 2 must not drag it onto the Completed shelf and
+        // overwrite what he said it was.
+        //
+        // `ongoing` was already exempt for the same reason. Neither status
+        // claims anything about finishing, so a finish has nothing to correct.
         if [.cleared, .completed, .hundredPercent].contains(label),
-           game.status != .completed, game.status != .ongoing {
+           ![.completed, .ongoing, .oldFavorite].contains(game.status) {
             game.status = .completed
         }
         touch(game, at: .now)
