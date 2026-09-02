@@ -81,12 +81,27 @@ enum LSTheme {
     }
 
     /// Hero card gradient (Continue Playing).
-    static var heroGradient: LinearGradient {
-        LinearGradient(
+    static var heroGradient: LinearGradient { hero(tintedBy: nil) }
+
+    /// The hero, wearing the same colour the ground does.
+    ///
+    /// It is the ground's own hue lifted off it — brighter than the ground in
+    /// the dark theme, deeper in the light one, because "raised" points in
+    /// opposite directions depending on which way the ground goes. Leaving it
+    /// fixed while the ground moved made the most prominent card on Home the
+    /// one thing that ignored your colour.
+    static func hero(tintedBy tint: Color?) -> LinearGradient {
+        let hue = tint?.lsHueSaturation
+        return LinearGradient(
             colors: [
-                .lsDynamic(light: purple.opacity(0.20), dark: purpleDeep.opacity(0.85)),
-                .lsDynamic(light: purple.opacity(0.08),
-                           dark:  Color(red: 0.12, green: 0.08, blue: 0.22)),
+                .lsDynamic(light: shade(hue, brightness: 0.93, saturation: 0.20,
+                                        fallback: purple.opacity(0.20)),
+                           dark:  shade(hue, brightness: 0.24, saturation: 0.55,
+                                        fallback: purpleDeep.opacity(0.85))),
+                .lsDynamic(light: shade(hue, brightness: 0.89, saturation: 0.26,
+                                        fallback: purple.opacity(0.08)),
+                           dark:  shade(hue, brightness: 0.15, saturation: 0.60,
+                                        fallback: Color(red: 0.12, green: 0.08, blue: 0.22))),
             ],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
