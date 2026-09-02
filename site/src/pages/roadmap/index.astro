@@ -2,6 +2,16 @@
 import Base from '../../layouts/Base.astro';
 
 const shipped = [
+  { t: 'A game you are waiting for tells you when', build: 35,
+    d: 'A countdown on the card, two widgets, a release calendar, and a reminder the morning before.' },
+  { t: 'The release date for the platform you picked', build: 35,
+    d: 'Out on PC and months away on Switch 2 is two true answers, and you get yours.' },
+  { t: 'Stats says what it is', build: 35,
+    d: 'Your history in three questions — Time, Finishes, Library — with the totals standing above them.' },
+  { t: 'Enough to decide when adding a game', build: 35,
+    d: 'The trailer, the screenshots, the description, and the date your platform actually gets.' },
+  { t: 'Your itch.io library', build: 35,
+    d: 'Connect the account and the games you bought or claimed come in, with their art.' },
   { t: 'Library and Wishlist, with an identity of their own', build: 34,
     d: 'Status, system and ownership all on screen, and a wishlist that knows what is out.' },
   { t: 'Every platform a game came out on', build: 34,
@@ -26,7 +36,6 @@ const horizons = [
       { t: 'Settling the beta', d: 'Making the things people use every day dependable before adding more.' },
       { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
       { t: 'Mac polish', d: "Underway. The Mac app has the new design and reachable settings now; the details still lag the iPhone." },
-      { t: 'Stats', d: "Home, the game page, Library and Wishlist all have an identity of their own now. Stats is the last page still waiting for the same treatment." },
     ],
   },
   {
@@ -39,8 +48,6 @@ const horizons = [
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
       { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
       { t: 'A notebook, not just a tracker', d: 'Somewhere to write about a game and read it back later, in the order it happened.' },
-      { t: 'itch.io games', d: "Tracked properly, including the many that have no IGDB entry at all — which is the case an IGDB-first app handles worst." },
-      { t: 'More to go on when adding a game', d: 'A trailer, screenshots and a description, so you can tell whether it is the right game — or worth adding at all — without already knowing it.' },
     ],
   },
   {
@@ -72,7 +79,7 @@ const notPlanned = [
 <main class="wrap">
   <article class="doc doc--wide">
     <h1>Roadmap</h1>
-    <p class="stamp">Last reviewed 1 September 2026 &middot; a direction, not a set of promises</p>
+    <p class="stamp">Last reviewed 2 September 2026 &middot; a direction, not a set of promises</p>
 
     <div class="board">
       {/* First, because the board reads left to right from done to maybe, and

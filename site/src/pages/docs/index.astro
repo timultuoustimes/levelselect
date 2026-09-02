@@ -60,6 +60,8 @@ const sections = [
     a: 'Settings → Game page layout. Four arrangements of the same page.' },
   { id: 'colors',            q: 'Can I change the colors?',
     a: 'Settings → Accent color, or any status color. Swatches, sliders, or a hex field.' },
+  { id: 'itch',              q: 'Can I bring in my itch.io games?',
+    a: 'Settings → itch.io → Connect. Games you bought or claimed arrive with their art.' },
   { id: 'paste',             q: 'I have a checklist from a wiki',
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
@@ -72,6 +74,8 @@ const sections = [
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently.' },
+  { id: 'releases',          q: 'When does the game I am waiting for come out?',
+    a: 'The wishlist counts down, on the date for the platform you picked — not somebody else\'s.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
     a: 'Home Screen, Lock Screen, and extra-large boards on iPad. Long-press to aim one.' },
   { id: 'shortcuts',         q: 'Can I use Siri for this?',
@@ -93,9 +97,10 @@ const sections = [
  * anyone who would rather scan it.
  */
 const moments = [
-  { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors'] },
+  { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors', 'itch'] },
   { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements'] },
   { t: 'My playtime looks wrong',         ids: ['sessions'] },
+  { t: 'I am waiting for a game',         ids: ['releases'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
   { t: 'I just finished a game',          ids: ['beaten', 'stats'] },
   { t: 'I want my data out',              ids: ['data'] },
@@ -127,7 +132,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
 <main class="wrap doc-page">
   <article class="doc">
     <h1>Help</h1>
-    <p class="stamp">Last updated 1 September 2026</p>
+    <p class="stamp">Last updated 2 September 2026</p>
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
@@ -213,6 +218,22 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
     <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
     <p>Kept colors live on the device. Your accent and status colors sync.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="itch" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'itch')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'itch')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Settings &rarr; itch.io &rarr; Connect.</strong> itch.io's own sign-in page opens, you approve LevelSelect there, and you come back connected. The app never sees your password, and there is no key to find or paste.</p>
+    <p>What arrives is <strong>the games itch records as yours</strong> &mdash; anything you bought or claimed &mdash; with their cover art, ready to sit in your library like anything else. It only ever reads.</p>
+
+    <h3>Why a game you own might not appear</h3>
+    <p>itch attaches a game to your account when it is <em>bought or claimed</em>. The <em>&ldquo;No thanks, just take me to the downloads&rdquo;</em> link records nothing at all &mdash; no purchase, no key, no email &mdash; and a game you only ever play in the browser frequently records nothing either. Those games are invisible to any app, ours included, and have to be added by hand. That is a better path than it used to be: a game IGDB has never heard of now gets its artwork from SteamGridDB by name instead of staying a grey rectangle.</p>
+    <p>Collections would have covered most of the gap, and they cannot. itch's API will tell an app that a collection exists and how many games are in it, then refuse to say <em>which</em> &mdash; so LevelSelect does not ask for that permission at all. Approving something that can do nothing is worse than not asking.</p>
+    <p><strong>Your token stays on your device</strong>, in the Keychain, and talks to itch.io directly. It never passes through our servers, and disconnecting removes it.</p>
       </div>
     </details>
 
@@ -319,6 +340,26 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="releases" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'releases')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'releases')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A wishlist card counts down while the wait is short &mdash; <em>Today</em>, <em>Tomorrow</em>, <em>in 6 days</em> &mdash; and shows the date itself once it is further off. The changeover is a fortnight, because that is exactly where the countdown stops speaking in days: &ldquo;in 2 days&rdquo; is a fact about your week, and &ldquo;in 6 weeks&rdquo; tells you less than &ldquo;Oct 16&rdquo; does.</p>
+
+    <h3>The date is yours, not the first one listed</h3>
+    <p>A game can be out on PC and months away on Switch 2. <strong>The date you see is the one for the platform you picked</strong> when you added it &mdash; change the platform and the date follows immediately. The game page lists everything a game is still coming to, each with its own date and countdown. If your platform has no announced day, it says so rather than borrowing a date from somebody else's copy.</p>
+    <p>Dates are shown only as precisely as they were announced. A game known only as &ldquo;2027&rdquo; says 2027, and never invents a day to count down to.</p>
+
+    <h3>The calendar</h3>
+    <p><strong>Wishlist &rarr; Release calendar.</strong> Month by month, and it keeps the games with <em>no</em> announced date in their own group at the end &mdash; a calendar that quietly dropped half your wishlist would be lying about what you are waiting for.</p>
+
+    <h3>Being told</h3>
+    <p><strong>Settings &rarr; Notifications &rarr; &ldquo;Tell me when a game arrives.&rdquo;</strong> Off until you ask for it, then on the day, or a day, three days, or a week before &mdash; always at 9am. A release is a calendar date rather than a moment, so firing <em>at</em> it would wake you in the small hours for a game that is not out where you are yet. <strong>Break through silent mode and Focus</strong> is one switch covering these and the still-playing reminder.</p>
+      </div>
+    </details>
+
     <details class="qa" id="widgets" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'widgets')!.q}</span>
@@ -328,6 +369,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>Widgets live on the Home Screen and the Lock Screen, and at extra-large sizes on iPad:</p>
     <ul>
       <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system, carrying that section's own cover art at medium and large sizes &mdash; point one at <em>Now Playing</em> and you have a shelf of what you are playing, a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
+      <li><strong>Releases:</strong> <em>Coming Soon</em> is your wishlist covers with the wait printed under each; <em>Release Calendar</em> is the dates themselves &mdash; one game at small, four at medium, and at large a real month grid with covers standing where the day numbers would be.</li>
       <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
       <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
       <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
@@ -369,6 +411,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'stats')!.a}</span>
       </summary>
       <div class="qa__body">
+    <p>Stats is your history in <strong>three questions</strong>, and the cards are grouped by which one they answer: <strong>Time</strong> (recent play, by month, your streak, most played), <strong>Finishes</strong> (what you completed, and your RetroAchievements masteries), and <strong>Library</strong> (ratings, status, system, genres, series, tags, release year). <strong>Overview</strong> sits above all three, because games, hours, sessions and percent-finished are the total the groups break down rather than one of them. The group a card belongs to is fixed; the order <em>inside</em> a group is still yours.</p>
     <p>Every card that shows a breakdown can be turned over. Tap the chart icon in its corner and the card flips between bars and a donut &mdash; Library, Ratings, By System, Genres and Tags. Your choice is remembered per card, and it is kept on the device rather than synced, like the order of the cards themselves.</p>
     <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
     <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>
