@@ -19,7 +19,7 @@ struct ItchSettings: View {
     @State private var username = ItchCredentials.current?.username
     @State private var working = false
     @State private var message: String?
-    @State private var lastImport: (added: Int, already: Int)?
+    @State private var lastImport: Report?
 
     var body: some View {
         Section {
@@ -38,7 +38,7 @@ struct ItchSettings: View {
                     if working {
                         HStack { ProgressView().controlSize(.small); Text("Reading your itch.io library…") }
                     } else {
-                        Label("Import owned games", systemImage: "square.and.arrow.down")
+                        Label("Import my itch.io games", systemImage: "square.and.arrow.down")
                     }
                 }
                 .disabled(working)
@@ -70,14 +70,14 @@ struct ItchSettings: View {
                 Text(message).font(.caption).foregroundStyle(.secondary)
             }
             if let lastImport {
-                Text("^[\(lastImport.added) game](inflect: true) added. \(lastImport.already) already in your library.")
+                Text(.init(lastImport.summary))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } header: {
             Text("itch.io")
         } footer: {
-            Text("Reads the games you have bought or claimed, so the ones IGDB has never heard of can still be tracked. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
+            Text("Reads the games you have bought or claimed and the ones in your collections, so games IGDB has never heard of can still be tracked. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
         }
     }
 
@@ -125,10 +125,17 @@ struct ItchSettings: View {
         defer { working = false }
         do {
             let owned = try await ItchService.ownedGames()
+            // Collections are a separate question from ownership, and for a
+            // lot of itch users they are the only one with an answer.
+            let collected = try await ItchService.collectionGames()
+
+            var byID: [Int: ItchService.OwnedGame] = [:]
+            for game in owned + collected { byID[game.id] = game }
+
             let existing = Set(games.map { $0.name.lowercased() })
             let repo = Repository(context)
             var added = 0
-            for game in owned where !existing.contains(game.name.lowercased()) {
+            for game in byID.values where !existing.contains(game.name.lowercased()) {
                 let new = repo.addGame(name: game.name, status: .backlog)
                 repo.edit(new) {
                     $0.platforms = ["itch.io"]
@@ -137,10 +144,36 @@ struct ItchSettings: View {
                 }
                 added += 1
             }
-            lastImport = (added: added, already: owned.count - added)
+            lastImport = Report(added: added,
+                                already: byID.count - added,
+                                owned: owned.count,
+                                collected: collected.count)
             message = nil
         } catch {
             message = (error as? LocalizedError)?.errorDescription ?? "Couldn't read your itch.io library."
         }
+    }
+}
+
+/// What the import actually saw, per source.
+///
+/// The first version reported only "0 games added", which is the least useful
+/// true sentence available — Tim: "nothing comes through into the app... I'm
+/// not sure what it's supposed to be from." Owned keys and collections are
+/// different things on itch and a library can be entirely one of them, so the
+/// report names both and an empty result says which was empty.
+struct Report {
+    var added: Int
+    var already: Int
+    var owned: Int
+    var collected: Int
+
+    var summary: String {
+        guard owned + collected > 0 else {
+            return "itch.io returned nothing. Games show up here once you have bought or claimed them, "
+                 + "or added them to a collection — downloading a free game without claiming it leaves no record on your account."
+        }
+        return "^[\(added) game](inflect: true) added, \(already) already in your library. "
+             + "itch.io had \(owned) owned and \(collected) in collections."
     }
 }

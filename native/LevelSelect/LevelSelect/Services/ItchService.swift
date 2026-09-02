@@ -39,11 +39,16 @@ enum ItchService {
 
     /// Only what is needed to read a library, and nothing else.
     ///
-    /// `profile:owned` grants `profile/owned-keys`; `profile:me` is only so a
-    /// connected account can say whose it is. Deliberately NOT `profile`,
-    /// which would take collections and developed games as well — scopes are
-    /// the one part of an OAuth request a user actually reads.
-    private static let scopes = "profile:me profile:owned"
+    /// `profile:owned` grants `profile/owned-keys` — games bought or claimed.
+    /// `profile:collections` is the other half, and it turned out to be the
+    /// half that matters: a game added to a collection has no download key,
+    /// so a library that is mostly collections comes back from owned-keys
+    /// completely empty. Tim's did.
+    ///
+    /// `profile:me` is only so a connected account can say whose it is. Still
+    /// not plain `profile`, which would also take the games someone develops
+    /// — scopes are the one part of an OAuth prompt a user actually reads.
+    private static let scopes = "profile:me profile:owned profile:collections"
 
     static func authorizationURL(state: String) -> URL? {
         guard let clientID else { return nil }
@@ -118,6 +123,55 @@ enum ItchService {
             page += 1
         }
         return games
+    }
+
+    /// The games in the user's collections.
+    ///
+    /// Not in the public API reference — `profile:collections` appears in the
+    /// OAuth scope list with no documented response — so these paths are the
+    /// ones itch's own client uses. Failures are treated as "no collections"
+    /// rather than as errors, so an endpoint that moves degrades to owned-keys
+    /// alone instead of breaking the import.
+    static func collectionGames() async throws -> [OwnedGame] {
+        guard let token = ItchCredentials.current?.token else { throw ItchError.notConnected }
+        guard let url = URL(string: "https://api.itch.io/profile/collections") else { return [] }
+        guard let json = await get(url, token: token),
+              let collections = json["collections"] as? [[String: Any]] else { return [] }
+
+        var games: [OwnedGame] = []
+        var seen = Set<Int>()
+        for collection in collections {
+            guard let id = collection["id"] as? Int else { continue }
+            var page = 1
+            while page <= 20 {
+                guard let url = URL(string:
+                    "https://api.itch.io/collections/\(id)/collection-games?page=\(page)"),
+                      let json = await get(url, token: token),
+                      let rows = json["collection_games"] as? [[String: Any]],
+                      !rows.isEmpty
+                else { break }
+                for row in rows {
+                    guard let game = row["game"] as? [String: Any],
+                          let gameID = game["id"] as? Int,
+                          let title = game["title"] as? String,
+                          seen.insert(gameID).inserted else { continue }
+                    games.append(OwnedGame(id: gameID, name: title,
+                                           coverURL: game["cover_url"] as? String,
+                                           url: game["url"] as? String))
+                }
+                page += 1
+            }
+        }
+        return games
+    }
+
+    /// A GET that returns nil rather than throwing, for the endpoints that
+    /// are not in the public reference and may not answer.
+    private static func get(_ url: URL, token: String) async -> [String: Any]? {
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
     }
 
     private static func ownedKeys(token: String, page: Int) async throws -> [OwnedGame] {
