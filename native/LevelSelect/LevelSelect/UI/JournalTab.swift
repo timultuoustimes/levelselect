@@ -82,6 +82,9 @@ struct JournalTimeline: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
     private var games: [Game]
 
+    /// The session being written about, if any.
+    @State private var editing: Session?
+
     var body: some View {
         // Built once per pass and held in a `let`, the same shape StatsCards
         // uses — as a computed property it would be rebuilt on every reference.
@@ -93,7 +96,7 @@ struct JournalTimeline: View {
                     VStack(alignment: .leading, spacing: 8) {
                         JournalPeriodHeader(period: period)
                         ForEach(period.entries) { entry in
-                            JournalRow(entry: entry)
+                            JournalRow(entry: entry, editing: $editing)
                         }
                     }
                 }
@@ -101,6 +104,10 @@ struct JournalTimeline: View {
             .padding()
         }
         .scrollIndicators(.hidden)
+        // The existing editor, not a second one — it already writes notes,
+        // and it knows that a paused session's editable end is not its stored
+        // end, which a note-only sheet would have had to learn again.
+        .sheet(item: $editing) { EditSessionSheet(session: $0) }
         .overlay {
             if periods.isEmpty {
                 ContentUnavailableView(
@@ -135,6 +142,7 @@ private struct JournalPeriodHeader: View {
 
 private struct JournalRow: View {
     let entry: JournalEntry
+    @Binding var editing: Session?
 
     var body: some View {
         NavigationLink(value: entry.game) {
@@ -193,5 +201,18 @@ private struct JournalRow: View {
             .lsCard()
         }
         .buttonStyle(.plain)
+        // Tapping still goes to the game — that is what a row about a game
+        // should do. Writing is the long-press, which is where this app
+        // already puts a row's secondary verbs.
+        .contextMenu {
+            if let session = entry.session {
+                Button {
+                    editing = session
+                } label: {
+                    Label(entry.note == nil ? "Add a note" : "Edit note",
+                          systemImage: "square.and.pencil")
+                }
+            }
+        }
     }
 }

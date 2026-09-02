@@ -48,6 +48,11 @@ struct JournalEntry: Identifiable {
     /// Your words. The reason the whole surface exists.
     let note: String?
     let companions: [Companion]
+
+    /// The record behind a session entry, so the timeline can hand it to the
+    /// editor that already exists. Nil for finishes and runs, which are
+    /// edited from the game page where their own editors live.
+    let session: Session?
 }
 
 /// A heading and the entries under it.
@@ -145,7 +150,8 @@ enum JournalBuilder {
                         detail: nil,
                         duration: session.elapsed(),
                         note: session.notes?.journalText,
-                        companions: session.companions))
+                        companions: session.companions,
+                        session: session))
                 }
                 for run in (playthrough.runs ?? []) where run.deletedAt == nil {
                     guard run.outcome != .inProgress else { continue }
@@ -159,7 +165,8 @@ enum JournalBuilder {
                         detail: run.outcome.journalText,
                         duration: nil,
                         note: run.notes?.journalText,
-                        companions: run.companions))
+                        companions: run.companions,
+                        session: nil))
                 }
             }
             for finish in (game.completionEvents ?? []) where finish.deletedAt == nil {
@@ -173,7 +180,8 @@ enum JournalBuilder {
                     detail: finish.journalLabel,
                     duration: nil,
                     note: finish.notes?.journalText,
-                    companions: finish.companions))
+                    companions: finish.companions,
+                    session: nil))
             }
         }
 
