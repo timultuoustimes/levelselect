@@ -81,14 +81,20 @@ struct JournalTab: View {
 struct JournalTimeline: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
     private var games: [Game]
+    /// Memories with no game — "first LAN party" — are reachable no other way.
+    @Query(filter: #Predicate<Memory> { $0.deletedAt == nil && $0.game == nil })
+    private var standaloneMemories: [Memory]
 
     /// The session being written about, if any.
     @State private var editing: Session?
+    /// The memory being written or edited. `.some(nil)` means a new one, which
+    /// is why this is a double optional rather than a Bool beside a Memory?.
+    @State private var editingMemory: Memory??
 
     var body: some View {
         // Built once per pass and held in a `let`, the same shape StatsCards
         // uses — as a computed property it would be rebuilt on every reference.
-        let periods = JournalBuilder.periods(from: games)
+        let periods = JournalBuilder.periods(from: games, standalone: standaloneMemories)
 
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
@@ -96,7 +102,8 @@ struct JournalTimeline: View {
                     VStack(alignment: .leading, spacing: 8) {
                         JournalPeriodHeader(period: period)
                         ForEach(period.entries) { entry in
-                            JournalRow(entry: entry, editing: $editing)
+                            JournalRow(entry: entry, editing: $editing,
+                                       editingMemory: $editingMemory)
                         }
                     }
                 }
@@ -108,6 +115,18 @@ struct JournalTimeline: View {
         // and it knows that a paused session's editable end is not its stored
         // end, which a note-only sheet would have had to learn again.
         .sheet(item: $editing) { EditSessionSheet(session: $0) }
+        .sheet(isPresented: Binding(
+            get: { editingMemory != nil },
+            set: { if !$0 { editingMemory = nil } })) {
+            MemorySheet(existing: editingMemory ?? nil)
+        }
+        .toolbar {
+            Button {
+                editingMemory = .some(nil)
+            } label: {
+                Label("Add a memory", systemImage: "plus")
+            }
+        }
         .overlay {
             if periods.isEmpty {
                 ContentUnavailableView(
@@ -143,6 +162,7 @@ private struct JournalPeriodHeader: View {
 private struct JournalRow: View {
     let entry: JournalEntry
     @Binding var editing: Session?
+    @Binding var editingMemory: Memory??
 
     var body: some View {
         NavigationLink(value: entry.game) {
@@ -152,6 +172,17 @@ private struct JournalRow: View {
                         .frame(width: 44, height: 59)
                         .clipShape(.rect(cornerRadius: 6))
                         .coverGloss()
+                } else if entry.kind == .memory {
+                    // "First LAN party" has no cover to show, and a row that
+                    // simply loses its leading column reads as broken rather
+                    // than as a different kind of thing.
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(LSTheme.accent.opacity(0.16))
+                        .frame(width: 44, height: 59)
+                        .overlay {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(LSTheme.accent)
+                        }
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -211,6 +242,13 @@ private struct JournalRow: View {
                 } label: {
                     Label(entry.note == nil ? "Add a note" : "Edit note",
                           systemImage: "square.and.pencil")
+                }
+            }
+            if let memory = entry.memory {
+                Button {
+                    editingMemory = .some(memory)
+                } label: {
+                    Label("Edit memory", systemImage: "square.and.pencil")
                 }
             }
         }

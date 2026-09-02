@@ -156,7 +156,64 @@ extension Memory {
         return CompletionEvent.fuzzyText(earliest, precision: precision, timeZone: .gmt)
     }
 
+    /// The one-line summary a timeline row shows beside the icon: what kind
+    /// of event it was, and the hardware if it named any.
+    ///
+    /// An ownership event says so — "Acquired", "Sold" — because that is the
+    /// whole difference between a note about a Genesis and the record that you
+    /// got one. A plain memory says only where it happened, if anywhere.
+    var detailLine: String? {
+        var parts: [String] = []
+        if let verb = Self.kindLabels[kind] { parts.append(verb) }
+        if let platform, !platform.isEmpty { parts.append(platform) }
+        if let place, !place.isEmpty { parts.append(place) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// Known kinds and how they read. A value this build has never heard of —
+    /// added by a later one and arriving over CloudKit — is absent here and
+    /// simply reads as a plain memory, which is the graceful answer.
+    static let kindLabels: [String: String] = [
+        "acquired": "Acquired",
+        "sold":     "Sold",
+        "traded":   "Traded",
+        "lost":     "Lost",
+        "gifted":   "Gifted",
+        "lent":     "Lent",
+        "returned": "Returned",
+        "broke":    "Broke",
+    ]
+
     /// True when the interval is wider than the precision claims — the
     /// disjunction case, where only the typed words are accurate.
     var isUncertain: Bool { precision == nil }
+
+    /// **UTC, like the release dates and unlike the journal's sessions.**
+    /// A memory's date is a calendar fact — "Christmas 1995" is the same day
+    /// everywhere — whereas a session is something you did where you were
+    /// sitting. Both rules are correct; using either one in the other's place
+    /// is the bug.
+    static var calendar: Calendar { ReleaseCountdown.utc }
+
+    /// The first instant the memory could have happened, given its precision.
+    static func intervalStart(of date: Date, precision: String?) -> Date {
+        switch precision {
+        case "year":  calendar.dateInterval(of: .year, for: date)?.start ?? date
+        case "month": calendar.dateInterval(of: .month, for: date)?.start ?? date
+        default:      calendar.startOfDay(for: date)
+        }
+    }
+
+    /// The last. A year-precision memory spans the whole year, so it sorts
+    /// among that year rather than pretending to be 1 January.
+    static func intervalEnd(of date: Date, precision: String?) -> Date {
+        let unit: Calendar.Component
+        switch precision {
+        case "year":  unit = .year
+        case "month": unit = .month
+        default:      unit = .day
+        }
+        guard let interval = calendar.dateInterval(of: unit, for: date) else { return date }
+        return interval.end.addingTimeInterval(-1)
+    }
 }

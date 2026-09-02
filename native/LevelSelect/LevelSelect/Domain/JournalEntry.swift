@@ -12,13 +12,14 @@ import Foundation
 /// CloudKit promote, and asks nothing new of anyone.
 struct JournalEntry: Identifiable {
     enum Kind {
-        case session, completion, run
+        case session, completion, run, memory
 
         var icon: String {
             switch self {
             case .session:    "timer"
             case .completion: "flag.checkered"
             case .run:        "dice.fill"
+            case .memory:     "sparkles"
             }
         }
     }
@@ -53,6 +54,17 @@ struct JournalEntry: Identifiable {
     /// editor that already exists. Nil for finishes and runs, which are
     /// edited from the game page where their own editors live.
     let session: Session?
+
+    /// The record behind a memory entry, editable from the timeline because
+    /// the timeline is the only place a memory appears at all.
+    var memory: Memory? = nil
+
+    /// A heading in the entry's own words, for a date no grain can describe.
+    ///
+    /// "Christmas 1995 or 1996" filed under a heading reading **1995** would
+    /// assert the very thing the record declines to — so an uncertain memory
+    /// becomes its own period, titled by what was actually written.
+    var headingOverride: String? = nil
 }
 
 /// A heading and the entries under it.
@@ -93,13 +105,31 @@ struct JournalPeriod: Identifiable {
     let start: Date
     let grain: Grain
     let entries: [JournalEntry]
+    /// Set when the period exists to carry one uncertain memory, and the only
+    /// accurate heading is the sentence its author wrote.
+    var headingOverride: String? = nil
 
-    var id: String { "\(grain.rawValue)@\(start.timeIntervalSince1970)" }
+    /// **The calendar this period was bucketed in, carried rather than
+    /// assumed.**
+    ///
+    /// Three separate bugs in this build came from a date formatter defaulting
+    /// to `Calendar.current`: a UTC-midnight 1 January reads as 31 December —
+    /// and therefore the *previous year* — for everyone west of Greenwich. The
+    /// app legitimately has two calendars, because a release date and a memory
+    /// are calendar facts while a session is something you did where you were
+    /// sitting. Whichever one grouped these entries has to be the one that
+    /// names them, or the heading disagrees with its own contents.
+    var calendar: Calendar = JournalBuilder.calendar
+
+    var id: String {
+        "\(grain.rawValue)@\(start.timeIntervalSince1970)@\(headingOverride ?? "")"
+    }
 
     /// The heading. Relative for the two days everyone has a word for, and the
     /// year dropped while it is the current one — a journal you are reading
     /// today does not need to keep saying 2026.
-    func title(now: Date = .now, calendar: Calendar = JournalBuilder.calendar) -> String {
+    func title(now: Date = .now) -> String {
+        if let headingOverride { return headingOverride }
         switch grain {
         case .year:  return String(calendar.component(.year, from: start))
         case .month: return start.formatted(.dateTime.month(.wide).year())
@@ -131,7 +161,9 @@ enum JournalBuilder {
     /// Entries with no note are kept. A journal of only the days you felt like
     /// writing is a journal that is empty, and the record of having played at
     /// all is what the writing later hangs off.
-    static func periods(from games: [Game], now: Date = .now) -> [JournalPeriod] {
+    static func periods(from games: [Game],
+                        standalone: [Memory] = [],
+                        now: Date = .now) -> [JournalPeriod] {
         var entries: [JournalEntry] = []
 
         for game in games {
@@ -169,6 +201,9 @@ enum JournalBuilder {
                         session: nil))
                 }
             }
+            for memory in (game.memories ?? []) where memory.deletedAt == nil {
+                entries.append(Self.entry(for: memory))
+            }
             for finish in (game.completionEvents ?? []) where finish.deletedAt == nil {
                 entries.append(JournalEntry(
                     id: finish.id,
@@ -185,16 +220,49 @@ enum JournalBuilder {
             }
         }
 
+        // Memories with no game at all — "first LAN party" — reach the
+        // timeline through nothing else, so they are fetched rather than
+        // walked to. They are the whole reason the model allows a nil game.
+        entries.append(contentsOf: standalone.map(Self.entry(for:)))
+
         return group(entries)
     }
 
+    /// One memory, as a timeline entry.
+    static func entry(for memory: Memory) -> JournalEntry {
+        JournalEntry(
+            id: memory.id,
+            kind: .memory,
+            // The interval's start orders it; what it PRINTS is its own words.
+            date: memory.earliest,
+            grain: JournalPeriod.Grain(precision: memory.precision),
+            game: memory.game,
+            title: memory.title,
+            detail: memory.detailLine,
+            duration: nil,
+            note: memory.body?.journalText,
+            companions: memory.companions,
+            session: nil,
+            memory: memory,
+            // Only when no grain can describe it. A year-precision memory is
+            // perfectly happy under a year heading.
+            headingOverride: memory.isUncertain ? memory.dateText : nil)
+    }
+
     private static func group(_ entries: [JournalEntry]) -> [JournalPeriod] {
-        var buckets: [String: (start: Date, grain: JournalPeriod.Grain, items: [JournalEntry])] = [:]
+        var buckets: [String: (start: Date, grain: JournalPeriod.Grain,
+                               calendar: Calendar, items: [JournalEntry])] = [:]
 
         for entry in entries {
-            let start = entry.grain.start(of: entry.date, calendar: calendar)
-            let key = "\(entry.grain.rawValue)@\(start.timeIntervalSince1970)"
-            buckets[key, default: (start, entry.grain, [])].items.append(entry)
+            // A memory's dates are UTC calendar facts; a session's day is the
+            // day it was where you were sitting. Each entry is bucketed in its
+            // own calendar rather than one being forced into the other's.
+            let entryCalendar = entry.kind == .memory ? Memory.calendar : calendar
+            let start = entry.grain.start(of: entry.date, calendar: entryCalendar)
+            // The override joins the key, so two uncertain memories in one
+            // year stay two periods rather than merging under one sentence.
+            let key = "\(entry.grain.rawValue)@\(start.timeIntervalSince1970)@\(entry.headingOverride ?? "")"
+            buckets[key, default: (start, entry.grain, entryCalendar, [])].items.append(entry)
         }
 
         return buckets.values
@@ -204,7 +272,9 @@ enum JournalBuilder {
                     grain: $0.grain,
                     // Within a period, latest first — the same direction the
                     // page reads, so scrolling never reverses mid-column.
-                    entries: $0.items.sorted { $0.date > $1.date })
+                    entries: $0.items.sorted { $0.date > $1.date },
+                    headingOverride: $0.items.first?.headingOverride,
+                    calendar: $0.calendar)
             }
             // Newest first. When a year bucket and a day inside it land on the
             // same instant, the precise one goes on top: it says more.

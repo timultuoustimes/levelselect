@@ -335,6 +335,46 @@ struct Repository {
         return collection
     }
 
+    // MARK: Memories
+
+    /// Save a memory, computing the sortable interval from the precision.
+    ///
+    /// The interval is derived here rather than at the call site so that
+    /// "year" always means the whole year and never 1 January — a memory
+    /// stored as an instant would sort as though its precision were a day,
+    /// which is the mistake the precision field exists to prevent.
+    @discardableResult
+    func saveMemory(_ memory: Memory,
+                    on date: Date,
+                    precision: String?,
+                    words: String?,
+                    span: ClosedRange<Date>? = nil) -> Memory {
+        if let span {
+            // A genuine disjunction — "Christmas 1995 or 1996". No single
+            // precision describes it, so nil is stored and only the words can
+            // say what it was.
+            memory.earliest = span.lowerBound
+            memory.latest = span.upperBound
+            memory.precision = nil
+        } else {
+            memory.earliest = Memory.intervalStart(of: date, precision: precision)
+            memory.latest = Memory.intervalEnd(of: date, precision: precision)
+            memory.precision = precision
+        }
+        memory.whenText = words?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? words : nil
+        if memory.modelContext == nil { context.insert(memory) }
+        touch(memory)
+        persist()
+        return memory
+    }
+
+    func deleteMemory(_ memory: Memory) {
+        memory.deletedAt = .now
+        touch(memory)
+        persist()
+    }
+
     @discardableResult
     func createCollection(name: String, isBundle: Bool = false) -> GameCollection {
         let collection = GameCollection(name: name, isBundle: isBundle)

@@ -469,3 +469,119 @@ struct Build36MemoryTests {
         #expect(chain.map(\.kind) == ["acquired", "sold", "acquired"])
     }
 }
+
+/// Build 36 — memories reaching the timeline, at the grain they actually have.
+@MainActor
+struct Build36MemoryTimelineTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func utc(_ y: Int, _ m: Int, _ d: Int) -> Date {
+        Memory.calendar.date(from: DateComponents(year: y, month: m, day: d)) ?? .now
+    }
+
+    /// **The heading a disjunction gets.** "Christmas 1995 or 1996" under a
+    /// heading reading 1995 would assert the one thing the record declines to,
+    /// so it becomes its own period titled by what was actually written.
+    @Test func anUncertainMemoryIsItsOwnPeriodInItsOwnWords() {
+        let memory = Memory(title: "Got a Sega Genesis", kind: "acquired",
+                            earliest: utc(1995, 1, 1), latest: utc(1996, 12, 31),
+                            precision: nil, whenText: "Christmas 1995 or 1996")
+        let periods = JournalBuilder.periods(from: [], standalone: [memory])
+        #expect(periods.count == 1)
+        #expect(periods.first?.title() == "Christmas 1995 or 1996")
+    }
+
+    /// Two uncertain memories in one year stay two periods — merging them
+    /// would file one under the other's sentence.
+    @Test func twoUncertainMemoriesDoNotMerge() {
+        let a = Memory(title: "Genesis", earliest: utc(1995, 1, 1), latest: utc(1996, 12, 31),
+                       precision: nil, whenText: "Christmas 1995 or 1996")
+        let b = Memory(title: "Game Gear", earliest: utc(1995, 1, 1), latest: utc(1996, 12, 31),
+                       precision: nil, whenText: "A birthday around then")
+        #expect(JournalBuilder.periods(from: [], standalone: [a, b]).count == 2)
+    }
+
+    /// A memory that DOES have a grain is perfectly happy under a normal
+    /// heading — the override is for uncertainty, not for memories.
+    @Test func aYearPrecisionMemoryUsesTheYearHeading() {
+        let memory = Memory(title: "Finished it at last",
+                            earliest: utc(2011, 1, 1), latest: utc(2011, 12, 31),
+                            precision: "year")
+        let periods = JournalBuilder.periods(from: [], standalone: [memory])
+        #expect(periods.first?.title() == "2011")
+        #expect(periods.first?.grain == .year)
+    }
+
+    /// A memory with no game reaches the timeline through nothing else — it is
+    /// the reason the model allows a nil game at all.
+    @Test func aStandaloneMemoryStillAppears() {
+        let memory = Memory(title: "First LAN party",
+                            earliest: utc(2001, 6, 1), latest: utc(2001, 6, 30),
+                            precision: "month")
+        let entries = JournalBuilder.periods(from: [], standalone: [memory])
+            .flatMap(\.entries)
+        #expect(entries.count == 1)
+        #expect(entries.first?.game == nil)
+        #expect(entries.first?.kind == .memory)
+    }
+
+    /// **The interval, not the instant.** A year-precision memory must span the
+    /// whole year — stored as a bare instant it would sort as though its
+    /// precision were a day, which is what the precision field exists to stop.
+    @Test func savingAYearPrecisionMemorySpansTheYear() {
+        let context = makeContext()
+        let memory = Memory(title: "Beat it that year")
+        Repository(context).saveMemory(memory, on: utc(2011, 7, 14),
+                                       precision: "year", words: nil)
+        #expect(memory.earliest == utc(2011, 1, 1))
+        #expect(Memory.calendar.component(.year, from: memory.latest) == 2011)
+        #expect(Memory.calendar.component(.month, from: memory.latest) == 12)
+    }
+
+    /// Saving a disjunction stores nil precision — "1995 or 1996" is two
+    /// years, and claiming year precision would say it was one.
+    @Test func savingAnUncertainSpanStoresNoPrecision() {
+        let context = makeContext()
+        let memory = Memory(title: "Got a Sega Genesis")
+        Repository(context).saveMemory(
+            memory, on: utc(1995, 1, 1), precision: nil,
+            words: "Christmas 1995 or 1996",
+            span: utc(1995, 1, 1)...utc(1996, 12, 31))
+        #expect(memory.precision == nil)
+        #expect(memory.isUncertain)
+        #expect(memory.whenText == "Christmas 1995 or 1996")
+    }
+
+    /// Blank words are not words — they must not be stored as if they were,
+    /// or the entry would print nothing where its date should be.
+    @Test func blankWordsAreNotStored() {
+        let context = makeContext()
+        let memory = Memory(title: "A memory")
+        Repository(context).saveMemory(memory, on: utc(2011, 1, 1),
+                                       precision: "year", words: "   ")
+        #expect(memory.whenText == nil)
+        #expect(memory.dateText == "2011")
+    }
+
+    /// An ownership event says which verb it was; a plain memory does not.
+    @Test func anOwnershipEventNamesItself() {
+        let acquired = Memory(title: "Got a Genesis", kind: "acquired")
+        acquired.platform = "Sega Genesis"
+        #expect(acquired.detailLine?.contains("Acquired") == true)
+        #expect(acquired.detailLine?.contains("Sega Genesis") == true)
+
+        let plain = Memory(title: "Played at a friend's")
+        #expect(plain.detailLine == nil)
+    }
+
+    /// A kind this build has never heard of — added later, arriving over
+    /// CloudKit — reads as a plain memory rather than failing to decode.
+    @Test func anUnknownKindDegradesToAPlainMemory() {
+        let future = Memory(title: "Something new", kind: "repaired")
+        #expect(Memory.kindLabels["repaired"] == nil)
+        #expect(future.detailLine == nil)
+    }
+}
