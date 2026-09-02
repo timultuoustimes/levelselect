@@ -90,8 +90,18 @@ struct JournalTimeline: View {
     /// The memory being written or edited. `.some(nil)` means a new one, which
     /// is why this is a double optional rather than a Bool beside a Memory?.
     @State private var editingMemory: Memory??
-    /// A picture being looked at full size.
-    @State private var viewingImage: GameImage?
+
+    private func memory(for route: JournalRoute) -> Memory? {
+        let all = standaloneMemories + games.flatMap { $0.memories ?? [] }
+        return all.first { $0.id.uuidString == route.id && $0.deletedAt == nil }
+    }
+
+    private func playEntry(for route: JournalRoute) -> JournalEntry? {
+        guard let gameID = route.gameID,
+              let game = games.first(where: { $0.id == gameID })
+        else { return nil }
+        return JournalBuilder.playEntries(for: game).first { $0.id == route.id }
+    }
 
     var body: some View {
         // Built once per pass and held in a `let`, the same shape StatsCards
@@ -105,8 +115,7 @@ struct JournalTimeline: View {
                         JournalPeriodHeader(period: period)
                         ForEach(period.entries) { entry in
                             JournalRow(entry: entry, editing: $editing,
-                                       editingMemory: $editingMemory,
-                                       viewingImage: $viewingImage)
+                                       editingMemory: $editingMemory)
                         }
                     }
                 }
@@ -118,12 +127,31 @@ struct JournalTimeline: View {
         // and it knows that a paused session's editable end is not its stored
         // end, which a note-only sheet would have had to learn again.
         .sheet(item: $editing) { EditSessionSheet(session: $0) }
+        // Resolved here rather than in JournalTab because this is where the
+        // data lives. A route carries ids, not objects — JournalEntry holds
+        // live SwiftData references and is rebuilt every pass, which makes it
+        // the wrong thing to hand a navigation path.
+        .navigationDestination(for: JournalRoute.self) { route in
+            if route.isMemory {
+                if let memory = memory(for: route) {
+                    MemoryView(memory: memory)
+                } else {
+                    ContentUnavailableView("Gone", systemImage: "questionmark",
+                                           description: Text("This entry no longer exists."))
+                }
+            } else if let entry = playEntry(for: route) {
+                JournalDayView(entry: entry)
+            } else {
+                ContentUnavailableView("Gone", systemImage: "questionmark",
+                                       description: Text("This day no longer has anything in it."))
+            }
+        }
         .sheet(isPresented: Binding(
             get: { editingMemory != nil },
             set: { if !$0 { editingMemory = nil } })) {
             MemorySheet(existing: editingMemory ?? nil)
         }
-        .sheet(item: $viewingImage) { LocalImageViewer(image: $0) }
+
         .toolbar {
             Button {
                 editingMemory = .some(nil)
@@ -167,132 +195,154 @@ private struct JournalRow: View {
     let entry: JournalEntry
     @Binding var editing: Session?
     @Binding var editingMemory: Memory??
-    @Binding var viewingImage: GameImage?
 
     var body: some View {
-        // **A memory row is a Button, not a NavigationLink.**
-        //
-        // It was a NavigationLink(value: entry.game), and a memory has no
-        // game — a link with a nil value is DISABLED, so the whole row drew
-        // greyed out. Tim: "it feels weird that it's greyed out like it's not
-        // real or not accessible." It was not accessible; it was switched off.
-        //
-        // It also wants somewhere different to go. The subject of a memory row
-        // is the memory, so tapping it opens the memory rather than whatever
-        // game happens to be attached.
-        Group {
-            if let memory = entry.memory {
-                Button { editingMemory = .some(memory) } label: { rowContent }
-            } else {
-                NavigationLink(value: entry.game) { rowContent }
-            }
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            if let session = entry.session {
-                Button {
-                    editing = session
-                } label: {
-                    Label(entry.note == nil ? "Add a note" : "Edit note",
-                          systemImage: "square.and.pencil")
+        // **Tap reads, long-press edits.** They were the same gesture, so
+        // opening a row to see what you wrote put you in an editor instead.
+        // Tim: "tapping to view a full journal entry, and pressing to edit
+        // should be different actions."
+        NavigationLink(value: JournalRoute(entry: entry)) { rowContent }
+            .buttonStyle(.plain)
+            .contextMenu {
+                if let memory = entry.memory {
+                    Button { editingMemory = .some(memory) } label: {
+                        Label("Edit memory", systemImage: "square.and.pencil")
+                    }
+                } else if entry.sessions.count == 1, let only = entry.sessions.first {
+                    // One session is unambiguous, so the shortcut is safe.
+                    // With several, "edit note" would have to ask which — the
+                    // day view is where that choice belongs.
+                    Button { editing = only } label: {
+                        Label(only.notes?.journalText == nil ? "Add a note" : "Edit note",
+                              systemImage: "square.and.pencil")
+                    }
+                }
+                if let game = entry.game {
+                    NavigationLink(value: game) {
+                        Label("Go to \(game.name)", systemImage: "gamecontroller")
+                    }
                 }
             }
-            if let memory = entry.memory {
-                Button {
-                    editingMemory = .some(memory)
-                } label: {
-                    Label("Edit memory", systemImage: "square.and.pencil")
-                }
-            }
-        }
     }
 
-    /// The row itself, so both the Button and the NavigationLink can wear it.
     private var rowContent: some View {
         HStack(alignment: .top, spacing: 12) {
-                if entry.kind == .memory {
-                    // **A circle, not a cover-shaped rectangle.** A memory is
-                    // not a game, and dressing it in box art said it was one
-                    // that had simply failed to load its cover. Tim: "these
-                    // memories/journal entries should have their own icon
-                    // that's not in a game art frame." The column keeps its
-                    // 44pt width so rows still line up.
-                    Circle()
-                        .fill(LSTheme.accent.opacity(0.16))
-                        .frame(width: 44, height: 44)
-                        .overlay {
-                            Image(systemName: "sparkles")
-                                .foregroundStyle(LSTheme.accent)
-                        }
-                } else if let game = entry.game {
-                    CoverThumb(urlString: game.displayCoverURLString)
-                        .frame(width: 44, height: 59)
-                        .clipShape(.rect(cornerRadius: 6))
-                        .coverGloss()
+            if entry.kind == .memory {
+                // A circle, not box art: a memory is not a game, and a
+                // cover-shaped frame said it was one whose art failed to load.
+                Circle()
+                    .fill(LSTheme.accent.opacity(0.16))
+                    .frame(width: 44, height: 44)
+                    .overlay {
+                        Image(systemName: "sparkles").foregroundStyle(LSTheme.accent)
+                    }
+            } else if let game = entry.game {
+                CoverThumb(urlString: game.displayCoverURLString)
+                    .frame(width: 44, height: 59)
+                    .clipShape(.rect(cornerRadius: 6))
+                    .coverGloss()
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+
+                summary
+
+                if !entry.companions.isEmpty {
+                    Label(entry.companions.map(\.name).joined(separator: ", "),
+                          systemImage: "person.2.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.title)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(2)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: entry.kind.icon)
-                            .font(.caption2)
-                        if let duration = entry.duration {
-                            Text(Format.duration(duration))
-                        } else if let detail = entry.detail {
-                            Text(detail)
-                        }
-                        // Only a same-day entry gets a clock: printing 12:00
-                        // under a heading that says "2011" would invent the
-                        // precision the grain exists to withhold.
-                        if entry.grain == .day {
-                            Text(entry.date.formatted(date: .omitted, time: .shortened))
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                    if !entry.companions.isEmpty {
-                        Label(entry.companions.map(\.name).joined(separator: ", "),
-                              systemImage: "person.2.fill")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-
-                    if !entry.images.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(entry.images) { image in
-                                    if let data = image.data {
-                                        Button { viewingImage = image } label: {
-                                            LocalArtworkThumb(data: data, contentMode: .fill)
-                                                .frame(width: 72, height: 72)
-                                                .clipShape(.rect(cornerRadius: 8))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
+                if !entry.images.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(entry.images) { image in
+                                if let data = image.data {
+                                    LocalArtworkThumb(data: data, contentMode: .fill)
+                                        .frame(width: 72, height: 72)
+                                        .clipShape(.rect(cornerRadius: 8))
                                 }
                             }
                         }
-                        .padding(.top, 4)
                     }
-
-                    // Your words, given the weight of the row rather than a
-                    // footnote's — this is the thing the surface exists for.
-                    if let note = entry.note {
-                        Text(note)
-                            .font(.callout)
-                            .foregroundStyle(.primary)
-                            .lineLimit(4)
-                            .padding(.top, 2)
-                    }
+                    .padding(.top, 4)
                 }
-                Spacer(minLength: 0)
+
+                // Your words. Several notes on one day are several lines —
+                // the day summary above says how much you played, this says
+                // what you said about it.
+                ForEach(Array(entry.notes.prefix(3).enumerated()), id: \.offset) { _, note in
+                    Text(note)
+                        .font(.callout)
+                        .foregroundStyle(.primary)
+                        .lineLimit(4)
+                        .padding(.top, 2)
+                }
+                if entry.notes.count > 3 {
+                    Text("+ \(entry.notes.count - 3) more")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
             }
+            Spacer(minLength: 0)
+        }
         .lsCard()
+    }
+
+    /// One line saying what the day amounted to.
+    @ViewBuilder
+    private var summary: some View {
+        HStack(spacing: 6) {
+            Image(systemName: entry.kind.icon).font(.caption2)
+            if entry.kind == .memory {
+                if let detail = entry.detail { Text(detail) }
+            } else {
+                if entry.duration > 0 {
+                    Text(Format.duration(entry.duration))
+                }
+                if entry.sessions.count > 1 {
+                    Text("· \(entry.sessions.count) sessions")
+                }
+                if !entry.runs.isEmpty {
+                    Text("· \(entry.runs.count) " + (entry.runs.count == 1 ? "run" : "runs"))
+                }
+                ForEach(entry.finishes) { finish in
+                    Label(finish.journalLabel, systemImage: "flag.checkered")
+                        .labelStyle(.titleAndIcon)
+                        .foregroundStyle(LSTheme.accent)
+                }
+            }
+            if entry.grain == .day, entry.kind == .memory {
+                Text(entry.date.formatted(date: .omitted, time: .shortened))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+    }
+}
+
+/// Where a journal row goes when tapped.
+///
+/// A value rather than the entry itself: `JournalEntry` holds live SwiftData
+/// objects and is rebuilt every pass, so it is the wrong thing to put in a
+/// navigation path. This carries only what the destination needs to find it
+/// again.
+struct JournalRoute: Hashable {
+    let id: String
+    let isMemory: Bool
+    let gameID: UUID?
+    let day: Date
+
+    init(entry: JournalEntry) {
+        id = entry.id
+        isMemory = entry.kind == .memory
+        gameID = entry.game?.id
+        day = entry.date
     }
 }

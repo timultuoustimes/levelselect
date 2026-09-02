@@ -22,6 +22,24 @@ struct Build36JournalTests {
         return (game, playthrough)
     }
 
+
+    /// A session as `stopSession` actually leaves it: stopped, with the played
+    /// time in `accumulatedDuration`. Setting only `endDate` leaves it
+    /// `.running` (the initialiser's default), and `elapsed()` then keeps
+    /// counting to now — which is a fixture that does not exist in real data.
+    @discardableResult
+    private func finished(_ context: ModelContext, _ playthrough: Playthrough,
+                          start: Date, seconds: TimeInterval = 600,
+                          notes: String? = nil) -> Session {
+        let session = Session(startDate: start, state: .stopped)
+        session.playthrough = playthrough
+        session.endDate = start.addingTimeInterval(seconds)
+        session.accumulatedDuration = seconds
+        session.notes = notes
+        context.insert(session)
+        return session
+    }
+
     private func day(_ y: Int, _ m: Int, _ d: Int, hour: Int = 12) -> Date {
         JournalBuilder.calendar.date(from: DateComponents(
             year: y, month: m, day: d, hour: hour)) ?? .now
@@ -47,8 +65,8 @@ struct Build36JournalTests {
 
         let periods = JournalBuilder.periods(from: [game])
         let entry = try? #require(periods.first?.entries.first)
-        #expect(entry?.note == "Finally beat Hornet. Third night on it.")
-        #expect(entry?.kind == .session)
+        #expect(entry?.notes.first == "Finally beat Hornet. Third night on it.")
+        #expect(entry?.kind == .play)
         #expect(entry?.title == "Hollow Knight")
     }
 
@@ -65,7 +83,7 @@ struct Build36JournalTests {
         session.notes = "   \n  "
         context.insert(session)
 
-        #expect(JournalBuilder.periods(from: [game]).first?.entries.first?.note == nil)
+        #expect(JournalBuilder.periods(from: [game]).first?.entries.first?.notes.isEmpty == true)
     }
 
     /// A running session has not happened yet — it belongs to the timer on
@@ -140,23 +158,17 @@ struct Build36JournalTests {
 
     // MARK: Grouping and order
 
-    /// A day gathers everything that happened on it, whatever kind it was —
-    /// the unit is the day, and sessions are its rows.
-    @Test func aDayGathersEveryKindThatHappenedOnIt() {
+    /// **One row per game-day, not per session.** Two sessions, a run and a
+    /// finish on one afternoon are one story; the first version told it four
+    /// times, each row repeating the cover and the name to say "and then a bit
+    /// more". Tim, scrolling a real timeline: Mina the Hollower three times on
+    /// one day.
+    @Test func aDayOfOneGameIsASingleEntry() {
         let context = makeContext()
         let (game, playthrough) = makeGame(context, name: "Hades")
 
-        let morning = Session()
-        morning.playthrough = playthrough
-        morning.startDate = day(2026, 8, 25, hour: 9)
-        morning.endDate = morning.startDate.addingTimeInterval(1800)
-        context.insert(morning)
-
-        let evening = Session()
-        evening.playthrough = playthrough
-        evening.startDate = day(2026, 8, 25, hour: 21)
-        evening.endDate = evening.startDate.addingTimeInterval(1800)
-        context.insert(evening)
+        finished(context, playthrough, start: day(2026, 8, 25, hour: 9), seconds: 1800)
+        finished(context, playthrough, start: day(2026, 8, 25, hour: 21), seconds: 1800)
 
         let run = Run(templateID: "default",
                       startedAt: day(2026, 8, 25, hour: 20),
@@ -173,9 +185,48 @@ struct Build36JournalTests {
 
         let periods = JournalBuilder.periods(from: [game])
         #expect(periods.count == 1)
-        #expect(periods.first?.entries.count == 4)
-        // Latest first, so the page never reverses direction mid-column.
-        #expect(periods.first?.entries.first?.kind == .completion)
+        #expect(periods.first?.entries.count == 1, "Four records, one day, one game — one row.")
+
+        let entry = try? #require(periods.first?.entries.first)
+        #expect(entry?.sessions.count == 2)
+        #expect(entry?.runs.count == 1)
+        #expect(entry?.finishes.count == 1)
+        #expect(entry?.duration == 3600, "Both sessions, summed.")
+    }
+
+    /// Two games on one day are two rows — the aggregation is per game, not
+    /// per day, or a day of variety would collapse into one line.
+    @Test func twoGamesOnOneDayAreTwoEntries() {
+        let context = makeContext()
+        let (hades, hadesRun) = makeGame(context, name: "Hades")
+        let (celeste, celesteRun) = makeGame(context, name: "Celeste")
+        for (playthrough, hour) in [(hadesRun, 10), (celesteRun, 20)] {
+            finished(context, playthrough, start: day(2026, 8, 25, hour: hour))
+        }
+        let periods = JournalBuilder.periods(from: [hades, celeste])
+        #expect(periods.count == 1)
+        #expect(periods.first?.entries.count == 2)
+        #expect(Set(periods.first?.entries.map(\.title) ?? []) == ["Hades", "Celeste"])
+    }
+
+    /// A day's writing is gathered in the order it happened, whichever record
+    /// held it — separating session notes from a finish's note would leak an
+    /// implementation detail into a diary.
+    @Test func aDaysNotesAreGatheredInOrder() {
+        let context = makeContext()
+        let (game, playthrough) = makeGame(context, name: "Hades")
+
+        finished(context, playthrough, start: day(2026, 8, 25, hour: 9), notes: "First attempt")
+
+        let finish = CompletionEvent()
+        finish.game = game
+        finish.date = day(2026, 8, 25, hour: 22)
+        finish.label = .cleared
+        finish.notes = "Finally"
+        context.insert(finish)
+
+        let entry = try? #require(JournalBuilder.periods(from: [game]).first?.entries.first)
+        #expect(entry?.notes == ["First attempt", "Finally"])
     }
 
     @Test func daysRunNewestFirst() {
@@ -526,6 +577,7 @@ struct Build36MemoryTimelineTests {
         #expect(entries.count == 1)
         #expect(entries.first?.game == nil)
         #expect(entries.first?.kind == .memory)
+        _ = entries
     }
 
     /// **The interval, not the instant.** A year-precision memory must span the
