@@ -1,4 +1,5 @@
 import Testing
+import SwiftUI
 import Foundation
 import SwiftData
 @testable import LevelSelect
@@ -395,18 +396,35 @@ struct AccentContrastTests {
     /// user's to choose, so both extremes must work: white on a deep color,
     /// black on a pale one. Getting this wrong makes the most important
     /// control on Home unreadable for whoever picked yellow.
-    @Test func lightAccentsGetDarkText() {
+    /// **Asserts the property, not the colour.**
+    ///
+    /// Build 36 made `onAccent` a knockout — the ground showing through the
+    /// button rather than ink laid on it — so the answer is no longer one of
+    /// two literals and, being scheme-dependent, is not comparable to one at
+    /// all. What the original test was really protecting is the only thing
+    /// that matters: whatever goes inside the button must be legible against
+    /// it. 4.5:1 is the WCAG AA floor for text.
+    @Test func lightAccentsStayLegible() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5E663"          // pale yellow
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
-    @Test func darkAccentsGetLightText() {
+    @Test func darkAccentsStayLegible() {
         let settings = ThemeSettings()
         settings.accentHex = "#3B1D6E"          // deep indigo
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .white)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
+    }
+
+    /// The knockout's own guard: when the ground is too close to the accent to
+    /// be seen through it, it must give up and fall back to plain contrast. A
+    /// pale accent on the light theme is the case — knocking out to near-white
+    /// on near-white would be an invisible Play button.
+    @Test func aGroundTooCloseToTheAccentFallsBack() {
+        let pale = Color(red: 0.97, green: 0.96, blue: 1.00)
+        #expect(ThemePalette.contrast(ThemePalette.knockout(on: pale), pale) >= 4.5)
     }
 
     /// The shipped default, which nobody chose and everybody starts on.
@@ -416,7 +434,7 @@ struct AccentContrastTests {
     /// it is a visible change to the default look and it is the correct one.
     @Test func theDefaultAccentGetsTheHigherContrastOption() {
         ThemePalette.refresh(from: nil)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
     /// Tim's own accent — torch orange. Mid-tone, so it is exactly the case a

@@ -48,9 +48,23 @@ struct ColorEditor: View {
     /// The app is near-black everywhere, so pale washes and muddy mid-tones
     /// are choices nobody can use — a grid that offers them mostly offers
     /// disappointment. These are picked to read on the ground they land on.
+/// The app's own colours, first and together.
+    ///
+    /// They were in the grid already — torch orange, the two purples — but
+    /// scattered among two dozen hues, so there was no way to tell they were a
+    /// set rather than a coincidence. Tim: *"I can't tell if they're part of
+    /// the same brand palette."* A palette you cannot recognise is not a
+    /// palette, so these lead and the rest follow.
+    private static let brandSwatches: [String] = [
+        "#F5A34D",   // torch orange — the wordmark, and the default accent
+        "#8A5CF6",   // brand purple
+        "#4C2A8C",   // deep purple — the ground's own hue
+        "#8A4B12",   // torch shadow, the darker orange under pixel type
+    ]
+
     private static let swatches: [String] = [
-        "#F5A34D", "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#A66BFF",
-        "#945CFA", "#6C7BFF", "#4D9BFF", "#37C6E0", "#2FD4B6", "#3FD07A",
+        "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#A66BFF",
+        "#6C7BFF", "#4D9BFF", "#37C6E0", "#2FD4B6", "#3FD07A",
         "#8BD450", "#D4D450", "#FFC93C", "#FF9F1C", "#E4572E", "#C1272D",
         "#B36BFF", "#7A5CFF", "#5AA9E6", "#54C6C6", "#57C785", "#9BC53D",
     ]
@@ -61,6 +75,18 @@ struct ColorEditor: View {
         ScrollView {
             VStack(spacing: 18) {
                 preview
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LevelSelect")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(Self.brandSwatches, id: \.self) { hex in
+                            swatch(hex)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(Self.swatches, id: \.self) { hex in
@@ -169,7 +195,7 @@ struct ColorEditor: View {
                 Image(systemName: "play.fill")
                 Text("Play").font(.subheadline.weight(.semibold))
             }
-            .foregroundStyle(ThemePalette.onColor(for: current))
+            .foregroundStyle(ThemePalette.knockout(on: current))
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
             .background(
@@ -317,7 +343,7 @@ struct ColorEditor: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             ZStack {
-                Capsule().fill(track).frame(height: 8)
+                Capsule().fill(track).frame(height: 18)
                 Slider(value: value, in: 0...1).tint(.clear)
             }
         }
