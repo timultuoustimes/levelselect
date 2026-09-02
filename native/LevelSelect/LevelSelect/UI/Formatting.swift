@@ -109,6 +109,42 @@ extension GameStatus {
 /// (Switch 2, then Switch), then Steam/PC, then Mac; everything else after,
 /// in IGDB's order.
 enum PlatformPreference {
+    /// Names that describe HOW a game is run, not what it ran on.
+    ///
+    /// These rank last so the original hardware leads: a MAME copy of Metal
+    /// Slug is a Neo Geo game you happen to run in MAME, and the shelf should
+    /// say Neo Geo. The list is deliberately generous — a name here costs one
+    /// wrong sort at worst, while a name missing from it puts "Dolphin" at the
+    /// head of a shelf where "GameCube" belongs.
+    ///
+    /// Two kinds, both treated the same way:
+    ///
+    /// **Frontends** — one program, many systems: RetroArch, Batocera,
+    /// Recalbox, EmuDeck, EmulationStation/ES-DE, RetroBat, LaunchBox, Pegasus,
+    /// Playnite.
+    ///
+    /// **System emulators** — one program, one machine: Dolphin (GameCube and
+    /// Wii), PCSX2 (PS2), RPCS3 (PS3), DuckStation (PS1), PPSSPP (PSP), Cemu
+    /// (Wii U), Ryujinx (Switch), Citra (3DS), melonDS, mGBA, Delta (iOS),
+    /// Flycast, Redream, Xemu, xenia, Mesen, Snes9x, Nestopia, Yuzu.
+    ///
+    /// Yuzu and Citra were shut down in 2024 and Ryujinx left GitHub after
+    /// legal pressure; their names stay because libraries recorded before that
+    /// still carry them, and this list exists to sort names people have
+    /// already typed rather than to recommend software.
+    static func isEmulator(_ p: String) -> Bool {
+        let names = [
+            "retroarch", "batocera", "recalbox", "emudeck", "emulationstation",
+            "es-de", "retrobat", "launchbox", "pegasus", "playnite",
+            "mame", "dolphin", "pcsx2", "nethersx2", "armsx2", "rpcs3",
+            "duckstation", "ppsspp", "cemu", "ryujinx", "yuzu", "citra",
+            "melonds", "mgba", "delta", "flycast", "redream", "xemu",
+            "xenia", "mesen", "snes9x", "nestopia", "vice", "fs-uae",
+        ]
+        return names.contains { p.contains($0) }
+    }
+
+
     static func rank(_ platform: String) -> Int {
         let p = platform.lowercased()
         if p.contains("switch 2") { return 0 }
@@ -122,10 +158,7 @@ enum PlatformPreference {
         // the shelf should say PC. When itch is the ONLY platform — the usual
         // case for these — it leads by default.
         if p.contains("itch") { return 150 }
-        if p.contains("recalbox") || p.contains("retroarch")
-            || p.contains("batocera") || p.contains("emudeck") || p.contains("emulationstation") {
-            return 200
-        }
+        if isEmulator(p) { return 200 }
         return 100
     }
 
