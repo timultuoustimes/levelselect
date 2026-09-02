@@ -151,6 +151,16 @@ struct WidgetSnapshot: Codable, Hashable {
     /// app's own store — so the accent travels here with everything else the
     /// app already tells them.
     var accentHex: String? = nil
+    /// Light / dark / system, and a chosen background, travelling the same
+    /// road as the accent and for the same reason: a widget cannot read
+    /// ThemeSettings.
+    ///
+    /// A widget cannot use `.preferredColorScheme` — WidgetKit hands it the
+    /// system's scheme and ignores that modifier — so it applies the choice as
+    /// an environment override on its own content instead. Without this, an
+    /// app pinned to dark would sit beside light widgets on the same screen.
+    var appearanceRaw: String? = nil
+    var backgroundHex: String? = nil
     /// Wishlist games with a real date still ahead, soonest first.
     var upcoming: [WidgetUpcomingGame] = []
     /// Average seconds per week over the four *finished* weeks before this
@@ -213,9 +223,13 @@ struct WidgetSnapshot: Codable, Hashable {
         platformIcons: [String: String] = [:],
         lastTicked: String? = nil,
         accentHex: String? = nil,
+        appearanceRaw: String? = nil,
+        backgroundHex: String? = nil,
         upcoming: [WidgetUpcomingGame] = []
     ) {
         self.accentHex = accentHex
+        self.appearanceRaw = appearanceRaw
+        self.backgroundHex = backgroundHex
         self.upcoming = upcoming
         self.lastTicked = lastTicked
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
@@ -263,6 +277,10 @@ struct WidgetSnapshot: Codable, Hashable {
         libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
         accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
+        // decodeIfPresent, like every field added after v1: an older snapshot
+        // on disk simply has no key, and must still decode.
+        appearanceRaw = try c.decodeIfPresent(String.self, forKey: .appearanceRaw)
+        backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex)
         upcoming = try c.decodeIfPresent([WidgetUpcomingGame].self, forKey: .upcoming) ?? []
         weeklyAverageSeconds = try c.decodeIfPresent(Double.self, forKey: .weeklyAverageSeconds) ?? 0
         completedCount = try c.decodeIfPresent(Int.self, forKey: .completedCount) ?? 0

@@ -159,6 +159,17 @@ struct AppearanceSettingsSection: View {
                 if open { loadStarDrafts() } else { commitStarNames() }
             }
 
+            Picker("Appearance", selection: Binding(
+                get: { LSAppearance(raw: settings?.appearanceRaw) },
+                set: { pick in
+                    let s = ensureSettings()
+                    s.appearanceRaw = pick.rawValue
+                    save(s)
+                })) {
+                ForEach(LSAppearance.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
             // The app says what each status means; this is where you disagree.
             // One person's "Abandoned" is another's "played it to bits", and
             // that is not settled by choosing a better default word.

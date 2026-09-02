@@ -17,6 +17,10 @@ enum ThemePalette {
     private(set) static var starNames: [String] = []
     /// Custom words for statuses ([:] = the built-in ones).
     private static var statusNameOverrides: [String: String] = [:]
+    /// Light, dark, or the system's choice. Schema V5.
+    private(set) static var appearance: LSAppearance = .dark
+    /// A custom page background, overriding the appearance's own. Schema V5.
+    private(set) static var backgroundOverride: Color?
     /// How hard the game-page backdrop reads.
     private(set) static var backdropIntensity: BackdropIntensity = .standard
     /// How game pages arrange their header.
@@ -121,6 +125,8 @@ enum ThemePalette {
         statusOverrides = overrides
         starNames = settings?.starNames ?? []
         statusNameOverrides = settings?.statusNames ?? [:]
+        appearance = LSAppearance(raw: settings?.appearanceRaw)
+        backgroundOverride = settings?.backgroundHex.flatMap(Color.init(hex:))
         backdropIntensity = settings?.backdropIntensityRaw
             .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard
         gamePageLayout = settings?.gamePageLayoutRaw

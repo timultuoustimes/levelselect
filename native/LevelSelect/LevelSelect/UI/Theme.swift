@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// LevelSelect visual identity: purple primary + dark gradient surfaces,
-/// matching the web app's look (Tim: "purple as the main color, and I like
-/// the gradients").
-enum LSTheme {
-    static let purple = Color(red: 0.58, green: 0.36, blue: 0.98)
-    static let purpleDeep = Color(red: 0.30, green: 0.16, blue: 0.55)
-
+/// The half of `LSTheme` that reads the user's settings.
+///
+/// The surfaces — background, card fills, hairlines — live in
+/// `Shared/LSSurfaces.swift`, because the widget target compiles `Shared` and
+/// not `UI`, and a theme the widgets cannot see is a theme with two
+/// implementations. This extension adds the parts that need SwiftData, which
+/// a widget has no business reaching for anyway.
+extension LSTheme {
     /// The live accent — user's choice (synced) or the default purple.
     @MainActor
     static var accent: Color { ThemePalette.accent }
@@ -16,31 +17,6 @@ enum LSTheme {
     /// user's and can be anything from pale yellow to near-black.
     @MainActor
     static var onAccent: Color { ThemePalette.onAccent }
-
-    /// App background: near-black with a purple cast at the top.
-    static var background: LinearGradient {
-        LinearGradient(
-            colors: [
-                Color(red: 0.10, green: 0.07, blue: 0.18),
-                Color(red: 0.05, green: 0.04, blue: 0.09),
-            ],
-            startPoint: .top, endPoint: .bottom
-        )
-    }
-
-    /// Hero card gradient (Continue Playing).
-    static var heroGradient: LinearGradient {
-        LinearGradient(
-            colors: [purpleDeep.opacity(0.85), Color(red: 0.12, green: 0.08, blue: 0.22)],
-            startPoint: .topLeading, endPoint: .bottomTrailing
-        )
-    }
-
-    /// Subtle card surface on the dark background.
-    static var cardFill: Color { .white.opacity(0.06) }
-
-    /// Torch orange from the dungeon-door icon/wordmark artwork.
-    static let torch = Color(red: 0.96, green: 0.64, blue: 0.30)
 
     /// The accent a fresh install wears.
     ///
@@ -93,7 +69,16 @@ enum LSTheme {
 extension View {
     /// Full-bleed themed background.
     func lsBackground() -> some View {
-        background(LSTheme.background.ignoresSafeArea())
+        background {
+            // A chosen background wins over the theme's own; without one the
+            // gradient resolves per scheme. Either way it is one ground, so
+            // nothing downstream has to ask which theme is on.
+            if let custom = ThemePalette.backgroundOverride {
+                custom.ignoresSafeArea()
+            } else {
+                LSTheme.background.ignoresSafeArea()
+            }
+        }
     }
 
     /// Card surface used across Stats/Home.

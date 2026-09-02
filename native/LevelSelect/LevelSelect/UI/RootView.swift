@@ -120,7 +120,10 @@ struct RootView: View {
         }
         .animation(.spring(duration: 0.35), value: persistence.lastErrorMessage == nil)
         .animation(.spring(duration: 0.35), value: generation.notice?.id)
-        .preferredColorScheme(.dark)
+        // Was hard-pinned to .dark for thirty-six builds — the one line that
+        // made every other colour decision moot. `.system` resolves to nil,
+        // which is exactly what this modifier wants for "follow the phone".
+        .preferredColorScheme(ThemePalette.appearance.colorScheme)
         .onOpenURL { route($0) }
         .onAppear {
             ThemePalette.refresh(from: themeSettings.first)

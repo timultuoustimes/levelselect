@@ -266,6 +266,8 @@ enum WidgetBridge {
             // than to a copy of today's hue that would go stale the next time
             // the default changes.
             accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil,
+            appearanceRaw: ThemePalette.appearance.rawValue,
+            backgroundHex: ThemePalette.backgroundOverride?.hexString(),
             upcoming: upcoming
         )
         return BuildResult(snapshot: snapshot, covers: covers)
