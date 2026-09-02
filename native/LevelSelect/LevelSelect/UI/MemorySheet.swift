@@ -87,8 +87,15 @@ struct MemorySheet: View {
                         DatePicker("Around when", selection: $date, displayedComponents: .date)
                     case .unsure:
                         TextField("Christmas 1995 or 1996", text: $words)
-                        Stepper("From \(fromYear)", value: $fromYear, in: 1970...2100)
-                        Stepper("To \(toYear)", value: $toYear, in: 1970...2100)
+                        // `verbatim:`, because interpolating an Int into a
+                        // LocalizedStringKey groups it — the stepper read
+                        // "From 1,995". A year is a label, not a quantity.
+                        Stepper(value: $fromYear, in: 1970...2100) {
+                            Text(verbatim: "From \(fromYear)")
+                        }
+                        Stepper(value: $toYear, in: 1970...2100) {
+                            Text(verbatim: "To \(toYear)")
+                        }
                     }
                 } header: {
                     Text("When")

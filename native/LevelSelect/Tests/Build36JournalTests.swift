@@ -566,6 +566,31 @@ struct Build36MemoryTimelineTests {
         #expect(memory.dateText == "2011")
     }
 
+    /// **The predicate the timeline actually runs.**
+    ///
+    /// A memory with no game is fetched rather than walked to from a game, so
+    /// the whole standalone path depends on SwiftData evaluating `game == nil`
+    /// against a *relationship*. That is exactly the sort of predicate that
+    /// compiles, reads correctly, and quietly matches nothing — and if it did,
+    /// "first LAN party" would vanish with no error anywhere.
+    @Test func theStandaloneQueryFindsMemoriesWithNoGame() throws {
+        let context = makeContext()
+        let attached = Memory(title: "Finished Columns")
+        let game = Game(name: "Columns")
+        context.insert(game)
+        context.insert(attached)
+        attached.game = game
+
+        let alone = Memory(title: "First LAN party")
+        context.insert(alone)
+        try context.save()
+
+        let found = try context.fetch(FetchDescriptor<Memory>(
+            predicate: #Predicate { $0.deletedAt == nil && $0.game == nil }))
+        #expect(found.count == 1)
+        #expect(found.first?.title == "First LAN party")
+    }
+
     /// An ownership event says which verb it was; a plain memory does not.
     @Test func anOwnershipEventNamesItself() {
         let acquired = Memory(title: "Got a Genesis", kind: "acquired")
