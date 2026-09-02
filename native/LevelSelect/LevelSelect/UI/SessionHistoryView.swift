@@ -118,10 +118,10 @@ struct SessionHistoryView: View {
     private var summary: some View {
         HStack(spacing: 0) {
             stat("\(shown.count)", shown.count == 1 ? "session" : "sessions")
-            Rectangle().fill(.white.opacity(0.09)).frame(width: 1, height: 26)
+            Rectangle().fill(LSTheme.separator).frame(width: 1, height: 26)
             stat(Format.duration(shown.reduce(0) { $0 + $1.elapsed() }), "played")
             if let first = shown.last {
-                Rectangle().fill(.white.opacity(0.09)).frame(width: 1, height: 26)
+                Rectangle().fill(LSTheme.separator).frame(width: 1, height: 26)
                 stat(first.startDate.formatted(.dateTime.month(.abbreviated).year()), "since")
             }
         }

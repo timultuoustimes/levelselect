@@ -87,9 +87,9 @@ struct SystemsRow: View {
                             VStack(spacing: 6) {
                                 PlatformIconView(platform: g.platform, size: 54)
                                     .frame(width: 84, height: 84)
-                                    .background(.white.opacity(0.05), in: .rect(cornerRadius: 18))
+                                    .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
                                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .strokeBorder(.white.opacity(0.07)))
+                                        .strokeBorder(LSTheme.hairline))
                                 // Two lines, not one. `lineLimit(1)` turned
                                 // "Other" and "SNES" into "Oth…" and "SN…" at
                                 // accessibility sizes — the shortest names the

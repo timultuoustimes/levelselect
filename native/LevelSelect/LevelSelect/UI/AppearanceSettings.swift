@@ -331,7 +331,7 @@ struct AppearanceSettingsSection: View {
                 Circle()
                     .fill(swatch)
                     .frame(width: 24, height: 24)
-                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+                    .overlay { Circle().strokeBorder(LSTheme.hairline, lineWidth: 1) }
             }
         }
     }

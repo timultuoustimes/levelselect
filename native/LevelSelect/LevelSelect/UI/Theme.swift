@@ -79,7 +79,7 @@ extension View {
     func lsCard() -> some View {
         padding(14)
             .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.07), lineWidth: 1))
+            .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LSTheme.hairline, lineWidth: 1))
     }
 
     /// Glassy sheen for box art — a soft top-left highlight + a bright top

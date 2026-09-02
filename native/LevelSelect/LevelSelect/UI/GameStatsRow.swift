@@ -74,7 +74,7 @@ struct GameStatsRow: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 12))
         .overlay {
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                .strokeBorder(LSTheme.hairline, lineWidth: 1)
         }
         // One label per card, so VoiceOver says "Played, 12 hours 30 minutes"
         // instead of reading the icon, the title and the number as three

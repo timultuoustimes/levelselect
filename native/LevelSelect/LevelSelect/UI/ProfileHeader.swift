@@ -340,7 +340,7 @@ struct ProfileHeader: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(.white.opacity(0.09)).frame(width: 1, height: 26)
+        Rectangle().fill(LSTheme.separator).frame(width: 1, height: 26)
     }
 
     private func stat(_ value: String, _ label: String) -> some View {
@@ -527,7 +527,7 @@ struct ProfileEditor: View {
                                 Circle()
                                     .fill(ProfileNameColor.swatch(nameColorRaw))
                                     .frame(width: 22, height: 22)
-                                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+                                    .overlay { Circle().strokeBorder(LSTheme.hairline, lineWidth: 1) }
                             }
                         }
                     }

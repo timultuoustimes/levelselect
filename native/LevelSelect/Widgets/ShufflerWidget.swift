@@ -255,14 +255,14 @@ struct ShufflerMedium: View {
                         .lineLimit(2)
                     Text(subtitle(pick))
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.secondary)
                     Spacer(minLength: 4)
                     HStack {
                         Text(entry.poolCount > 1
                              ? "1 of \(entry.poolCount) it could have picked"
                              : "the only one that qualifies")
                             .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.4))
+                            .foregroundStyle(.tertiary)
                         Spacer()
                         DieButton(config: entry.config, size: 34)
                     }
@@ -296,10 +296,10 @@ private struct EmptyShuffle: View {
                 .foregroundStyle(LSWidget.accent)
             Text("Nothing to pick from")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.primary)
             Text("Loosen the statuses or system in this widget's settings.")
                 .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -327,10 +327,7 @@ struct ShufflerWidget: Widget {
                                intent: ShufflerConfigIntent.self,
                                provider: ShufflerProvider()) { entry in
             ShufflerWidgetView(entry: entry)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Choose a Game for Me")
         .description("Picks something off your shelf and stands by it until you roll again. Configure which statuses and system it may pick from.")

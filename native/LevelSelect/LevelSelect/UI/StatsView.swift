@@ -358,7 +358,7 @@ struct StatsCards: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(LSTheme.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(label): \(number)")
     }
@@ -708,13 +708,13 @@ struct StatsCards: View {
                             if case .success(let image) = phase {
                                 image.resizable().scaledToFill()
                             } else {
-                                RoundedRectangle(cornerRadius: 6).fill(.white.opacity(0.06))
+                                RoundedRectangle(cornerRadius: 6).fill(LSTheme.cardFill)
                             }
                         }
                         .frame(width: 52, height: 52)
                         .clipShape(.rect(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(award.hardcore ? Color.yellow.opacity(0.85) : .white.opacity(0.25),
+                            .strokeBorder(award.hardcore ? Color.yellow.opacity(0.85) : LSTheme.hairline,
                                           lineWidth: award.hardcore ? 2 : 1))
                     }
                     .buttonStyle(.plain)
@@ -932,13 +932,13 @@ struct StatsCards: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(.white.opacity(0.08)).frame(width: 1, height: 34)
+        Rectangle().fill(LSTheme.separator).frame(width: 1, height: 34)
     }
 
     private func bar(fraction: Double, color: Color) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.06))
+                Capsule().fill(LSTheme.cardFill)
                 Capsule()
                     .fill(LinearGradient(colors: [color, color.opacity(0.55)],
                                          startPoint: .leading, endPoint: .trailing))
@@ -1057,7 +1057,7 @@ struct StatsCards: View {
 
     private func heatColor(_ minutes: Double) -> Color {
         switch minutes {
-        case ..<1:    Color.white.opacity(0.06)
+        case ..<1:    LSTheme.cardFill
         case ..<20:   LSTheme.accent.opacity(0.30)
         case ..<60:   LSTheme.accent.opacity(0.55)
         case ..<120:  LSTheme.accent.opacity(0.80)
@@ -1203,8 +1203,8 @@ private struct FlowCountRows: View {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(.white.opacity(0.07)))
-                    .overlay(Capsule().strokeBorder(.white.opacity(0.08)))
+                    .background(Capsule().fill(LSTheme.cardFill))
+                    .overlay(Capsule().strokeBorder(LSTheme.hairline))
                 }
                 .buttonStyle(.plain)
             }

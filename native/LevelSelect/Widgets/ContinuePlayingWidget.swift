@@ -239,7 +239,7 @@ struct CoverPoster: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(.white.opacity(0.08)))
+            .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(LSTheme.hairline))
     }
 }
 
@@ -264,7 +264,7 @@ struct ContinuePlayingMedium: View {
                         .padding(.top, 4)
                     Text(metaLine(snapshot))
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.secondary)
                         .padding(.top, 1)
 
                     Spacer(minLength: 6)
@@ -274,13 +274,13 @@ struct ContinuePlayingMedium: View {
                             if let itemID = snapshot.nextObjectiveID {
                                 Button(intent: ToggleObjectiveIntent(gameID: snapshot.gameID, itemID: itemID)) {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(.white.opacity(0.4), lineWidth: 1.5)
+                                        .strokeBorder(LSTheme.hairline, lineWidth: 1.5)
                                         .frame(width: 16, height: 16)
                                 }
                                 .buttonStyle(.plain)
                             } else {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(.white.opacity(0.35), lineWidth: 1.5)
+                                    .strokeBorder(LSTheme.hairline, lineWidth: 1.5)
                                     .frame(width: 14, height: 14)
                             }
                             VStack(alignment: .leading, spacing: 1) {
@@ -289,7 +289,7 @@ struct ContinuePlayingMedium: View {
                                     .foregroundStyle(LSWidget.torch)
                                 Text(objective)
                                     .font(.system(size: 12))
-                                    .foregroundStyle(.white.opacity(0.92))
+                                    .foregroundStyle(.primary)
                                     .lineLimit(1)
                                 // What's next tells you where to go; what you
                                 // last ticked tells you where you were, which
@@ -297,7 +297,7 @@ struct ContinuePlayingMedium: View {
                                 if let last = snapshot.lastTicked {
                                     Text("Left off: \(last)")
                                         .font(.system(size: 10))
-                                        .foregroundStyle(.white.opacity(0.5))
+                                        .foregroundStyle(.secondary)
                                         .lineLimit(1)
                                 }
                             }
@@ -305,7 +305,7 @@ struct ContinuePlayingMedium: View {
                             resumeButton(snapshot)
                         }
                         .padding(.top, 6)
-                        .overlay(Divider().overlay(.white.opacity(0.1)), alignment: .top)
+                        .overlay(Divider().overlay(LSTheme.separator), alignment: .top)
                     } else {
                         HStack {
                             Spacer()
@@ -366,10 +366,10 @@ struct EmptyWidget: View {
                 .foregroundStyle(LSWidget.accent)
             Text("No active game")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.primary)
             Text("Start a session in LevelSelect")
                 .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -383,10 +383,7 @@ struct ContinuePlayingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ContinuePlaying", provider: ContinuePlayingProvider()) { entry in
             ContinuePlayingWidgetView(entry: entry)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Continue Playing")
         .description("Jump back into your current game — and start a session right from the Home Screen.")

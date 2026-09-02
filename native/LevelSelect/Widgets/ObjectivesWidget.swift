@@ -20,7 +20,7 @@ struct ObjectivesLargeView: View {
                                 .foregroundStyle(LSWidget.green)
                             Text("All objectives complete!")
                                 .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.85))
+                                .foregroundStyle(.primary)
                         }
                         Spacer()
                     }
@@ -30,7 +30,7 @@ struct ObjectivesLargeView: View {
                         ForEach(items) { item in
                             objectiveRow(gameID: snapshot.gameID, item: item)
                             if item.id != items.last?.id {
-                                Divider().overlay(.white.opacity(0.07))
+                                Divider().overlay(LSTheme.separator)
                             }
                         }
                     }
@@ -58,7 +58,7 @@ struct ObjectivesLargeView: View {
                         .frame(maxWidth: 130)
                     Text("\(s.completionDone)/\(s.completionTotal)")
                         .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
@@ -94,11 +94,11 @@ private struct EmptyObjectives: View {
                 .foregroundStyle(LSWidget.accent)
             Text(snapshot == nil ? "No active game" : "No tracker yet")
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(.primary)
             if let snapshot {
                 Text(snapshot.gameName)
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
         }
@@ -111,10 +111,7 @@ struct ObjectivesWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "LSObjectives", provider: ContinuePlayingProvider()) { entry in
             ObjectivesLargeView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Objectives")
         .description("Check off your next objectives right from the Home Screen.")

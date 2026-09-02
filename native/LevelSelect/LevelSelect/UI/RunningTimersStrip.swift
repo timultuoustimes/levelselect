@@ -119,7 +119,7 @@ struct RunningTimersStrip: View {
                 .accessibilityLabel("Stop")
             }
             .padding(8)
-            .background(.white.opacity(0.04), in: .rect(cornerRadius: 10))
+            .background(LSTheme.cardFill, in: .rect(cornerRadius: 10))
         }
     }
 }

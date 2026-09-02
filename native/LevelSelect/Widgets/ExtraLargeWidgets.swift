@@ -25,7 +25,7 @@ struct CommandBoardView: View {
             HStack(spacing: 0) {
                 left(s)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                Rectangle().fill(.white.opacity(0.06)).frame(width: 1)
+                Rectangle().fill(LSTheme.separator).frame(width: 1)
                     .padding(.vertical, 2)
                 right(s)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -50,7 +50,7 @@ struct CommandBoardView: View {
                     if let last = s.lastPlayedAt {
                         Text("Last played \(last.formatted(.relative(presentation: .named))) · \(lsPlaytime(s.playtimeSeconds))")
                             .font(.system(size: 11))
-                            .foregroundStyle(.white.opacity(0.6))
+                            .foregroundStyle(.secondary)
                     }
                     if s.completionTotal > 0 {
                         HStack(spacing: 7) {
@@ -59,7 +59,7 @@ struct CommandBoardView: View {
                                 .tint(LSWidget.accent)
                             Text("\(s.completionDone)/\(s.completionTotal)")
                                 .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(.secondary)
                         }
                         .padding(.top, 6)
                     }
@@ -72,10 +72,10 @@ struct CommandBoardView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "circle")
                                 .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.tertiary)
                             Text(item.name)
                                 .font(.system(size: 13))
-                                .foregroundStyle(.white.opacity(0.92))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                         }
@@ -93,10 +93,10 @@ struct CommandBoardView: View {
                 Link(destination: WidgetShared.gameURL(s.gameID) ?? WidgetShared.homeURL!) {
                     Text("Open Game")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(.primary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 11))
+                        .background(LSTheme.cardFill, in: RoundedRectangle(cornerRadius: 11))
                 }
             }
         }
@@ -135,7 +135,7 @@ struct CommandBoardView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("NOW PLAYING")
                 .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 ForEach(Array(s.nowPlaying.filter { $0.statusRaw ?? "playing" == "playing" }.prefix(5))) { game in
                     Link(destination: WidgetShared.gameURL(game.id) ?? WidgetShared.homeURL!) {
@@ -153,7 +153,7 @@ struct CommandBoardView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("THIS WEEK")
                         .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.secondary)
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text(lsHours(s.weeklyTotalSeconds))
                             .font(.system(size: 24, weight: .heavy))
@@ -161,7 +161,7 @@ struct CommandBoardView: View {
                         if s.gamesPlayedThisWeek > 0 {
                             Text("· \(s.gamesPlayedThisWeek) game\(s.gamesPlayedThisWeek == 1 ? "" : "s")")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.55))
+                                .foregroundStyle(.secondary)
                         }
                     }
                     weekBars(s)
@@ -179,7 +179,7 @@ struct CommandBoardView: View {
                             }
                         Text(s.gameName)
                             .font(.system(size: 9, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .frame(maxWidth: 78)
                     }
@@ -219,7 +219,7 @@ struct ShelfXLView: View {
                 HStack {
                     Text("YOUR SHELF")
                         .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.secondary)
                     Spacer()
                     legend
                 }
@@ -257,7 +257,7 @@ struct ShelfXLView: View {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(label)
                 .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -293,7 +293,7 @@ struct WhereYouStandView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("WHERE YOU STAND")
                     .font(.system(size: 10, weight: .bold)).tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 24), GridItem(.flexible())],
                           spacing: 12) {
                     ForEach(rows) { row in
@@ -323,7 +323,7 @@ struct WhereYouStandView: View {
                             .tint(LSWidget.accent)
                         Text("\(done)/\(total)")
                             .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                             .layoutPriority(1)
                     }
                 } else if let wins = game.wins, let losses = game.losses {
@@ -335,7 +335,7 @@ struct WhereYouStandView: View {
                              ? "\(wins)W \(losses)L · \(Int((Double(wins) / Double(decided) * 100).rounded()))%"
                              : "\(wins)W \(losses)L")
                             .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                             .layoutPriority(1)
                     }
                 }
@@ -350,10 +350,7 @@ struct CommandBoardWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "CommandBoard", provider: ContinuePlayingProvider()) { entry in
             CommandBoardView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Command Board")
         .description("Your current game with its next objectives, the shelf, the week, and the ring — one glance.")
@@ -365,10 +362,7 @@ struct ShelfXLWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ShelfXL", provider: ContinuePlayingProvider()) { entry in
             ShelfXLView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Your Shelf")
         .description("Twelve covers from your shelf — playing, paused, and up next. Tap any cover to open its game.")
@@ -380,10 +374,7 @@ struct WhereYouStandWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "WhereYouStand", provider: ContinuePlayingProvider()) { entry in
             WhereYouStandView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Where You Stand")
         .description("A progress bar for every game you're playing — tracker fractions, or the win record for roguelikes.")

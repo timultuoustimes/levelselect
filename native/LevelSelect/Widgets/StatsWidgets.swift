@@ -21,7 +21,7 @@ struct HeatmapWidgetView: View {
                     .foregroundStyle(LSWidget.torch)
                 Text("STREAK")
                     .font(.system(size: 10, weight: .bold)).tracking(0.7)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.secondary)
                 Text("\(streak) day\(streak == 1 ? "" : "s")")
                     .font(.system(size: 11, weight: .bold).monospacedDigit())
                     .foregroundStyle(.white)
@@ -29,7 +29,7 @@ struct HeatmapWidgetView: View {
                 if let total = snapshot?.weeklyTotalSeconds, total > 0 {
                     Text("\(lsHours(total)) this week")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.secondary)
                 }
             }
             grid(daily)
@@ -72,10 +72,7 @@ struct HeatmapWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "Heatmap", provider: ContinuePlayingProvider()) { entry in
             HeatmapWidgetView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Play Heatmap")
         .description("Sixteen weeks of play, one square per day — the habit at a glance.")
@@ -103,12 +100,12 @@ struct FinishedShareView: View {
                             .foregroundStyle(.white)
                         Text("\(done)/\(total)")
                             .font(.system(size: 9, weight: .semibold).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                     }
                 }
             Text("Finished")
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(.primary)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .widgetURL(WidgetShared.statsURL)
@@ -119,10 +116,7 @@ struct FinishedShareWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "FinishedShare", provider: ContinuePlayingProvider()) { entry in
             FinishedShareView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Finished Share")
         .description("How much of the whole library you've finished.")

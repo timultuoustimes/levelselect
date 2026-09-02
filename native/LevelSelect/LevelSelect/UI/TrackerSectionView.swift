@@ -924,9 +924,9 @@ struct TrackerSectionView: View {
             }
         }
         .padding(10)
-        .background(.white.opacity(0.04), in: .rect(cornerRadius: 10))
+        .background(LSTheme.cardFill, in: .rect(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10)
-            .strokeBorder(.white.opacity(0.08), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            .strokeBorder(LSTheme.hairline, style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .contextMenu {
             moveActions(category)
             Divider()

@@ -774,7 +774,7 @@ struct GameDetailView: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .padding(6)
-                        .background(.white.opacity(0.08), in: .circle)
+                        .background(LSTheme.cardFill, in: .circle)
                 }
                 .buttonStyle(.plain)
             }
@@ -833,7 +833,7 @@ struct GameDetailView: View {
                 Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
                     .font(.caption.weight(.bold))
                     .padding(6)
-                    .background(.white.opacity(0.08), in: .circle)
+                    .background(LSTheme.cardFill, in: .circle)
             }
             .buttonStyle(.plain)
             Button {
@@ -842,7 +842,7 @@ struct GameDetailView: View {
                 Image(systemName: "stop.fill")
                     .font(.caption.weight(.bold))
                     .padding(6)
-                    .background(.white.opacity(0.08), in: .circle)
+                    .background(LSTheme.cardFill, in: .circle)
             }
             .buttonStyle(.plain)
         } else {
@@ -870,7 +870,7 @@ struct GameDetailView: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .padding(6)
-                        .background(.white.opacity(0.08), in: .circle)
+                        .background(LSTheme.cardFill, in: .circle)
                 }
                 .buttonStyle(.plain)
             }
@@ -1281,7 +1281,7 @@ struct GameDetailView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                    .strokeBorder(LSTheme.hairline, lineWidth: 1)
             }
     }
 

@@ -53,7 +53,7 @@ struct ReleaseCalendarWidgetView: View {
             VStack(alignment: .leading, spacing: 7) {
                 Label("RELEASE CALENDAR", systemImage: "calendar")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
 
                 ForEach(games) { game in
@@ -69,7 +69,7 @@ struct ReleaseCalendarWidgetView: View {
                                 Text(game.releaseDate.formatted(
                                     Date.FormatStyle(timeZone: .gmt).month(.abbreviated)))
                                     .font(.system(size: 9, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.55))
+                                    .foregroundStyle(.secondary)
                             }
                             .frame(width: 30)
 
@@ -86,7 +86,7 @@ struct ReleaseCalendarWidgetView: View {
 
                             Text(ReleaseCountdown.countdown(to: game.releaseDate) ?? "")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
                     }
@@ -143,13 +143,13 @@ extension ReleaseCalendarWidgetView {
                 Spacer(minLength: 0)
             }
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(.white.opacity(0.55))
+            .foregroundStyle(.secondary)
 
             HStack(spacing: 2) {
                 ForEach(cal.veryShortStandaloneWeekdaySymbols, id: \.self) { day in
                     Text(day)
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.35))
+                        .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -171,7 +171,7 @@ extension ReleaseCalendarWidgetView {
                         } else {
                             Text("\(day)")
                                 .font(.system(size: 13, weight: .medium).monospacedDigit())
-                                .foregroundStyle(.white.opacity(0.45))
+                                .foregroundStyle(.tertiary)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     }
@@ -187,10 +187,7 @@ struct ReleaseCalendarWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "ReleaseCalendar", provider: ReleaseCalendarProvider()) { entry in
             ReleaseCalendarWidgetView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Release Calendar")
         .description("The dates your wanted games land on, soonest first.")

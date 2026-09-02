@@ -41,3 +41,50 @@ struct RingView: View {
         }
     }
 }
+
+// MARK: The widget's ground
+
+extension LSWidget {
+    /// What the app is set to, read from the snapshot.
+    ///
+    /// A widget cannot use `.preferredColorScheme` — WidgetKit hands it the
+    /// system's scheme and ignores that modifier — so the choice arrives as an
+    /// environment override on the content instead. Without it, an app pinned
+    /// to Light would sit beside dark widgets on the same Home Screen.
+    static var appearance: LSAppearance {
+        LSAppearance(raw: WidgetSnapshot.load()?.appearanceRaw)
+    }
+
+    /// The same ground the app draws, from the same function — so a widget
+    /// beside the app is the same colour rather than a good match.
+    static var ground: LinearGradient {
+        LSTheme.ground(tintedBy: WidgetSnapshot.load()?.backgroundHex.flatMap { Color(hex: $0) })
+    }
+}
+
+extension View {
+    /// One place every widget gets its ground and its theme.
+    ///
+    /// Fifteen widgets each repeated the same navy gradient literal, which is
+    /// why they all stayed dark when the app learned to be light — there was
+    /// no single thing to change. Now there is.
+    func lsWidgetSurface() -> some View {
+        modifier(LSWidgetSurface())
+    }
+}
+
+private struct LSWidgetSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        Group {
+            if let scheme = LSWidget.appearance.colorScheme {
+                // `.system` deliberately applies nothing, so the widget keeps
+                // following the phone rather than being pinned to a copy of
+                // whatever it was when the snapshot was written.
+                content.environment(\.colorScheme, scheme)
+            } else {
+                content
+            }
+        }
+        .containerBackground(for: .widget) { LSWidget.ground }
+    }
+}
