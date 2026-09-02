@@ -15,6 +15,8 @@ enum ThemePalette {
     private static var statusOverrides: [GameStatus: Color] = [:]
     /// Custom words on the five stars ([] = the built-in labels).
     private(set) static var starNames: [String] = []
+    /// Custom words for statuses ([:] = the built-in ones).
+    private static var statusNameOverrides: [String: String] = [:]
     /// How hard the game-page backdrop reads.
     private(set) static var backdropIntensity: BackdropIntensity = .standard
     /// How game pages arrange their header.
@@ -29,6 +31,18 @@ enum ThemePalette {
             return starNames[rating - 1]
         }
         return RatingControl.labels[max(1, min(rating, 5)) - 1]
+    }
+
+    /// The word a status wears: the user's if set, the built-in if not.
+    ///
+    /// Blank counts as unset, so clearing the field restores the default
+    /// rather than leaving a shelf with no heading at all.
+    static func statusName(for status: GameStatus) -> String {
+        if let custom = statusNameOverrides[status.rawValue],
+           !custom.trimmingCharacters(in: .whitespaces).isEmpty {
+            return custom
+        }
+        return status.defaultTitle
     }
 
     /// Built-in defaults (the palette shipped before theming existed).
@@ -106,6 +120,7 @@ enum ThemePalette {
         }
         statusOverrides = overrides
         starNames = settings?.starNames ?? []
+        statusNameOverrides = settings?.statusNames ?? [:]
         backdropIntensity = settings?.backdropIntensityRaw
             .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard
         gamePageLayout = settings?.gamePageLayoutRaw
