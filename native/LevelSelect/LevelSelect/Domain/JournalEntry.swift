@@ -1,0 +1,230 @@
+import Foundation
+
+/// One thing you did, and when.
+///
+/// **Nothing here is stored.** The app has been generating a diary since build
+/// one and throwing the spine away at display time: a session, a finish and a
+/// run are all "something you did, on a date, with your own words optionally
+/// attached", and every one of them was readable only inside the sheet that
+/// produced it. `Session.notes`, `CompletionEvent.notes` and `Run.notes` are
+/// already dated, already synced, and already written. This type is the spine,
+/// rebuilt at read time — which is why the journal costs no new model, no
+/// CloudKit promote, and asks nothing new of anyone.
+struct JournalEntry: Identifiable {
+    enum Kind {
+        case session, completion, run
+
+        var icon: String {
+            switch self {
+            case .session:    "timer"
+            case .completion: "flag.checkered"
+            case .run:        "dice.fill"
+            }
+        }
+    }
+
+    let id: UUID
+    let kind: Kind
+    /// When it happened, for ordering. What it is *filed under* is `grain`,
+    /// which is not always a day.
+    let date: Date
+    /// How precisely `date` is actually known. Sessions and runs are instants
+    /// the app timestamped itself; only a finish can be vague.
+    let grain: JournalPeriod.Grain
+    let game: Game?
+    /// What the entry is about. The game's name, nearly always.
+    let title: String
+    /// The app's own summary — a duration, a finish label, an outcome.
+    let detail: String?
+    /// Your words. The reason the whole surface exists.
+    let note: String?
+    let companions: [Companion]
+}
+
+/// A heading and the entries under it.
+///
+/// Not simply "a day", because the app already refuses to pretend it knows
+/// more than it was told. A finish recorded as *"2011"* is stored on 1 January
+/// with `datePrecision == "year"` precisely so it can be *printed* as 2011 —
+/// filing it under a heading reading "Saturday 1 January 2011" would take a
+/// truth the model went to some trouble to preserve and turn it back into the
+/// lie it was designed to avoid. So the grain of a heading is the grain of
+/// what it holds.
+struct JournalPeriod: Identifiable {
+    enum Grain: Int, Comparable {
+        case day = 0, month = 1, year = 2
+        static func < (a: Grain, b: Grain) -> Bool { a.rawValue < b.rawValue }
+
+        /// `CompletionEvent.datePrecision`'s vocabulary, reused rather than a
+        /// second one invented beside it.
+        init(precision: String?) {
+            switch precision {
+            case "year":  self = .year
+            case "month": self = .month
+            default:      self = .day
+            }
+        }
+
+        func start(of date: Date, calendar: Calendar) -> Date {
+            switch self {
+            case .day:   calendar.startOfDay(for: date)
+            case .month: calendar.dateInterval(of: .month, for: date)?.start
+                            ?? calendar.startOfDay(for: date)
+            case .year:  calendar.dateInterval(of: .year, for: date)?.start
+                            ?? calendar.startOfDay(for: date)
+            }
+        }
+    }
+
+    let start: Date
+    let grain: Grain
+    let entries: [JournalEntry]
+
+    var id: String { "\(grain.rawValue)@\(start.timeIntervalSince1970)" }
+
+    /// The heading. Relative for the two days everyone has a word for, and the
+    /// year dropped while it is the current one — a journal you are reading
+    /// today does not need to keep saying 2026.
+    func title(now: Date = .now, calendar: Calendar = JournalBuilder.calendar) -> String {
+        switch grain {
+        case .year:  return String(calendar.component(.year, from: start))
+        case .month: return start.formatted(.dateTime.month(.wide).year())
+        case .day:
+            if calendar.isDateInToday(start)     { return "Today" }
+            if calendar.isDateInYesterday(start) { return "Yesterday" }
+            let sameYear = calendar.component(.year, from: start)
+                        == calendar.component(.year, from: now)
+            return sameYear
+                ? start.formatted(.dateTime.weekday(.wide).day().month(.wide))
+                : start.formatted(.dateTime.weekday(.abbreviated).day().month(.wide).year())
+        }
+    }
+}
+
+enum JournalBuilder {
+    /// **Local, on purpose — and deliberately not the UTC calendar the release
+    /// dates use.**
+    ///
+    /// Those two look like the same decision and are opposites. A release date
+    /// is a calendar fact the world agrees on, so it is read in UTC or it
+    /// drifts a day for everyone west of Greenwich. A session is something
+    /// *you* did, and the day it belongs to is the day it was where you were
+    /// sitting.
+    static var calendar: Calendar { .current }
+
+    /// Everything, newest first.
+    ///
+    /// Entries with no note are kept. A journal of only the days you felt like
+    /// writing is a journal that is empty, and the record of having played at
+    /// all is what the writing later hangs off.
+    static func periods(from games: [Game], now: Date = .now) -> [JournalPeriod] {
+        var entries: [JournalEntry] = []
+
+        for game in games {
+            for playthrough in game.livePlaythroughs {
+                for session in (playthrough.sessions ?? []) where session.deletedAt == nil {
+                    // A running session has not happened yet. It belongs to
+                    // the timer on Home, not to the record of what you did.
+                    guard session.endDate != nil else { continue }
+                    entries.append(JournalEntry(
+                        id: session.id,
+                        kind: .session,
+                        date: session.startDate,
+                        grain: .day,
+                        game: game,
+                        title: game.name,
+                        detail: Format.duration(session.elapsed()),
+                        note: session.notes?.journalText,
+                        companions: session.companions))
+                }
+                for run in (playthrough.runs ?? []) where run.deletedAt == nil {
+                    guard run.outcome != .inProgress else { continue }
+                    entries.append(JournalEntry(
+                        id: run.id,
+                        kind: .run,
+                        date: run.endedAt ?? run.startedAt,
+                        grain: .day,
+                        game: game,
+                        title: game.name,
+                        detail: run.outcome.journalText,
+                        note: run.notes?.journalText,
+                        companions: run.companions))
+                }
+            }
+            for finish in (game.completionEvents ?? []) where finish.deletedAt == nil {
+                entries.append(JournalEntry(
+                    id: finish.id,
+                    kind: .completion,
+                    date: finish.date,
+                    grain: JournalPeriod.Grain(precision: finish.datePrecision),
+                    game: game,
+                    title: game.name,
+                    detail: finish.journalLabel,
+                    note: finish.notes?.journalText,
+                    companions: finish.companions))
+            }
+        }
+
+        return group(entries)
+    }
+
+    private static func group(_ entries: [JournalEntry]) -> [JournalPeriod] {
+        var buckets: [String: (start: Date, grain: JournalPeriod.Grain, items: [JournalEntry])] = [:]
+
+        for entry in entries {
+            let start = entry.grain.start(of: entry.date, calendar: calendar)
+            let key = "\(entry.grain.rawValue)@\(start.timeIntervalSince1970)"
+            buckets[key, default: (start, entry.grain, [])].items.append(entry)
+        }
+
+        return buckets.values
+            .map {
+                JournalPeriod(
+                    start: $0.start,
+                    grain: $0.grain,
+                    // Within a period, latest first — the same direction the
+                    // page reads, so scrolling never reverses mid-column.
+                    entries: $0.items.sorted { $0.date > $1.date })
+            }
+            // Newest first. When a year bucket and a day inside it land on the
+            // same instant, the precise one goes on top: it says more.
+            .sorted {
+                $0.start == $1.start ? $0.grain < $1.grain : $0.start > $1.start
+            }
+    }
+}
+
+extension RunOutcome {
+    var journalText: String {
+        switch self {
+        case .success:    "Run won"
+        case .failure:    "Run lost"
+        case .neutral:    "Run ended"
+        case .inProgress: "Run in progress"
+        }
+    }
+}
+
+extension CompletionEvent {
+    /// The short noun a timeline row needs. `CompletionSection` spells these
+    /// out as sentences for its picker ("100% — all of my list"); a row under
+    /// a date wants the label, not the explanation.
+    var journalLabel: String {
+        switch label {
+        case .cleared:        "Beaten"
+        case .completed:      "Completed"
+        case .hundredPercent: "100%"
+        case .newGamePlus:    "New Game+"
+        case .custom:         customLabel?.journalText ?? "Finished"
+        }
+    }
+}
+
+extension String {
+    /// Blank strings are absent values wearing a value's clothes, and a row
+    /// draws differently when a note is genuinely there.
+    var journalText: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

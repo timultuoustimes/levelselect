@@ -29,7 +29,7 @@ struct RootView: View {
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
                 Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
-                Tab("Stats", systemImage: "chart.bar.fill", value: LSTab.stats) { StatsTab() }
+                Tab("Journal", systemImage: "book.closed.fill", value: LSTab.journal) { JournalTab() }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
@@ -180,7 +180,8 @@ struct RootView: View {
         case "continue": nav.continuePlaying()
         case "library": nav.go(to: .library)
         case "wishlist": nav.go(to: .wishlist)
-        case "stats": nav.go(to: .stats)
+        // Both spellings: "stats" is what every widget already baked.
+        case "journal", "stats": nav.go(to: .journal)
         case "shuffle":
             // The lock-screen die: every tap is a fresh roll, made HERE at
             // launch — a widget URL is baked per timeline entry, so rolling

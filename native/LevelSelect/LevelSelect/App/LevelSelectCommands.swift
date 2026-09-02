@@ -96,7 +96,7 @@ extension LSTab {
         case .home: "Home"
         case .library: "Library"
         case .wishlist: "Wishlist"
-        case .stats: "Stats"
+        case .journal: "Journal"
         }
     }
 }

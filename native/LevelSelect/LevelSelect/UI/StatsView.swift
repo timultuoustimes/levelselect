@@ -143,7 +143,15 @@ enum StatsCard: String, CaseIterable, Identifiable {
     }
 }
 
-struct StatsTab: View {
+/// The charts — one lens on your history, not the whole of it.
+///
+/// This was the entire Stats tab through build 35. It kept every card, every
+/// group and every arrangement when the journal took the tab over; what it
+/// gave up was owning the `NavigationStack`, the title and the navigation
+/// destinations, which now belong to `JournalTab` so both lenses push onto
+/// the same stack. Its own toolbar stays here, because Arrange is a charts
+/// verb and SwiftUI merges a child's toolbar into the enclosing stack.
+struct StatsCards: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var games: [Game]
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -180,7 +188,6 @@ struct StatsTab: View {
     }
 
     var body: some View {
-        NavigationStack {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     // Each computed once per body pass. As properties they
@@ -233,12 +240,6 @@ struct StatsTab: View {
                 .padding()
             }
             .scrollIndicators(.hidden)
-            .lsBackground()
-            .navigationTitle("Stats")
-            // Glass, like Home — see LibraryView.
-            #if os(macOS)
-            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-            #endif
             .toolbar {
                 Button {
                     arranging = true
@@ -249,13 +250,8 @@ struct StatsTab: View {
             .sheet(isPresented: $arranging) {
                 StatsArrangeSheet(orderRaw: $cardOrderRaw, hiddenRaw: $hiddenCardsRaw)
             }
-            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
-            .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
-            .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
-            .navigationDestination(for: CompletionYearRoute.self) { CompletionYearView(year: $0.year) }
             .dekuBrowser(target: $raBrowser)
             .task { await loadRAAwards() }
-        }
     }
 
     /// Cached wall first, then a refresh at most once a day. No account, no

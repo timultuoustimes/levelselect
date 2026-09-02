@@ -3,13 +3,14 @@ import SwiftData
 
 /// A top-level section of the app, for the "Open …" shortcuts.
 enum LSSection: String, AppEnum {
-    case home, library, wishlist, stats
+    /// Raw values are the Shortcuts identifiers — see `LSTab`.
+    case home, library, wishlist, journal = "stats"
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation {
         TypeDisplayRepresentation(name: "Section")
     }
     static var caseDisplayRepresentations: [LSSection: DisplayRepresentation] {
-        [.home: "Home", .library: "Library", .wishlist: "Wishlist", .stats: "Stats"]
+        [.home: "Home", .library: "Library", .wishlist: "Wishlist", .journal: "Journal"]
     }
 
     var tab: LSTab {
@@ -17,7 +18,7 @@ enum LSSection: String, AppEnum {
         case .home: .home
         case .library: .library
         case .wishlist: .wishlist
-        case .stats: .stats
+        case .journal: .journal
         }
     }
 }
