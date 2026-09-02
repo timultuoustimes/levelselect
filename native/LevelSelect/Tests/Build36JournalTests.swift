@@ -252,3 +252,107 @@ struct Build36JournalTests {
         #expect(lastYear.title(now: now).contains("2025"))
     }
 }
+
+/// Build 36 — the prompt that gives the timeline something to read.
+@MainActor
+struct Build36SessionNoteTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func endedSession(_ context: ModelContext,
+                              endedAgo: TimeInterval,
+                              notes: String? = nil,
+                              deleted: Bool = false) -> Session {
+        let game = Game(name: "Hades")
+        let playthrough = Playthrough()
+        playthrough.game = game
+        let session = Session()
+        session.playthrough = playthrough
+        session.endDate = Date.now.addingTimeInterval(-endedAgo)
+        session.startDate = session.endDate!.addingTimeInterval(-1800)
+        session.notes = notes
+        if deleted { session.deletedAt = .now }
+        context.insert(game); context.insert(playthrough); context.insert(session)
+        return session
+    }
+
+    /// The question is about the thing you were just doing.
+    @Test func aJustFinishedSessionIsAskedAbout() {
+        let context = makeContext()
+        let session = endedSession(context, endedAgo: 30)
+        #expect(SessionNotePrompt.candidate(among: [session], watermark: 0)?.id == session.id)
+    }
+
+    /// **The line between helpful and an interrogation.** "What happened?" is
+    /// a good question about ten minutes ago and a bad one about last Tuesday,
+    /// so anything past the window is left alone forever.
+    @Test func anOldSessionIsNeverAskedAbout() {
+        let context = makeContext()
+        let old = endedSession(context, endedAgo: SessionNotePrompt.window + 60)
+        #expect(SessionNotePrompt.candidate(among: [old], watermark: 0) == nil)
+    }
+
+    /// Already written about is already answered.
+    @Test func aSessionThatAlreadyHasANoteIsSkipped() {
+        let context = makeContext()
+        let written = endedSession(context, endedAgo: 30, notes: "Beat the third boss.")
+        #expect(SessionNotePrompt.candidate(among: [written], watermark: 0) == nil)
+    }
+
+    /// A whitespace note is not a note, so the question is still open.
+    @Test func aBlankNoteDoesNotCountAsAnswered() {
+        let context = makeContext()
+        let blank = endedSession(context, endedAgo: 30, notes: "   ")
+        #expect(SessionNotePrompt.candidate(among: [blank], watermark: 0) != nil)
+    }
+
+    /// A running session has not ended; there is nothing to ask about yet.
+    @Test func aRunningSessionIsNotACandidate() {
+        let context = makeContext()
+        let running = endedSession(context, endedAgo: 30)
+        running.endDate = nil
+        #expect(SessionNotePrompt.candidate(among: [running], watermark: 0) == nil)
+    }
+
+    @Test func aDeletedSessionIsNotACandidate() {
+        let context = makeContext()
+        let gone = endedSession(context, endedAgo: 30, deleted: true)
+        #expect(SessionNotePrompt.candidate(among: [gone], watermark: 0) == nil)
+    }
+
+    /// The watermark is what stops a relaunch asking the same question again.
+    @Test func theWatermarkRetiresASessionForGood() {
+        let context = makeContext()
+        let session = endedSession(context, endedAgo: 30)
+        let mark = session.endDate!.timeIntervalSinceReferenceDate
+        #expect(SessionNotePrompt.candidate(among: [session], watermark: mark) == nil)
+    }
+
+    /// Two in the window means the one you just finished, not the older one.
+    @Test func theMostRecentlyEndedSessionWins() {
+        let context = makeContext()
+        let older = endedSession(context, endedAgo: 400)
+        let newer = endedSession(context, endedAgo: 20)
+        #expect(SessionNotePrompt.candidate(among: [older, newer], watermark: 0)?.id == newer.id)
+    }
+
+    /// **Writing a note must not touch the clock.** `updateSession` recomputes
+    /// the duration from start and end, and for a session that was paused those
+    /// deliberately disagree — so routing a note through it would inflate the
+    /// recorded playtime. This is the same class of bug build 34 fixed in the
+    /// session editor, and the notes-only path exists to avoid repeating it.
+    @Test func savingANoteLeavesAPausedSessionsDurationAlone() {
+        let context = makeContext()
+        let session = endedSession(context, endedAgo: 30)
+        // Half an hour of wall clock, ten minutes actually played.
+        session.accumulatedDuration = 600
+        let before = session.accumulatedDuration
+
+        Repository(context).setSessionNotes(session, "Stopped for dinner halfway.")
+
+        #expect(session.accumulatedDuration == before)
+        #expect(session.notes == "Stopped for dinner halfway.")
+    }
+}

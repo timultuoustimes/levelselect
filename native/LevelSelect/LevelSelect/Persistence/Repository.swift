@@ -787,6 +787,20 @@ struct Repository {
         persist()
     }
 
+    /// Write only the note, leaving the clock alone.
+    ///
+    /// **Not `updateSession`**, which recomputes `accumulatedDuration` from
+    /// start and end. For a session that was ever paused those disagree — the
+    /// accumulated time is deliberately *less* than the wall-clock span — so
+    /// routing a notes-only write through it would silently inflate the
+    /// recorded playtime, which is exactly the bug build 34 fixed in the
+    /// session editor.
+    func setSessionNotes(_ session: Session, _ notes: String?) {
+        session.notes = notes?.isEmpty == true ? nil : notes
+        touch(session)
+        persist()
+    }
+
     /// Edit a completed session's times and notes.
     func updateSession(_ session: Session, start: Date, end: Date, notes: String?) {
         let clampedEnd = max(start, end)

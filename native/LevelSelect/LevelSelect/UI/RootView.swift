@@ -29,10 +29,11 @@ struct RootView: View {
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
                 Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
-                Tab("Journal", systemImage: "book.closed.fill", value: LSTab.journal) { JournalTab() }
+                Tab("Journal", systemImage: "scroll.fill", value: LSTab.journal) { JournalTab() }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
+            .sessionNotePrompt()
             .releaseRemindersPrompt()
             .overlappingTimerGuard()
             .id(nav.themeRevision)
