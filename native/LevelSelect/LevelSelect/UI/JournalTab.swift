@@ -154,7 +154,9 @@ private struct JournalRow: View {
                     HStack(spacing: 6) {
                         Image(systemName: entry.kind.icon)
                             .font(.caption2)
-                        if let detail = entry.detail {
+                        if let duration = entry.duration {
+                            Text(Format.duration(duration))
+                        } else if let detail = entry.detail {
                             Text(detail)
                         }
                         // Only a same-day entry gets a clock: printing 12:00

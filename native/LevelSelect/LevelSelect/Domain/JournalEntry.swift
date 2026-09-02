@@ -34,8 +34,17 @@ struct JournalEntry: Identifiable {
     let game: Game?
     /// What the entry is about. The game's name, nearly always.
     let title: String
-    /// The app's own summary — a duration, a finish label, an outcome.
+    /// The app's own summary — a finish label, a run outcome.
+    ///
+    /// A session's summary is its `duration` instead, because formatting it
+    /// here would mean reaching into `UI/Formatting.swift`, and **Domain is
+    /// compiled into the watch target while UI is not** (see `project.yml`).
+    /// Baking a display string into a value type would have been the wrong
+    /// shape regardless; the watch simply refuses to let it compile.
     let detail: String?
+
+    /// How long a session ran. Formatted by whoever draws it.
+    let duration: TimeInterval?
     /// Your words. The reason the whole surface exists.
     let note: String?
     let companions: [Companion]
@@ -133,7 +142,8 @@ enum JournalBuilder {
                         grain: .day,
                         game: game,
                         title: game.name,
-                        detail: Format.duration(session.elapsed()),
+                        detail: nil,
+                        duration: session.elapsed(),
                         note: session.notes?.journalText,
                         companions: session.companions))
                 }
@@ -147,6 +157,7 @@ enum JournalBuilder {
                         game: game,
                         title: game.name,
                         detail: run.outcome.journalText,
+                        duration: nil,
                         note: run.notes?.journalText,
                         companions: run.companions))
                 }
@@ -160,6 +171,7 @@ enum JournalBuilder {
                     game: game,
                     title: game.name,
                     detail: finish.journalLabel,
+                    duration: nil,
                     note: finish.notes?.journalText,
                     companions: finish.companions))
             }
