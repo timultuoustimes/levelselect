@@ -80,7 +80,55 @@ final class ThemeSettings {
     /// should follow you between devices.
     var starNamesData: Data?
 
+    /// Your own word for a status: JSON `[statusRawValue: name]`. Schema V5.
+    ///
+    /// The same argument as `starNamesData`, and it arrived the same way — by
+    /// Tim finding a status that was wrong for him. Games he played to death
+    /// as a kid and will never finish are not *Abandoned*, which says the game
+    /// lost him, and not *Backlog*, which says he never started. One person's
+    /// "Abandoned" is another's "played it to bits", and that disagreement is
+    /// not resolvable by picking a better default word.
+    ///
+    /// So the app states what it means (see `GameStatus.blurb`) and lets you
+    /// disagree. Synced, because your words for your own shelves should follow
+    /// you between devices.
+    var statusNamesData: Data?
+
+    // MARK: Build 36 — appearance (fields ahead of the feature, on purpose)
+
+    /// `system` | `light` | `dark`; nil = system. Schema V5.
+    ///
+    /// **Shipped ahead of the light theme that will use it.** An unused
+    /// optional costs nothing and a schema version costs a promote cycle, so a
+    /// field whose feature is a build away still belongs in the batch that is
+    /// deploying today. That reasoning is why V2 landed eight items at once.
+    ///
+    /// Synced rather than device-local: unlike the card order or a flip state,
+    /// "this app is light for me" is a statement about the app rather than
+    /// about the device you happen to be holding.
+    var appearanceRaw: String?
+
+    /// A custom page background (hex), overriding whatever the appearance
+    /// would otherwise pick. nil = the appearance's own default.
+    ///
+    /// Separate from `accentHex` because they fail differently: a bad accent
+    /// is ugly, a bad background makes text unreadable. Keeping them apart
+    /// lets the background be validated for contrast on its own terms.
+    var backgroundHex: String?
+
     init() {}
+
+    var statusNames: [String: String] {
+        get {
+            guard let data = statusNamesData,
+                  let map = try? JSONDecoder().decode([String: String].self, from: data)
+            else { return [:] }
+            return map
+        }
+        set {
+            statusNamesData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue)
+        }
+    }
 
     var statusColors: [String: String] {
         get {

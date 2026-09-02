@@ -10,7 +10,46 @@ import Foundation
 /// Adding a case costs no schema version: this is stored as a String
 /// attribute, so the shape on disk and in CloudKit is unchanged.
 enum GameStatus: String, Codable, CaseIterable, Sendable {
-    case backlog, playing, paused, completed, queued, shelved, abandoned, wishlist, ongoing
+    /// `oldFavorite` is build 36. Free to add — a new case in a String-raw
+    /// enum needs no schema version, the same path `wishlist` and `ongoing`
+    /// took.
+    case backlog, playing, paused, completed, queued, shelved, abandoned,
+         wishlist, ongoing, oldFavorite
+
+    /// What each one MEANS, in one line, shown where you choose it.
+    ///
+    /// Nine statuses shipped without this and the cost showed up in the
+    /// obvious way: asked to list the ones that did not fit his childhood
+    /// games, Tim named four and did not mention `shelved` at all — a status
+    /// he had designed. If the author loses track of one, nobody else stands
+    /// a chance.
+    ///
+    /// A blurb rather than a "status key" page, because a key is something you
+    /// have to go and find, and the moment you need the meaning is the moment
+    /// you are choosing. `PlaythroughOutcome` already does exactly this.
+    ///
+    /// These are the app's meaning, not the last word — `ThemeSettings
+    /// .statusNames` lets anyone disagree.
+    var blurb: String {
+        switch self {
+        case .playing:     "You're in it now."
+        case .ongoing:     "No ending to reach — you just play it."
+        case .paused:      "Mid-run, and you mean to go back."
+        case .queued:      "Next up, once you have room."
+        case .backlog:     "Yours, and not started yet."
+        case .wishlist:    "Not yours yet."
+        case .completed:   "You finished it."
+        // The one this set was missing, and the gap it fills is precise.
+        // Every other status here sits on a progress axis; `ongoing` escapes
+        // by saying no finish line exists. These games HAVE one — you're
+        // simply not walking toward it, and that isn't a verdict on the game.
+        // Tim: "I'm not going to beat a game like Barkley Shut Up and Jam,
+        // but I don't feel like I've abandoned them."
+        case .oldFavorite: "Played to bits, never finished, still loved."
+        case .shelved:     "Set aside, no plans either way."
+        case .abandoned:   "It lost you, and you're not going back."
+        }
+    }
 }
 
 enum SessionState: String, Codable, Sendable {

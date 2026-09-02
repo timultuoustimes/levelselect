@@ -39,6 +39,9 @@ enum ThemePalette {
         case .completed: .blue
         case .queued:    .purple
         case .backlog:   .gray
+        // Warm, and deliberately not near .abandoned's colour: the whole
+        // point of the status is that it is not a failure.
+        case .oldFavorite: .pink
         case .shelved:   .brown
         case .abandoned: .red
         case .wishlist:  .pink

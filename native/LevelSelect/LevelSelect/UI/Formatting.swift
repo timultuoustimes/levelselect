@@ -55,6 +55,7 @@ extension GameStatus {
         case .completed: "checkmark.circle.fill"
         case .queued:    "text.append"
         case .backlog:   "tray.full"
+        case .oldFavorite: "heart.circle"
         case .shelved:   "archivebox"
         case .abandoned: "xmark.circle"
         case .wishlist:  "heart.fill"
@@ -68,8 +69,10 @@ extension GameStatus {
     /// is closer to what you're playing than to a backlog, and burying it
     /// below the finished pile would defeat the point of having the status.
     static var displayOrder: [GameStatus] {
+        // Old Favorite sits with the past-tense statuses rather than the
+        // queue: it is where a game ends up, not where it waits.
         [.playing, .ongoing, .paused, .queued, .backlog, .wishlist,
-         .completed, .shelved, .abandoned]
+         .completed, .oldFavorite, .shelved, .abandoned]
     }
 
     /// The statuses Home carries: what is live and what is next.
@@ -93,6 +96,7 @@ extension GameStatus {
         case .queued:    "Up Next"
         case .backlog:   "Backlog"
         case .completed: "Completed"
+        case .oldFavorite: "Old Favorite"
         case .shelved:   "Shelved"
         case .abandoned: "Abandoned"
         case .wishlist:  "Wishlist"
