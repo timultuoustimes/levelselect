@@ -125,7 +125,12 @@ struct ProfileHeader: View {
                         // The ink darkened, so a custom name colour gets a
                         // shadow that belongs to it rather than a fixed brown
                         // — the rule `Wordmark.shadowTint` already follows.
-                        .shadow(color: ink.mix(with: .black, by: 0.55), radius: 0, y: 3)
+                        // y:2, not 3. The face draws on a pixel grid, and an
+                        // offset larger than one of its blocks leaves a lit
+                        // gap between glyph and shadow instead of a solid
+                        // step — visible at 22pt, which is far larger than
+                        // the wordmark usually renders.
+                        .shadow(color: ink.mix(with: .black, by: 0.55), radius: 0, y: 2)
                 }
                 handleChips(profile)
             }
@@ -410,6 +415,36 @@ struct ProfileEditor: View {
 
     private var profile: PlayerProfile? { profiles.first }
 
+    /// Extracted from `body` because the whole Form went past the
+    /// type-checker's budget — "unable to type-check this expression in
+    /// reasonable time" is a size complaint, not a correctness one, and the
+    /// cure is to give the largest sub-expression its own name.
+    private var avatarButton: some View {
+        Button { choosingSource = true } label: {
+            ZStack {
+                if let avatar {
+                    LocalArtworkThumb(data: avatar, contentMode: .fit)
+                        .frame(width: 108, height: 108)
+                } else {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 78))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: 116, height: 116)
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(LSTheme.onAccent)
+                    .frame(width: 28, height: 28)
+                    .background(LSTheme.accent, in: .circle)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(avatar == nil ? "Add a picture" : "Change picture")
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -422,29 +457,7 @@ struct ProfileEditor: View {
                             // Form row — which hit-tested as a single control
                             // and fired the wrong one — and none of them was
                             // the thing you actually want to tap.
-                            Button { choosingSource = true } label: {
-                                ZStack {
-                                    if let avatar {
-                                        LocalArtworkThumb(data: avatar, contentMode: .fit)
-                                            .frame(width: 108, height: 108)
-                                    } else {
-                                        Image(systemName: "person.crop.circle")
-                                            .font(.system(size: 78))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                .frame(width: 116, height: 116)
-                                .overlay(alignment: .bottomTrailing) {
-                                    Image(systemName: "pencil")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(LSTheme.onAccent)
-                                        .frame(width: 28, height: 28)
-                                        .background(LSTheme.accent, in: .circle)
-                                }
-                                .contentShape(.rect)
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(avatar == nil ? "Add a picture" : "Change picture")
+                            avatarButton
 
                             Text(avatar == nil ? "Add a picture" : "Tap to change")
                                 .font(.caption)
@@ -497,14 +510,16 @@ struct ProfileEditor: View {
 
                     if ProfileNameColor.mode(of: nameColorRaw) == .custom {
                         NavigationLink {
-                            ColorEditor(
-                                title: "Name color",
-                                defaultColor: LSTheme.accent,
-                                isCustomised: true,
-                                color: Binding(
-                                    get: { Color(hex: nameColorRaw) ?? LSTheme.accent },
-                                    set: { nameColorRaw = $0.hexString() ?? nameColorRaw }),
-                                onReset: { nameColorRaw = ProfileNameColor.accent })
+                            ColorEditor(title: "Name color", targets: [
+                                ColorTarget(
+                                    id: "name", label: "Name color",
+                                    defaultColor: LSTheme.accent,
+                                    isCustomised: true,
+                                    binding: Binding(
+                                        get: { Color(hex: nameColorRaw) ?? LSTheme.accent },
+                                        set: { nameColorRaw = $0.hexString() ?? nameColorRaw }),
+                                    onReset: { nameColorRaw = ProfileNameColor.accent }),
+                            ])
                         } label: {
                             HStack {
                                 Text("Pick a color")

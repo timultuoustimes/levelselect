@@ -437,13 +437,39 @@ struct AccentContrastTests {
         #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
-    /// Tim's own accent — torch orange. Mid-tone, so it is exactly the case a
-    /// naive 0.5 threshold gets wrong.
-    @Test func torchOrangeGetsDarkText() {
+    /// Tim's own accent — torch orange, and the case that drove the whole
+    /// knockout design.
+    ///
+    /// It is the awkward one: light enough that knocking out to the LIGHT
+    /// ground gives 1.90:1, and dark enough that against the DARK ground it
+    /// gives 8.77:1. So the same accent knocks out cleanly in one theme and
+    /// cannot in the other, which is precisely why the fallback exists — and
+    /// why it darkens the ground rather than reaching for black. Whatever it
+    /// resolves to, it has to be readable.
+    @Test func torchOrangeStaysLegibleInEitherTheme() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5A34D"
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
+    }
+
+    /// The fallback must not quietly become black. Losing the ground's hue
+    /// loses the reason the effect works — the glyph is meant to look cut from
+    /// the material behind it, and black is not that material.
+    @Test func theFallbackKeepsTheGroundsHue() {
+        let paleGround = Color(red: 0.97, green: 0.96, blue: 1.00)
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let ink = ThemePalette.onAccent
+        // Not pure black, and not pure grey: it still carries a hue.
+        #expect(ThemePalette.luminance(of: ink) > 0)
+        if let inkHS = ink.lsHueSaturation, let groundHS = paleGround.lsHueSaturation {
+            #expect(inkHS.saturation > 0.05,
+                    "A darkened ground should stay tinted, not collapse to grey.")
+            #expect(abs(inkHS.hue - groundHS.hue) < 0.05,
+                    "It should be the ground's hue, not some other one.")
+        }
     }
 }
 

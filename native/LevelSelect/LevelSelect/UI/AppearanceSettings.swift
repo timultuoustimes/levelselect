@@ -76,32 +76,12 @@ struct AppearanceSettingsSection: View {
             }
             .padding(.vertical, 2)
 
-            colorRow("Accent color", swatch: LSTheme.accent,
-                     isCustom: settings?.accentHex != nil) {
-                ColorEditor(
-                    title: "Accent color",
-                    defaultColor: LSTheme.defaultAccent,
-                    isCustomised: settings?.accentHex != nil,
-                    color: accentBinding,
-                    onReset: {
-                        let s = ensureSettings()
-                        s.accentHex = nil
-                        save(s)
-                    })
-            }
-
-            colorRow("Background", swatch: ThemePalette.backgroundOverride ?? LSTheme.purpleDeep,
-                     isCustom: settings?.backgroundHex != nil) {
-                ColorEditor(
-                    title: "Background",
-                    defaultColor: LSTheme.purpleDeep,
-                    isCustomised: settings?.backgroundHex != nil,
-                    color: backgroundBinding,
-                    onReset: {
-                        let s = ensureSettings()
-                        s.backgroundHex = nil
-                        save(s)
-                    })
+            // One row, because they are one decision. An accent is chosen
+            // against a ground and a ground against an accent; two sheets
+            // turned a comparison into a memory test.
+            colorRow("Colors", swatch: LSTheme.accent,
+                     isCustom: settings?.accentHex != nil || settings?.backgroundHex != nil) {
+                ColorEditor(title: "Colors", targets: themeColorTargets)
             }
 
             Picker("Game page background", selection: pageBackgroundBinding) {
@@ -146,18 +126,23 @@ struct AppearanceSettingsSection: View {
                     colorRow(status.sectionTitle, icon: status.systemImage,
                              swatch: status.color,
                              isCustom: settings?.statusColors[status.rawValue] != nil) {
-                        ColorEditor(
-                            title: status.sectionTitle,
-                            defaultColor: ThemePalette.defaultColor(for: status),
-                            isCustomised: settings?.statusColors[status.rawValue] != nil,
-                            color: statusBinding(status),
-                            onReset: {
-                                let s = ensureSettings()
-                                var map = s.statusColors
-                                map[status.rawValue] = nil
-                                s.statusColors = map
-                                save(s)
-                            })
+                        // A single target: a status colour is chosen on its
+                        // own, so there is nothing to compare it against and
+                        // the picker stays hidden.
+                        ColorEditor(title: status.sectionTitle, targets: [
+                            ColorTarget(id: status.rawValue,
+                                        label: status.sectionTitle,
+                                        defaultColor: ThemePalette.defaultColor(for: status),
+                                        isCustomised: settings?.statusColors[status.rawValue] != nil,
+                                        binding: statusBinding(status),
+                                        onReset: {
+                                            let s = ensureSettings()
+                                            var map = s.statusColors
+                                            map[status.rawValue] = nil
+                                            s.statusColors = map
+                                            save(s)
+                                        }),
+                        ])
                     }
                 }
             }
@@ -386,6 +371,32 @@ struct AppearanceSettingsSection: View {
                 scheduleSave(s)
             }
         )
+    }
+
+    /// Accent and background, editable side by side. Order is the order they
+    /// appear in the picker, and accent leads because it is the one people
+    /// come here to change.
+    private var themeColorTargets: [ColorTarget] {
+        [
+            ColorTarget(id: "accent", label: "Accent",
+                        defaultColor: LSTheme.defaultAccent,
+                        isCustomised: settings?.accentHex != nil,
+                        binding: accentBinding,
+                        onReset: {
+                            let s = ensureSettings()
+                            s.accentHex = nil
+                            save(s)
+                        }),
+            ColorTarget(id: "background", label: "Background",
+                        defaultColor: LSTheme.purpleDeep,
+                        isCustomised: settings?.backgroundHex != nil,
+                        binding: backgroundBinding,
+                        onReset: {
+                            let s = ensureSettings()
+                            s.backgroundHex = nil
+                            save(s)
+                        }),
+        ]
     }
 
     /// The ground's tint. Only its hue and saturation are used — the theme

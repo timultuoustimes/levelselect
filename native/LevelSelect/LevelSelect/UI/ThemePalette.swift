@@ -148,8 +148,42 @@ enum ThemePalette {
     /// one. 3:1 is the WCAG floor for large text and graphical objects, which
     /// is exactly what this is.
     static func knockout(on accent: Color) -> Color {
-        let ground = groundBase
-        return contrast(ground, accent) >= 3 ? ground : onColor(for: accent)
+        knockoutPreview(on: accent, ground: groundBase)
+    }
+
+    /// The same rule against a ground you name, so the colour editor can show
+    /// a candidate pair before either is stored. The preview has to answer the
+    /// question the button will, and the button's answer depends on both.
+    static func knockoutPreview(on accent: Color, ground rawGround: Color) -> Color {
+        let ground = rawGround
+        if contrast(ground, accent) >= 3 { return ground }
+
+        // **Not black.** Torch orange on the light ground knocks out at
+        // 1.90:1 — genuinely unreadable — but flat black throws away the
+        // effect entirely, and the point was that the glyph looks cut from
+        // the material behind it. So the ground is *darkened* until it is
+        // legible instead of abandoned: same hue, same family, enough
+        // contrast. On torch that lands around 5.6:1 against black's 10:1,
+        // which is well clear of the 4.5:1 floor and looks like it belongs.
+        //
+        // Note the knockout is already live in dark mode for the same accent
+        // — torch on the dark ground is 8.77:1. This is only the light-theme,
+        // light-accent corner.
+        guard let hs = ground.lsHueSaturation else { return onColor(for: accent) }
+        for brightness in stride(from: 0.45, through: 0.10, by: -0.05) {
+            // A much lower grey threshold than `groundBase` uses. The
+            // default light ground is (0.97, 0.96, 1.00) — saturation 0.04,
+            // deliberately barely purple — and treating that as grey threw
+            // away the exact hue that makes this read as the ground rather
+            // than as ink. Only a genuinely neutral pick stays neutral.
+            let candidate = Color(hue: hs.hue,
+                                  saturation: hs.saturation < 0.01 ? 0 : 0.35,
+                                  brightness: brightness)
+            if contrast(candidate, accent) >= 4.5 { return candidate }
+        }
+        // A mid-toned accent that nothing in the ground's hue can beat —
+        // rare, and black or white is the honest last resort.
+        return onColor(for: accent)
     }
 
     /// A solid stand-in for the background gradient — its top stop, which is

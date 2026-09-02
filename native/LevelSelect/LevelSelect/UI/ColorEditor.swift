@@ -15,20 +15,52 @@ import SwiftData
 /// Everything here is a draft until Done. Cancel restores what was there when
 /// the sheet opened, including the live theme, so nothing is committed by
 /// looking.
-struct ColorEditor: View {
-    let title: String
-    /// The color this reverts to. Nil when there is no default to go back to.
+/// One colour this editor can change.
+struct ColorTarget: Identifiable {
+    let id: String
+    let label: String
+    /// The colour this reverts to. Nil when there is no default to go back to.
     let defaultColor: Color?
     /// Whether a custom value is currently stored — Reset is pointless without.
     let isCustomised: Bool
-    @Binding var color: Color
-    var onReset: () -> Void
+    let binding: Binding<Color>
+    let onReset: () -> Void
+}
+
+struct ColorEditor: View {
+    let title: String
+    /// Every colour editable here. More than one gets a picker at the top.
+    ///
+    /// Accent and background arrive together because they are chosen against
+    /// each other. Tim: *"you should be able to choose accent and background
+    /// color in the same single screen, so that you can pick colors that work
+    /// together, as opposed to picking one, moving over to another and then
+    /// choosing the other."* Two sheets made the pair a memory test.
+    let targets: [ColorTarget]
+    @State private var selectedID: String
 
     @Environment(\.dismiss) private var dismiss
 
-    /// What the theme looked like when the sheet opened, for Cancel.
-    @State private var original: Color = .clear
-    @State private var originalWasCustom = false
+    init(title: String, targets: [ColorTarget], initial: String? = nil) {
+        self.title = title
+        self.targets = targets
+        _selectedID = State(initialValue: initial ?? targets.first?.id ?? "")
+    }
+
+    private var target: ColorTarget {
+        targets.first { $0.id == selectedID } ?? targets[0]
+    }
+
+    /// The two colours the preview needs, live — whichever one is being
+    /// edited comes from the sliders, the other from its stored binding.
+    private func live(_ id: String) -> Color {
+        id == selectedID ? current : (targets.first { $0.id == id }?.binding.wrappedValue ?? .clear)
+    }
+
+    /// What the theme looked like when the sheet opened, for Cancel — one
+    /// per target, because Cancel now has to undo everything the sheet
+    /// touched rather than just the last thing.
+    @State private var originals: [String: Color] = [:]
     @State private var hue: Double = 0
     @State private var saturation: Double = 0.7
     @State private var brightness: Double = 0.9
@@ -74,6 +106,14 @@ struct ColorEditor: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
+                if targets.count > 1 {
+                    Picker("Editing", selection: $selectedID) {
+                        ForEach(targets) { Text($0.label).tag($0.id) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 preview
 
                 VStack(alignment: .leading, spacing: 8) {
@@ -139,13 +179,13 @@ struct ColorEditor: View {
 
                 Spacer(minLength: 0)
 
-                if isCustomised || defaultColor != nil {
+                if target.isCustomised || target.defaultColor != nil {
                     Button {
-                        onReset()
-                        if let d = defaultColor { setFromColor(d) }
-                        dismiss()
+                        target.onReset()
+                        if let d = target.defaultColor { setFromColor(d) }
                     } label: {
-                        Label("Use the default", systemImage: "arrow.uturn.backward")
+                        Label("Use the default \(target.label.lowercased())",
+                              systemImage: "arrow.uturn.backward")
                             .font(.subheadline)
                     }
                     .buttonStyle(.plain)
@@ -166,7 +206,13 @@ struct ColorEditor: View {
                     // Puts the LIVE theme back, not just the stored value —
                     // the preview writes through so you can see a color on
                     // the real app behind the sheet.
-                    Button("Cancel") { color = original; dismiss() }
+                    Button("Cancel") {
+                        // Everything the sheet touched, not just the last one.
+                        for t in targets {
+                            if let was = originals[t.id] { t.binding.wrappedValue = was }
+                        }
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -175,9 +221,16 @@ struct ColorEditor: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                original = color
-                originalWasCustom = isCustomised
-                setFromColor(color)
+                for t in targets { originals[t.id] = t.binding.wrappedValue }
+                setFromColor(target.binding.wrappedValue)
+            }
+            // Switching target loads ITS colour without writing — otherwise
+            // the sliders' current position would immediately overwrite the
+            // colour you just switched to with the one you switched from.
+            .onChange(of: selectedID) { _, _ in
+                loading = true
+                setFromColor(target.binding.wrappedValue)
+                loading = false
             }
             .onChange(of: hue) { _, _ in push() }
             .onChange(of: saturation) { _, _ in push() }
@@ -188,14 +241,21 @@ struct ColorEditor: View {
         #endif
     }
 
-    /// The color doing the job it will actually do, rather than a square.
+    /// Both colours doing the jobs they will actually do.
+    ///
+    /// The background used to be painted ON the button, which is the one place
+    /// it never goes — so choosing a background showed a blue Play button and
+    /// told you nothing. Now the ground is the ground and the accent is the
+    /// button, whichever of the two you happen to be editing.
     private var preview: some View {
-        HStack(spacing: 12) {
+        let accent = live("accent")
+        let ground = live("background")
+        return HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "play.fill")
                 Text("Play").font(.subheadline.weight(.semibold))
             }
-            .foregroundStyle(ThemePalette.knockout(on: current))
+            .foregroundStyle(ThemePalette.knockoutPreview(on: accent, ground: ground))
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
             .background(
@@ -205,17 +265,20 @@ struct ColorEditor: View {
 
             Text("Sample")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(current)
+                .foregroundStyle(accent)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(current.opacity(0.16), in: .capsule)
-                .overlay(Capsule().strokeBorder(current.opacity(0.5), lineWidth: 1))
+                .background(accent.opacity(0.16), in: .capsule)
+                .overlay(Capsule().strokeBorder(accent.opacity(0.5), lineWidth: 1))
 
             Spacer(minLength: 0)
         }
         .padding(14)
         .frame(maxWidth: .infinity)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 14))
+        // The real ground, derived exactly as the app derives it, so the two
+        // colours are judged against each other in the arrangement they will
+        // actually appear in.
+        .background(LSTheme.ground(tintedBy: ground), in: .rect(cornerRadius: 14))
     }
 
     /// A hex field and a keep button.
@@ -373,7 +436,13 @@ struct ColorEditor: View {
         return abs(a.h - b.h) < 0.02 && abs(a.s - b.s) < 0.05 && abs(a.b - b.b) < 0.05
     }
 
-    private func push() { color = current }
+    /// Guards the write while a target switch is loading values in.
+    @State private var loading = false
+
+    private func push() {
+        guard !loading else { return }
+        target.binding.wrappedValue = current
+    }
 
     private func setFromColor(_ c: Color) {
         let v = ColorEditor.hsb(c)
