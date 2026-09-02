@@ -77,7 +77,7 @@ struct ItchSettings: View {
         } header: {
             Text("itch.io")
         } footer: {
-            Text("Reads your collections and the games you have bought or claimed, so games IGDB has never heard of can still be tracked. Collections matter most: a free game taken straight to the downloads leaves no record on your account, and browser games often never produce one either. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
+            Text("Brings in the games you bought or claimed on itch.io, so ones IGDB has never heard of can still be tracked. It cannot see your collections — itch reports how many games one holds but not which — and a free game taken straight to the downloads leaves no record at all, so those are added by hand. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
         }
     }
 
@@ -124,13 +124,11 @@ struct ItchSettings: View {
         working = true
         defer { working = false }
         do {
-            let owned = try await ItchService.ownedGames()
-            // Collections are a separate question from ownership, and for a
-            // lot of itch users they are the only one with an answer.
-            let collected = try await ItchService.collectionGames()
+            var ownedProbe = ItchService.Probe()
+            let owned = try await ItchService.ownedGames(probe: &ownedProbe)
 
             var byID: [Int: ItchService.OwnedGame] = [:]
-            for game in owned + collected { byID[game.id] = game }
+            for game in owned { byID[game.id] = game }
 
             let existing = Set(games.map { $0.name.lowercased() })
             let repo = Repository(context)
@@ -147,7 +145,7 @@ struct ItchSettings: View {
             lastImport = Report(added: added,
                                 already: byID.count - added,
                                 owned: owned.count,
-                                collected: collected.count)
+                                ownedProbe: ownedProbe.line)
             message = nil
         } catch {
             message = (error as? LocalizedError)?.errorDescription ?? "Couldn't read your itch.io library."
@@ -166,15 +164,19 @@ struct Report {
     var added: Int
     var already: Int
     var owned: Int
-    var collected: Int
+    /// What the endpoint actually answered. Shown only when nothing came
+    /// back, because at that point "0 games" is a symptom and this is the
+    /// only thing separating a wrong call from an empty account.
+    var ownedProbe: String
 
     var summary: String {
-        guard owned + collected > 0 else {
-            return "itch.io returned nothing. A game reaches your account when you buy it, claim it, or add it "
-                 + "to a collection — but the \"No thanks, just take me to the downloads\" link on a free game "
-                 + "records nothing at all, not even a zero-dollar purchase. Adding those to a collection on itch.io is what makes them findable."
+        guard owned > 0 else {
+            return "itch.io has no owned games on this account. A game only lands there when you BUY or CLAIM it — "
+                 + "the \"No thanks, just take me to the downloads\" link records nothing at all, not even a "
+                 + "zero-dollar purchase. Collections cannot help: itch's API reports how many games a collection holds but not which ones, so those need adding by hand."
+                 + "\n\nowned-keys: \(ownedProbe)"
         }
-        return "^[\(added) game](inflect: true) added, \(already) already in your library. "
-             + "itch.io had \(owned) owned and \(collected) in collections."
+        return "^[\(added) game](inflect: true) added, \(already) already in your library, "
+             + "from \(owned) owned on itch.io."
     }
 }

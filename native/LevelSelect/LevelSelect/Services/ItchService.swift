@@ -40,15 +40,17 @@ enum ItchService {
     /// Only what is needed to read a library, and nothing else.
     ///
     /// `profile:owned` grants `profile/owned-keys` — games bought or claimed.
-    /// `profile:collections` is the other half, and it turned out to be the
-    /// half that matters: a game added to a collection has no download key,
-    /// so a library that is mostly collections comes back from owned-keys
-    /// completely empty. Tim's did.
+    /// `profile:me` is only so a connected account can say whose it is.
     ///
-    /// `profile:me` is only so a connected account can say whose it is. Still
-    /// not plain `profile`, which would also take the games someone develops
-    /// — scopes are the one part of an OAuth prompt a user actually reads.
-    private static let scopes = "profile:me profile:owned profile:collections"
+    /// **`profile:collections` was requested and has been withdrawn.** It
+    /// grants listing collections and nothing more: a collection object
+    /// carries `created_at, games_count, id, title, updated_at` — a COUNT,
+    /// not the games — and every path to the contents answers 403 to a token
+    /// holding that scope. Measured against Tim's account rather than
+    /// guessed. Asking someone for a permission the app cannot act on is
+    /// worse than not having it, so the prompt no longer mentions
+    /// collections.
+    private static let scopes = "profile:me profile:owned"
 
     static func authorizationURL(state: String) -> URL? {
         guard let clientID else { return nil }
@@ -109,8 +111,12 @@ enum ItchService {
     /// Paged: `owned-keys` returns a page at a time, and a library of free
     /// jam games is routinely hundreds long — stopping at the first page
     /// would import a slice and call it the library.
-    static func ownedGames() async throws -> [OwnedGame] {
+    static func ownedGames(probe: inout Probe) async throws -> [OwnedGame] {
         guard let token = ItchCredentials.current?.token else { throw ItchError.notConnected }
+        // One probing call first, so an empty result can name its cause.
+        if let url = URL(string: "https://api.itch.io/profile/owned-keys?page=1") {
+            probe = await get(url, token: token).probe
+        }
         var games: [OwnedGame] = []
         var page = 1
         // A ceiling rather than a while(true): a paging bug on either side
@@ -125,53 +131,41 @@ enum ItchService {
         return games
     }
 
-    /// The games in the user's collections.
-    ///
-    /// Not in the public API reference — `profile:collections` appears in the
-    /// OAuth scope list with no documented response — so these paths are the
-    /// ones itch's own client uses. Failures are treated as "no collections"
-    /// rather than as errors, so an endpoint that moves degrades to owned-keys
-    /// alone instead of breaking the import.
-    static func collectionGames() async throws -> [OwnedGame] {
-        guard let token = ItchCredentials.current?.token else { throw ItchError.notConnected }
-        guard let url = URL(string: "https://api.itch.io/profile/collections") else { return [] }
-        guard let json = await get(url, token: token),
-              let collections = json["collections"] as? [[String: Any]] else { return [] }
+    /// What one call actually did. A silent `nil` was the wrong shape here:
+    /// a wrong path, a missing scope and an empty account all produced the
+    /// same nothing, so the screen could not say which — and neither could I.
+    struct Probe: Sendable {
+        var status: Int = 0
+        /// Top-level keys the response actually had. The fastest way to see
+        /// that a path answered but under a different name than expected.
+        var keys: [String] = []
+        var count: Int = 0
+        var errors: [String] = []
+        /// What each candidate path answered, when more than one was tried.
+        var attempts: [String] = []
 
-        var games: [OwnedGame] = []
-        var seen = Set<Int>()
-        for collection in collections {
-            guard let id = collection["id"] as? Int else { continue }
-            var page = 1
-            while page <= 20 {
-                guard let url = URL(string:
-                    "https://api.itch.io/collections/\(id)/collection-games?page=\(page)"),
-                      let json = await get(url, token: token),
-                      let rows = json["collection_games"] as? [[String: Any]],
-                      !rows.isEmpty
-                else { break }
-                for row in rows {
-                    guard let game = row["game"] as? [String: Any],
-                          let gameID = game["id"] as? Int,
-                          let title = game["title"] as? String,
-                          seen.insert(gameID).inserted else { continue }
-                    games.append(OwnedGame(id: gameID, name: title,
-                                           coverURL: game["cover_url"] as? String,
-                                           url: game["url"] as? String))
-                }
-                page += 1
-            }
+        var line: String {
+            if status == 0 { return "unreachable" }
+            if status != 200 { return "HTTP \(status)" }
+            if !errors.isEmpty { return "error: \(errors.joined(separator: "; "))" }
+            let base = "\(count) from [\(keys.joined(separator: ", "))]"
+            return attempts.isEmpty ? base : base + " · " + attempts.joined(separator: " · ")
         }
-        return games
     }
 
-    /// A GET that returns nil rather than throwing, for the endpoints that
-    /// are not in the public reference and may not answer.
-    private static func get(_ url: URL, token: String) async -> [String: Any]? {
+    private static func get(_ url: URL, token: String) async -> (json: [String: Any]?, probe: Probe) {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+            return (nil, Probe())
+        }
+        var probe = Probe(status: (response as? HTTPURLResponse)?.statusCode ?? 0)
+        let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        probe.keys = json.map { Array($0.keys).sorted() } ?? []
+        // itch answers 200 with an `errors` array rather than an HTTP code,
+        // so the status alone says nothing — the text is the only signal.
+        if let errors = json?["errors"] as? [String] { probe.errors = errors }
+        return (json, probe)
     }
 
     private static func ownedKeys(token: String, page: Int) async throws -> [OwnedGame] {
