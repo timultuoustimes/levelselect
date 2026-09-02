@@ -655,3 +655,95 @@ struct PlatformReleaseTests {
         #expect(restored.platformReleases == g.platformReleases)
     }
 }
+
+@Suite("A beta is not a release")
+struct ReleaseStatusTests {
+    /// The real rows IGDB returns for Call of Duty: Modern Warfare 4 —
+    /// captured from the live API on 2026-09-02, not invented. A beta on
+    /// 28 August across four platforms, then the launches.
+    private func modernWarfare4() -> IGDBGame {
+        IGDBGame(
+            id: 403310, name: "Call of Duty: Modern Warfare 4", slug: nil,
+            coverImageID: nil, franchise: nil, releaseYear: 2026, summary: nil,
+            gameType: 0, platforms: ["Nintendo Switch 2", "PC (Microsoft Windows)"],
+            genres: [], themes: [], gameModes: [], playerPerspectives: [],
+            developers: [], publishers: [],
+            releaseTimestamp: 1_787_875_200,          // the BETA, 28 Aug
+            releasePrecision: .day,
+            platformReleases: [
+                .init(platform: "Nintendo Switch 2", timestamp: 1_787_875_200, precision: .day, status: 2),
+                .init(platform: "PC (Microsoft Windows)", timestamp: 1_787_875_200, precision: .day, status: 2),
+                .init(platform: "Nintendo Switch 2", timestamp: 1_792_108_800, precision: .day, status: 6),
+                .init(platform: "PC (Microsoft Windows)", timestamp: 1_792_713_600, precision: .day, status: 6),
+            ])
+    }
+
+    private func utcDay(_ d: Date) -> DateComponents {
+        ReleaseCountdown.utc.dateComponents([.year, .month, .day], from: d)
+    }
+
+    /// The bug Tim found: the app said "Released Aug 28" for a game that has
+    /// not come out, because the beta row came first.
+    @Test("The launch wins over the beta, per platform")
+    func launchNotBeta() throws {
+        let game = modernWarfare4()
+
+        let switch2 = try #require(game.storableReleaseDate(on: "Nintendo Switch 2"))
+        #expect(utcDay(switch2).month == 10)
+        #expect(utcDay(switch2).day == 16)
+
+        let pc = try #require(game.storableReleaseDate(on: "PC (Microsoft Windows)"))
+        #expect(utcDay(pc).month == 10)
+        #expect(utcDay(pc).day == 23)
+    }
+
+    /// With no platform chosen the app takes the soonest ANNOUNCED day, and
+    /// that must not be the beta either.
+    @Test("The soonest day skips betas too")
+    func earliestSkipsBeta() throws {
+        let soonest = try #require(modernWarfare4().earliestAnnouncedDay)
+        #expect(utcDay(soonest).month == 10)
+        #expect(utcDay(soonest).day == 16)
+    }
+
+    /// What gets written to the game under Schema V4.
+    @Test("Only launches are stored")
+    func storesLaunchesOnly() {
+        let stored = modernWarfare4().storedPlatformReleases
+        #expect(stored.count == 2)
+        #expect(stored.allSatisfy { utcDay($0.date).month == 10 })
+    }
+
+    /// Most games set no status at all — the Vault Edition of this very game
+    /// has nil — so nil must count as a launch or nothing would have a date.
+    @Test("No status means it is the release")
+    func nilStatusCounts() throws {
+        let game = IGDBGame(
+            id: 1, name: "Vault Edition", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2026, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: 1_792_108_800, releasePrecision: .day,
+            platformReleases: [
+                .init(platform: "Nintendo Switch 2", timestamp: 1_792_108_800, precision: .day, status: nil)
+            ])
+        let date = try #require(game.storableReleaseDate(on: "Nintendo Switch 2"))
+        #expect(utcDay(date).day == 16)
+    }
+
+    /// A platform with nothing but pre-release rows keeps them rather than
+    /// vanishing — a beta date is worse than a launch date and better than
+    /// pretending the game has none.
+    @Test("A platform with only a beta still reports it")
+    func betaOnly() throws {
+        let game = IGDBGame(
+            id: 2, name: "Beta Only", slug: nil, coverImageID: nil, franchise: nil,
+            releaseYear: 2026, summary: nil, gameType: 0, platforms: [], genres: [],
+            themes: [], gameModes: [], playerPerspectives: [], developers: [], publishers: [],
+            releaseTimestamp: 1_787_875_200, releasePrecision: .day,
+            platformReleases: [
+                .init(platform: "PC (Microsoft Windows)", timestamp: 1_787_875_200, precision: .day, status: 2)
+            ])
+        let date = try #require(game.storableReleaseDate(on: "PC (Microsoft Windows)"))
+        #expect(utcDay(date).month == 8)
+    }
+}

@@ -32,6 +32,9 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
         let platform: String
         let timestamp: Double
         let precision: ReleasePrecision
+        /// IGDB's release TYPE, not its precision. A game can carry two rows
+        /// for one platform — a beta and the launch. nil is the common case.
+        var status: Int? = nil
     }
 
     /// What IGDB's date actually claims.
@@ -106,9 +109,29 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     ///
     /// Falls back to the aggregate when IGDB lists no date for that platform,
     /// or when no platform has been chosen.
+    /// A beta is not a release.
+    ///
+    /// IGDB gives a game one `release_dates` row PER EVENT, not per platform,
+    /// and each carries a `status`. Call of Duty: Modern Warfare 4 has eight
+    /// rows: a beta on 28 August for four platforms, and the launches — 16
+    /// October on Switch 2, 23 October everywhere else. Taking the first row
+    /// for a platform took the beta, so the app called an unreleased game
+    /// released, on every platform, and counted down to the wrong day.
+    ///
+    /// Measured, not guessed: `status=2` is that beta and `status=6` those
+    /// launches. Most games set no status at all — the Vault Edition of the
+    /// same game has `nil` — so `nil` counts as a launch, and a platform with
+    /// nothing but pre-release rows falls back to them rather than vanishing.
+    static let launchStatuses: Set<Int> = [6]
+
+    var launchReleases: [PlatformRelease] {
+        let launches = platformReleases.filter { $0.status == nil || Self.launchStatuses.contains($0.status!) }
+        return launches.isEmpty ? platformReleases : launches
+    }
+
     func storableReleaseDate(on platform: String?) -> Date? {
         guard let platform,
-              let match = platformReleases.first(where: {
+              let match = launchReleases.first(where: {
                   PlatformIcon.consoleKey($0.platform) == PlatformIcon.consoleKey(platform)
               })
         else { return earliestAnnouncedDay ?? storableReleaseDate }
@@ -150,7 +173,9 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     /// date is picked from it; this is the same data on its way to disk, so a
     /// game can carry all of them.
     var storedPlatformReleases: [StoredPlatformRelease] {
-        platformReleases.map {
+        // Only launches are stored. A beta date on a game page would read as
+        // a release, which is exactly the bug this fixes.
+        launchReleases.map {
             StoredPlatformRelease(platform: $0.platform,
                                   date: Date(timeIntervalSince1970: $0.timestamp),
                                   hasDay: $0.precision.hasDay)
@@ -170,7 +195,7 @@ struct IGDBGame: Identifiable, Hashable, Sendable {
     /// said Switch 2 and Switch 2 has no day, the honest answer is that nobody
     /// has told you when YOUR copy arrives.
     var earliestAnnouncedDay: Date? {
-        platformReleases
+        launchReleases
             .filter(\.precision.hasDay)
             .map { Date(timeIntervalSince1970: $0.timestamp) }
             .filter { !MetadataRefresh.isYearOnly($0) }
@@ -212,8 +237,7 @@ enum IGDBService {
 
     private static let fields = """
         fields name, slug, summary, game_type, cover.image_id, franchises.name, collection.name, \
-        first_release_date, release_dates.category, release_dates.date_format, \
-        release_dates.date, release_dates.platform.name, \
+        first_release_date, release_dates.*, release_dates.platform.name, \
         platforms.name, genres.name, themes.name, game_modes.name, \
         player_perspectives.name, videos.video_id, videos.name, \
         involved_companies.developer, involved_companies.publisher, \
@@ -355,6 +379,9 @@ enum IGDBService {
             /// the precision to `date_format`. Both are read, so this keeps
             /// working whichever one an endpoint decides to send.
             let date_format: Int?
+            /// IGDB's release TYPE — Beta, Early Access, Full Release. Not
+            /// precision. A game can have two rows for one platform.
+            let status: Int?
             struct Platform: Decodable { let name: String? }
             let platform: Platform?
         }
@@ -443,7 +470,7 @@ enum IGDBService {
                     guard let name = row.platform?.name, let stamp = row.date else { return nil }
                     return IGDBGame.PlatformRelease(
                         platform: name, timestamp: stamp,
-                        precision: Self.precision(of: row))
+                        precision: Self.precision(of: row), status: row.status)
                 },
                 videoIDs: {
                     let rows = videos ?? []
