@@ -74,6 +74,20 @@ struct AppearanceSettingsSection: View {
                     })
             }
 
+            colorRow("Background", swatch: ThemePalette.backgroundOverride ?? LSTheme.purpleDeep,
+                     isCustom: settings?.backgroundHex != nil) {
+                ColorEditor(
+                    title: "Background",
+                    defaultColor: LSTheme.purpleDeep,
+                    isCustomised: settings?.backgroundHex != nil,
+                    color: backgroundBinding,
+                    onReset: {
+                        let s = ensureSettings()
+                        s.backgroundHex = nil
+                        save(s)
+                    })
+            }
+
             Picker("Game page background", selection: pageBackgroundBinding) {
                 ForEach(ThemePageBackground.allCases, id: \.rawValue) { choice in
                     Text(choice.label).tag(choice)
@@ -364,6 +378,20 @@ struct AppearanceSettingsSection: View {
             set: { color in
                 let s = ensureSettings()
                 s.accentHex = color.hexString()
+                scheduleSave(s)
+            }
+        )
+    }
+
+    /// The ground's tint. Only its hue and saturation are used — the theme
+    /// keeps the luminance, so no pick can make text unreadable. See
+    /// `LSTheme.ground(tintedBy:)`.
+    private var backgroundBinding: Binding<Color> {
+        Binding(
+            get: { settings?.backgroundHex.flatMap { Color(hex: $0) } ?? LSTheme.purpleDeep },
+            set: { color in
+                let s = ensureSettings()
+                s.backgroundHex = color.hexString()
                 scheduleSave(s)
             }
         )

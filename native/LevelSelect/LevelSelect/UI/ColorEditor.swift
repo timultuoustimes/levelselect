@@ -84,11 +84,31 @@ struct ColorEditor: View {
 
                 hexRow
 
-                VStack(spacing: 10) {
-                    slider("Hue", value: $hue, track: hueTrack)
-                    slider("Saturation", value: $saturation, track: satTrack)
-                    slider("Brightness", value: $brightness, track: brightTrack)
+                // Two ways into the same three numbers. Sliders are precise
+                // and say what they are; a wheel is faster when you are
+                // hunting rather than adjusting. Neither is a second colour
+                // model — swiping between them changes nothing but the input.
+                TabView {
+                    VStack(spacing: 10) {
+                        slider("Hue", value: $hue, track: hueTrack)
+                        slider("Saturation", value: $saturation, track: satTrack)
+                        slider("Brightness", value: $brightness, track: brightTrack)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.bottom, 28)
+
+                    ColorWheel(hue: $hue, saturation: $saturation, brightness: $brightness)
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 28)
                 }
+                #if !os(macOS)
+                .tabViewStyle(.page)
+                .indexViewStyle(.page(backgroundDisplayMode: .always))
+                #endif
+                // A page view has no intrinsic height, so it needs one; the
+                // wheel is square and the sliders are shorter, so the wheel
+                // sets it.
+                .frame(height: 300)
 
                 Spacer(minLength: 0)
 

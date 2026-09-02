@@ -69,16 +69,10 @@ extension LSTheme {
 extension View {
     /// Full-bleed themed background.
     func lsBackground() -> some View {
-        background {
-            // A chosen background wins over the theme's own; without one the
-            // gradient resolves per scheme. Either way it is one ground, so
-            // nothing downstream has to ask which theme is on.
-            if let custom = ThemePalette.backgroundOverride {
-                custom.ignoresSafeArea()
-            } else {
-                LSTheme.background.ignoresSafeArea()
-            }
-        }
+        // A picked colour tints the ground rather than replacing it — see
+        // LSTheme.ground(tintedBy:). Either way it is one gradient, so nothing
+        // downstream has to ask which theme is on or whether one was chosen.
+        background(LSTheme.ground(tintedBy: ThemePalette.backgroundOverride).ignoresSafeArea())
     }
 
     /// Card surface used across Stats/Home.

@@ -27,19 +27,57 @@ enum LSTheme {
 
     // MARK: The ground
 
-    /// App background. Near-black with a purple cast; in light, the same cast
-    /// at the other end of the range rather than plain white — the purple is
-    /// the brand and it should survive the switch.
-    static var background: LinearGradient {
-        LinearGradient(
+    /// App background: a wash from a lighter top to a darker bottom.
+    ///
+    /// The light range is deliberately wider than the first attempt at it,
+    /// which read as flat. Tim: *"Light mode should carry over the same
+    /// gradient style that dark mode had. It's slight, but there."* Dark can
+    /// halve its luminance across the drop and stay handsome; light has less
+    /// room before it goes muddy, so it travels less — but it has to travel.
+    static var background: LinearGradient { ground(tintedBy: nil) }
+
+    /// The ground, optionally wearing a colour the user picked.
+    ///
+    /// **The tint supplies hue and saturation; the theme keeps luminance.**
+    /// That is the whole safety property. A background is the one surface
+    /// where a bad choice makes text unreadable, and letting someone drop a
+    /// near-black into Light mode would do exactly that — dark ground, dark
+    /// text, nothing legible, no warning. Taking only the *colour* of their
+    /// choice means the app is still recognisably theirs and cannot be made
+    /// unreadable by picking wrong.
+    ///
+    /// It also matches what the default already is. The shipped gradient is
+    /// not two colours; it is one hue at two brightnesses — so deriving the
+    /// second stop reproduces the look that was already tuned, rather than
+    /// inventing a new one.
+    static func ground(tintedBy tint: Color?) -> LinearGradient {
+        let hue = tint?.lsHueSaturation
+        return LinearGradient(
             colors: [
-                .lsDynamic(light: Color(red: 0.96, green: 0.95, blue: 0.99),
-                           dark:  Color(red: 0.10, green: 0.07, blue: 0.18)),
-                .lsDynamic(light: Color(red: 0.91, green: 0.90, blue: 0.96),
-                           dark:  Color(red: 0.05, green: 0.04, blue: 0.09)),
+                .lsDynamic(light: shade(hue, brightness: 0.97, saturation: 0.06,
+                                        fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
+                           dark:  shade(hue, brightness: 0.16, saturation: 0.55,
+                                        fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
+                .lsDynamic(light: shade(hue, brightness: 0.88, saturation: 0.10,
+                                        fallback: Color(red: 0.88, green: 0.86, blue: 0.94)),
+                           dark:  shade(hue, brightness: 0.07, saturation: 0.60,
+                                        fallback: Color(red: 0.05, green: 0.04, blue: 0.09))),
             ],
             startPoint: .top, endPoint: .bottom
         )
+    }
+
+    /// One stop: the picked hue at the brightness this theme allows, or the
+    /// built-in colour when nothing was picked.
+    private static func shade(_ hue: (hue: Double, saturation: Double)?,
+                              brightness: Double,
+                              saturation: Double,
+                              fallback: Color) -> Color {
+        guard let hue else { return fallback }
+        // A grey pick has no hue worth keeping — honour it as grey rather
+        // than snapping to whatever arbitrary hue the picker reported.
+        let sat = hue.saturation < 0.05 ? 0 : saturation
+        return Color(hue: hue.hue, saturation: sat, brightness: brightness)
     }
 
     /// Hero card gradient (Continue Playing).
@@ -91,6 +129,22 @@ enum LSTheme {
 }
 
 extension Color {
+    /// Hue and saturation, dropped of brightness — what a tint contributes to
+    /// the ground. nil when the platform will not give up components.
+    var lsHueSaturation: (hue: Double, saturation: Double)? {
+        #if canImport(UIKit)
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard UIColor(self).getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+        else { return nil }
+        return (Double(h), Double(s))
+        #elseif canImport(AppKit)
+        guard let c = NSColor(self).usingColorSpace(.sRGB) else { return nil }
+        return (Double(c.hueComponent), Double(c.saturationComponent))
+        #else
+        return nil
+        #endif
+    }
+
     /// One colour that resolves differently in each theme.
     ///
     /// Done in code rather than as asset-catalog colour sets so the *reasoning*
