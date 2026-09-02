@@ -742,3 +742,58 @@ struct Build36BeatenVsCompletedTests {
         #expect(finishes.contains { $0.date == long_ago }, "The first time has to survive the second.")
     }
 }
+
+/// Build 36 — pictures on a memory.
+@MainActor
+struct Build36MemoryPhotoTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// A 2x2 PNG — small, real, and enough for ImageIngest to accept.
+    private var tinyPNG: Data {
+        Data(base64Encoded: """
+        iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFUlEQVR4nGP8//8/AzJgYkAD\
+        IyIAAFvxA/2v9BpAAAAAAElFTkSuQmCC
+        """)!
+    }
+
+    /// **Reuses GameImage, which is the whole point.** The CloudKit asset
+    /// fields were already deployed for game pictures, so a photo of Christmas
+    /// 1995 costs no new binary field — the trap that cost build 32 a promote.
+    @Test func aPictureAttachesToAMemory() throws {
+        let context = makeContext()
+        let memory = Memory(title: "Got a Sega Genesis", kind: "acquired")
+        context.insert(memory)
+
+        let image = try Repository(context).addImage(to: memory, data: tinyPNG)
+        #expect(image.memory?.id == memory.id)
+        #expect(image.game == nil, "A memory photo need not belong to any game.")
+        #expect(image.data != nil)
+        #expect(image.byteCount > 0)
+    }
+
+    /// It has to reach the timeline, or adding one is a write into the dark.
+    @Test func aMemorysPicturesReachTheTimeline() throws {
+        let context = makeContext()
+        let memory = Memory(title: "First LAN party")
+        context.insert(memory)
+        try Repository(context).addImage(to: memory, data: tinyPNG)
+
+        let entry = JournalBuilder.entry(for: memory)
+        #expect(entry.images.count == 1)
+    }
+
+    /// Deleting is soft everywhere else in this app, and Recently Deleted has
+    /// to mean something here too.
+    @Test func aDeletedPictureLeavesTheTimeline() throws {
+        let context = makeContext()
+        let memory = Memory(title: "Christmas morning")
+        context.insert(memory)
+        let image = try Repository(context).addImage(to: memory, data: tinyPNG)
+        image.deletedAt = .now
+
+        #expect(JournalBuilder.entry(for: memory).images.isEmpty)
+    }
+}

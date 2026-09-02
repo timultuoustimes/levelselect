@@ -59,6 +59,11 @@ struct JournalEntry: Identifiable {
     /// the timeline is the only place a memory appears at all.
     var memory: Memory? = nil
 
+    /// Pictures attached to a memory. A photo of the morning itself is most
+    /// of the point of writing one down, so the timeline shows them rather
+    /// than hiding them behind an edit sheet.
+    var images: [GameImage] = []
+
     /// A heading in the entry's own words, for a date no grain can describe.
     ///
     /// "Christmas 1995 or 1996" filed under a heading reading **1995** would
@@ -244,6 +249,8 @@ enum JournalBuilder {
             companions: memory.companions,
             session: nil,
             memory: memory,
+            images: (memory.images ?? []).filter { $0.deletedAt == nil }
+                .sorted { $0.addedAt < $1.addedAt },
             // Only when no grain can describe it. A year-precision memory is
             // perfectly happy under a year heading.
             headingOverride: memory.isUncertain ? memory.dateText : nil)

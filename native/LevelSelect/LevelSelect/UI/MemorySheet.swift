@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 /// Writing down something that happened before the app was watching.
 ///
@@ -31,6 +32,15 @@ struct MemorySheet: View {
     @State private var words = ""
     @State private var fromYear = 1995
     @State private var toYear = 1996
+
+    @State private var photoItem: PhotosPickerItem?
+    @State private var importing = false
+    @State private var importError: String?
+    /// A memory being written has no record yet, so a photo picked before the
+    /// first save is held here and attached once there is something to attach
+    /// it to. Losing a photo because you had not saved yet would be its own
+    /// small betrayal.
+    @State private var pendingPhotos: [Data] = []
 
     /// How well the date is known — and the fourth case is the point.
     enum HowKnown: String, CaseIterable, Identifiable {
@@ -103,6 +113,44 @@ struct MemorySheet: View {
                     Text(footerText)
                 }
 
+                Section {
+                    if !photos.isEmpty || !pendingPhotos.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(photos) { image in
+                                    if let data = image.data {
+                                        LocalArtworkThumb(data: data, contentMode: .fill)
+                                            .frame(width: 84, height: 84)
+                                            .clipShape(.rect(cornerRadius: 10))
+                                    }
+                                }
+                                ForEach(Array(pendingPhotos.enumerated()), id: \.offset) { _, data in
+                                    LocalArtworkThumb(data: data, contentMode: .fill)
+                                        .frame(width: 84, height: 84)
+                                        .clipShape(.rect(cornerRadius: 10))
+                                        .opacity(0.7)
+                                }
+                            }
+                        }
+                    }
+                    PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                        if importing {
+                            HStack(spacing: 6) { ProgressView(); Text("Adding…") }
+                        } else {
+                            Label("Add a picture", systemImage: "photo.badge.plus")
+                        }
+                    }
+                    .disabled(importing)
+                    if let importError {
+                        Text(importError).font(.caption).foregroundStyle(.red)
+                    }
+                } header: {
+                    Text("Pictures")
+                } footer: {
+                    // The reason the feature exists, said once where it lands.
+                    Text("A photo of the day itself. Pictures are downscaled and kept in your own iCloud, like every other picture you add.")
+                }
+
                 Section("What kind") {
                     Picker("Kind", selection: $kind) {
                         Text("Just a memory").tag("memory")
@@ -128,6 +176,7 @@ struct MemorySheet: View {
                 }
             }
             .onAppear(perform: load)
+            .task(id: photoItem) { await ingestPickedPhoto() }
         }
     }
 
@@ -140,6 +189,35 @@ struct MemorySheet: View {
         case .month:  "Only the month and year are kept."
         case .year:   "Only the year is kept."
         case .unsure: "Shown exactly as you write it. The years are only used to place it on the timeline."
+        }
+    }
+
+    /// Pictures already attached, newest first.
+    private var photos: [GameImage] {
+        (existing?.images ?? []).filter { $0.deletedAt == nil }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
+    private func ingestPickedPhoto() async {
+        guard let photoItem else { return }
+        importing = true
+        importError = nil
+        defer { importing = false; self.photoItem = nil }
+        do {
+            guard let raw = try await photoItem.loadTransferable(type: Data.self) else {
+                importError = "That photo couldn't be read."
+                return
+            }
+            if let existing {
+                try Repository(context).addImage(to: existing, data: raw)
+            } else {
+                // Held until Save makes a record to hang it on.
+                pendingPhotos.append(raw)
+            }
+        } catch ImageIngest.Failure.unreadable {
+            importError = "That file isn't an image this device can read."
+        } catch {
+            importError = "Couldn't add that picture."
         }
     }
 
@@ -175,6 +253,9 @@ struct MemorySheet: View {
                             words: words, span: start...end)
         } else {
             repo.saveMemory(memory, on: date, precision: howKnown.precision, words: nil)
+        }
+        for data in pendingPhotos {
+            try? repo.addImage(to: memory, data: data)
         }
         dismiss()
     }

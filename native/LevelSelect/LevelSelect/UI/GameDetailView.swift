@@ -657,6 +657,14 @@ struct GameDetailView: View {
             .background(alignment: .top) { scrollingBackdrop(topInset: topInset) }
         }
         .scrollIndicators(.hidden)
+        // The themed ground, UNDER the backdrop rather than instead of it.
+        //
+        // The page had no ground of its own — it leaned on the cover art at
+        // the top and fell through to the system default everywhere below,
+        // which read as plain grey once the app could be light and ignored a
+        // chosen background entirely. The art still owns the top; this is what
+        // the rest of the page stands on.
+        .lsBackground()
         // Soft, not the default `.hard`. See RootView: iOS 26's scroll edge
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than

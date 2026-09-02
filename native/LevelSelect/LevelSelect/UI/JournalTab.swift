@@ -217,6 +217,21 @@ private struct JournalRow: View {
                             .lineLimit(1)
                     }
 
+                    if !entry.images.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(entry.images) { image in
+                                    if let data = image.data {
+                                        LocalArtworkThumb(data: data, contentMode: .fill)
+                                            .frame(width: 72, height: 72)
+                                            .clipShape(.rect(cornerRadius: 8))
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.top, 4)
+                    }
+
                     // Your words, given the weight of the row rather than a
                     // footnote's — this is the thing the surface exists for.
                     if let note = entry.note {

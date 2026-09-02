@@ -2200,6 +2200,27 @@ struct Repository {
         return image
     }
 
+    /// The same ingest, attached to a memory instead of a game.
+    ///
+    /// Deliberately the same model and the same `ImageIngest.prepare` — the
+    /// photo of a Christmas morning goes through exactly what a photo of a
+    /// cartridge does, so it downscales the same way, exports the same way and
+    /// mirrors to the same already-deployed CloudKit asset fields.
+    @discardableResult
+    func addImage(to memory: Memory, data: Data, caption: String? = nil) throws -> GameImage {
+        let prepared = try ImageIngest.prepare(data, role: .gallery)
+        let image = GameImage(role: .gallery, data: prepared.data)
+        context.insert(image)
+        image.memory = memory
+        image.caption = caption
+        image.pixelWidth = prepared.pixelWidth
+        image.pixelHeight = prepared.pixelHeight
+        image.byteCount = prepared.data.count
+        touch(memory, at: .now)
+        persist()
+        return image
+    }
+
     /// Point a role at something — a local image, a remote URL, or nothing.
     func setArtwork(_ pointer: String?, role: ArtworkRole, on game: Game) {
         guard role != .gallery else { return }
