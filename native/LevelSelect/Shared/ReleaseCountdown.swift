@@ -79,12 +79,21 @@ enum ReleaseCountdown {
         return d
     }
 
-    /// How near a countdown stays useful.
+    /// How near a countdown stays useful — and it is exactly as near as the
+    /// countdown still speaks in DAYS.
     ///
-    /// "in 6 days" tells you something you would act on; "in 11 months" tells
-    /// you less than the date does, and a wishlist full of them reads as a
-    /// page of vague waiting. Past this, the shelf prints the date it knows.
-    static let horizon = 60
+    /// The first version drew this at 60 days, which let the vague half of
+    /// the countdown win: "in 6 weeks" replaced "Oct 16" on a card, and that
+    /// is strictly worse — you cannot plan around six weeks, and the date is
+    /// exact. Tim, seeing Modern Warfare 4 say "in 6 weeks" beside GTA VI
+    /// saying "Nov 19, 2026": "I'm good with either direction, just curious
+    /// about it."
+    ///
+    /// So the rule is the one the wording already implies. Inside a
+    /// fortnight a countdown says something a date does not — "in 2 days" is
+    /// a fact about your week. Past it the date is simply better information,
+    /// and the shelf prints that.
+    static let horizon = 13
 
     /// Exactly as much as is known, and no more.
     static func dateLabel(_ date: Date) -> String {
