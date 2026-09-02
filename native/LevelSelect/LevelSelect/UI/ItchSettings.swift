@@ -77,7 +77,7 @@ struct ItchSettings: View {
         } header: {
             Text("itch.io")
         } footer: {
-            Text("Reads the games you have bought or claimed and the ones in your collections, so games IGDB has never heard of can still be tracked. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
+            Text("Reads your collections and the games you have bought or claimed, so games IGDB has never heard of can still be tracked. Collections matter most: a free game taken straight to the downloads leaves no record on your account, and browser games often never produce one either. Your token stays in this device's Keychain, is never synced, and goes to itch.io directly — never through our server.")
         }
     }
 
@@ -170,8 +170,9 @@ struct Report {
 
     var summary: String {
         guard owned + collected > 0 else {
-            return "itch.io returned nothing. Games show up here once you have bought or claimed them, "
-                 + "or added them to a collection — downloading a free game without claiming it leaves no record on your account."
+            return "itch.io returned nothing. A game reaches your account when you buy it, claim it, or add it "
+                 + "to a collection — but the \"No thanks, just take me to the downloads\" link on a free game "
+                 + "records nothing at all, not even a zero-dollar purchase. Adding those to a collection on itch.io is what makes them findable."
         }
         return "^[\(added) game](inflect: true) added, \(already) already in your library. "
              + "itch.io had \(owned) owned and \(collected) in collections."
