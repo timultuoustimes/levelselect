@@ -77,7 +77,11 @@ struct MemorySheet: View {
                 Section {
                     TextField("What happened?", text: $title)
                     TextField("Anything more", text: $body_, axis: .vertical)
-                        .lineLimit(3...8)
+                        // Open-ended. A cap of 8 turned the field into a tiny
+                        // scroller at exactly the point someone had something
+                        // to say — nobody is writing a novel here, but the box
+                        // should not be the thing that stops them.
+                        .lineLimit(3...)
                 }
 
                 Section {
