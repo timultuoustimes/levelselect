@@ -76,16 +76,28 @@ extension View {
 
 private struct LSWidgetSurface: ViewModifier {
     func body(content: Content) -> some View {
+        // **The scheme has to be the OUTERMOST modifier**, wrapping the
+        // background as well as the content.
+        //
+        // The first version put it on `content` and attached
+        // `containerBackground` outside that — so the text resolved against
+        // the override while the ground resolved against the system, and a
+        // Light app on a Dark phone drew black labels on a dark ground.
+        // Ground and text are one decision; splitting them across an
+        // environment boundary is what made them disagree.
+        //
+        // `.system` still applies nothing, so the widget keeps following the
+        // phone rather than being pinned to a copy of whatever the snapshot
+        // was written with.
         Group {
             if let scheme = LSWidget.appearance.colorScheme {
-                // `.system` deliberately applies nothing, so the widget keeps
-                // following the phone rather than being pinned to a copy of
-                // whatever it was when the snapshot was written.
-                content.environment(\.colorScheme, scheme)
+                content
+                    .containerBackground(for: .widget) { LSWidget.ground }
+                    .environment(\.colorScheme, scheme)
             } else {
                 content
+                    .containerBackground(for: .widget) { LSWidget.ground }
             }
         }
-        .containerBackground(for: .widget) { LSWidget.ground }
     }
 }
