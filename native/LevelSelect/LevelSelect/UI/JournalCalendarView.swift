@@ -50,6 +50,14 @@ struct JournalCalendarView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    // Above the grid, not below it: a full year of squares is
+                    // a screenful, so a hint underneath sits below the fold
+                    // behind the tab bar — invisible in exactly the case it
+                    // exists for.
+                    if !populated.contains(shownYear) {
+                        emptyYearHint
+                    }
+
                     YearGrid(year: shownYear, calendar: calendar, load: load, peak: peak)
 
                     if !undated.isEmpty {
@@ -60,6 +68,22 @@ struct JournalCalendarView: View {
             }
             .scrollIndicators(.hidden)
         }
+    }
+
+    /// Said when the year on show holds nothing.
+    ///
+    /// **Keyed to the year, not to an empty library.** A `ContentUnavailableView`
+    /// over a pristine install would cover the very grid it is explaining, and
+    /// would never fire in the case that actually needs it: scrubbing back to
+    /// 1995 to write down a Christmas, and finding twelve months of grey with
+    /// nothing saying they can be tapped. Backfilling is the whole point of
+    /// the year strip, so the hint belongs on every empty year.
+    private var emptyYearHint: some View {
+        let year = String(shownYear)
+        return Text("Nothing in \(year) yet. Days you play fill in on their own — tap a month to write down something that happened.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The entries a grid cannot hold.
@@ -509,6 +533,13 @@ private struct DayCell: View {
         return nil
     }
 
+    /// **The square is a guess, and says so.** A memory whose year is a
+    /// disjunction is placed on the earlier candidate; without a mark the
+    /// calendar would be asserting a date its own author refused to.
+    private var isUncertain: Bool {
+        entries.contains { $0.memory?.isUncertain == true }
+    }
+
     private var isToday: Bool { calendar.isDateInToday(day) }
     private var isFuture: Bool { day > calendar.startOfDay(for: .now) }
 
@@ -596,6 +627,15 @@ private struct DayCell: View {
                     Text("\(entries.count)")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(art == nil ? AnyShapeStyle(.secondary)
+                                                    : AnyShapeStyle(Color.white))
+                        .padding(4)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if isUncertain {
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(art == nil ? AnyShapeStyle(.tertiary)
                                                     : AnyShapeStyle(Color.white))
                         .padding(4)
                 }

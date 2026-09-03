@@ -987,6 +987,40 @@ struct Build36CalendarGridTests {
         #expect(load.keys.allSatisfy { cal.component(.year, from: $0) == 2026 })
     }
 
+    @Test("A Christmas whose year is uncertain lands on Christmas, not 1 January")
+    func uncertainYearKeepsItsDay() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let cal = JournalBuilder.calendar
+
+        // "Christmas 1995 or 1996" as the sheet now stores it: the span runs
+        // candidate to candidate, so it never starts on a day the memory did
+        // not claim. 1 January 1995 is nearer Christmas *1994* than either of
+        // the two days it might actually have been.
+        let memory = Memory()
+        memory.title = "Got my Sega Genesis for Christmas"
+        let first = Memory.calendar.date(from: DateComponents(year: 1995, month: 12, day: 25))!
+        let second = Memory.calendar.date(from: DateComponents(year: 1996, month: 12, day: 25))!
+        _ = Repository(context).saveMemory(memory, on: first, precision: nil,
+                                           words: "Christmas 1995/1996",
+                                           span: first...second)
+
+        #expect(memory.isUncertain)
+        // The words are still the only thing shown for the date.
+        #expect(memory.dateText == "Christmas 1995/1996")
+
+        let entry = JournalBuilder.entry(for: memory)
+        #expect(Memory.calendar.component(.month, from: entry.date) == 12)
+        #expect(Memory.calendar.component(.day, from: entry.date) == 25)
+        #expect(Memory.calendar.component(.year, from: entry.date) == 1995)
+
+        // And it reaches the square for Christmas Day, not New Year's.
+        let periods = JournalBuilder.periods(from: [], standalone: [memory])
+        let load = JournalCalendarView.load(from: periods, calendar: cal)
+        let christmas = JournalBuilder.square(for: first, in: Memory.calendar, grid: cal)
+        #expect(load[christmas]?.entries == 1)
+        #expect(load.keys.count == 1)
+    }
+
     @Test("A local session keeps the day it was played on")
     func sessionKeepsItsDay() {
         // A late-night session is still that evening, not the next morning.

@@ -36,6 +36,15 @@ struct MemorySheet: View {
     @State private var words = ""
     @State private var fromYear = 1995
     @State private var toYear = 1996
+    /// **"Christmas 1995 or 1996" knows the day perfectly well.** Only the
+    /// year is in doubt. Storing the span as 1 January → 31 December threw the
+    /// day away and put a Christmas on a square nearer the *previous*
+    /// Christmas than either of the two it might have been. Tim: *"I'd rather
+    /// it pick one of the days and tell me it might be a different year, than
+    /// pick just January 1."*
+    @State private var dayKnown = false
+    @State private var vagueMonth = 12
+    @State private var vagueDay = 25
 
     @State private var photoItem: PhotosPickerItem?
     @State private var importing = false
@@ -123,6 +132,31 @@ struct MemorySheet: View {
                         Stepper(value: $toYear, in: 1970...2100) {
                             Text(verbatim: "To \(toYear)")
                         }
+                        // Optional, because "sometime in 1995 or 1996" is a
+                        // real answer too — and a form that demanded a day
+                        // here would be the exact thing this picker exists to
+                        // avoid.
+                        Toggle("I know the day", isOn: $dayKnown.animation())
+                        if dayKnown {
+                            Picker("Month", selection: $vagueMonth) {
+                                ForEach(1...12, id: \.self) { month in
+                                    // **Names from the user's calendar, not
+                                    // the storage one.** `Memory.calendar` is
+                                    // a bare UTC Gregorian with no locale, and
+                                    // its symbols come back as "M12". Which
+                                    // month a memory is stored in is a data
+                                    // question; what that month is *called* is
+                                    // the reader's.
+                                    Text(Calendar.current.standaloneMonthSymbols[month - 1])
+                                        .tag(month)
+                                }
+                            }
+                            Picker("Day", selection: $vagueDay) {
+                                ForEach(1...31, id: \.self) {
+                                    Text(verbatim: "\($0)").tag($0)
+                                }
+                            }
+                        }
                     }
                 } header: {
                     Text("When")
@@ -205,7 +239,9 @@ struct MemorySheet: View {
         case .day:    "Stored and shown as an exact day."
         case .month:  "Only the month and year are kept."
         case .year:   "Only the year is kept."
-        case .unsure: "Shown exactly as you write it. The years are only used to place it on the timeline."
+        case .unsure: dayKnown
+            ? "Shown exactly as you write it. It sits on that day in the first year, marked as uncertain."
+            : "Shown exactly as you write it. The years are only used to place it on the timeline."
         }
     }
 
@@ -253,6 +289,29 @@ struct MemorySheet: View {
         howKnown = HowKnown.allCases.first { $0.precision == existing.precision } ?? .unsure
         fromYear = Memory.calendar.component(.year, from: existing.earliest)
         toYear = Memory.calendar.component(.year, from: existing.latest)
+        // A stored 1 January → 31 December span is what "no day" looks like;
+        // anything else is carrying one.
+        let from = Memory.calendar.dateComponents([.month, .day], from: existing.earliest)
+        let to = Memory.calendar.dateComponents([.month, .day], from: existing.latest)
+        dayKnown = !(from.month == 1 && from.day == 1 && to.month == 12 && to.day == 31)
+        if dayKnown {
+            vagueMonth = from.month ?? 12
+            vagueDay = from.day ?? 25
+        }
+    }
+
+    /// The chosen day in a given year, clamped to that month's real length.
+    ///
+    /// 29 February is the case that makes this necessary: the year is the part
+    /// nobody is sure of, so the day can legitimately not exist in one of the
+    /// candidates.
+    private func vagueDate(year: Int) -> Date? {
+        var parts = DateComponents(year: year, month: vagueMonth, day: 1)
+        guard let first = Memory.calendar.date(from: parts),
+              let length = Memory.calendar.range(of: .day, in: .month, for: first)
+        else { return nil }
+        parts.day = min(vagueDay, length.count)
+        return Memory.calendar.date(from: parts)
     }
 
     private func save() {
@@ -267,8 +326,14 @@ struct MemorySheet: View {
         let repo = Repository(context)
         if howKnown == .unsure {
             let low = min(fromYear, toYear), high = max(fromYear, toYear)
-            let start = Memory.calendar.date(from: DateComponents(year: low, month: 1, day: 1)) ?? date
-            let end = Memory.calendar.date(from: DateComponents(year: high, month: 12, day: 31)) ?? date
+            // With a day, the span runs candidate-to-candidate rather than
+            // year-to-year. It is still every instant the memory might be —
+            // and a narrower, truer interval than the old one — but it no
+            // longer *starts* on a day the memory never claimed.
+            let start = (dayKnown ? vagueDate(year: low) : nil)
+                ?? Memory.calendar.date(from: DateComponents(year: low, month: 1, day: 1)) ?? date
+            let end = (dayKnown ? vagueDate(year: high) : nil)
+                ?? Memory.calendar.date(from: DateComponents(year: high, month: 12, day: 31)) ?? date
             repo.saveMemory(memory, on: start, precision: nil,
                             words: words, span: start...end)
         } else {
