@@ -948,6 +948,45 @@ struct Build36CalendarGridTests {
         #expect(load[remembered]?.entries == 1)
     }
 
+    @Test("A year-precision finish belongs to its year, not to nowhere")
+    func vagueFinishesKeepTheirYear() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let cal = JournalBuilder.calendar
+
+        let game = Game(name: "The Elder Scrolls V: Skyrim")
+        let playthrough = Playthrough()
+        playthrough.game = game
+        context.insert(game)
+        context.insert(playthrough)
+
+        // Beaten "in 2011" — no day, but emphatically a year.
+        let finish = CompletionEvent()
+        finish.game = game
+        finish.date = cal.date(from: DateComponents(year: 2011, month: 1, day: 1))!
+        finish.datePrecision = "year"
+        context.insert(finish)
+
+        // And something with a real day, in a different year.
+        let start = cal.date(from: DateComponents(year: 2026, month: 8, day: 11, hour: 12))!
+        let session = Session(startDate: start, state: .stopped)
+        session.playthrough = playthrough
+        session.endDate = start.addingTimeInterval(3600)
+        session.accumulatedDuration = 3600
+        context.insert(session)
+
+        let periods = JournalBuilder.periods(from: [game])
+        let undated = JournalCalendarView.undatedByYear(from: periods)
+        let load = JournalCalendarView.load(from: periods, calendar: cal)
+
+        // The bug this guards: 2011 held a finish and the year strip drew it
+        // as an empty year, because only day-precision entries were counted.
+        #expect(undated[2011]?.count == 1)
+        #expect(undated[2026] == nil)
+        // And the other half: viewing 2026 used to list 2011's finish under it.
+        #expect(load.keys.contains(cal.date(from: DateComponents(year: 2026, month: 8, day: 11))!))
+        #expect(load.keys.allSatisfy { cal.component(.year, from: $0) == 2026 })
+    }
+
     @Test("A local session keeps the day it was played on")
     func sessionKeepsItsDay() {
         // A late-night session is still that evening, not the next morning.

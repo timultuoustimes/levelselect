@@ -30,8 +30,10 @@ struct JournalCalendarView: View {
     var body: some View {
         let periods = JournalBuilder.periods(from: games, standalone: standaloneMemories)
         let load = Self.load(from: periods, calendar: calendar)
+        let undatedByYear = Self.undatedByYear(from: periods)
         let populated = Set(load.keys.map { calendar.component(.year, from: $0) })
-        let undated = periods.filter { $0.grain != .day }
+            .union(undatedByYear.keys)
+        let undated = undatedByYear[shownYear] ?? []
         // **Normalised within the year on show, not across the whole library.**
         // A quiet year beside a heavy one would otherwise render as blank —
         // the calendar reporting "nothing happened" about a year that simply
@@ -101,6 +103,21 @@ struct JournalCalendarView: View {
         let now = calendar.component(.year, from: .now)
         let start = min(earliest ?? now, 1970)
         return Array(start...max(start, now))
+    }
+
+    /// Entries too vague for a square, filed under the year they still name.
+    ///
+    /// **A vague date is not an unknown one.** "2011" is 2011, and filing those
+    /// outside the year system meant a year holding three finishes read as
+    /// empty in the strip, while the year you were actually looking at listed
+    /// somebody else's 2009.
+    ///
+    /// Bucketed by each period's own calendar: a year-precision memory is
+    /// stored as 1 January UTC, which is the previous year read locally.
+    static func undatedByYear(from periods: [JournalPeriod]) -> [Int: [JournalPeriod]] {
+        Dictionary(grouping: periods.filter { $0.grain != .day }) {
+            $0.calendar.component(.year, from: $0.start)
+        }
     }
 
     /// How much each day carries, keyed by the square it belongs in.
