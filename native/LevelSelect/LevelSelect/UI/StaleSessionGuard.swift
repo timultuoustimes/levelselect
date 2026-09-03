@@ -104,6 +104,31 @@ struct StaleSessionGuard: ViewModifier {
         // move, and a game can be bought — all of which happen while the app
         // is closed, and none of which the scheduling side would ever hear
         // about on its own.
+        syncReleaseReminders()
+
+        // **Ask IGDB whether any of those dates moved, then reconcile again.**
+        // The comment above has always said a date can move; until now nothing
+        // could make one. A complete upcoming game was never re-queried, so its
+        // date was frozen at whatever IGDB said the day it was added — which is
+        // how a game read "Tomorrow" for a day that had already passed while a
+        // game added minutes earlier read correctly.
+        //
+        // Second sync rather than one after the await: the reminders should be
+        // right immediately on the dates already held, not only once the
+        // network answers — or a launch in airplane mode would schedule none.
+        Task {
+            let moved = await UpcomingReleaseRefresh.run(library: games, context: context)
+            if !moved.isEmpty { syncReleaseReminders() }
+        }
+
+        guard stale == nil else { return }
+        stale = candidates.first {
+            $0.elapsed() > Self.threshold && !snoozed.contains($0.id)
+        }
+    }
+
+    /// Point every reminder at the date the app currently believes.
+    private func syncReleaseReminders() {
         NotificationManager.syncReleaseReminders(
             upcoming: WishlistShelf
                 .comingSoon(games.filter { $0.status == .wishlist })
@@ -111,11 +136,6 @@ struct StaleSessionGuard: ViewModifier {
                     guard let date = game.effectiveReleaseDate else { return nil }
                     return (id: game.id, name: game.name, releaseDate: date)
                 })
-
-        guard stale == nil else { return }
-        stale = candidates.first {
-            $0.elapsed() > Self.threshold && !snoozed.contains($0.id)
-        }
     }
 }
 

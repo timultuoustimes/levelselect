@@ -1069,3 +1069,103 @@ struct Build36BetaQuestionTests {
         #expect(Set(ids).count == ids.count)
     }
 }
+
+/// Build 36 — a release date that has not arrived is still IGDB's to revise.
+///
+/// Tim, with two wishlist games side by side: *"onimusha way of the sword isn't
+/// updating to Today and still says tomorrow, but orbitals, which I just added
+/// (literally just added) says today."* Same code, different age — a game with
+/// nothing missing was never queried again, so its date was frozen at whatever
+/// IGDB said the day it was added. A wishlist is made of games whose dates move.
+@MainActor
+struct Build36UpcomingReleaseTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func utcDay(_ offsetDays: Int, from now: Date = .now) -> Date {
+        let utc = ReleaseCountdown.utc
+        return utc.date(byAdding: .day, value: offsetDays, to: utc.startOfDay(for: now))!
+    }
+
+    @Test("A date still ahead may move")
+    func futureDatesMayMove() {
+        #expect(MetadataRefresh.mayMove(utcDay(1)))
+        #expect(MetadataRefresh.mayMove(utcDay(60)))
+    }
+
+    @Test("A date landing today may still move, because a game can slip on the day")
+    func todayMayStillMove() {
+        #expect(MetadataRefresh.mayMove(utcDay(0)))
+    }
+
+    @Test("A date that has passed is history and is never rewritten")
+    func pastDatesAreFrozen() {
+        // The boundary that keeps `MetadataRefresh`'s additive design intact:
+        // a released game's date is exactly where a hand-correction lives.
+        #expect(!MetadataRefresh.mayMove(utcDay(-1)))
+        #expect(!MetadataRefresh.mayMove(utcDay(-4000)))
+    }
+
+    @Test("A year-only placeholder is not a day, so it is not moved by this rule")
+    func yearOnlyIsNotADay() {
+        let jan1 = ReleaseCountdown.utc.date(
+            from: DateComponents(year: 2027, month: 1, day: 1))!
+        #expect(!MetadataRefresh.mayMove(jan1))
+        #expect(!MetadataRefresh.mayMove(nil))
+    }
+
+    @Test("An upcoming game is re-asked; a released one is left alone")
+    func onlyUpcomingGamesAreRechecked() {
+        let context = makeContext()
+        let soon = Game(name: "Onimusha: Way of the Sword")
+        soon.igdbID = 1
+        soon.firstReleaseDate = utcDay(1)
+        let out = Game(name: "Orbitals")
+        out.igdbID = 2
+        out.firstReleaseDate = utcDay(-3)
+        context.insert(soon); context.insert(out)
+
+        let due = MetadataRefresh.upcomingNeedingRecheck([soon, out])
+        #expect(due.map(\.name) == ["Onimusha: Way of the Sword"])
+    }
+
+    @Test("Asked today, not asked again today")
+    func recheckIsThrottled() {
+        let game = Game(name: "The Duskbloods")
+        game.igdbID = 3
+        game.firstReleaseDate = utcDay(30)
+
+        let now = Date.now
+        #expect(MetadataRefresh.upcomingNeedingRecheck(
+            [game], checked: [game.id: now.addingTimeInterval(-3600)], now: now).isEmpty)
+        // ...but tomorrow it is fair game again, because that is how often a
+        // delay is worth hearing about.
+        #expect(MetadataRefresh.upcomingNeedingRecheck(
+            [game], checked: [game.id: now.addingTimeInterval(-25 * 3600)], now: now).count == 1)
+    }
+
+    @Test("A game with no IGDB id has nothing to ask")
+    func handAddedGamesAreSkipped() {
+        let game = Game(name: "Something I typed in myself")
+        game.firstReleaseDate = utcDay(5)
+        #expect(MetadataRefresh.upcomingNeedingRecheck([game]).isEmpty)
+    }
+
+    @Test("The two throttles are separate ledgers")
+    func throttlesDoNotShareAKey() {
+        // Sharing one would mean a daily date check silently suppressed the
+        // monthly fill pass for the same game.
+        #expect(MetadataCheckedStore.fillKey != MetadataCheckedStore.upcomingKey)
+
+        let defaults = UserDefaults(suiteName: "ls.tests.\(UUID().uuidString)")!
+        let id = UUID()
+        MetadataCheckedStore(defaults: defaults, key: MetadataCheckedStore.upcomingKey)
+            .markChecked([id])
+        #expect(MetadataCheckedStore(defaults: defaults,
+                                     key: MetadataCheckedStore.fillKey).all().isEmpty)
+        #expect(MetadataCheckedStore(defaults: defaults,
+                                     key: MetadataCheckedStore.upcomingKey).all()[id] != nil)
+    }
+}

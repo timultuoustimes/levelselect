@@ -134,7 +134,16 @@ struct Repository {
         // shorthand for "the year is all we know" — see
         // `MetadataRefresh.isYearOnly`. Storing IGDB's padded 30 December
         // would make the wishlist promise a launch day nobody announced.
-        if let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+        // **Both, and keyed to the same platform the display reads.**
+        // `effectiveReleaseDate` prefers `platformReleases` and only falls back
+        // to `firstReleaseDate`, so refreshing the fallback alone left the
+        // wishlist showing the stale per-platform row — a manual refresh that
+        // looked like it did nothing. And `chosenPlatform`, not
+        // `primaryOwnedPlatform`: a wishlist game is owned on nothing.
+        if !igdb.storedPlatformReleases.isEmpty {
+            game.platformReleases = igdb.storedPlatformReleases
+        }
+        if let date = igdb.storableReleaseDate(on: game.chosenPlatform) {
             game.firstReleaseDate = date
         }
         if let f = igdb.franchise { game.franchise = f }
