@@ -369,8 +369,23 @@ struct Repository {
         return memory
     }
 
-    func deleteMemory(_ memory: Memory) {
-        memory.deletedAt = .now
+    /// Deleting a memory takes its pictures with it.
+    ///
+    /// **The cascade rule on `Memory.images` only fires on a hard delete**,
+    /// and this is a soft one — so the photos were left `deletedAt == nil`
+    /// after the memory that owned them was gone. A memory's pictures are
+    /// reachable through nothing else, which made them bytes no screen in the
+    /// app could show and `ImageStorageView` still counted as in use.
+    ///
+    /// Soft, like every other delete here: a hard delete races CloudKit, which
+    /// is why this codebase tombstones instead.
+    func deleteMemory(_ memory: Memory, at date: Date = .now) {
+        memory.deletedAt = date
+        for image in (memory.images ?? []) where image.deletedAt == nil {
+            image.deletedAt = date
+            image.updatedAt = date
+            image.revision += 1
+        }
         touch(memory)
         persist()
     }

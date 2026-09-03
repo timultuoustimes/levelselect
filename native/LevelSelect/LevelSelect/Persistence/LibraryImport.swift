@@ -25,7 +25,7 @@ enum LibraryImport {
 
     /// Mirror of `LibraryExport.formatVersion`, nonisolated so error text can
     /// use it; a test pins that the two never drift.
-    nonisolated static let supportedVersion = 1
+    nonisolated static let supportedVersion = 2
 
     enum ImportError: LocalizedError {
         case notAnExport
@@ -122,6 +122,7 @@ enum LibraryImport {
         var completions = Set<UUID>(), videos = Set<UUID>(), maps = Set<UUID>()
         var markers = Set<UUID>(), collections = Set<UUID>()
         var images = Set<UUID>()
+        var memories = Set<UUID>()
 
         init(context: ModelContext) throws {
             games = Set(try context.fetch(FetchDescriptor<Game>()).map(\.id))
@@ -136,6 +137,7 @@ enum LibraryImport {
             markers = Set(try context.fetch(FetchDescriptor<Marker>()).map(\.id))
             collections = Set(try context.fetch(FetchDescriptor<GameCollection>()).map(\.id))
             images = Set(try context.fetch(FetchDescriptor<GameImage>()).map(\.id))
+            memories = Set(try context.fetch(FetchDescriptor<Memory>()).map(\.id))
         }
     }
 
@@ -184,6 +186,12 @@ enum LibraryImport {
         }
         for c in (root["collections"] as? [[String: Any]]) ?? [] {
             visit("collections", c, in: existing.collections)
+        }
+        for m in (root["memories"] as? [[String: Any]]) ?? [] {
+            visit("memories", m, in: existing.memories)
+            for i in (m["images"] as? [[String: Any]]) ?? [] {
+                visit("images", i, in: existing.images)
+            }
         }
     }
 
@@ -362,6 +370,47 @@ enum LibraryImport {
             collection.gameIDs = (cDict["gameIDs"] as? [String]) ?? []
             context.insert(collection)
             outcome.created["collections", default: 0] += 1
+        }
+
+        for mDict in (root["memories"] as? [[String: Any]]) ?? [] {
+            guard let mID = uuid(mDict["id"]) else { continue }
+            if existing.memories.contains(mID) {
+                outcome.skipped["memories", default: 0] += 1; continue
+            }
+            let memory = Memory()
+            memory.id = mID
+            memory.title = (mDict["title"] as? String) ?? ""
+            memory.body = mDict["body"] as? String
+            // Taken from the file, never rebuilt from `precision`: the words
+            // are the memory's own answer to "when", and the interval is what
+            // places it. Deriving either would restore a guess.
+            memory.whenText = mDict["whenText"] as? String
+            memory.precision = mDict["precision"] as? String
+            memory.earliest = date(mDict["earliest"]) ?? .now
+            memory.latest = date(mDict["latest"]) ?? memory.earliest
+            memory.kind = (mDict["kind"] as? String) ?? "memory"
+            memory.place = mDict["place"] as? String
+            memory.platform = mDict["platform"] as? String
+            memory.createdAt = date(mDict["createdAt"]) ?? .now
+            memory.companions = companions(mDict["playedWith"])
+            // A memory whose game is not in this file stays standalone rather
+            // than being dropped — it is the user's writing either way.
+            if let gID = uuid(mDict["gameID"]) { memory.game = gamesByID[gID] }
+            context.insert(memory)
+            outcome.created["memories", default: 0] += 1
+
+            for iDict in (mDict["images"] as? [[String: Any]]) ?? [] {
+                guard let iID = uuid(iDict["id"]) else { continue }
+                if existing.images.contains(iID) {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                guard let image = makeImage(iDict, id: iID) else {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                context.insert(image)
+                image.memory = memory
+                outcome.created["images", default: 0] += 1
+            }
         }
 
         // Reappearing data deserves true rings.

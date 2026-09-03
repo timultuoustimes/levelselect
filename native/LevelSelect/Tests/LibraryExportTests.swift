@@ -119,3 +119,141 @@ struct LibraryExportTests {
         #expect(manifest["sessions"] as? Int == 2)       // playtime survives
     }
 }
+
+/// Build 36 — memories, and the pictures on them, survive a backup.
+///
+/// The export carried `game.images` and no memories at all, so someone's
+/// Christmas photo — and the words they wrote about it — were absent from
+/// their own backup file without anything saying so. These are the tests that
+/// would have caught it.
+@MainActor
+struct Build36MemoryExportTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// A 1×1 PNG — enough bytes that `makeImage` accepts it on the way back.
+    private var pixel: Data {
+        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")!
+    }
+
+    @Test("A memory, its words and its photo all survive an export and re-import")
+    func memoriesRoundTrip() throws {
+        let source = makeContext()
+        let repo = Repository(source)
+
+        let memory = Memory()
+        memory.title = "Got my Sega Genesis for Christmas"
+        memory.body = "Model 2 with Columns bundle"
+        memory.place = "Twin Lakes house"
+        memory.platform = "Sega Genesis"
+        memory.kind = "acquired"
+        let first = Memory.calendar.date(from: DateComponents(year: 1995, month: 12, day: 25))!
+        let second = Memory.calendar.date(from: DateComponents(year: 1996, month: 12, day: 25))!
+        _ = repo.saveMemory(memory, on: first, precision: nil,
+                            words: "Christmas 1995/1996", span: first...second)
+        _ = try repo.addImage(to: memory, data: pixel)
+
+        let data = try LibraryExport.makeJSON(context: source)
+
+        // Into an empty library, the way a restore actually happens.
+        let target = makeContext()
+        let outcome = try LibraryImport.apply(data: data, context: target)
+        #expect(outcome.created["memories"] == 1)
+        #expect(outcome.created["images"] == 1)
+
+        let restored = try target.fetch(FetchDescriptor<Memory>())
+        #expect(restored.count == 1)
+        let it = try #require(restored.first)
+        #expect(it.title == "Got my Sega Genesis for Christmas")
+        #expect(it.body == "Model 2 with Columns bundle")
+        #expect(it.place == "Twin Lakes house")
+        #expect(it.platform == "Sega Genesis")
+        #expect(it.kind == "acquired")
+        // The words are the memory's own answer to "when" and are never
+        // re-rendered from the interval — so they have to come back verbatim.
+        #expect(it.whenText == "Christmas 1995/1996")
+        #expect(it.precision == nil)
+        #expect(it.isUncertain)
+        #expect(it.earliest == first)
+        #expect(it.latest == second)
+        // And the photograph, which is the part that cannot be retyped.
+        #expect((it.images ?? []).count == 1)
+        #expect((it.images ?? []).first?.data == pixel)
+    }
+
+    @Test("A memory attached to a game comes back attached to it")
+    func memoryKeepsItsGame() throws {
+        let source = makeContext()
+        let repo = Repository(source)
+        let game = Game(name: "Sonic the Hedgehog 2")
+        source.insert(game)
+        let memory = Memory()
+        memory.title = "Beat it at my cousin's"
+        memory.game = game
+        _ = repo.saveMemory(memory, on: .now, precision: "day", words: nil)
+
+        let data = try LibraryExport.makeJSON(context: source)
+        let target = makeContext()
+        _ = try LibraryImport.apply(data: data, context: target)
+
+        let restored = try #require(try target.fetch(FetchDescriptor<Memory>()).first)
+        #expect(restored.game?.name == "Sonic the Hedgehog 2")
+    }
+
+    @Test("A standalone memory is exported at all")
+    func standaloneMemoryIsNotNested() throws {
+        // The specific shape of the original bug: memories nested under games
+        // would have exported only the attached ones. "First LAN party"
+        // belongs to no game.
+        let source = makeContext()
+        let memory = Memory()
+        memory.title = "First LAN party"
+        _ = Repository(source).saveMemory(memory, on: .now, precision: "day", words: nil)
+
+        let data = try LibraryExport.makeJSON(context: source)
+        let root = try #require(
+            try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let memories = try #require(root["memories"] as? [[String: Any]])
+        #expect(memories.count == 1)
+        #expect(memories.first?["title"] as? String == "First LAN party")
+
+        let manifest = try #require(root["manifest"] as? [String: Any])
+        #expect(manifest["memories"] as? Int == 1)
+    }
+
+    @Test("Deleting a memory takes its pictures out of live storage")
+    func deletingAMemoryRemovesItsPictures() throws {
+        let context = makeContext()
+        let repo = Repository(context)
+        let memory = Memory()
+        memory.title = "Sold the collection"
+        _ = repo.saveMemory(memory, on: .now, precision: "day", words: nil)
+        let image = try repo.addImage(to: memory, data: pixel)
+
+        repo.deleteMemory(memory)
+
+        // The cascade rule on the relationship only fires on a hard delete, so
+        // before this the picture stayed live: unreachable from any screen,
+        // and still counted by the storage view as bytes in use.
+        #expect(image.deletedAt != nil)
+        let live = try context.fetch(FetchDescriptor<GameImage>())
+            .filter { $0.deletedAt == nil }
+        #expect(live.isEmpty)
+    }
+
+    @Test("A deleted memory is not exported")
+    func deletedMemoriesStayOut() throws {
+        let context = makeContext()
+        let repo = Repository(context)
+        let memory = Memory()
+        memory.title = "Typo"
+        _ = repo.saveMemory(memory, on: .now, precision: "day", words: nil)
+        repo.deleteMemory(memory)
+
+        let root = try #require(try JSONSerialization.jsonObject(
+            with: try LibraryExport.makeJSON(context: context)) as? [String: Any])
+        #expect((root["memories"] as? [[String: Any]])?.isEmpty == true)
+    }
+}
