@@ -184,6 +184,48 @@ struct MemoryView: View {
             .sorted { $0.addedAt < $1.addedAt }
     }
 
+    /// One big, the rest two-up beneath it.
+    ///
+    /// **The first picture is always the hero.** An adaptive grid gave every
+    /// photo the same small cell, which made three screenshots read as a
+    /// contact sheet rather than a memory — Tim: *"it needs to be a hero one
+    /// up, 2 up below."* One rule covers every count: at one you get the hero
+    /// alone, at three exactly what he described, and at five it keeps going
+    /// in pairs rather than inventing a second layout.
+    @ViewBuilder
+    private var gallery: some View {
+        if let first = images.first {
+            VStack(spacing: 8) {
+                if let data = first.data {
+                    Button { viewingImage = first } label: {
+                        photo(data, height: 240, radius: 14)
+                    }
+                    .buttonStyle(.plain)
+                }
+                let rest = Array(images.dropFirst())
+                if !rest.isEmpty {
+                    LazyVGrid(columns: Self.pair, spacing: 8) {
+                        ForEach(rest) { image in
+                            if let data = image.data {
+                                Button { viewingImage = image } label: {
+                                    // Shorter than the hero, and wider than the
+                                    // old cells were — half the content width
+                                    // rather than a third, so a screenshot is
+                                    // still legible at a glance.
+                                    photo(data, height: 140, radius: 12)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static let pair = [GridItem(.flexible(), spacing: 8),
+                               GridItem(.flexible(), spacing: 8)]
+
     /// A picture at a fixed height, cut to its cell.
     ///
     /// **The size comes from a shape, and the clip is outermost.** Setting
@@ -206,24 +248,7 @@ struct MemoryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if images.count == 1, let data = images[0].data {
-                    Button { viewingImage = images[0] } label: {
-                        photo(data, height: 240, radius: 14)
-                    }
-                    .buttonStyle(.plain)
-                } else if images.count > 1 {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 108), spacing: 8)],
-                              spacing: 8) {
-                        ForEach(images) { image in
-                            if let data = image.data {
-                                Button { viewingImage = image } label: {
-                                    photo(data, height: 108, radius: 10)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
+                gallery
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(memory.title).font(.title2.weight(.semibold))
