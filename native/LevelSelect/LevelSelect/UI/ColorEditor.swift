@@ -185,23 +185,16 @@ struct ColorEditor: View {
                 // wheel is square and the sliders are shorter, so the wheel
                 // sets it.
                 .frame(height: 300)
-
-                Spacer(minLength: 0)
-
-                if target.isCustomised || target.defaultColor != nil {
-                    Button {
-                        target.onReset()
-                        if let d = target.defaultColor { setFromColor(d) }
-                    } label: {
-                        Label("Use the default \(target.label.lowercased())",
-                              systemImage: "arrow.uturn.backward")
-                            .font(.subheadline)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
-                }
             }
             .padding(20)
+            // **Pinned, not the last thing in the scroll.** It sat after a
+            // `Spacer` that a ScrollView gives no room to, so it landed exactly
+            // at the sheet's edge and drew half-sliced — Tim: *"'Use the default
+            // background' and 'use the default accent' are off the bottom."*
+            // A reset is the one control you go looking for when the colour is
+            // wrong, so it should not be a scroll away from the thing that made
+            // it wrong.
+            .safeAreaInset(edge: .bottom) { resetControl }
             .navigationTitle(title)
             // Cancel and a back chevron would be two exits that mean different
             // things — back keeps the change, Cancel throws it away — and
@@ -250,6 +243,26 @@ struct ColorEditor: View {
         #endif
     }
 
+    @ViewBuilder
+    private var resetControl: some View {
+        if target.isCustomised || target.defaultColor != nil {
+            Button {
+                target.onReset()
+                if let d = target.defaultColor { setFromColor(d) }
+            } label: {
+                Label("Use the default \(target.label.lowercased())",
+                      systemImage: "arrow.uturn.backward")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            // Opaque, so the swatches do not scroll through it.
+            .background(.bar)
+        }
+    }
+
     /// Both colours doing the jobs they will actually do.
     ///
     /// The background used to be painted ON the button, which is the one place
@@ -267,8 +280,13 @@ struct ColorEditor: View {
             .foregroundStyle(ThemePalette.knockoutPreview(on: accent, ground: ground))
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
+            // **`accent`, not `current`.** The comment above describes this
+            // being fixed and only the knockout colour was; the fill still took
+            // whichever colour was being edited, so picking a background
+            // painted the background onto the Play button — the one place it
+            // never goes — and the preview answered a question nobody asked.
             .background(
-                LinearGradient(colors: [current, current.opacity(0.82)],
+                LinearGradient(colors: [accent, accent.opacity(0.82)],
                                startPoint: .top, endPoint: .bottom),
                 in: .rect(cornerRadius: 12))
 
