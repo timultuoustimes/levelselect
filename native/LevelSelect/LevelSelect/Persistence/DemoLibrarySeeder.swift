@@ -58,22 +58,28 @@ enum DemoLibrarySeeder {
         .init(igdbID: 366893, name: "Pokémon Pokopia",     platform: "Nintendo Switch 2", status: .playing, rating: nil, ownership: [.physical], hours: 8.7),
 
         // **The wishlist.** Mostly unannounced-to-unreleased on purpose: the
+        // ids are pinned like every other seed, and for a reason the name
+        // fallback demonstrated: searching "The Legend of Zelda: Ocarina of
+        // Time" returned a fan project called "Unreal Engine The Legend of
+        // Zelda: Ocarina of Time" ahead of the 2026 remake. These came from
+        // Tim's own library, so each one is an entry a person already chose.
+        //
         // wishlist's three shelves are Coming soon / No date yet / Out now,
         // and the countdown, the releases widget and the reminder all key off
         // a real date. A wishlist of games that already shipped exercises none
         // of it. Owned by nobody and played for zero hours, because that is
         // what wanting a game looks like.
-        .init(name: "Grand Theft Auto VI",        platform: "PlayStation 5",      status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "The Duskbloods",             platform: "Nintendo Switch 2",  status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "Onimusha: Way of the Sword", platform: "PlayStation 5",      status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "Promise Mascot Agency",      platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "Denshattack!",               platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "Future Knight",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "The Legend of Zelda: Ocarina of Time", platform: "Nintendo Switch 2", status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID:  52189, name: "Grand Theft Auto VI",        platform: "PlayStation 5",          status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 338104, name: "The Duskbloods",             platform: "Nintendo Switch 2",      status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 325602, name: "Onimusha: Way of the Sword", platform: "PlayStation 5",          status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 405460, name: "The Legend of Zelda: Ocarina of Time", platform: "Nintendo Switch 2", status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 299593, name: "Promise Mascot Agency",      platform: "Nintendo Switch",        status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 361826, name: "Denshattack!",               platform: "Nintendo Switch",        status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 388341, name: "Future Knight",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
         // Out already, which the shelf needs too: "Out now" is one of the
         // three, and a wishlist of nothing but unreleased games never draws it.
-        .init(name: "Orbitals",                   platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
-        .init(name: "Blood Dungeon",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 381237, name: "Orbitals",                   platform: "Nintendo Switch",        status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(igdbID: 404724, name: "Blood Dungeon",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
     ]
 
     /// Create the demo library. Network is used for IGDB metadata; without it
