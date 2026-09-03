@@ -2,7 +2,15 @@ import Foundation
 
 /// The app's four top-level tabs.
 enum LSTab: String, Hashable, CaseIterable {
-    case home, library, wishlist, stats
+    /// **The raw value stays `"stats"` on purpose, and must keep staying.**
+    ///
+    /// The charts were the whole tab until the journal took it over, and that
+    /// name leaked outward: widget deep links are baked as `levelselect://stats`
+    /// per timeline entry, and `LSSection` is an `AppEnum`, which persists the
+    /// raw value inside whatever Shortcuts anyone has already built. Renaming
+    /// the case is a readability change; renaming the raw value silently
+    /// breaks a shortcut somebody wrote, months later, with no error.
+    case home, library, wishlist, journal = "stats"
 }
 
 /// Shared navigation bus that App Intents (and widget deep links) drive.

@@ -103,13 +103,34 @@ struct ProfileHeader: View {
                     // about 19pt and fits; a 24-character name lands near the
                     // 0.5 floor and stops there rather than wrapping mid-word,
                     // which is what a pixel face does worst.
+                    let ink = ProfileNameColor.resolve(profile.nameColorRaw ?? "")
                     Text(name)
-                        .foregroundStyle(ProfileNameColor.resolve(profile.nameColorRaw ?? ""))
+                        .foregroundStyle(ink)
                         .font(LSTheme.pixel(22))
                         .fontDesign(nil)   // never let an app-wide design override the pixel face
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                        .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
+                        // The wordmark's treatment, not a new one.
+                        //
+                        // A soft blur under pixel type fights the face — the
+                        // letterforms have hard square edges and a gaussian
+                        // halo smears them, which was tolerable on a dark
+                        // ground and obvious on a light one. `Wordmark` had
+                        // already solved this: a hard offset in a darkened
+                        // version of the ink, so the shadow reads as a second
+                        // set of pixels rather than a glow. This is the only
+                        // other pixel-type string in the app, and the only
+                        // other place the treatment belongs — the rest of the
+                        // interface is ordinary text and would just get loud.
+                        // The ink darkened, so a custom name colour gets a
+                        // shadow that belongs to it rather than a fixed brown
+                        // — the rule `Wordmark.shadowTint` already follows.
+                        // y:2, not 3. The face draws on a pixel grid, and an
+                        // offset larger than one of its blocks leaves a lit
+                        // gap between glyph and shadow instead of a solid
+                        // step — visible at 22pt, which is far larger than
+                        // the wordmark usually renders.
+                        .shadow(color: LSTheme.hardStep(under: ink), radius: 0, y: 2)
                 }
                 handleChips(profile)
             }
@@ -319,7 +340,7 @@ struct ProfileHeader: View {
     }
 
     private var divider: some View {
-        Rectangle().fill(.white.opacity(0.09)).frame(width: 1, height: 26)
+        Rectangle().fill(LSTheme.separator).frame(width: 1, height: 26)
     }
 
     private func stat(_ value: String, _ label: String) -> some View {
@@ -394,6 +415,36 @@ struct ProfileEditor: View {
 
     private var profile: PlayerProfile? { profiles.first }
 
+    /// Extracted from `body` because the whole Form went past the
+    /// type-checker's budget — "unable to type-check this expression in
+    /// reasonable time" is a size complaint, not a correctness one, and the
+    /// cure is to give the largest sub-expression its own name.
+    private var avatarButton: some View {
+        Button { choosingSource = true } label: {
+            ZStack {
+                if let avatar {
+                    LocalArtworkThumb(data: avatar, contentMode: .fit)
+                        .frame(width: 108, height: 108)
+                } else {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 78))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .frame(width: 116, height: 116)
+            .overlay(alignment: .bottomTrailing) {
+                Image(systemName: "pencil")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(LSTheme.onAccent)
+                    .frame(width: 28, height: 28)
+                    .background(LSTheme.accent, in: .circle)
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(avatar == nil ? "Add a picture" : "Change picture")
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -406,29 +457,7 @@ struct ProfileEditor: View {
                             // Form row — which hit-tested as a single control
                             // and fired the wrong one — and none of them was
                             // the thing you actually want to tap.
-                            Button { choosingSource = true } label: {
-                                ZStack {
-                                    if let avatar {
-                                        LocalArtworkThumb(data: avatar, contentMode: .fit)
-                                            .frame(width: 108, height: 108)
-                                    } else {
-                                        Image(systemName: "person.crop.circle")
-                                            .font(.system(size: 78))
-                                            .foregroundStyle(.tertiary)
-                                    }
-                                }
-                                .frame(width: 116, height: 116)
-                                .overlay(alignment: .bottomTrailing) {
-                                    Image(systemName: "pencil")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundStyle(LSTheme.onAccent)
-                                        .frame(width: 28, height: 28)
-                                        .background(LSTheme.accent, in: .circle)
-                                }
-                                .contentShape(.rect)
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(avatar == nil ? "Add a picture" : "Change picture")
+                            avatarButton
 
                             Text(avatar == nil ? "Add a picture" : "Tap to change")
                                 .font(.caption)
@@ -481,14 +510,16 @@ struct ProfileEditor: View {
 
                     if ProfileNameColor.mode(of: nameColorRaw) == .custom {
                         NavigationLink {
-                            ColorEditor(
-                                title: "Name color",
-                                defaultColor: LSTheme.accent,
-                                isCustomised: true,
-                                color: Binding(
-                                    get: { Color(hex: nameColorRaw) ?? LSTheme.accent },
-                                    set: { nameColorRaw = $0.hexString() ?? nameColorRaw }),
-                                onReset: { nameColorRaw = ProfileNameColor.accent })
+                            ColorEditor(title: "Name color", targets: [
+                                ColorTarget(
+                                    id: "name", label: "Name color",
+                                    defaultColor: LSTheme.accent,
+                                    isCustomised: true,
+                                    binding: Binding(
+                                        get: { Color(hex: nameColorRaw) ?? LSTheme.accent },
+                                        set: { nameColorRaw = $0.hexString() ?? nameColorRaw }),
+                                    onReset: { nameColorRaw = ProfileNameColor.accent }),
+                            ])
                         } label: {
                             HStack {
                                 Text("Pick a color")
@@ -496,7 +527,7 @@ struct ProfileEditor: View {
                                 Circle()
                                     .fill(ProfileNameColor.swatch(nameColorRaw))
                                     .frame(width: 22, height: 22)
-                                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+                                    .overlay { Circle().strokeBorder(LSTheme.hairline, lineWidth: 1) }
                             }
                         }
                     }

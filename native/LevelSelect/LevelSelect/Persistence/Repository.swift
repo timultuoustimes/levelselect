@@ -134,7 +134,16 @@ struct Repository {
         // shorthand for "the year is all we know" — see
         // `MetadataRefresh.isYearOnly`. Storing IGDB's padded 30 December
         // would make the wishlist promise a launch day nobody announced.
-        if let date = igdb.storableReleaseDate(on: game.primaryOwnedPlatform) {
+        // **Both, and keyed to the same platform the display reads.**
+        // `effectiveReleaseDate` prefers `platformReleases` and only falls back
+        // to `firstReleaseDate`, so refreshing the fallback alone left the
+        // wishlist showing the stale per-platform row — a manual refresh that
+        // looked like it did nothing. And `chosenPlatform`, not
+        // `primaryOwnedPlatform`: a wishlist game is owned on nothing.
+        if !igdb.storedPlatformReleases.isEmpty {
+            game.platformReleases = igdb.storedPlatformReleases
+        }
+        if let date = igdb.storableReleaseDate(on: game.chosenPlatform) {
             game.firstReleaseDate = date
         }
         if let f = igdb.franchise { game.franchise = f }
@@ -333,6 +342,61 @@ struct Repository {
         touch(collection)
         persist()
         return collection
+    }
+
+    // MARK: Memories
+
+    /// Save a memory, computing the sortable interval from the precision.
+    ///
+    /// The interval is derived here rather than at the call site so that
+    /// "year" always means the whole year and never 1 January — a memory
+    /// stored as an instant would sort as though its precision were a day,
+    /// which is the mistake the precision field exists to prevent.
+    @discardableResult
+    func saveMemory(_ memory: Memory,
+                    on date: Date,
+                    precision: String?,
+                    words: String?,
+                    span: ClosedRange<Date>? = nil) -> Memory {
+        if let span {
+            // A genuine disjunction — "Christmas 1995 or 1996". No single
+            // precision describes it, so nil is stored and only the words can
+            // say what it was.
+            memory.earliest = span.lowerBound
+            memory.latest = span.upperBound
+            memory.precision = nil
+        } else {
+            memory.earliest = Memory.intervalStart(of: date, precision: precision)
+            memory.latest = Memory.intervalEnd(of: date, precision: precision)
+            memory.precision = precision
+        }
+        memory.whenText = words?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? words : nil
+        if memory.modelContext == nil { context.insert(memory) }
+        touch(memory)
+        persist()
+        return memory
+    }
+
+    /// Deleting a memory takes its pictures with it.
+    ///
+    /// **The cascade rule on `Memory.images` only fires on a hard delete**,
+    /// and this is a soft one — so the photos were left `deletedAt == nil`
+    /// after the memory that owned them was gone. A memory's pictures are
+    /// reachable through nothing else, which made them bytes no screen in the
+    /// app could show and `ImageStorageView` still counted as in use.
+    ///
+    /// Soft, like every other delete here: a hard delete races CloudKit, which
+    /// is why this codebase tombstones instead.
+    func deleteMemory(_ memory: Memory, at date: Date = .now) {
+        memory.deletedAt = date
+        for image in (memory.images ?? []) where image.deletedAt == nil {
+            image.deletedAt = date
+            image.updatedAt = date
+            image.revision += 1
+        }
+        touch(memory)
+        persist()
     }
 
     @discardableResult
@@ -784,6 +848,20 @@ struct Repository {
         }
         NotificationManager.cancelStaleReminder(sessionID: session.id)
         LiveActivityManager.sessionChanged(session, gameName: session.playthrough?.game?.name ?? "A game")
+        persist()
+    }
+
+    /// Write only the note, leaving the clock alone.
+    ///
+    /// **Not `updateSession`**, which recomputes `accumulatedDuration` from
+    /// start and end. For a session that was ever paused those disagree — the
+    /// accumulated time is deliberately *less* than the wall-clock span — so
+    /// routing a notes-only write through it would silently inflate the
+    /// recorded playtime, which is exactly the bug build 34 fixed in the
+    /// session editor.
+    func setSessionNotes(_ session: Session, _ notes: String?) {
+        session.notes = notes?.isEmpty == true ? nil : notes
+        touch(session)
         persist()
     }
 
@@ -2073,11 +2151,21 @@ struct Repository {
         event.platform = platform
         event.notes = notes
         event.companions = playedWith
-        // Any finish-shaped label moves the game to Completed — but never
-        // back: a historical "beat it in 2011" on a game you're replaying
-        // shouldn't yank it off the Playing shelf.
+        // Any finish-shaped label moves the game to Completed — except off
+        // the two statuses that are not on the finishing axis at all.
+        //
+        // Tim's distinction, and the model already had it: **beaten is a play
+        // event, completed is a shelf.** "I got to the ending" is something
+        // that happened, recorded here and kept forever; "I got to the ending
+        // and I'm done with it" is where the game sits now. A game can be
+        // beaten without being done — that is the entire idea of Old Favorite,
+        // and replaying Sonic 2 must not drag it onto the Completed shelf and
+        // overwrite what he said it was.
+        //
+        // `ongoing` was already exempt for the same reason. Neither status
+        // claims anything about finishing, so a finish has nothing to correct.
         if [.cleared, .completed, .hundredPercent].contains(label),
-           game.status != .completed, game.status != .ongoing {
+           ![.completed, .ongoing, .oldFavorite].contains(game.status) {
             game.status = .completed
         }
         touch(game, at: .now)
@@ -2132,6 +2220,27 @@ struct Repository {
         image.pixelHeight = prepared.pixelHeight
         image.byteCount = prepared.data.count
         touch(game, at: .now)
+        persist()
+        return image
+    }
+
+    /// The same ingest, attached to a memory instead of a game.
+    ///
+    /// Deliberately the same model and the same `ImageIngest.prepare` — the
+    /// photo of a Christmas morning goes through exactly what a photo of a
+    /// cartridge does, so it downscales the same way, exports the same way and
+    /// mirrors to the same already-deployed CloudKit asset fields.
+    @discardableResult
+    func addImage(to memory: Memory, data: Data, caption: String? = nil) throws -> GameImage {
+        let prepared = try ImageIngest.prepare(data, role: .gallery)
+        let image = GameImage(role: .gallery, data: prepared.data)
+        context.insert(image)
+        image.memory = memory
+        image.caption = caption
+        image.pixelWidth = prepared.pixelWidth
+        image.pixelHeight = prepared.pixelHeight
+        image.byteCount = prepared.data.count
+        touch(memory, at: .now)
         persist()
         return image
     }

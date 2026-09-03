@@ -397,6 +397,32 @@ enum CloudKitSchemaSeeder {
         context.insert(smallImage)
         smallImage.game = game
 
+        // --- Memory (V5) ---
+        //
+        // Every field is written, including the ones a real memory usually
+        // leaves nil: CloudKit creates a field the first time it SEES a value,
+        // so a property never populated here has no column in Production and
+        // fails to sync forever after. `place`, `whenText` and `platform` are
+        // exactly the optional-in-practice fields that would be missed.
+        let memory = Memory(title: marker,
+                            kind: "acquired",
+                            earliest: now,
+                            latest: now,
+                            precision: "year",
+                            whenText: marker)
+        memory.userID = UUID()
+        memory.deletedAt = now
+        memory.legacyID = marker
+        memory.body = marker
+        memory.place = marker
+        memory.platform = marker
+        memory.companions = [Companion(name: marker, handle: marker)]
+        context.insert(memory)
+        memory.game = game
+        // The relationship itself needs seeding, not just the two models —
+        // `CD_GameImage.memory` is its own CloudKit field.
+        smallImage.memory = memory
+
         // --- GameCollection ---
         let collection = GameCollection(name: marker, isBundle: true, sortIndex: 1)
         collection.userID = UUID()
@@ -462,6 +488,9 @@ enum CloudKitSchemaSeeder {
             if existingTheme.backdropIntensityRaw == nil { existingTheme.backdropIntensityRaw = marker }
             if existingTheme.gamePageLayoutRaw == nil { existingTheme.gamePageLayoutRaw = marker }
             if existingTheme.savedSwatchesData == nil { existingTheme.savedSwatchesData = stamp }
+            if existingTheme.statusNamesData == nil { existingTheme.statusNamesData = stamp }   // V5
+            if existingTheme.appearanceRaw == nil { existingTheme.appearanceRaw = marker }        // V5
+            if existingTheme.backgroundHex == nil { existingTheme.backgroundHex = marker }        // V5
         // ⚠️ A NEW ThemeSettings FIELD MUST BE ADDED TO BOTH BRANCHES.
         //
         // The app creates a ThemeSettings on launch, so a seed run almost
@@ -481,6 +510,9 @@ enum CloudKitSchemaSeeder {
             theme.backdropIntensityRaw = marker           // build 32
             theme.gamePageLayoutRaw = marker              // build 33
             theme.savedSwatchesData = stamp               // build 33, second deploy
+            theme.statusNamesData = stamp                 // build 36 (V5)
+            theme.appearanceRaw = marker                  // build 36 (V5)
+            theme.backgroundHex = marker                  // build 36 (V5)
             context.insert(theme)
         }
 
@@ -516,6 +548,7 @@ enum CloudKitSchemaSeeder {
         purgeAll(TrackerItemDetail.self) { $0.legacyID == marker }
         purgeAll(EarnedBadge.self) { $0.legacyID == marker }
         purgeAll(GameImage.self) { $0.legacyID == marker }
+        purgeAll(Memory.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(PlayerProfile.self) { $0.displayName == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
@@ -535,6 +568,9 @@ enum CloudKitSchemaSeeder {
             if theme.platformIconVariantsData == Data("{}".utf8) { theme.platformIconVariantsData = nil }
             if theme.dekuWishlistURLString == marker { theme.dekuWishlistURLString = nil }
             if theme.starNamesData == Data("{}".utf8) { theme.starNamesData = nil }
+            if theme.statusNamesData == Data("{}".utf8) { theme.statusNamesData = nil }
+            if theme.appearanceRaw == marker { theme.appearanceRaw = nil }
+            if theme.backgroundHex == marker { theme.backgroundHex = nil }
             if theme.backdropIntensityRaw == marker { theme.backdropIntensityRaw = nil }
             if theme.gamePageLayoutRaw == marker { theme.gamePageLayoutRaw = nil }
             ThemePalette.refresh(from: theme)

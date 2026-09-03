@@ -86,14 +86,30 @@ extension CompletionEvent {
         return "\(start) → \(end)"
     }
 
-    static func fuzzyText(_ date: Date, precision: String?, wideMonth: Bool = true) -> String {
+    /// - Parameter timeZone: which calendar the stored instant is *in*.
+    ///
+    ///   Defaults to the user's own, which is right for a finish: the app
+    ///   writes those in local time, so reading them locally round-trips.
+    ///   **A record written at UTC midnight must pass `.gmt`**, or west of
+    ///   Greenwich it reads as the previous year — a 2011 placeholder printing
+    ///   "2010". That is exactly the bug build 35 spent an afternoon on, and
+    ///   the parameter exists so the next caller has to answer the question
+    ///   rather than inherit an assumption.
+    static func fuzzyText(_ date: Date,
+                          precision: String?,
+                          wideMonth: Bool = true,
+                          timeZone: TimeZone = .current) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = timeZone
         switch precision {
         case "year":
-            return String(Calendar.current.component(.year, from: date))
+            return String(calendar.component(.year, from: date))
         case "month":
-            return date.formatted(.dateTime.month(wideMonth ? .wide : .abbreviated).year())
+            return date.formatted(Date.FormatStyle(timeZone: timeZone)
+                .month(wideMonth ? .wide : .abbreviated).year())
         default:
-            return date.formatted(date: .abbreviated, time: .omitted)
+            return date.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                                   timeZone: timeZone))
         }
     }
 

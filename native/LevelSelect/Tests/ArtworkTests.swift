@@ -1,4 +1,5 @@
 import Testing
+import SwiftUI
 import Foundation
 import SwiftData
 @testable import LevelSelect
@@ -395,18 +396,35 @@ struct AccentContrastTests {
     /// user's to choose, so both extremes must work: white on a deep color,
     /// black on a pale one. Getting this wrong makes the most important
     /// control on Home unreadable for whoever picked yellow.
-    @Test func lightAccentsGetDarkText() {
+    /// **Asserts the property, not the colour.**
+    ///
+    /// Build 36 made `onAccent` a knockout — the ground showing through the
+    /// button rather than ink laid on it — so the answer is no longer one of
+    /// two literals and, being scheme-dependent, is not comparable to one at
+    /// all. What the original test was really protecting is the only thing
+    /// that matters: whatever goes inside the button must be legible against
+    /// it. 4.5:1 is the WCAG AA floor for text.
+    @Test func lightAccentsStayLegible() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5E663"          // pale yellow
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
-    @Test func darkAccentsGetLightText() {
+    @Test func darkAccentsStayLegible() {
         let settings = ThemeSettings()
         settings.accentHex = "#3B1D6E"          // deep indigo
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .white)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
+    }
+
+    /// The knockout's own guard: when the ground is too close to the accent to
+    /// be seen through it, it must give up and fall back to plain contrast. A
+    /// pale accent on the light theme is the case — knocking out to near-white
+    /// on near-white would be an invisible Play button.
+    @Test func aGroundTooCloseToTheAccentFallsBack() {
+        let pale = Color(red: 0.97, green: 0.96, blue: 1.00)
+        #expect(ThemePalette.contrast(ThemePalette.knockout(on: pale), pale) >= 4.5)
     }
 
     /// The shipped default, which nobody chose and everybody starts on.
@@ -416,16 +434,42 @@ struct AccentContrastTests {
     /// it is a visible change to the default look and it is the correct one.
     @Test func theDefaultAccentGetsTheHigherContrastOption() {
         ThemePalette.refresh(from: nil)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
-    /// Tim's own accent — torch orange. Mid-tone, so it is exactly the case a
-    /// naive 0.5 threshold gets wrong.
-    @Test func torchOrangeGetsDarkText() {
+    /// Tim's own accent — torch orange, and the case that drove the whole
+    /// knockout design.
+    ///
+    /// It is the awkward one: light enough that knocking out to the LIGHT
+    /// ground gives 1.90:1, and dark enough that against the DARK ground it
+    /// gives 8.77:1. So the same accent knocks out cleanly in one theme and
+    /// cannot in the other, which is precisely why the fallback exists — and
+    /// why it darkens the ground rather than reaching for black. Whatever it
+    /// resolves to, it has to be readable.
+    @Test func torchOrangeStaysLegibleInEitherTheme() {
         let settings = ThemeSettings()
         settings.accentHex = "#F5A34D"
         ThemePalette.refresh(from: settings)
-        #expect(ThemePalette.onAccent == .black)
+        #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
+    }
+
+    /// The fallback must not quietly become black. Losing the ground's hue
+    /// loses the reason the effect works — the glyph is meant to look cut from
+    /// the material behind it, and black is not that material.
+    @Test func theFallbackKeepsTheGroundsHue() {
+        let paleGround = Color(red: 0.97, green: 0.96, blue: 1.00)
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let ink = ThemePalette.onAccent
+        // Not pure black, and not pure grey: it still carries a hue.
+        #expect(ThemePalette.luminance(of: ink) > 0)
+        if let inkHS = ink.lsHueSaturation, let groundHS = paleGround.lsHueSaturation {
+            #expect(inkHS.saturation > 0.05,
+                    "A darkened ground should stay tinted, not collapse to grey.")
+            #expect(abs(inkHS.hue - groundHS.hue) < 0.05,
+                    "It should be the ground's hue, not some other one.")
+        }
     }
 }
 

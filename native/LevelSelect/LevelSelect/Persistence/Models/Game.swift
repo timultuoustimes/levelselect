@@ -131,6 +131,22 @@ final class Game {
         }
     }
 
+    /// Have you finished this game — **whatever it says now**.
+    ///
+    /// Status is where a game *currently sits*; finishing is something that
+    /// *happened*, and the two stopped agreeing the moment `oldFavorite`
+    /// existed. Sonic 2 is beaten and will be beaten again; filing it under
+    /// Old Favorite must not un-beat it, and counting `status == .completed`
+    /// did exactly that — the finished percentage fell when a game moved.
+    ///
+    /// A completion event is the real record, so it wins. The status is kept
+    /// as a fallback because plenty of games were marked Completed before
+    /// there was any event to record: 13 of Tim's 21 on the day this shipped.
+    var isFinished: Bool {
+        if (completionEvents ?? []).contains(where: { $0.deletedAt == nil }) { return true }
+        return status == .completed
+    }
+
     /// Images that haven't been soft-deleted, newest first.
     var liveImages: [GameImage] {
         (images ?? []).filter { $0.deletedAt == nil }
@@ -232,6 +248,19 @@ final class Game {
     /// restores a game with its pictures rather than holes.
     @Relationship(deleteRule: .cascade, inverse: \GameImage.game)
     var images: [GameImage]?
+    /// Memories that mention this game. Schema V5.
+    ///
+    /// **Nullify, not cascade** — and the difference is the whole point of the
+    /// model. "Traded this away in 2004" is a thing that happened to *you*;
+    /// removing the game from your library must not delete your memory of
+    /// owning it. A memory is allowed to have no game, so losing the link
+    /// leaves a valid record rather than a broken one.
+    ///
+    /// It exists at all because CloudKit refuses to load a store where any
+    /// relationship lacks an inverse — `Memory.game` on its own took the
+    /// container down at launch.
+    @Relationship(deleteRule: .nullify, inverse: \Memory.game)
+    var memories: [Memory]?
 
     init(
         id: UUID = UUID(),

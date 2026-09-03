@@ -70,6 +70,53 @@ enum MetadataRefresh {
         return utc.component(.year, from: date) >= utc.component(.year, from: now)
     }
 
+    /// A release date that has not arrived yet, and so is still IGDB's to
+    /// revise.
+    ///
+    /// **The one relaxation of the additive rule, and the day itself is the
+    /// boundary.** This type refuses to overwrite because Tim hand-corrects
+    /// platform names and vocabulary, and a refresh that clobbered those would
+    /// undo the very work it exists to save. A release date for a game that has
+    /// not shipped is a different kind of value: it is not a correction, it is
+    /// a fact IGDB owns and revises, and delays are the normal case for the
+    /// entire contents of a wishlist. `platformReleases` already carries this
+    /// exact carve-out — *"a record of what IGDB currently says, not a user
+    /// field"* — and this extends the same reasoning to the field the
+    /// countdown actually reads.
+    ///
+    /// A date that has already passed is never touched. That is history, and
+    /// it is also where a hand-correction is most likely to be: a retro game
+    /// IGDB has wrong.
+    ///
+    /// Compared as whole UTC days, like everything else about release dates,
+    /// so a game landing today can still be delayed rather than being frozen
+    /// the moment its own morning starts.
+    static func mayMove(_ date: Date?, now: Date = .now) -> Bool {
+        guard let date, !isMissing(date), !isYearOnly(date) else { return false }
+        let utc = ReleaseCountdown.utc
+        return utc.startOfDay(for: date) >= utc.startOfDay(for: now)
+    }
+
+    /// Games that have not come out yet and have not been asked about lately.
+    ///
+    /// **Why "complete" is not the same as "finished with".** `plan` skips any
+    /// game missing nothing, which is right for a library of released games and
+    /// wrong for a wishlist: a fully-populated upcoming game was never queried
+    /// again, so its date stayed frozen at whatever IGDB said the day it was
+    /// added. Onimusha read "Tomorrow" for a date that had moved, while a game
+    /// added minutes earlier read correctly — same code, different age.
+    static func upcomingNeedingRecheck(_ library: [Game],
+                                       checked: [UUID: Date] = [:],
+                                       now: Date = .now) -> [Game] {
+        library.filter { game in
+            guard game.deletedAt == nil, game.igdbID != nil,
+                  mayMove(game.effectiveReleaseDate, now: now)
+            else { return false }
+            guard let asked = checked[game.id] else { return true }
+            return now.timeIntervalSince(asked) >= recheckAwaitingDateAfter
+        }
+    }
+
     /// Is this release date absent — either genuinely nil, or the epoch
     /// placeholder that renders as 1969?
     ///
@@ -394,6 +441,14 @@ enum MetadataRefresh {
            let date = igdb.storableReleaseDate(on: game.chosenPlatform) {
             game.firstReleaseDate = date
             filled.insert(.releaseDate)
+        } else if mayMove(game.firstReleaseDate),
+                  let date = igdb.storableReleaseDate(on: game.chosenPlatform),
+                  !isYearOnly(date),
+                  date != game.firstReleaseDate {
+            // It has not come out yet and IGDB now says a different day —
+            // a delay, or a date finally pinned down. See `mayMove`.
+            game.firstReleaseDate = date
+            filled.insert(.releaseDate)
         } else if awaitsAnnouncedDate(game.firstReleaseDate),
                   let date = igdb.storableReleaseDate(on: game.chosenPlatform),
                   !isYearOnly(date),
@@ -564,13 +619,22 @@ enum MetadataRefresh {
 /// not user data — syncing it would spread one device's stale answer to
 /// another, and re-asking per device costs one lookup a month.
 struct MetadataCheckedStore {
-    private static let key = "metadataFillCheckedAt"
-    private let defaults: UserDefaults
+    static let fillKey = "metadataFillCheckedAt"
+    /// A separate ledger for the upcoming-release recheck. Sharing one would
+    /// mean a daily date check silently suppressed the monthly fill pass for
+    /// the same game.
+    static let upcomingKey = "upcomingReleaseCheckedAt"
 
-    init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    private let defaults: UserDefaults
+    private let key: String
+
+    init(defaults: UserDefaults = .standard, key: String = MetadataCheckedStore.fillKey) {
+        self.defaults = defaults
+        self.key = key
+    }
 
     func all() -> [UUID: Date] {
-        guard let raw = defaults.dictionary(forKey: Self.key) as? [String: Date] else { return [:] }
+        guard let raw = defaults.dictionary(forKey: key) as? [String: Date] else { return [:] }
         return Dictionary(uniqueKeysWithValues: raw.compactMap { key, date in
             UUID(uuidString: key).map { ($0, date) }
         })
@@ -578,16 +642,16 @@ struct MetadataCheckedStore {
 
     func markChecked(_ ids: [UUID], at date: Date = .now) {
         guard !ids.isEmpty else { return }
-        var raw = (defaults.dictionary(forKey: Self.key) as? [String: Date]) ?? [:]
+        var raw = (defaults.dictionary(forKey: key) as? [String: Date]) ?? [:]
         for id in ids { raw[id.uuidString] = date }
-        defaults.set(raw, forKey: Self.key)
+        defaults.set(raw, forKey: key)
     }
 
     /// A field DID fill — the game is live upstream again, forget the "nothing
     /// there" answer so future absences re-ask promptly.
     func clear(_ id: UUID) {
-        var raw = (defaults.dictionary(forKey: Self.key) as? [String: Date]) ?? [:]
+        var raw = (defaults.dictionary(forKey: key) as? [String: Date]) ?? [:]
         raw.removeValue(forKey: id.uuidString)
-        defaults.set(raw, forKey: Self.key)
+        defaults.set(raw, forKey: key)
     }
 }

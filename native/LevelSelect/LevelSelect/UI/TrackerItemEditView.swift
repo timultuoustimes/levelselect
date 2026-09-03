@@ -41,7 +41,7 @@ struct TrackerItemEditView: View {
                 }
                 Section("Location") {
                     TextField("Where to find it", text: $location, axis: .vertical)
-                        .lineLimit(1...3)
+                        .lineLimit(1...)
                 }
                 Section {
                     HStack {
@@ -62,7 +62,7 @@ struct TrackerItemEditView: View {
 
                 Section {
                     TextField("Anything you want to remember", text: $note, axis: .vertical)
-                        .lineLimit(3...12)
+                        .lineLimit(3...)
                 } header: {
                     Text("Your Note")
                 } footer: {

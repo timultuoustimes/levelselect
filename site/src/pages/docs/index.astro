@@ -73,7 +73,7 @@ const sections = [
   { id: 'retroachievements', q: 'I want my retro achievements in here',
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
-    a: 'A session is time played; a run is one attempt at something. They count differently.' },
+    a: 'A session is time played; a run is one attempt at something. They count differently. Stopping one asks what happened.' },
   { id: 'releases',          q: 'When does the game I am waiting for come out?',
     a: 'The wishlist counts down, on the date for the platform you picked — not somebody else\'s.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
@@ -82,8 +82,12 @@ const sections = [
     a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
   { id: 'beaten',            q: 'I finished a game — what do I mark?',
     a: 'Beating it and finishing your tracker are different things, and both are recorded.' },
+  { id: 'journal',           q: 'Where does everything I write down go?',
+    a: 'The Journal tab — your notes and sessions in order, in three views: Timeline, Calendar and Charts.' },
+  { id: 'memories',          q: 'Can I record something from before I had the app?',
+    a: 'Yes — a memory, dated as vaguely as you actually remember it, with pictures.' },
   { id: 'stats',             q: 'What do the charts show?',
-    a: 'Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
+    a: 'Journal → Charts. Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
   { id: 'data',              q: 'How do I get my data out?',
     a: 'Settings → Your data → Export library writes a readable JSON file of everything.' },
 ];
@@ -102,7 +106,8 @@ const moments = [
   { t: 'My playtime looks wrong',         ids: ['sessions'] },
   { t: 'I am waiting for a game',         ids: ['releases'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
-  { t: 'I just finished a game',          ids: ['beaten', 'stats'] },
+  { t: 'I just finished a game',          ids: ['beaten'] },
+  { t: 'I want to look back',             ids: ['journal', 'memories', 'stats'] },
   { t: 'I want my data out',              ids: ['data'] },
 ];
 
@@ -215,7 +220,8 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'colors')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p><strong>Settings &rarr; Accent color</strong>, or any status color under Status colors. Each opens the same editor: a grid to pick from, three sliders, and a hex field if you already know the color you want.</p>
+    <p><strong>Settings &rarr; Colors</strong> for your accent and the app&rsquo;s background &mdash; both on one screen, so you can see a button against the ground while you pick it &mdash; or any status color under Status colors. The editor is a grid to pick from, three sliders, a hex field if you already know the color you want, and a hue wheel on the second page. The app&rsquo;s own four colors lead the grid.</p>
+    <p>A background takes the <em>color</em> you choose and keeps the theme&rsquo;s own contrast, so there is no way to pick one that makes text disappear. <strong>Settings &rarr; Appearance</strong> switches the whole app between System, Light and Dark.</p>
     <p>The <strong>+</strong> keeps a color you have made, so you do not have to find it again; long-press one of your kept colors to remove it. <strong>Cancel</strong> puts back what was there when you opened the editor, so you can drag a slider and watch the real app behind the sheet without committing. <strong>Use the default</strong> resets that one color, leaving every other color you have chosen alone.</p>
     <p>Kept colors live on the device. Your accent and status colors sync.</p>
       </div>
@@ -300,6 +306,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <div class="qa__body">
     <p>Any tracker item can carry <strong>your own note</strong> — press and hold the row and choose <em>Edit item</em>. It's for the thing the checklist can't know: which NPC you were mid-quest with, where you'd stashed the key, what you meant to try next. The note shows on the item itself, in your accent color, marked as yours rather than as more of whatever generated the list. Regenerating the tracker never touches it.</p>
     <p>The same sheet is where you rename an item to whatever you actually call it, and record where it is.</p>
+    <p>Notes are not only for the item they sit on. Everything you write &mdash; on an item, on a session, on the moment you finished something &mdash; is gathered in the <a href="#journal">Journal</a>, in the order it happened.</p>
     <p><strong>Where you left off</strong> sits at the top of the Tracker section: the last thing you ticked, when you ticked it, and your note about it if you wrote one. It's there for the game you haven't opened in three weeks — a percentage tells you how far you got, but not what you were <em>doing</em>. It records the moment you ticked something, so editing an old item later won't push it to the front. The same line appears on the Continue Playing card and its widget, so the answer reaches you before you open the app.</p>
 
     <p>Finishes can be corrected, too: tap any entry under <strong>Beaten</strong> to fix a date you now remember better, change what it was, or add who you played it with. <strong>Played with</strong> is written down and nothing more — the app has no accounts and shares nothing — so a couch co-op finish remembers who was there.</p>
@@ -324,7 +331,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </summary>
       <div class="qa__body">
     <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
-    <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. Stats gains a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
+    <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. The Journal&rsquo;s charts gain a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
       </div>
     </details>
@@ -401,7 +408,34 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </summary>
       <div class="qa__body">
     <p>Beating a game and finishing every item on your tracker are different achievements, and LevelSelect records them separately. On any game's page, in the <strong>Beaten</strong> section, mark <em>Beat the game</em>, <em>100%</em>, <em>New Game+</em>, or your own words. "100%" means everything on <em>your</em> list, the one you chose to keep; it doesn't claim a platinum.</p>
-    <p>Dates are stored only as precisely as you know them: an exact day for last night's credits, a month for "sometime that spring," a bare year for the game you beat in 2011 — and shown exactly that vaguely, because the app doesn't pretend to know more than you told it. Logging your history needs no sessions and no retroactive box-ticking. A beat can point at the playthrough it capped; that run wears a checkered flag, and Stats' <strong>Beaten &amp; Completed</strong> card opens each year into the actual list of what you finished.</p>
+    <p>Dates are stored only as precisely as you know them: an exact day for last night's credits, a month for "sometime that spring," a bare year for the game you beat in 2011 — and shown exactly that vaguely, because the app doesn't pretend to know more than you told it. Logging your history needs no sessions and no retroactive box-ticking. A beat can point at the playthrough it capped; that run wears a checkered flag, and the <strong>Beaten &amp; Completed</strong> card opens each year into the actual list of what you finished.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="journal" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'journal')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'journal')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>The <strong>Journal</strong> tab, in three views: <strong>Timeline</strong>, <strong>Calendar</strong> and <strong>Charts</strong>. Nothing new had to be stored to fill it &mdash; notes on sessions, on runs and on the moment you finished something have been dated and synced since the first build, and were only ever visible inside the sheet you typed them into.</p>
+    <p>A day of a game is <strong>one entry</strong>. Three sessions of one game on a Saturday is a single row summarising the day; open it for each session with its own note and time, any runs, and whether that was the session you finished in. Tap to read, press and hold to edit.</p>
+    <p>When you stop a session the app asks what happened, once, while it is still what you were just doing. That is the note worth re-reading later, and before this the only way to write one was to go back and edit a session you had already finished.</p>
+    <p><strong>Memories</strong> are for the part that happened before you had the app. A title, when, who you were with, where, and pictures. How well you know the date is a choice &mdash; an exact day, a month, a year, or not sure at all &mdash; and <em>&ldquo;Christmas 1995 or 1996&rdquo;</em> is shown exactly as you wrote it rather than re-rendered from a date the app invented. If you know the day but not the year, say so: it sits on that day in the first year, marked as uncertain.</p>
+    <p>The <strong>calendar</strong> opens on a year: twelve small months and a heat map. Ones holding something stand out along the year strip, empty ones are still tappable, and any empty day is a <strong>+</strong> that starts a memory already dated. Entries too vague for a single day sit under the year they name rather than being dropped.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="memories" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'memories')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'memories')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A <strong>memory</strong> is something that happened, written down now. The Christmas you got a Genesis, the first time you played Halo 2 with four other people, the day you sold a collection. <em>Journal &rarr; +</em>, or tap any empty day in the calendar and it starts one already dated.</p>
+    <p><strong>How well you know the date is a choice</strong>, and that is the whole design. An <em>exact day</em> for last night. A <em>month</em> for &ldquo;sometime that spring&rdquo;. A <em>year</em>. Or <em>not sure at all</em> &mdash; and then you write it in your own words. <em>&ldquo;Christmas 1995 or 1996&rdquo;</em> is a real answer, and it is shown exactly that way rather than re-rendered from a date the app decided for you.</p>
+    <p>If you know the day but not the year, say so: turn on <em>I know the day</em>, pick it, and the memory sits on that day in the first year you named, marked as uncertain. It will not quietly file a Christmas under 1 January.</p>
+    <p>A memory can be attached to a game or stand on its own, can name who you were with and where, and carries pictures &mdash; one becomes the header, more become a grid, and any of them opens full size. Everything here is in your export, words and photographs both.</p>
       </div>
     </details>
 
@@ -411,7 +445,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'stats')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p>Stats is your history in <strong>three questions</strong>, and the cards are grouped by which one they answer: <strong>Time</strong> (recent play, by month, your streak, most played), <strong>Finishes</strong> (what you completed, and your RetroAchievements masteries), and <strong>Library</strong> (ratings, status, system, genres, series, tags, release year). <strong>Overview</strong> sits above all three, because games, hours, sessions and percent-finished are the total the groups break down rather than one of them. The group a card belongs to is fixed; the order <em>inside</em> a group is still yours.</p>
+    <p><strong>Journal &rarr; Charts</strong> is your history in <strong>three questions</strong>, and the cards are grouped by which one they answer: <strong>Time</strong> (recent play, by month, your streak, most played), <strong>Finishes</strong> (what you completed, and your RetroAchievements masteries), and <strong>Library</strong> (ratings, status, system, genres, series, tags, release year). <strong>Overview</strong> sits above all three, because games, hours, sessions and percent-finished are the total the groups break down rather than one of them. The group a card belongs to is fixed; the order <em>inside</em> a group is still yours.</p>
     <p>Every card that shows a breakdown can be turned over. Tap the chart icon in its corner and the card flips between bars and a donut &mdash; Library, Ratings, By System, Genres and Tags. Your choice is remembered per card, and it is kept on the device rather than synced, like the order of the cards themselves.</p>
     <p>Tap a slice, or its row in the legend, and the middle of the ring becomes that slice: its count and its share. Tap again for the total back. The point is not to make you estimate an angle.</p>
     <p>Everything here is built from your own sessions. Nothing is estimated and nothing is borrowed from anyone else's average, which is why a game you have never timed contributes nothing rather than a guess.</p>

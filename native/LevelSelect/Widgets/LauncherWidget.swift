@@ -196,7 +196,7 @@ struct LauncherPortalMedium: View {
                     Spacer()
                     Text("Nothing here yet")
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
                     Spacer()
                 } else {
@@ -232,7 +232,7 @@ struct LauncherPortalLarge: View {
                     Spacer()
                     Text("Nothing here yet")
                         .font(.system(size: 12))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.tertiary)
                         .frame(maxWidth: .infinity)
                     Spacer()
                 } else {
@@ -264,12 +264,12 @@ struct PortalHeader: View {
             PortalMark(target: target, snapshot: snapshot, size: 13)
             Text(target.name.uppercased())
                 .font(.system(size: 11, weight: .bold)).tracking(0.6)
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             Spacer()
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.tertiary)
         }
     }
 }
@@ -295,7 +295,7 @@ struct LauncherSmallView: View {
                     .shadow(color: .black.opacity(0.45), radius: 8, y: 4)
                 Text(target.name)
                     .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
             .padding(2)
@@ -306,11 +306,11 @@ struct LauncherSmallView: View {
                 Spacer(minLength: 0)
                 Text(target.name)
                     .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                 Text(target.subtitle)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -322,10 +322,10 @@ struct LauncherSmallView: View {
                     .foregroundStyle(LSWidget.accent)
                 Text("Pick a destination")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(.primary)
                 Text("Long-press → Edit Widget")
                     .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
             }
             .widgetURL(WidgetShared.homeURL)
         }
@@ -338,10 +338,7 @@ struct LauncherWidget: Widget {
                                intent: LauncherConfigIntent.self,
                                provider: LauncherProvider()) { entry in
             LauncherWidgetView(entry: entry)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Open To…")
         .description("A door straight to a collection, a status shelf, or a system.")

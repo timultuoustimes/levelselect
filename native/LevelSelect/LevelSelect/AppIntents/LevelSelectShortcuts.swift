@@ -15,13 +15,18 @@ struct LevelSelectShortcuts: AppShortcutsProvider {
             systemImageName: "play.fill"
         )
         AppShortcut(
-            intent: OpenSectionIntent(.stats),
+            intent: OpenSectionIntent(.journal),
             phrases: [
+                "Open \(.applicationName) journal",
+                "Show my \(.applicationName) journal",
+                // Kept: the tab answered to "stats" for thirty-five builds,
+                // and a phrase someone already says out loud should not stop
+                // working because the tab grew.
                 "Open \(.applicationName) stats",
                 "Show my \(.applicationName) stats",
             ],
-            shortTitle: "Stats",
-            systemImageName: "chart.bar.fill"
+            shortTitle: "Journal",
+            systemImageName: "book.closed.fill"
         )
         AppShortcut(
             intent: OpenSectionIntent(.library),

@@ -592,8 +592,22 @@ struct Build34LibraryTests {
     /// the position seen. If the tab order ever changes, the shortcuts follow
     /// it — this pins the order they are derived from.
     @Test func theTabsAreInTheOrderTheMenuNumbersThem() {
-        #expect(LSTab.allCases == [.home, .library, .wishlist, .stats])
-        #expect(LSTab.allCases.map(\.menuTitle) == ["Home", "Library", "Wishlist", "Stats"])
+        #expect(LSTab.allCases == [.home, .library, .wishlist, .journal])
+        #expect(LSTab.allCases.map(\.menuTitle) == ["Home", "Library", "Wishlist", "Journal"])
+    }
+
+    /// **The raw values are a shipped contract, not an implementation detail.**
+    ///
+    /// Widget deep links are baked as `levelselect://stats` per timeline entry,
+    /// and `LSSection` is an `AppEnum`, so its raw value is what Shortcuts
+    /// persists inside a shortcut somebody already built. Build 36 renamed the
+    /// case to `journal` and deliberately kept the wire value — this pins that,
+    /// because the next rename will look just as harmless and would break a
+    /// shortcut months later with no error anywhere.
+    @Test func theTabWireValuesSurviveTheJournalRename() {
+        #expect(LSTab.journal.rawValue == "stats")
+        #expect(LSSection.journal.rawValue == "stats")
+        #expect(LSSection.journal.tab == .journal)
     }
 
     /// The menu lives outside the view tree that owns the sheets, so it raises
@@ -626,7 +640,7 @@ struct Build34LibraryTests {
     /// meaning nothing.
     @Test func findGoesToLibraryFromATabWithNoSearch() {
         let nav = AppNavigator.shared
-        for tab in [LSTab.home, .stats] {
+        for tab in [LSTab.home, .journal] {
             nav.selectedTab = tab
             nav.requestSearch()
             #expect(nav.selectedTab == .library)
@@ -637,7 +651,7 @@ struct Build34LibraryTests {
     /// on a tab that cannot show it reads as the command having done nothing.
     @Test func theLibraryCommandsGoToLibraryFirst() {
         let nav = AppNavigator.shared
-        nav.selectedTab = .stats
+        nav.selectedTab = .journal
         nav.requestNewCollection()
         #expect(nav.selectedTab == .library)
 

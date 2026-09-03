@@ -246,7 +246,7 @@ struct LibraryTab: View {
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than
         // either done consistently.
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
     }
 
     /// Home's shape, brought to Library as a CHOICE rather than a duplicate.
@@ -293,7 +293,7 @@ struct LibraryTab: View {
             .padding(.vertical, 10)
         }
         .scrollIndicators(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
     }
 
     /// Enough to browse, few enough that the shelf below it is still reachable.

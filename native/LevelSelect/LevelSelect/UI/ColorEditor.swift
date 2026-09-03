@@ -15,20 +15,52 @@ import SwiftData
 /// Everything here is a draft until Done. Cancel restores what was there when
 /// the sheet opened, including the live theme, so nothing is committed by
 /// looking.
-struct ColorEditor: View {
-    let title: String
-    /// The color this reverts to. Nil when there is no default to go back to.
+/// One colour this editor can change.
+struct ColorTarget: Identifiable {
+    let id: String
+    let label: String
+    /// The colour this reverts to. Nil when there is no default to go back to.
     let defaultColor: Color?
     /// Whether a custom value is currently stored — Reset is pointless without.
     let isCustomised: Bool
-    @Binding var color: Color
-    var onReset: () -> Void
+    let binding: Binding<Color>
+    let onReset: () -> Void
+}
+
+struct ColorEditor: View {
+    let title: String
+    /// Every colour editable here. More than one gets a picker at the top.
+    ///
+    /// Accent and background arrive together because they are chosen against
+    /// each other. Tim: *"you should be able to choose accent and background
+    /// color in the same single screen, so that you can pick colors that work
+    /// together, as opposed to picking one, moving over to another and then
+    /// choosing the other."* Two sheets made the pair a memory test.
+    let targets: [ColorTarget]
+    @State private var selectedID: String
 
     @Environment(\.dismiss) private var dismiss
 
-    /// What the theme looked like when the sheet opened, for Cancel.
-    @State private var original: Color = .clear
-    @State private var originalWasCustom = false
+    init(title: String, targets: [ColorTarget], initial: String? = nil) {
+        self.title = title
+        self.targets = targets
+        _selectedID = State(initialValue: initial ?? targets.first?.id ?? "")
+    }
+
+    private var target: ColorTarget {
+        targets.first { $0.id == selectedID } ?? targets[0]
+    }
+
+    /// The two colours the preview needs, live — whichever one is being
+    /// edited comes from the sliders, the other from its stored binding.
+    private func live(_ id: String) -> Color {
+        id == selectedID ? current : (targets.first { $0.id == id }?.binding.wrappedValue ?? .clear)
+    }
+
+    /// What the theme looked like when the sheet opened, for Cancel — one
+    /// per target, because Cancel now has to undo everything the sheet
+    /// touched rather than just the last thing.
+    @State private var originals: [String: Color] = [:]
     @State private var hue: Double = 0
     @State private var saturation: Double = 0.7
     @State private var brightness: Double = 0.9
@@ -48,11 +80,34 @@ struct ColorEditor: View {
     /// The app is near-black everywhere, so pale washes and muddy mid-tones
     /// are choices nobody can use — a grid that offers them mostly offers
     /// disappointment. These are picked to read on the ground they land on.
+/// The app's own colours, first and together.
+    ///
+    /// They were in the grid already — torch orange, the two purples — but
+    /// scattered among two dozen hues, so there was no way to tell they were a
+    /// set rather than a coincidence. Tim: *"I can't tell if they're part of
+    /// the same brand palette."* A palette you cannot recognise is not a
+    /// palette, so these lead and the rest follow.
+    private static let brandSwatches: [String] = [
+        "#F5A34D",   // torch orange — the wordmark, and the default accent
+        "#8A5CF6",   // brand purple
+        "#4C2A8C",   // deep purple — the ground's own hue
+        "#8A4B12",   // torch shadow, the darker orange under pixel type
+    ]
+
+    /// The rest of the palette — and deliberately **no near-copies of the
+    /// brand four above**. Tim: *"if they're in the top 4 brand colors, they
+    /// shouldn't also be in the other color circles below."*
+    ///
+    /// Three were within a hair of a brand colour and are gone: `#A66BFF` and
+    /// `#7A5CFF` sat 0.017 and 0.019 in hue from the brand purple, and
+    /// `#FF9F1C` sat 0.011 from torch orange. `#B36BFF` and `#FF8A5B` stay —
+    /// a lighter purple and a coral read as their own hues rather than as the
+    /// brand colour repeated.
     private static let swatches: [String] = [
-        "#F5A34D", "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#A66BFF",
-        "#945CFA", "#6C7BFF", "#4D9BFF", "#37C6E0", "#2FD4B6", "#3FD07A",
-        "#8BD450", "#D4D450", "#FFC93C", "#FF9F1C", "#E4572E", "#C1272D",
-        "#B36BFF", "#7A5CFF", "#5AA9E6", "#54C6C6", "#57C785", "#9BC53D",
+        "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#B36BFF",
+        "#6C7BFF", "#4D9BFF", "#37C6E0", "#2FD4B6", "#3FD07A",
+        "#8BD450", "#D4D450", "#FFC93C", "#E4572E", "#C1272D",
+        "#5AA9E6", "#54C6C6", "#57C785", "#9BC53D",
     ]
 
     private let columns = [GridItem(.adaptive(minimum: 46), spacing: 10)]
@@ -60,7 +115,27 @@ struct ColorEditor: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
+                if targets.count > 1 {
+                    Picker("Editing", selection: $selectedID) {
+                        ForEach(targets) { Text($0.label).tag($0.id) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                }
+
                 preview
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("LevelSelect")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    LazyVGrid(columns: columns, spacing: 10) {
+                        ForEach(Self.brandSwatches, id: \.self) { hex in
+                            swatch(hex)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 LazyVGrid(columns: columns, spacing: 10) {
                     ForEach(Self.swatches, id: \.self) { hex in
@@ -84,28 +159,42 @@ struct ColorEditor: View {
 
                 hexRow
 
-                VStack(spacing: 10) {
-                    slider("Hue", value: $hue, track: hueTrack)
-                    slider("Saturation", value: $saturation, track: satTrack)
-                    slider("Brightness", value: $brightness, track: brightTrack)
-                }
-
-                Spacer(minLength: 0)
-
-                if isCustomised || defaultColor != nil {
-                    Button {
-                        onReset()
-                        if let d = defaultColor { setFromColor(d) }
-                        dismiss()
-                    } label: {
-                        Label("Use the default", systemImage: "arrow.uturn.backward")
-                            .font(.subheadline)
+                // Two ways into the same three numbers. Sliders are precise
+                // and say what they are; a wheel is faster when you are
+                // hunting rather than adjusting. Neither is a second colour
+                // model — swiping between them changes nothing but the input.
+                TabView {
+                    VStack(spacing: 10) {
+                        slider("Hue", value: $hue, track: hueTrack)
+                        slider("Saturation", value: $saturation, track: satTrack)
+                        slider("Brightness", value: $brightness, track: brightTrack)
+                        Spacer(minLength: 0)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 28)
+
+                    ColorWheel(hue: $hue, saturation: $saturation, brightness: $brightness)
+                        .padding(.horizontal, 12)
+                        // Clears the page dots, which draw over the content.
+                        .padding(.bottom, 36)
                 }
+                #if !os(macOS)
+                .tabViewStyle(.page)
+                .indexViewStyle(.page(backgroundDisplayMode: .always))
+                #endif
+                // A page view has no intrinsic height, so it needs one; the
+                // wheel is square and the sliders are shorter, so the wheel
+                // sets it.
+                .frame(height: 300)
             }
             .padding(20)
+            // **Pinned, not the last thing in the scroll.** It sat after a
+            // `Spacer` that a ScrollView gives no room to, so it landed exactly
+            // at the sheet's edge and drew half-sliced — Tim: *"'Use the default
+            // background' and 'use the default accent' are off the bottom."*
+            // A reset is the one control you go looking for when the colour is
+            // wrong, so it should not be a scroll away from the thing that made
+            // it wrong.
+            .safeAreaInset(edge: .bottom) { resetControl }
             .navigationTitle(title)
             // Cancel and a back chevron would be two exits that mean different
             // things — back keeps the change, Cancel throws it away — and
@@ -119,7 +208,13 @@ struct ColorEditor: View {
                     // Puts the LIVE theme back, not just the stored value —
                     // the preview writes through so you can see a color on
                     // the real app behind the sheet.
-                    Button("Cancel") { color = original; dismiss() }
+                    Button("Cancel") {
+                        // Everything the sheet touched, not just the last one.
+                        for t in targets {
+                            if let was = originals[t.id] { t.binding.wrappedValue = was }
+                        }
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -128,9 +223,16 @@ struct ColorEditor: View {
             .onAppear {
                 guard !loaded else { return }
                 loaded = true
-                original = color
-                originalWasCustom = isCustomised
-                setFromColor(color)
+                for t in targets { originals[t.id] = t.binding.wrappedValue }
+                setFromColor(target.binding.wrappedValue)
+            }
+            // Switching target loads ITS colour without writing — otherwise
+            // the sliders' current position would immediately overwrite the
+            // colour you just switched to with the one you switched from.
+            .onChange(of: selectedID) { _, _ in
+                loading = true
+                setFromColor(target.binding.wrappedValue)
+                loading = false
             }
             .onChange(of: hue) { _, _ in push() }
             .onChange(of: saturation) { _, _ in push() }
@@ -141,34 +243,69 @@ struct ColorEditor: View {
         #endif
     }
 
-    /// The color doing the job it will actually do, rather than a square.
+    @ViewBuilder
+    private var resetControl: some View {
+        if target.isCustomised || target.defaultColor != nil {
+            Button {
+                target.onReset()
+                if let d = target.defaultColor { setFromColor(d) }
+            } label: {
+                Label("Use the default \(target.label.lowercased())",
+                      systemImage: "arrow.uturn.backward")
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            // Opaque, so the swatches do not scroll through it.
+            .background(.bar)
+        }
+    }
+
+    /// Both colours doing the jobs they will actually do.
+    ///
+    /// The background used to be painted ON the button, which is the one place
+    /// it never goes — so choosing a background showed a blue Play button and
+    /// told you nothing. Now the ground is the ground and the accent is the
+    /// button, whichever of the two you happen to be editing.
     private var preview: some View {
-        HStack(spacing: 12) {
+        let accent = live("accent")
+        let ground = live("background")
+        return HStack(spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "play.fill")
                 Text("Play").font(.subheadline.weight(.semibold))
             }
-            .foregroundStyle(ThemePalette.onColor(for: current))
+            .foregroundStyle(ThemePalette.knockoutPreview(on: accent, ground: ground))
             .padding(.horizontal, 16)
             .padding(.vertical, 11)
+            // **`accent`, not `current`.** The comment above describes this
+            // being fixed and only the knockout colour was; the fill still took
+            // whichever colour was being edited, so picking a background
+            // painted the background onto the Play button — the one place it
+            // never goes — and the preview answered a question nobody asked.
             .background(
-                LinearGradient(colors: [current, current.opacity(0.82)],
+                LinearGradient(colors: [accent, accent.opacity(0.82)],
                                startPoint: .top, endPoint: .bottom),
                 in: .rect(cornerRadius: 12))
 
             Text("Sample")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(current)
+                .foregroundStyle(accent)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(current.opacity(0.16), in: .capsule)
-                .overlay(Capsule().strokeBorder(current.opacity(0.5), lineWidth: 1))
+                .background(accent.opacity(0.16), in: .capsule)
+                .overlay(Capsule().strokeBorder(accent.opacity(0.5), lineWidth: 1))
 
             Spacer(minLength: 0)
         }
         .padding(14)
         .frame(maxWidth: .infinity)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 14))
+        // The real ground, derived exactly as the app derives it, so the two
+        // colours are judged against each other in the arrangement they will
+        // actually appear in.
+        .background(LSTheme.ground(tintedBy: ground), in: .rect(cornerRadius: 14))
     }
 
     /// A hex field and a keep button.
@@ -264,9 +401,37 @@ struct ColorEditor: View {
                       Int(round(r * 255)), Int(round(g * 255)), Int(round(b * 255)))
     }
 
+    /// The one swatch that counts as "the colour you are on".
+    ///
+    /// **Singular by construction, because selection is.** `matches` is a
+    /// tolerance test — 0.02 in hue, 0.05 in saturation and brightness — so
+    /// picking the brand purple lit three circles at once: `#A66BFF` and
+    /// `#7A5CFF` both fall inside it. Tightening the tolerance would only move
+    /// the problem, since any two neighbouring swatches can be closer to each
+    /// other than to the value you dragged the sliders to. So the ring goes to
+    /// the *nearest* swatch across every row, and only if it is near at all.
+    private var selectedSwatch: String? {
+        let all = Self.brandSwatches + Self.swatches + saved
+        return all
+            .compactMap { hex -> (String, Double)? in
+                guard let c = Color(hex: hex), matches(c) else { return nil }
+                return (hex, distance(to: c))
+            }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    /// How far `current` is from a colour, in the same three axes `matches`
+    /// uses. Hue counts most: two purples of different brightness still read
+    /// as the same colour, two hues apart do not.
+    private func distance(to other: Color) -> Double {
+        let a = ColorEditor.hsb(current), b = ColorEditor.hsb(other)
+        let dh = min(abs(a.h - b.h), 1 - abs(a.h - b.h))
+        return dh * 4 + abs(a.s - b.s) + abs(a.b - b.b)
+    }
+
     private func swatch(_ hex: String, removable: Bool = false) -> some View {
         let c = Color(hex: hex) ?? .gray
-        let selected = matches(c)
+        let selected = (hex == selectedSwatch)
         return Button {
             setFromColor(c)
             push()
@@ -296,7 +461,7 @@ struct ColorEditor: View {
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             ZStack {
-                Capsule().fill(track).frame(height: 8)
+                Capsule().fill(track).frame(height: 18)
                 Slider(value: value, in: 0...1).tint(.clear)
             }
         }
@@ -326,7 +491,13 @@ struct ColorEditor: View {
         return abs(a.h - b.h) < 0.02 && abs(a.s - b.s) < 0.05 && abs(a.b - b.b) < 0.05
     }
 
-    private func push() { color = current }
+    /// Guards the write while a target switch is loading values in.
+    @State private var loading = false
+
+    private func push() {
+        guard !loading else { return }
+        target.binding.wrappedValue = current
+    }
 
     private func setFromColor(_ c: Color) {
         let v = ColorEditor.hsb(c)

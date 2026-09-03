@@ -10,7 +10,56 @@ import Foundation
 /// Adding a case costs no schema version: this is stored as a String
 /// attribute, so the shape on disk and in CloudKit is unchanged.
 enum GameStatus: String, Codable, CaseIterable, Sendable {
-    case backlog, playing, paused, completed, queued, shelved, abandoned, wishlist, ongoing
+    /// `oldFavorite` is build 36. Free to add — a new case in a String-raw
+    /// enum needs no schema version, the same path `wishlist` and `ongoing`
+    /// took.
+    case backlog, playing, paused, completed, queued, shelved, abandoned,
+         wishlist, ongoing, oldFavorite
+
+    /// What each one MEANS, in one line, shown where you choose it.
+    ///
+    /// Nine statuses shipped without this and the cost showed up in the
+    /// obvious way: asked to list the ones that did not fit his childhood
+    /// games, Tim named four and did not mention `shelved` at all — a status
+    /// he had designed. If the author loses track of one, nobody else stands
+    /// a chance.
+    ///
+    /// A blurb rather than a "status key" page, because a key is something you
+    /// have to go and find, and the moment you need the meaning is the moment
+    /// you are choosing. `PlaythroughOutcome` already does exactly this.
+    ///
+    /// These are the app's meaning, not the last word — `ThemeSettings
+    /// .statusNames` lets anyone disagree.
+    var blurb: String {
+        switch self {
+        case .playing:     "You're in it now."
+        case .ongoing:     "No ending to reach — you just play it."
+        case .paused:      "Mid-run, and you mean to go back."
+        case .queued:      "Next up, once you have room."
+        case .backlog:     "Yours, and not started yet."
+        case .wishlist:    "Not yours yet."
+        case .completed:   "You finished it."
+        // The one this set was missing, and it is the ONLY status that does
+        // not sit on the progress axis at all.
+        //
+        // `ongoing` escapes that axis by saying no finish line exists —
+        // Minecraft, a city builder. This one escapes differently: the finish
+        // line **exists and is beside the point**. That is why it has to stay
+        // silent on whether you reached it. Tim's two examples are the whole
+        // argument, and they sit at opposite ends of the old axis:
+        //
+        //   Sonic 2         beaten, and he will beat it again
+        //   Awesome Possum  never beaten, and never will be
+        //
+        // Same relationship. Filing the first under Completed and the second
+        // under Abandoned would split one feeling in half and call the second
+        // one a failure. So the blurb is deliberately parallel to `ongoing`'s
+        // — the two off-axis statuses should read as the pair they are.
+        case .oldFavorite: "It has an ending — you'll play it again anyway."
+        case .shelved:     "Set aside, no plans either way."
+        case .abandoned:   "It lost you, and you're not going back."
+        }
+    }
 }
 
 enum SessionState: String, Codable, Sendable {

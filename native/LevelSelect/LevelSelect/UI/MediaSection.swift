@@ -227,7 +227,10 @@ struct ScreenshotStrip: View {
 
 /// Full-size view of an image the user added, with its caption editable —
 /// the caption is the notebook part ("the cart I traded away").
-private struct LocalImageViewer: View {
+///
+/// Not private: the journal shows the same pictures and needs the same
+/// viewer. Two of these would drift until one lost the caption field.
+struct LocalImageViewer: View {
     @Bindable var image: GameImage
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -243,10 +246,19 @@ private struct LocalImageViewer: View {
                     ContentUnavailableView("Still syncing", systemImage: "icloud.and.arrow.down",
                                            description: Text("This picture hasn't finished downloading to this device."))
                 }
-                TextField("Caption", text: $caption, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...3)
-                    .padding()
+                // Reads as a caption rather than an anonymous input: a
+                // pencil to say it is editable, and no border, because a
+                // caption belongs to the picture above it rather than
+                // sitting in a box of its own.
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "pencil")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 3)
+                    TextField("Add a caption", text: $caption, axis: .vertical)
+                        .lineLimit(1...)
+                }
+                .padding()
             }
             .background(.black)
             .toolbar {

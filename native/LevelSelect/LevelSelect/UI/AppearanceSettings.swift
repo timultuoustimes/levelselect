@@ -24,6 +24,10 @@ struct AppearanceSettingsSection: View {
     /// closes or a field is submitted.
     @State private var starDrafts = Array(repeating: "", count: 5)
     @State private var starNamesExpanded = false
+    /// Status-name editing buffer, keyed by raw value. Same shape as the star
+    /// drafts and for the same reason: edit freely, write once on close.
+    @State private var statusDrafts: [String: String] = [:]
+    @State private var statusNamesExpanded = false
     @State private var arrangingPages = false
     /// Pending debounced write for the color pickers. See `scheduleSave`.
     @State private var themeCommit: Task<Void, Never>?
@@ -56,18 +60,28 @@ struct AppearanceSettingsSection: View {
 
     private var personalization: some View {
         Section {
-            colorRow("Accent color", swatch: LSTheme.accent,
-                     isCustom: settings?.accentHex != nil) {
-                ColorEditor(
-                    title: "Accent color",
-                    defaultColor: LSTheme.defaultAccent,
-                    isCustomised: settings?.accentHex != nil,
-                    color: accentBinding,
-                    onReset: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Appearance")
+                Picker("Appearance", selection: Binding(
+                    get: { LSAppearance(raw: settings?.appearanceRaw) },
+                    set: { pick in
                         let s = ensureSettings()
-                        s.accentHex = nil
+                        s.appearanceRaw = pick.rawValue
                         save(s)
-                    })
+                    })) {
+                    ForEach(LSAppearance.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
+            .padding(.vertical, 2)
+
+            // One row, because they are one decision. An accent is chosen
+            // against a ground and a ground against an accent; two sheets
+            // turned a comparison into a memory test.
+            colorRow("Colors", swatch: LSTheme.accent,
+                     isCustom: settings?.accentHex != nil || settings?.backgroundHex != nil) {
+                ColorEditor(title: "Colors", targets: themeColorTargets)
             }
 
             Picker("Game page background", selection: pageBackgroundBinding) {
@@ -112,18 +126,23 @@ struct AppearanceSettingsSection: View {
                     colorRow(status.sectionTitle, icon: status.systemImage,
                              swatch: status.color,
                              isCustom: settings?.statusColors[status.rawValue] != nil) {
-                        ColorEditor(
-                            title: status.sectionTitle,
-                            defaultColor: ThemePalette.defaultColor(for: status),
-                            isCustomised: settings?.statusColors[status.rawValue] != nil,
-                            color: statusBinding(status),
-                            onReset: {
-                                let s = ensureSettings()
-                                var map = s.statusColors
-                                map[status.rawValue] = nil
-                                s.statusColors = map
-                                save(s)
-                            })
+                        // A single target: a status colour is chosen on its
+                        // own, so there is nothing to compare it against and
+                        // the picker stays hidden.
+                        ColorEditor(title: status.sectionTitle, targets: [
+                            ColorTarget(id: status.rawValue,
+                                        label: status.sectionTitle,
+                                        defaultColor: ThemePalette.defaultColor(for: status),
+                                        isCustomised: settings?.statusColors[status.rawValue] != nil,
+                                        binding: statusBinding(status),
+                                        onReset: {
+                                            let s = ensureSettings()
+                                            var map = s.statusColors
+                                            map[status.rawValue] = nil
+                                            s.statusColors = map
+                                            save(s)
+                                        }),
+                        ])
                     }
                 }
             }
@@ -153,6 +172,45 @@ struct AppearanceSettingsSection: View {
             }
             .onChange(of: starNamesExpanded) { _, open in
                 if open { loadStarDrafts() } else { commitStarNames() }
+            }
+
+            // The app says what each status means; this is where you disagree.
+            // One person's "Abandoned" is another's "played it to bits", and
+            // that is not settled by choosing a better default word.
+            DisclosureGroup("Status names", isExpanded: $statusNamesExpanded) {
+                ForEach(GameStatus.displayOrder, id: \.self) { status in
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack {
+                            Label {
+                                Text(status.defaultTitle)
+                            } icon: {
+                                Image(systemName: status.systemImage)
+                                    .foregroundStyle(status.color)
+                            }
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            Spacer(minLength: 12)
+                            TextField(status.defaultTitle, text: Binding(
+                                get: { statusDrafts[status.rawValue] ?? "" },
+                                set: { statusDrafts[status.rawValue] = $0 }))
+                                .textFieldStyle(.plain)
+                                .multilineTextAlignment(.trailing)
+                                .submitLabel(.done)
+                                .onSubmit { commitStatusNames() }
+                        }
+                        // The blurb here as well as in the picker: renaming a
+                        // status is exactly when you need to know what it was
+                        // for, and it is the one screen where all ten sit
+                        // together.
+                        Text(status.blurb)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .onChange(of: statusNamesExpanded) { _, open in
+                if open { loadStatusDrafts() } else { commitStatusNames() }
             }
 
             // Collapsed, and only present when something can actually be
@@ -273,7 +331,7 @@ struct AppearanceSettingsSection: View {
                 Circle()
                     .fill(swatch)
                     .frame(width: 24, height: 24)
-                    .overlay { Circle().strokeBorder(.white.opacity(0.2), lineWidth: 1) }
+                    .overlay { Circle().strokeBorder(LSTheme.hairline, lineWidth: 1) }
             }
         }
     }
@@ -310,6 +368,46 @@ struct AppearanceSettingsSection: View {
             set: { color in
                 let s = ensureSettings()
                 s.accentHex = color.hexString()
+                scheduleSave(s)
+            }
+        )
+    }
+
+    /// Accent and background, editable side by side. Order is the order they
+    /// appear in the picker, and accent leads because it is the one people
+    /// come here to change.
+    private var themeColorTargets: [ColorTarget] {
+        [
+            ColorTarget(id: "accent", label: "Accent",
+                        defaultColor: LSTheme.defaultAccent,
+                        isCustomised: settings?.accentHex != nil,
+                        binding: accentBinding,
+                        onReset: {
+                            let s = ensureSettings()
+                            s.accentHex = nil
+                            save(s)
+                        }),
+            ColorTarget(id: "background", label: "Background",
+                        defaultColor: LSTheme.purpleDeep,
+                        isCustomised: settings?.backgroundHex != nil,
+                        binding: backgroundBinding,
+                        onReset: {
+                            let s = ensureSettings()
+                            s.backgroundHex = nil
+                            save(s)
+                        }),
+        ]
+    }
+
+    /// The ground's tint. Only its hue and saturation are used — the theme
+    /// keeps the luminance, so no pick can make text unreadable. See
+    /// `LSTheme.ground(tintedBy:)`.
+    private var backgroundBinding: Binding<Color> {
+        Binding(
+            get: { settings?.backgroundHex.flatMap { Color(hex: $0) } ?? LSTheme.purpleDeep },
+            set: { color in
+                let s = ensureSettings()
+                s.backgroundHex = color.hexString()
                 scheduleSave(s)
             }
         )
@@ -388,6 +486,24 @@ struct AppearanceSettingsSection: View {
         guard trimmed != current else { return }
         let s = ensureSettings()
         s.starNames = trimmed
+        save(s)
+    }
+
+    private func loadStatusDrafts() {
+        statusDrafts = settings?.statusNames ?? [:]
+    }
+
+    /// Buffer → stored names, once, and only on a real change. A blank field
+    /// means "use the built-in", so it is removed rather than stored empty.
+    private func commitStatusNames() {
+        var trimmed: [String: String] = [:]
+        for (key, value) in statusDrafts {
+            let clean = value.trimmingCharacters(in: .whitespaces)
+            if !clean.isEmpty { trimmed[key] = clean }
+        }
+        guard trimmed != (settings?.statusNames ?? [:]) else { return }
+        let s = ensureSettings()
+        s.statusNames = trimmed
         save(s)
     }
 

@@ -156,6 +156,10 @@ enum CSVImport {
         case "queued", "up next", "next", "planning",
              "plan to play", "want to play":                .queued
         case "shelved", "backlog?", "someday":              .shelved
+        // Build 36. The words people actually use for it, including the ones
+        // other trackers export.
+        case "old favorite", "old favourite", "oldfavorite",
+             "played to death", "childhood", "retro favorite":  .oldFavorite
         case "abandoned", "dropped", "quit", "unfinished":  .abandoned
         case "wishlist", "wish list", "wanted":             .wishlist
         default:                                            .backlog

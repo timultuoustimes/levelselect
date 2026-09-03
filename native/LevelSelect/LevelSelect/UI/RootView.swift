@@ -24,15 +24,30 @@ struct RootView: View {
         ZStack {
             TabView(selection: Binding(get: { nav.selectedTab },
                                        set: { nav.selectedTab = $0 })) {
-                Tab("Home", systemImage: "house.fill", value: LSTab.home) { HomeTab() }
-                Tab("Library", systemImage: "square.grid.2x2.fill", value: LSTab.library) { LibraryTab() }
+                // A scroll, not a house — and the pair is the point.
+                //
+                // The app icon is literally a checklist scroll in a dungeon
+                // door, so the scroll is this app's own vocabulary rather than
+                // a borrowed one. Tim: *"Home is really the active running
+                // log."* An open scroll is a list still being worked through;
+                // a closed book is a history already written. Open and closed
+                // is the whole distinction between these two tabs, and the
+                // glyphs now carry it.
+                Tab("Home", systemImage: "scroll.fill", value: LSTab.home) { HomeTab() }
+                // A shelf, not a grid. The grid named a LAYOUT — and Library
+                // has three of them — so the icon was advertising one setting
+                // as the tab's identity. Spines on a shelf are what a
+                // collection actually looks like, which is the same reason
+                // the systems shelf draws real console art.
+                Tab("Library", systemImage: "books.vertical.fill", value: LSTab.library) { LibraryTab() }
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
                 Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
-                Tab("Stats", systemImage: "chart.bar.fill", value: LSTab.stats) { StatsTab() }
+                Tab("Journal", systemImage: "book.closed.fill", value: LSTab.journal) { JournalTab() }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
+            .sessionNotePrompt()
             .releaseRemindersPrompt()
             .overlappingTimerGuard()
             .id(nav.themeRevision)
@@ -105,7 +120,10 @@ struct RootView: View {
         }
         .animation(.spring(duration: 0.35), value: persistence.lastErrorMessage == nil)
         .animation(.spring(duration: 0.35), value: generation.notice?.id)
-        .preferredColorScheme(.dark)
+        // Was hard-pinned to .dark for thirty-six builds — the one line that
+        // made every other colour decision moot. `.system` resolves to nil,
+        // which is exactly what this modifier wants for "follow the phone".
+        .preferredColorScheme(ThemePalette.appearance.colorScheme)
         .onOpenURL { route($0) }
         .onAppear {
             ThemePalette.refresh(from: themeSettings.first)
@@ -180,7 +198,8 @@ struct RootView: View {
         case "continue": nav.continuePlaying()
         case "library": nav.go(to: .library)
         case "wishlist": nav.go(to: .wishlist)
-        case "stats": nav.go(to: .stats)
+        // Both spellings: "stats" is what every widget already baked.
+        case "journal", "stats": nav.go(to: .journal)
         case "shuffle":
             // The lock-screen die: every tap is a fresh roll, made HERE at
             // launch — a widget URL is baked per timeline entry, so rolling
@@ -314,7 +333,7 @@ private struct ShuffleToast: View {
         }
         .padding(.horizontal, 14).padding(.vertical, 10)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.white.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LSTheme.hairline))
     }
 }
 
@@ -669,7 +688,7 @@ struct HomeTab: View {
             // is what King Kai kept showing through two toolbar-background
             // fixes: the bar's background was not drawing it, this was. `.soft`
             // is the gradual fade, which is what the art wants.
-            .scrollEdgeEffectStyle(.soft, for: .top)
+            .scrollEdgeEffectStyle(.hard, for: .top)
             // ONLY when the header paints art. Without a header, letting
             // content start under the bar would put Continue Playing behind
             // the toolbar at rest, which is a bug rather than an effect.

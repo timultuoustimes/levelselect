@@ -89,7 +89,7 @@ struct LastTickedRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
-            .background(.white.opacity(0.045), in: .rect(cornerRadius: 10))
+            .background(LSTheme.cardFill, in: .rect(cornerRadius: 10))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Where you left off"
                                 + (recent.playthrough.map { " in \($0)" } ?? "")

@@ -158,7 +158,9 @@ enum WidgetBridge {
         let priorFourWeeks = daily.dropLast(7).suffix(28)
         let weeklyAverage = priorFourWeeks.isEmpty ? 0
             : priorFourWeeks.reduce(0, +) * 60 / 4
-        let completedCount = games.filter { $0.status == .completed }.count
+        // Matches Stats — see Game.isFinished. A ring that disagreed with
+        // the page it mirrors is worse than no ring.
+        let completedCount = games.filter(\.isFinished).count
         let collectionDescriptor = FetchDescriptor<GameCollection>(
             predicate: #Predicate { $0.deletedAt == nil })
         // uniquingKeysWith, NEVER uniqueKeysWithValues: CloudKit sync twins
@@ -264,6 +266,8 @@ enum WidgetBridge {
             // than to a copy of today's hue that would go stale the next time
             // the default changes.
             accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil,
+            appearanceRaw: ThemePalette.appearance.rawValue,
+            backgroundHex: ThemePalette.backgroundOverride?.hexString(),
             upcoming: upcoming
         )
         return BuildResult(snapshot: snapshot, covers: covers)

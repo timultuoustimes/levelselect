@@ -23,6 +23,7 @@ extension TrackerStateRecord: Syncable {}
 extension Run: Syncable {}
 extension GameMap: Syncable {}
 extension Marker: Syncable {}
+extension Memory: Syncable {}
 extension GameVideo: Syncable {}
 extension GameCollection: Syncable {}
 extension TrackerItemDetail: Syncable {}

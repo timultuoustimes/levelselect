@@ -208,7 +208,10 @@ struct ContinueHeroCard: View {
             }
         }
         .padding(14)
-        .background(LSTheme.heroGradient, in: .rect(cornerRadius: 16))
+        // Follows the chosen background — it is the ground's hue lifted off
+        // it, not a fixed purple panel sitting on someone else's colour.
+        .background(LSTheme.hero(tintedBy: ThemePalette.backgroundOverride),
+                    in: .rect(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(LSTheme.accent.opacity(0.35), lineWidth: 1)
@@ -351,7 +354,20 @@ struct ContinueHeroCard: View {
                     // one reads as something breaking rather than a state
                     // change.
                     .shadow(color: LSTheme.accent.opacity(0.22), radius: 6, y: 3)
-                    .shadow(color: .black.opacity(0.3), radius: 3, y: 2)
+                    // A HARD step, where the blur used to be.
+                    //
+                    // Same reasoning as the wordmark and the username, applied
+                    // to an object rather than type: this app's visual
+                    // language is pixel art, and a gaussian blur is the one
+                    // thing pixel art never has. A solid offset in a darkened
+                    // accent reads as the button standing on its own shadow —
+                    // which is also more legible on a light ground, where a
+                    // soft black blur turns into grey haze.
+                    //
+                    // The glow above stays: it does the lifting, this does the
+                    // shape.
+                    .shadow(color: LSTheme.hardStep(under: LSTheme.accent),
+                            radius: 0, y: 3)
             }
             .foregroundStyle(LSTheme.onAccent)
         }

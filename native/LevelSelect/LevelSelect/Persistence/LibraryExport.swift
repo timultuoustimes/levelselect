@@ -21,7 +21,13 @@ import SwiftData
 @MainActor
 enum LibraryExport {
     /// Bump when the shape changes; importers should refuse unknown majors.
-    static let formatVersion = 1
+    /// **2 — memories, and the pictures on them.**
+    ///
+    /// Bumped rather than added quietly. The importer gates strictly on this
+    /// number, so a build that predates memories now refuses the file and says
+    /// why, instead of restoring a library with every memory silently missing
+    /// — which is the failure this version exists to fix.
+    static let formatVersion = 2
 
     struct Manifest: Codable {
         var formatVersion: Int
@@ -38,6 +44,7 @@ enum LibraryExport {
         var maps: Int
         var markers: Int
         var collections: Int
+        var memories: Int
         /// User-added images, and what they weigh. The byte figure is
         /// reported so someone reading the manifest can see why the file is
         /// the size it is, without decoding anything.
@@ -314,6 +321,62 @@ enum LibraryExport {
             gameObjects.append(dict.compactMapValues { $0 })
         }
 
+        // **Memories are top-level, not nested under their game.** A memory
+        // can stand alone — "first LAN party" belongs to no game — so nesting
+        // would have exported only the ones that happened to be attached.
+        let memories = try context.fetch(
+            FetchDescriptor<Memory>(predicate: #Predicate { $0.deletedAt == nil })
+        )
+        let memoryObjects = memories
+            .sorted { $0.earliest < $1.earliest }
+            .map { memory -> [String: Any] in
+                var m: [String: Any] = [
+                    "id": memory.id.uuidString,
+                    "title": memory.title,
+                    // The interval, both ends. Re-deriving it from `precision`
+                    // on the way back in would rebuild a guess; these are the
+                    // stored truth.
+                    "earliest": iso(memory.earliest),
+                    "latest": iso(memory.latest),
+                    "kind": memory.kind,
+                    "createdAt": iso(memory.createdAt),
+                ]
+                m["body"] = memory.body
+                // The user's own words for the date, which the app never
+                // re-renders from the interval. Losing this loses the memory's
+                // actual answer to "when".
+                m["whenText"] = memory.whenText
+                m["precision"] = memory.precision
+                m["place"] = memory.place
+                m["platform"] = memory.platform
+                m["gameID"] = memory.game?.id.uuidString
+                if !memory.companions.isEmpty {
+                    m["playedWith"] = memory.companions.map {
+                        ["name": $0.name, "handle": $0.handle]
+                    }
+                }
+                let pictures = (memory.images ?? []).filter { $0.deletedAt == nil }
+                counts.images += pictures.count
+                counts.imageBytes += pictures.reduce(0) { $0 + $1.byteCount }
+                if !pictures.isEmpty {
+                    m["images"] = pictures.sorted { $0.addedAt < $1.addedAt }
+                        .map { image -> [String: Any] in
+                            var i: [String: Any] = [
+                                "id": image.id.uuidString,
+                                "role": image.roleRaw,
+                                "addedAt": iso(image.addedAt),
+                                "pixelWidth": image.pixelWidth,
+                                "pixelHeight": image.pixelHeight,
+                                "byteCount": image.byteCount,
+                            ]
+                            i["caption"] = image.caption
+                            i["data"] = image.data?.base64EncodedString()
+                            return i
+                        }
+                }
+                return m.compactMapValues { $0 }
+            }
+
         let collectionObjects = collections
             .sorted { $0.sortIndex < $1.sortIndex }
             .map { collection -> [String: Any] in
@@ -330,6 +393,7 @@ enum LibraryExport {
         let total = games.count + counts.playthroughs + counts.sessions + counts.runs
             + counts.states + counts.schemas + counts.completions + counts.videos
             + counts.maps + counts.markers + counts.images + collectionObjects.count
+            + memoryObjects.count
 
         let manifest = Manifest(
             formatVersion: formatVersion,
@@ -346,6 +410,7 @@ enum LibraryExport {
             maps: counts.maps,
             markers: counts.markers,
             collections: collectionObjects.count,
+            memories: memoryObjects.count,
             images: counts.images,
             imageBytes: counts.imageBytes,
             totalRecords: total
@@ -355,6 +420,7 @@ enum LibraryExport {
             "manifest": try manifestDictionary(manifest),
             "games": gameObjects,
             "collections": collectionObjects,
+            "memories": memoryObjects,
         ]
         // Synced appearance choices are user data too — a custom accent and
         // per-status colors are exactly the kind of thing that's annoying to

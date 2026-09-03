@@ -13,7 +13,7 @@ struct CoverMosaic: View {
     var body: some View {
         let covers = Array(games.prefix(4))
         ZStack {
-            Rectangle().fill(.white.opacity(0.05))
+            Rectangle().fill(LSTheme.cardFill)
             switch covers.count {
             case 0:
                 Image(systemName: "square.stack.3d.up")
@@ -34,7 +34,7 @@ struct CoverMosaic: View {
         AsyncImage(url: game.displayCoverURLString.flatMap(URL.init(string:))) { phase in
             switch phase {
             case .success(let img): img.resizable().scaledToFill()
-            default: Rectangle().fill(.white.opacity(0.06))
+            default: Rectangle().fill(LSTheme.cardFill)
             }
         }
     }
@@ -51,7 +51,7 @@ struct CollectionCard: View {
             CoverMosaic(games: members)
                 .frame(width: 122, height: 122)
                 .clipShape(.rect(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.08)))
+                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(LSTheme.hairline))
                 .overlay(alignment: .topTrailing) {
                     if collection.isBundle {
                         Image(systemName: "shippingbox.fill")
@@ -201,7 +201,7 @@ struct CollectionDetailView: View {
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than
         // either done consistently.
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .lsBackground()
         .navigationTitle(collection.name)
         #if !os(macOS)
@@ -377,10 +377,10 @@ struct CollectionMembersPicker: View {
                 .font(.caption.weight(selected ? .bold : .regular))
                 .padding(.horizontal, 11).padding(.vertical, 6)
                 .background(selected ? AnyShapeStyle(LSTheme.accent.opacity(0.25))
-                                     : AnyShapeStyle(.white.opacity(0.06)),
+                                     : AnyShapeStyle(LSTheme.cardFill),
                             in: .capsule)
                 .overlay(Capsule().strokeBorder(
-                    selected ? LSTheme.accent.opacity(0.55) : .white.opacity(0.08), lineWidth: 1))
+                    selected ? LSTheme.accent.opacity(0.55) : LSTheme.hairline, lineWidth: 1))
                 .foregroundStyle(selected ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
         }
         .buttonStyle(.plain)

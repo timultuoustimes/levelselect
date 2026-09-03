@@ -235,9 +235,14 @@ struct AddGameSheet: View {
             Section {
                 TextField("Name", text: $manualName)
                 TextField("Platform", text: $manualPlatform)
+                // displayOrder, not allCases: allCases is declaration order,
+                // which put Old Favorite last simply because it was added last.
                 Picker("Status", selection: $manualStatus) {
-                    ForEach(GameStatus.allCases, id: \.self) { Text($0.label).tag($0) }
+                    ForEach(GameStatus.displayOrder, id: \.self) { Text($0.label).tag($0) }
                 }
+                Text(manualStatus.blurb)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Button("Add") {
@@ -382,8 +387,15 @@ private struct ConfirmAddView: View {
                     TextField("Platform name", text: $customPlatform)
                 }
                 Picker("Status", selection: $status) {
-                    ForEach(GameStatus.allCases, id: \.self) { Text($0.label).tag($0) }
+                    ForEach(GameStatus.displayOrder, id: \.self) { Text($0.label).tag($0) }
                 }
+                // The meaning where the choice is, rather than on a key page
+                // you would have to go and find. A menu cannot carry a
+                // subtitle on every platform, so it sits under the picker and
+                // follows the selection.
+                Text(status.blurb)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Owned").font(.caption).foregroundStyle(.secondary)
                     OwnershipControl(ownership: $ownership)

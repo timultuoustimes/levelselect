@@ -2,6 +2,16 @@
 import Base from '../../layouts/Base.astro';
 
 const shipped = [
+  { t: 'The Journal', build: 36,
+    d: 'Everything you have written down, in order. A day of a game is one entry, not three, and it asks what happened while it is still what you were just doing.' },
+  { t: 'The part that happened before the app', build: 36,
+    d: 'Memories, dated as vaguely as you actually remember them — an exact day, a month, a year, or "Christmas 1995 or 1996" in your own words. Pictures included.' },
+  { t: 'A year of play in one screen', build: 36,
+    d: 'Twelve small months and a heat map, and any month opens into full box art on every day you played.' },
+  { t: 'Light mode, in your colour', build: 36,
+    d: 'The whole app light or dark, with a background you choose and the contrast the app keeps for you.' },
+  { t: 'Ten statuses that say what they mean', build: 36,
+    d: 'Old Favorite for the ones you replay forever, a line of explanation where you pick each one, and rename any of them.' },
   { t: 'A game you are waiting for tells you when', build: 35,
     d: 'A countdown on the card, two widgets, a release calendar, and a reminder the morning before.' },
   { t: 'The release date for the platform you picked', build: 35,
@@ -47,7 +57,6 @@ const horizons = [
       { t: 'The consoles themselves', d: "A system becomes something you own in its own right, with add-ons attached to the machine they plug into — rather than a label that only ever exists on a game." },
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
       { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
-      { t: 'A notebook, not just a tracker', d: 'Somewhere to write about a game and read it back later, in the order it happened.' },
     ],
   },
   {
@@ -60,7 +69,7 @@ const horizons = [
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
       { t: 'More ways to bring a library in', d: 'Beyond CSV.' },
       { t: 'Game news, in its own place', d: 'A reader for releases and news you choose to follow — a separate tab, not a feed bolted onto the shelf you came to look at.' },
-      { t: 'More of your own notebook', d: 'Themes, icons, and the sort of personality a paper journal has.' },
+      { t: 'More of your own notebook', d: 'Light and dark and your own background colour landed in 36. Icons, covers, and the rest of the personality a paper journal has.' },
     ],
   },
 ];
@@ -79,7 +88,7 @@ const notPlanned = [
 <main class="wrap">
   <article class="doc doc--wide">
     <h1>Roadmap</h1>
-    <p class="stamp">Last reviewed 2 September 2026 &middot; a direction, not a set of promises</p>
+    <p class="stamp">Last reviewed 3 September 2026 &middot; a direction, not a set of promises</p>
 
     <div class="board">
       {/* First, because the board reads left to right from done to maybe, and

@@ -25,7 +25,9 @@ enum LibraryImport {
 
     /// Mirror of `LibraryExport.formatVersion`, nonisolated so error text can
     /// use it; a test pins that the two never drift.
-    nonisolated static let supportedVersion = 1
+    /// The newest format this build understands. **Older files are read, not
+    /// refused** — see the gate in `root(of:)`.
+    nonisolated static let supportedVersion = 2
 
     enum ImportError: LocalizedError {
         case notAnExport
@@ -37,7 +39,7 @@ enum LibraryImport {
             case .notAnExport:
                 "This file isn't a LevelSelect export — no manifest found."
             case .unsupportedVersion(let v):
-                "This export is format version \(v); this build reads version \(LibraryImport.supportedVersion)."
+                "This export is format version \(v); this build reads up to version \(LibraryImport.supportedVersion). It was made by a newer version of LevelSelect."
             case .malformed(let what):
                 "The export is damaged: \(what)."
             }
@@ -73,7 +75,17 @@ enum LibraryImport {
             throw ImportError.notAnExport
         }
         let version = (manifest["formatVersion"] as? Int) ?? 0
-        guard version == Self.supportedVersion else {
+        // **Older is fine; newer is not.** Equality was right when there was
+        // only one version, and became a bug the moment there were two: it
+        // refused every backup made before memories existed, which is exactly
+        // the file someone restoring from a backup is most likely to hold.
+        //
+        // Reading down is safe because the format only ever gains keys — a v1
+        // file simply has no `memories`, and every lookup here already treats
+        // a missing key as an empty list. Reading *up* is not: a newer file
+        // carries records this build has no model for, and dropping them
+        // silently is the failure v2 exists to fix.
+        guard version >= 1, version <= Self.supportedVersion else {
             throw ImportError.unsupportedVersion(version)
         }
         return root
@@ -122,6 +134,7 @@ enum LibraryImport {
         var completions = Set<UUID>(), videos = Set<UUID>(), maps = Set<UUID>()
         var markers = Set<UUID>(), collections = Set<UUID>()
         var images = Set<UUID>()
+        var memories = Set<UUID>()
 
         init(context: ModelContext) throws {
             games = Set(try context.fetch(FetchDescriptor<Game>()).map(\.id))
@@ -136,6 +149,7 @@ enum LibraryImport {
             markers = Set(try context.fetch(FetchDescriptor<Marker>()).map(\.id))
             collections = Set(try context.fetch(FetchDescriptor<GameCollection>()).map(\.id))
             images = Set(try context.fetch(FetchDescriptor<GameImage>()).map(\.id))
+            memories = Set(try context.fetch(FetchDescriptor<Memory>()).map(\.id))
         }
     }
 
@@ -184,6 +198,12 @@ enum LibraryImport {
         }
         for c in (root["collections"] as? [[String: Any]]) ?? [] {
             visit("collections", c, in: existing.collections)
+        }
+        for m in (root["memories"] as? [[String: Any]]) ?? [] {
+            visit("memories", m, in: existing.memories)
+            for i in (m["images"] as? [[String: Any]]) ?? [] {
+                visit("images", i, in: existing.images)
+            }
         }
     }
 
@@ -362,6 +382,47 @@ enum LibraryImport {
             collection.gameIDs = (cDict["gameIDs"] as? [String]) ?? []
             context.insert(collection)
             outcome.created["collections", default: 0] += 1
+        }
+
+        for mDict in (root["memories"] as? [[String: Any]]) ?? [] {
+            guard let mID = uuid(mDict["id"]) else { continue }
+            if existing.memories.contains(mID) {
+                outcome.skipped["memories", default: 0] += 1; continue
+            }
+            let memory = Memory()
+            memory.id = mID
+            memory.title = (mDict["title"] as? String) ?? ""
+            memory.body = mDict["body"] as? String
+            // Taken from the file, never rebuilt from `precision`: the words
+            // are the memory's own answer to "when", and the interval is what
+            // places it. Deriving either would restore a guess.
+            memory.whenText = mDict["whenText"] as? String
+            memory.precision = mDict["precision"] as? String
+            memory.earliest = date(mDict["earliest"]) ?? .now
+            memory.latest = date(mDict["latest"]) ?? memory.earliest
+            memory.kind = (mDict["kind"] as? String) ?? "memory"
+            memory.place = mDict["place"] as? String
+            memory.platform = mDict["platform"] as? String
+            memory.createdAt = date(mDict["createdAt"]) ?? .now
+            memory.companions = companions(mDict["playedWith"])
+            // A memory whose game is not in this file stays standalone rather
+            // than being dropped — it is the user's writing either way.
+            if let gID = uuid(mDict["gameID"]) { memory.game = gamesByID[gID] }
+            context.insert(memory)
+            outcome.created["memories", default: 0] += 1
+
+            for iDict in (mDict["images"] as? [[String: Any]]) ?? [] {
+                guard let iID = uuid(iDict["id"]) else { continue }
+                if existing.images.contains(iID) {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                guard let image = makeImage(iDict, id: iID) else {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                context.insert(image)
+                image.memory = memory
+                outcome.created["images", default: 0] += 1
+            }
         }
 
         // Reappearing data deserves true rings.

@@ -40,6 +40,7 @@ extension GameStatus {
     /// beside it said "Now Playing / Up Next / Always Around". Status is a
     /// central idea in this app; it does not get to change names depending on
     /// which surface was written first.
+    @MainActor
     var label: String { sectionTitle }
 
     /// Themed status color (user override → default palette).
@@ -55,9 +56,16 @@ extension GameStatus {
         case .completed: "checkmark.circle.fill"
         case .queued:    "text.append"
         case .backlog:   "tray.full"
+        // The heart moved here when the Wishlist tab became a bag. A heart
+        // was always a strange glyph for "want" — it says love, which is what
+        // this status is actually about — and holding both meanings at once
+        // was why neither could use it well.
+        case .oldFavorite: "heart.fill"
         case .shelved:   "archivebox"
         case .abandoned: "xmark.circle"
-        case .wishlist:  "heart.fill"
+        // Matches the tab. They disagreed until now, which is the sort of
+        // thing nobody notices and everybody feels.
+        case .wishlist:  "bag.fill"
         case .ongoing:   "infinity"
         }
     }
@@ -68,8 +76,10 @@ extension GameStatus {
     /// is closer to what you're playing than to a backlog, and burying it
     /// below the finished pile would defeat the point of having the status.
     static var displayOrder: [GameStatus] {
+        // Old Favorite sits with the past-tense statuses rather than the
+        // queue: it is where a game ends up, not where it waits.
         [.playing, .ongoing, .paused, .queued, .backlog, .wishlist,
-         .completed, .shelved, .abandoned]
+         .completed, .oldFavorite, .shelved, .abandoned]
     }
 
     /// The statuses Home carries: what is live and what is next.
@@ -86,13 +96,16 @@ extension GameStatus {
         [.playing, .ongoing, .paused, .queued]
     }
 
-    var sectionTitle: String {
+    /// The built-in word. `sectionTitle` prefers the user's, when they have
+    /// one — see `ThemePalette.statusName(for:)`.
+    var defaultTitle: String {
         switch self {
         case .playing:   "Now Playing"
         case .paused:    "Paused"
         case .queued:    "Up Next"
         case .backlog:   "Backlog"
         case .completed: "Completed"
+        case .oldFavorite: "Old Favorite"
         case .shelved:   "Shelved"
         case .abandoned: "Abandoned"
         case .wishlist:  "Wishlist"
@@ -103,6 +116,14 @@ extension GameStatus {
         case .ongoing:   "Always Around"
         }
     }
+
+    /// What this status is actually called here.
+    ///
+    /// Routed through the palette exactly like `color`, so renaming reaches
+    /// every shelf heading, filter chip and picker without 22 call sites
+    /// having to know it exists.
+    @MainActor
+    var sectionTitle: String { ThemePalette.statusName(for: self) }
 }
 
 /// Tim's platform preference for defaulting new adds: Nintendo eShop first

@@ -18,6 +18,8 @@ struct ReleaseRemindersSettings: View {
     @State private var on = NotificationManager.releaseRemindersOn
     @State private var leadDays = NotificationManager.releaseLeadDays
     @State private var breaksThrough = NotificationManager.breaksThroughFocus
+    /// The session-note prompt's own switch — see `SessionNotePrompt`.
+    @AppStorage("askForSessionNotes") private var askForNotes = true
 
     /// What the setting will actually do, counted from the wishlist.
     private var upcoming: [Game] {
@@ -46,6 +48,12 @@ struct ReleaseRemindersSettings: View {
                     reschedule()
                 }
             }
+            // Not a notification, and sits here anyway: it is the other
+            // thing the app says to you unprompted, and a person looking for
+            // "stop asking me things" looks in one place, not two.
+            Toggle("Ask what happened after I play", isOn: $askForNotes)
+                .tint(LSTheme.accent)
+
             // Governs the still-playing reminder too, which is why it sits
             // outside the release toggle: that one is scheduled whenever a
             // timer runs, so hiding this behind "tell me when a game arrives"

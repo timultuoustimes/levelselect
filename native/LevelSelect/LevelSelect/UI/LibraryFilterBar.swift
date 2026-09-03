@@ -115,7 +115,7 @@ struct LibraryFilterBar: View {
 
     private var divider: some View {
         Rectangle()
-            .fill(.white.opacity(0.12))
+            .fill(LSTheme.separator)
             .frame(width: 1, height: 18)
             .accessibilityHidden(true)
     }

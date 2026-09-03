@@ -70,8 +70,12 @@ struct SchemaFreezeTests {
         #expect(LevelSelectSchemaV1.versionIdentifier == Schema.Version(1, 0, 0))
         #expect(LevelSelectSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
         #expect(LevelSelectSchemaV3.versionIdentifier == Schema.Version(3, 0, 0))
-        #expect(LevelSelectMigrationPlan.schemas.count == 3,
-                "Adding V3? Record it here too — this list is the written history of the shape.")
+        #expect(LevelSelectSchemaV5.versionIdentifier == Schema.Version(5, 0, 0))
+        // Four, not five: V4 added per-platform release dates as a FIELD on
+        // Game and no new model, and a VersionedSchema lists models. The gap
+        // in the numbering is the record being accurate rather than tidy.
+        #expect(LevelSelectMigrationPlan.schemas.count == 4,
+                "Adding a version? Record it here too — this list is the written history of the shape.")
     }
 
     /// An existing store must still open after the schema grows.
@@ -111,7 +115,7 @@ struct SchemaFreezeTests {
     /// people's existing libraries keep opening.
     @Test func schemaOnlyEverGrows() {
         var current: [String: Set<String>] = [:]
-        for line in Self.fingerprint(LevelSelectSchemaV3.self) {
+        for line in Self.fingerprint(LevelSelectSchemaV5.self) {
             let parts = line.split(separator: ":", maxSplits: 1).map(String.init)
             current[parts[0]] = Set(parts[1].split(separator: ",").map {
                 $0.trimmingCharacters(in: .whitespaces)
@@ -150,12 +154,23 @@ struct SchemaFreezeTests {
             // 2026-09-02 build 35 (Option B — every platform's date, because
             // "out on PC, coming to Switch 2" is one game with two true
             // answers). Seed-and-promote before any build that writes it.
-            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,name,notes,ownedPlatforms,ownership,pinned,platformReleasesData,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
+            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,memories,name,notes,ownedPlatforms,ownership,pinned,platformReleasesData,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos",
             "GameCollection: createdAt,deletedAt,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
-            "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
+            // memory added 2026-09-02 build 36 (V5): a photo can belong to
+            // a memory instead of a game. Reused rather than given its own
+            // model precisely so the deployed CKAsset fields are not
+            // duplicated — see GameImage.memory.
+            "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,memory,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
             "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
+            // Memory — new in V5 (build 36), the model that lets the library
+            // hold things older than the install. earliest/latest are the
+            // sortable interval; whenText is the user's words, kept verbatim
+            // and never regenerated from the interval; precision is nil for a
+            // genuine disjunction ("Christmas 1995 or 1996"), which is the
+            // case no single precision can describe.
+            "Memory: body,createdAt,deletedAt,earliest,game,id,images,kind,latest,legacyID,place,platform,playedWithData,precision,revision,title,updatedAt,userID,whenText",
             "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
             // PlayerProfile added 2026-08-29 build 33 — the person the shelf
             // belongs to. A NEW record type rather than reusing `Profile`,
@@ -194,12 +209,17 @@ struct SchemaFreezeTests {
             // than creating one, and the field had only been added to the
             // create branch — so the first Console diff was silently missing
             // it. See CloudKitSchemaSeeder's warning at that branch.
-            "ThemeSettings: accentHex,backdropIntensityRaw,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,gamePageLayoutRaw,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,updatedAt",
+            // statusNamesData, appearanceRaw and backgroundHex added 2026-09-02
+            // build 36 (V5). The last two ship AHEAD of the light theme that
+            // uses them: an unused optional costs nothing and a schema version
+            // costs a promote cycle, so a field whose feature is a build away
+            // still belongs in the batch deploying today.
+            "ThemeSettings: accentHex,appearanceRaw,backdropIntensityRaw,backgroundHex,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,gamePageLayoutRaw,overlappingTimerPolicyRaw,pageBackgroundRaw,platformIconVariantsData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,updatedAt,userID",
         ]
-        #expect(Self.fingerprint(LevelSelectSchemaV3.self) == expected,
-                "Schema V3 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
+        #expect(Self.fingerprint(LevelSelectSchemaV5.self) == expected,
+                "Schema V5 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
     }
 }

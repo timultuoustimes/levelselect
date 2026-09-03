@@ -61,7 +61,7 @@ struct RunTrackerView: View {
             Spacer(minLength: 6)
             Text(run.name)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .lineLimit(1)
             HStack(spacing: 8) {
                 record(run)
@@ -87,11 +87,11 @@ struct RunTrackerView: View {
                 if run.inProgress { inRunPill } else { labelPill("RUNS", color: LSWidget.torch) }
                 Text(run.name)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Text("\(run.total) run\(run.total == 1 ? "" : "s") logged")
                     .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 6)
                 record(run).font(.system(size: 14, weight: .bold))
             }
@@ -103,10 +103,10 @@ struct RunTrackerView: View {
                 VStack(spacing: 0) {
                     Text("\(Int((run.winRate * 100).rounded()))%")
                         .font(.system(size: 17, weight: .heavy).monospacedDigit())
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                     Text("win")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(width: 66, height: 66)
@@ -145,7 +145,7 @@ struct RunTrackerView: View {
                 .foregroundStyle(LSWidget.accent)
             Text("No runs tracked yet")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.75))
+                .foregroundStyle(.primary)
                 .multilineTextAlignment(.center)
         }
         .padding()
@@ -157,10 +157,7 @@ struct RunTrackerWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "LSRunTracker", provider: ContinuePlayingProvider()) { entry in
             RunTrackerView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Run Tracker")
         .description("Win/loss record for your latest roguelike run.")

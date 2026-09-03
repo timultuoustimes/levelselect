@@ -75,7 +75,7 @@ struct ReleasesView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                     Text(game.name)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .lineLimit(3)
                         .minimumScaleFactor(0.75)
                     Spacer(minLength: 0)
@@ -89,7 +89,7 @@ struct ReleasesView: View {
                         .minimumScaleFactor(0.5)
                     Text(ReleaseCountdown.dateLabel(game.releaseDate))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.55))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -141,7 +141,7 @@ struct ReleasesView: View {
     private var header: some View {
         Label("COMING SOON", systemImage: "calendar")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(.white.opacity(0.55))
+            .foregroundStyle(.secondary)
             .lineLimit(1)
     }
 
@@ -158,10 +158,7 @@ struct ReleasesWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "Releases", provider: ReleasesProvider()) { entry in
             ReleasesView(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Coming Soon")
         .description("The games on your wishlist that have not come out yet, and how long the wait is.")

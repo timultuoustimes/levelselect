@@ -15,16 +15,16 @@ struct CompletionRingSmall: View {
                     VStack(spacing: 0) {
                         Text("\(Int((progress * 100).rounded()))%")
                             .font(.system(size: 24, weight: .heavy).monospacedDigit())
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Text("\(snapshot.completionDone)/\(snapshot.completionTotal)")
                             .font(.system(size: 11, weight: .medium).monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .frame(width: 88, height: 88)
                 Text(snapshot.gameName)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -36,12 +36,12 @@ struct CompletionRingSmall: View {
                     .foregroundStyle(LSWidget.accent)
                 Text(snapshot == nil ? "No active game" : "No tracker yet")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(.primary)
                     .multilineTextAlignment(.center)
                 if let snapshot {
                     Text(snapshot.gameName)
                         .font(.system(size: 10))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
             }
@@ -55,10 +55,7 @@ struct CompletionRingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "LSCompletionRing", provider: ContinuePlayingProvider()) { entry in
             CompletionRingSmall(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("Completion")
         .description("Objective progress for your current game.")

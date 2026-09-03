@@ -18,16 +18,16 @@ struct WeekStatSmall: View {
                     .foregroundStyle(LSWidget.torch)
                 Text("THIS WEEK")
                     .font(.system(size: 10, weight: .bold)).tracking(0.6)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.secondary)
             }
             Text(lsHours(total))
                 .font(.system(size: 30, weight: .heavy))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .padding(.top, 1)
             if let n = snapshot?.gamesPlayedThisWeek, n > 0 {
                 Text("\(n) game\(n == 1 ? "" : "s")")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 8)
@@ -42,7 +42,7 @@ struct WeekStatSmall: View {
                             .frame(height: max(3, CGFloat(secs / peak) * 42))
                         Text(dayIndexLetter(idx, count: weekly.count))
                             .font(.system(size: 8, weight: .semibold))
-                            .foregroundStyle(.white.opacity(isToday ? 0.9 : 0.4))
+                            .foregroundStyle(isToday ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -67,10 +67,7 @@ struct WeekStatWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "LSWeekStat", provider: ContinuePlayingProvider()) { entry in
             WeekStatSmall(snapshot: entry.snapshot)
-                .containerBackground(for: .widget) {
-                    LinearGradient(colors: [LSWidget.navy, LSWidget.navyDeep],
-                                   startPoint: .top, endPoint: .bottom)
-                }
+                .lsWidgetSurface()
         }
         .configurationDisplayName("This Week")
         .description("Your play time over the last 7 days.")

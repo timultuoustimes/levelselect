@@ -637,7 +637,16 @@ struct GameDetailView: View {
     }
 
     private func standardScroll(stageMode: Bool, topInset: CGFloat) -> some View {
-        ScrollView {
+        // **The ground is a SIBLING of the scroll view, not a background on
+        // it.** As `.lsBackground()` — a `.background(…)` — it silently killed
+        // the scroll edge effect, so the bar lost its material and the game's
+        // name sat directly on whatever text was scrolling under it. Behind
+        // the scroll view in a ZStack, the page still stands on the theme and
+        // the scroll view keeps the identity the effect needs.
+        ZStack {
+            LSTheme.ground(tintedBy: ThemePalette.backgroundOverride)
+                .ignoresSafeArea()
+            ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
                 if game.livePlaythroughs.count > 1 {
@@ -661,7 +670,13 @@ struct GameDetailView: View {
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than
         // either done consistently.
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        //
+        // **Before `.lsBackground()`, not after.** `lsBackground` is a
+        // `.background(…)`, and putting it first meant this modifier attached
+        // to the wrapper rather than to the scroll view — so the bar lost its
+        // material entirely and the game's name sat directly on whatever text
+        // was scrolling under it.
+        .scrollEdgeEffectStyle(.hard, for: .top)
         // The handoff point is the header card's own title. Below it the name
         // is on screen in full; above it, the bar takes over.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -691,6 +706,7 @@ struct GameDetailView: View {
             } else {
                 withAnimation(.easeInOut(duration: 0.18)) { titleInBar = handedOver }
             }
+        }
         }
     }
 
@@ -774,7 +790,7 @@ struct GameDetailView: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .padding(6)
-                        .background(.white.opacity(0.08), in: .circle)
+                        .background(LSTheme.cardFill, in: .circle)
                 }
                 .buttonStyle(.plain)
             }
@@ -833,7 +849,7 @@ struct GameDetailView: View {
                 Image(systemName: active.state == .running ? "pause.fill" : "play.fill")
                     .font(.caption.weight(.bold))
                     .padding(6)
-                    .background(.white.opacity(0.08), in: .circle)
+                    .background(LSTheme.cardFill, in: .circle)
             }
             .buttonStyle(.plain)
             Button {
@@ -842,7 +858,7 @@ struct GameDetailView: View {
                 Image(systemName: "stop.fill")
                     .font(.caption.weight(.bold))
                     .padding(6)
-                    .background(.white.opacity(0.08), in: .circle)
+                    .background(LSTheme.cardFill, in: .circle)
             }
             .buttonStyle(.plain)
         } else {
@@ -870,7 +886,7 @@ struct GameDetailView: View {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
                         .padding(6)
-                        .background(.white.opacity(0.08), in: .circle)
+                        .background(LSTheme.cardFill, in: .circle)
                 }
                 .buttonStyle(.plain)
             }
@@ -1281,7 +1297,7 @@ struct GameDetailView: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 14))
             .overlay {
                 RoundedRectangle(cornerRadius: 14)
-                    .strokeBorder(.white.opacity(0.10), lineWidth: 1)
+                    .strokeBorder(LSTheme.hairline, lineWidth: 1)
             }
     }
 
