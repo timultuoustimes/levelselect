@@ -34,7 +34,7 @@ const rest = [
     body: 'A CSV from a spreadsheet becomes a library, with its hours logged as real time rather than invented history.',
   },
   {
-    title: 'Stats that stay honest',
+    title: 'Numbers that stay honest',
     body: "Hours by game, what you've finished, and how much you actually played this week versus how much you meant to. Only what your own sessions can prove — nothing estimated, nothing borrowed from anyone else's average. Flip any card between bars and a pie.",
   },
   {
@@ -102,8 +102,8 @@ const steps = [
     <Reveal class="composite composite--hero">
       <img class="c-ipad" src="/assets/shots/ipad-01-split-tracker.webp" width="1600" height="1226"
            alt="LevelSelect on iPad: the Hollow Knight game page, key art running the width of the screen, beside its tracker panel in landscape split view." />
-      <img class="c-phone" src="/assets/shots/iphone-33-home-profile.webp" width="686" height="1400"
-           alt="LevelSelect home screen on iPhone: a profile at the top \u2014 Memoji, the handle timultuoustimes, and the services it is used on \u2014 over a backdrop made from this week\u2019s game covers, with 5 playing, 8 hours 35 minutes this week and 266 hours total; Hollow Knight sits in Continue Playing, left off at Grubsong, last played two days ago." />
+      <img class="c-phone" src="/assets/shots/iphone-36-home-profile.webp" width="686" height="1400"
+           alt="LevelSelect home screen on iPhone: a profile at the top \u2014 Memoji, the handle timultuoustimes, and the services it is used on \u2014 over a backdrop made from this week\u2019s game covers, with 5 playing, 8 hours 35 minutes this week and 266 hours total; Hollow Knight sits in Continue Playing, left off at Grubsong, and the tabs along the bottom read Home, Library, Wishlist and Journal." />
     </Reveal>
   </div>
 
@@ -140,20 +140,55 @@ const steps = [
     </Reveal>
   </section>
 
-  <!-- Stats had a line in the feature list and no picture. The pies are the
-       first thing in the app that is worth LOOKING at rather than reading,
-       which is exactly the argument for giving them a section. -->
-  <section class="wrap story story--flip" id="stats">
+  <!-- Stats was a tab and is now a lens inside the Journal, so the section
+       that described it described something gone. The journal is also the
+       larger claim: the app can hold the part of your gaming life that
+       happened before you installed it. -->
+  <section class="wrap story story--flip" id="journal">
     <Reveal class="story__text">
-      <h2>Your history, two ways round</h2>
-      <p class="lede">Hours by game, what you finished, which systems and genres you actually reach for. Only what your own sessions can prove — nothing estimated, nothing borrowed from anyone else's average.</p>
-      <p class="lede">Tap the chart icon on any card to turn it over. Tap a slice and the middle tells you its share, so you are reading a number rather than guessing at an angle.</p>
+      <h2>The part that already happened</h2>
+      <p class="lede">You have been writing things down since the first build — a note on a session, what you thought when you finished something. All of it was real, dated and synced, and every word of it was only ever visible inside the sheet you typed it into. The <strong>Journal</strong> is that writing, in order.</p>
+      <p class="lede">A day of a game is one entry. Three sessions of Hollow Knight on a Saturday is one row, not three, and tapping it gives you the day in full — each session with its own note, and whether that was the evening you finished it.</p>
+      <p class="lede">And it reaches back further than the app does. A <strong>memory</strong> is something that happened before you had this: when, who you were with, and pictures. How well you know the date is a choice — an exact day, a month, a year, or not sure at all. <em>“Christmas 1995 or 1996”</em> is a real answer, and that is exactly how it is shown.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
-      <img class="c-front" src="/assets/shots/iphone-33-stats-pies.webp" width="686" height="1400" loading="lazy"
-           alt="The Stats tab with Ratings and Library turned over to donut charts: 11 games rated, and the library split into Now Playing, Paused, Up Next, Backlog and Completed." />
-      <img class="c-back" src="/assets/shots/iphone-33-stats-bars.webp" width="686" height="1400" loading="lazy"
-           alt="The same two cards as bars: a 4.6 average across 11 rated games, and the library as horizontal bars \u2014 Now Playing 5, Paused 3, Up Next 1, Backlog 4, Completed 1." />
+      <img class="c-front" src="/assets/shots/iphone-36-journal-timeline-memories.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal timeline on iPhone: Stardew Valley sessions from last week, then First time playing Halo 2 dated Friday 12 November 2004 with three screenshots and the note \u201cMultiplayer with Kumar, Eric, Omar and Kevin\u201d, then Got my Sega Genesis dated Tuesday 24 December 1996." />
+      <img class="c-back" src="/assets/shots/iphone-36-memory-photos.webp" width="686" height="1400" loading="lazy"
+           alt="A single memory opened: three photographs, one large above two smaller, over the title First time playing Halo 2, the date 13 November 2004, and the console it was played on." />
+    </Reveal>
+  </section>
+
+  <!-- The calendar answers a question the timeline cannot: not what happened,
+       but when, all at once. -->
+  <section class="wrap story" id="calendar">
+    <Reveal class="story__text">
+      <h2>A year of play, in one screen</h2>
+      <p class="lede">The calendar opens on a <strong>year</strong> — twelve small months and a heat map — because thirty years of history one month at a time is three hundred screens of scrolling.</p>
+      <p class="lede">Scrub the years along the top. Ones holding something stand out; empty ones are still tappable, because the year you have nothing in is exactly the year you are about to write your first console into. Tap a month and it opens properly: full box art on every day you played, and what the month added up to underneath.</p>
+      <p class="lede">The charts are here too, as the third view. Hours by game, what you finished, which systems you actually reach for — only what your own sessions can prove.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="right">
+      <img class="c-front" src="/assets/shots/iphone-36-journal-calendar-year.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal calendar showing a whole year as twelve small months, each day a square shaded by how much was played, with a row of years along the top and 2026 selected." />
+      <img class="c-back" src="/assets/shots/iphone-36-journal-charts.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal\u2019s charts view: 26 games, 266 hours 36 minutes played, 106 sessions, 12 percent finished, recent play, hours by month and a streak grid." />
+    </Reveal>
+  </section>
+
+  <!-- Light mode is the change people notice first, and the whole app moves
+       rather than the background alone. -->
+  <section class="wrap story story--flip" id="light">
+    <Reveal class="story__text">
+      <h2>Light, dark, and your colour</h2>
+      <p class="lede">The whole app can be light now. Not the dark theme with its colours swapped — every surface knows which way <em>up</em> is, so a card lifts off a dark ground by getting lighter and off a light one by getting darker.</p>
+      <p class="lede">And the background is yours. Accent and background sit on one screen, so you see a button against the ground you are choosing while you choose it. The app keeps its own contrast, so no choice can make text vanish.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-36-light-home.webp" width="686" height="1400" loading="lazy"
+           alt="LevelSelect home in light mode: a warm cream background, the profile and week\u2019s totals across the top, and Continue Playing showing BioShock Remastered." />
+      <img class="c-back" src="/assets/shots/iphone-36-light-game-page.webp" width="686" height="1400" loading="lazy"
+           alt="A game page in light mode: Clair Obscur Expedition 33 with its key art across the top, five stars, and its session and tracker sections on a light ground." />
     </Reveal>
   </section>
 
