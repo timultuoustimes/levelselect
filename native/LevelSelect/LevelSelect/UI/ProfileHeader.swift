@@ -130,7 +130,7 @@ struct ProfileHeader: View {
                         // gap between glyph and shadow instead of a solid
                         // step — visible at 22pt, which is far larger than
                         // the wordmark usually renders.
-                        .shadow(color: ink.mix(with: .black, by: 0.55), radius: 0, y: 2)
+                        .shadow(color: LSTheme.hardStep(under: ink), radius: 0, y: 2)
                 }
                 handleChips(profile)
             }

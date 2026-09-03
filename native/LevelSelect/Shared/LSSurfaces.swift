@@ -147,6 +147,30 @@ enum LSTheme {
         .lsDynamic(light: .black.opacity(0.08), dark: .white.opacity(0.09))
     }
 
+    /// The hard step under a pixel-art glyph or object.
+    ///
+    /// **The amount has to change with the ground, because darkening has no
+    /// headroom on a dark one.** A step 55% toward black measures 10.9:1
+    /// against the light ground and 1.5:1 against the dark one — the same
+    /// colour, disappearing into the exact background it exists to stand out
+    /// from. Going *darker* makes it worse, not better: at 70% it is 1.2:1 and
+    /// at 85% it is 1.0:1, because the ground is already near black and there
+    /// is nowhere below it to go.
+    ///
+    /// So on dark the step is a *lighter* shade than on light. It stays much
+    /// darker than the object and ends up lighter than the ground behind it,
+    /// which is how pixel art has always shaded a sprite: the shadow belongs
+    /// to the object, not to the surface it is standing on. At 40% the two
+    /// separations come out even — 2.1:1 from the ground, 2.1:1 from the ink —
+    /// so the step reads the same weight in both themes.
+    ///
+    /// Radius is always 0 where this is used. A gaussian blur is the one thing
+    /// pixel art never has.
+    static func hardStep(under ink: Color) -> Color {
+        .lsDynamic(light: ink.mix(with: .black, by: 0.55),
+                   dark: ink.mix(with: .black, by: 0.40))
+    }
+
     /// Darkening laid over artwork so text on top of it stays readable.
     ///
     /// **Stays dark in both themes, on purpose.** It is not a surface — it is

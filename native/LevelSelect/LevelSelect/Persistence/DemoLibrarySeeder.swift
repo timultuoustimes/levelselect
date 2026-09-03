@@ -22,7 +22,13 @@ enum DemoLibrarySeeder {
         /// Pinned IGDB id. Search alone is unreliable for a demo that has to
         /// look identical every time: "Hades" returns a 1995 game before
         /// Supergiant's, and "Disco Elysium" leads with the Game Boy Edition.
-        let igdbID: Int
+        ///
+        /// **nil means "resolve by name".** Unreleased games have no id worth
+        /// pinning by hand — and pinning a *guessed* one is the worse failure,
+        /// because a wrong id looks exactly like a right one. The seed report
+        /// names every game that came in this way so a bad match is caught
+        /// rather than quietly shipped.
+        var igdbID: Int? = nil
         let name: String
         let platform: String
         let status: GameStatus
@@ -50,6 +56,24 @@ enum DemoLibrarySeeder {
         // Current releases, so the demo doesn't read as a 2018 time capsule.
         .init(igdbID: 305152, name: "Clair Obscur: Expedition 33", platform: "PlayStation 5", status: .playing, rating: 5, ownership: [.digital], hours: 24.9),
         .init(igdbID: 366893, name: "Pokémon Pokopia",     platform: "Nintendo Switch 2", status: .playing, rating: nil, ownership: [.physical], hours: 8.7),
+
+        // **The wishlist.** Mostly unannounced-to-unreleased on purpose: the
+        // wishlist's three shelves are Coming soon / No date yet / Out now,
+        // and the countdown, the releases widget and the reminder all key off
+        // a real date. A wishlist of games that already shipped exercises none
+        // of it. Owned by nobody and played for zero hours, because that is
+        // what wanting a game looks like.
+        .init(name: "Grand Theft Auto VI",        platform: "PlayStation 5",      status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "The Duskbloods",             platform: "Nintendo Switch 2",  status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "Onimusha: Way of the Sword", platform: "PlayStation 5",      status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "Promise Mascot Agency",      platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "Denshattack!",               platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "Future Knight",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "The Legend of Zelda: Ocarina of Time", platform: "Nintendo Switch 2", status: .wishlist, rating: nil, ownership: [], hours: 0),
+        // Out already, which the shelf needs too: "Out now" is one of the
+        // three, and a wishlist of nothing but unreleased games never draws it.
+        .init(name: "Orbitals",                   platform: "Nintendo Switch",    status: .wishlist, rating: nil, ownership: [], hours: 0),
+        .init(name: "Blood Dungeon",              platform: "PC (Microsoft Windows)", status: .wishlist, rating: nil, ownership: [], hours: 0),
     ]
 
     /// Create the demo library. Network is used for IGDB metadata; without it
@@ -61,9 +85,24 @@ enum DemoLibrarySeeder {
         var withCovers = 0
         var byName: [String: Game] = [:]
 
+        var bySearch: [String] = []
+        var unmatched: [String] = []
+
         for (rank, seed) in seeds.enumerated() {
-            // Look up by pinned id, not by name — see Seed.igdbID.
-            let igdb = try? await IGDBService.lookup(id: seed.igdbID)
+            // Look up by pinned id where there is one — see Seed.igdbID.
+            var igdb: IGDBGame?
+            if let id = seed.igdbID {
+                igdb = try? await IGDBService.lookup(id: id)
+            } else if let hit = (try? await IGDBService.search(name: seed.name))?.first {
+                igdb = hit
+                // Report the name IGDB actually returned, not the one asked
+                // for. "Future Knight" matching a 1986 ZX Spectrum game is the
+                // failure this line exists to make visible.
+                bySearch.append(hit.name == seed.name ? seed.name
+                                                      : "\(seed.name) → \(hit.name)")
+            } else {
+                unmatched.append(seed.name)
+            }
             let game: Game
             if let igdb {
                 game = repo.addGame(from: igdb, platform: seed.platform, status: seed.status)
@@ -113,7 +152,16 @@ enum DemoLibrarySeeder {
         addCollection(repo: repo, games: ["Stardew Valley", "Celeste", "Sonic the Hedgehog 2"].compactMap { byName[$0] })
 
         PersistenceMonitor.shared.commit(context)
-        return "Demo library ready: \(created) games (\(withCovers) with IGDB art), sessions, a tracker, runs, and a collection."
+        var report = "Demo library ready: \(created) games (\(withCovers) with IGDB art), "
+            + "sessions, a tracker, runs, and a collection."
+        if !bySearch.isEmpty {
+            report += "\n\nMatched by name, so worth checking: " + bySearch.joined(separator: ", ") + "."
+        }
+        if !unmatched.isEmpty {
+            report += "\n\nIGDB had nothing for: " + unmatched.joined(separator: ", ")
+                + ". Added without art."
+        }
+        return report
     }
 
     /// A believable play history: sessions of a human length, spread over

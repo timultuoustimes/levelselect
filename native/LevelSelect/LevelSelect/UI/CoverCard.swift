@@ -366,7 +366,7 @@ struct ContinueHeroCard: View {
                     //
                     // The glow above stays: it does the lifting, this does the
                     // shape.
-                    .shadow(color: LSTheme.accent.mix(with: .black, by: 0.55),
+                    .shadow(color: LSTheme.hardStep(under: LSTheme.accent),
                             radius: 0, y: 3)
             }
             .foregroundStyle(LSTheme.onAccent)
