@@ -53,7 +53,17 @@ struct MemorySheet: View {
     /// first save is held here and attached once there is something to attach
     /// it to. Losing a photo because you had not saved yet would be its own
     /// small betrayal.
-    @State private var pendingPhotos: [Data] = []
+    @State private var pendingPhotos: [PendingPhoto] = []
+
+    /// A picture chosen before the memory has a record to hang it on.
+    ///
+    /// Identified rather than indexed: `ForEach(enumerated(), id: \.offset)`
+    /// re-numbers every item the moment one is removed, so a remove button
+    /// keyed on offset deletes the wrong picture as soon as there are two.
+    struct PendingPhoto: Identifiable {
+        let id = UUID()
+        let data: Data
+    }
 
     /// How well the date is known — and the fourth case is the point.
     enum HowKnown: String, CaseIterable, Identifiable {
@@ -170,16 +180,33 @@ struct MemorySheet: View {
                             HStack(spacing: 10) {
                                 ForEach(photos) { image in
                                     if let data = image.data {
-                                        LocalArtworkThumb(data: data, contentMode: .fill)
-                                            .frame(width: 84, height: 84)
-                                            .clipShape(.rect(cornerRadius: 10))
+                                        thumb(data)
+                                            .overlay(alignment: .topTrailing) {
+                                                removeButton("Remove picture") {
+                                                    Repository(context).softDelete(image)
+                                                }
+                                            }
+                                            // The long-press the rest of the
+                                            // app already uses for this, kept
+                                            // so the gesture means one thing
+                                            // everywhere.
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    Repository(context).softDelete(image)
+                                                } label: {
+                                                    Label("Remove", systemImage: "trash")
+                                                }
+                                            }
                                     }
                                 }
-                                ForEach(Array(pendingPhotos.enumerated()), id: \.offset) { _, data in
-                                    LocalArtworkThumb(data: data, contentMode: .fill)
-                                        .frame(width: 84, height: 84)
-                                        .clipShape(.rect(cornerRadius: 10))
+                                ForEach(pendingPhotos) { photo in
+                                    thumb(photo.data)
                                         .opacity(0.7)
+                                        .overlay(alignment: .topTrailing) {
+                                            removeButton("Remove picture") {
+                                                pendingPhotos.removeAll { $0.id == photo.id }
+                                            }
+                                        }
                                 }
                             }
                         }
@@ -246,6 +273,33 @@ struct MemorySheet: View {
     }
 
     /// Pictures already attached, newest first.
+    private func thumb(_ data: Data) -> some View {
+        LocalArtworkThumb(data: data, contentMode: .fill)
+            .frame(width: 84, height: 84)
+            .clipShape(.rect(cornerRadius: 10))
+    }
+
+    /// **Visible, not only a long-press.** `MediaSection` hides removal in a
+    /// context menu, which is right on a page you are mostly reading — but
+    /// this is the editor, and a picture you have just added is the thing most
+    /// likely to want undoing. Tim, having added one: *"I can't remove the
+    /// photo from the memory."*
+    ///
+    /// No confirmation: removing is a soft delete, the same as everywhere else
+    /// pictures are removed, so the picture is recoverable rather than gone.
+    private func removeButton(_ label: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(role: .destructive, action: action) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.body)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(.white, .black.opacity(0.55))
+        }
+        .buttonStyle(.plain)
+        .padding(3)
+        .accessibilityLabel(label)
+    }
+
     private var photos: [GameImage] {
         (existing?.images ?? []).filter { $0.deletedAt == nil }
             .sorted { $0.addedAt > $1.addedAt }
@@ -265,7 +319,7 @@ struct MemorySheet: View {
                 try Repository(context).addImage(to: existing, data: raw)
             } else {
                 // Held until Save makes a record to hang it on.
-                pendingPhotos.append(raw)
+                pendingPhotos.append(PendingPhoto(data: raw))
             }
         } catch ImageIngest.Failure.unreadable {
             importError = "That file isn't an image this device can read."
@@ -339,7 +393,7 @@ struct MemorySheet: View {
         } else {
             repo.saveMemory(memory, on: date, precision: howKnown.precision, words: nil)
         }
-        for data in pendingPhotos {
+        for data in pendingPhotos.map(\.data) {
             try? repo.addImage(to: memory, data: data)
         }
         dismiss()
