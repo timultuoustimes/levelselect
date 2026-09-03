@@ -201,7 +201,7 @@ struct CollectionDetailView: View {
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than
         // either done consistently.
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         .lsBackground()
         .navigationTitle(collection.name)
         #if !os(macOS)

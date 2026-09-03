@@ -339,7 +339,7 @@ struct PlatformGamesView: View {
             .padding(.vertical, 10)
         }
         .scrollIndicators(.hidden)
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
     }
 
     private func grid(_ items: [Game]) -> some View {

@@ -676,7 +676,7 @@ struct GameDetailView: View {
         // to the wrapper rather than to the scroll view — so the bar lost its
         // material entirely and the game's name sat directly on whatever text
         // was scrolling under it.
-        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.hard, for: .top)
         // The handoff point is the header card's own title. Below it the name
         // is on screen in full; above it, the bar takes over.
         .onScrollGeometryChange(for: CGFloat.self) { geometry in

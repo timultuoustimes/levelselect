@@ -688,7 +688,7 @@ struct HomeTab: View {
             // is what King Kai kept showing through two toolbar-background
             // fixes: the bar's background was not drawing it, this was. `.soft`
             // is the gradual fade, which is what the art wants.
-            .scrollEdgeEffectStyle(.soft, for: .top)
+            .scrollEdgeEffectStyle(.hard, for: .top)
             // ONLY when the header paints art. Without a header, letting
             // content start under the bar would put Continue Playing behind
             // the toolbar at rest, which is a bug rather than an effect.
