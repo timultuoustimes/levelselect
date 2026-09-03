@@ -1031,3 +1031,41 @@ struct Build36CalendarGridTests {
         #expect(square == sydney.date(from: DateComponents(year: 2026, month: 6, day: 3)))
     }
 }
+
+/// Build 36 — the in-app question can be asked more than once.
+///
+/// It was a single boolean set forever the first time anyone declined, so
+/// every tester who tapped "No thanks" during build 31 was unreachable for
+/// every build after it. Questions attached to TestFlight release notes are
+/// read at install time, when nobody has an opinion yet; the app had no way to
+/// ask anything later. These pin the sequencing that fixes it.
+@MainActor
+struct Build36BetaQuestionTests {
+
+    @Test("A device that has answered nothing gets the onboarding question")
+    func strangersGetTheFirstQuestion() {
+        // The case that matters now the TestFlight link is public: someone
+        // arriving cold from a podcast can only answer "what were you using
+        // before", so that has to be what they are asked.
+        let next = BetaQuestionCard.nextQuestion(answered: [])
+        #expect(next?.id == "before")
+    }
+
+    @Test("Someone who dealt with the first question gets the current one")
+    func veteransGetTheNewQuestion() {
+        let next = BetaQuestionCard.nextQuestion(answered: ["before"])
+        #expect(next?.id == "journal-36")
+    }
+
+    @Test("Nobody is asked the same question twice")
+    func answeringEndsIt() {
+        let all = Set(BetaQuestionCard.questions.map(\.id))
+        #expect(BetaQuestionCard.nextQuestion(answered: all) == nil)
+    }
+
+    @Test("Question ids are unique, since the record is keyed on them")
+    func idsAreUnique() {
+        let ids = BetaQuestionCard.questions.map(\.id)
+        #expect(Set(ids).count == ids.count)
+    }
+}
