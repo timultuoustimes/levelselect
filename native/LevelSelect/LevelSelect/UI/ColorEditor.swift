@@ -94,11 +94,20 @@ struct ColorEditor: View {
         "#8A4B12",   // torch shadow, the darker orange under pixel type
     ]
 
+    /// The rest of the palette — and deliberately **no near-copies of the
+    /// brand four above**. Tim: *"if they're in the top 4 brand colors, they
+    /// shouldn't also be in the other color circles below."*
+    ///
+    /// Three were within a hair of a brand colour and are gone: `#A66BFF` and
+    /// `#7A5CFF` sat 0.017 and 0.019 in hue from the brand purple, and
+    /// `#FF9F1C` sat 0.011 from torch orange. `#B36BFF` and `#FF8A5B` stay —
+    /// a lighter purple and a coral read as their own hues rather than as the
+    /// brand colour repeated.
     private static let swatches: [String] = [
-        "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#A66BFF",
+        "#FF8A5B", "#FF6B6B", "#F2547D", "#D65DB1", "#B36BFF",
         "#6C7BFF", "#4D9BFF", "#37C6E0", "#2FD4B6", "#3FD07A",
-        "#8BD450", "#D4D450", "#FFC93C", "#FF9F1C", "#E4572E", "#C1272D",
-        "#B36BFF", "#7A5CFF", "#5AA9E6", "#54C6C6", "#57C785", "#9BC53D",
+        "#8BD450", "#D4D450", "#FFC93C", "#E4572E", "#C1272D",
+        "#5AA9E6", "#54C6C6", "#57C785", "#9BC53D",
     ]
 
     private let columns = [GridItem(.adaptive(minimum: 46), spacing: 10)]
@@ -374,9 +383,37 @@ struct ColorEditor: View {
                       Int(round(r * 255)), Int(round(g * 255)), Int(round(b * 255)))
     }
 
+    /// The one swatch that counts as "the colour you are on".
+    ///
+    /// **Singular by construction, because selection is.** `matches` is a
+    /// tolerance test — 0.02 in hue, 0.05 in saturation and brightness — so
+    /// picking the brand purple lit three circles at once: `#A66BFF` and
+    /// `#7A5CFF` both fall inside it. Tightening the tolerance would only move
+    /// the problem, since any two neighbouring swatches can be closer to each
+    /// other than to the value you dragged the sliders to. So the ring goes to
+    /// the *nearest* swatch across every row, and only if it is near at all.
+    private var selectedSwatch: String? {
+        let all = Self.brandSwatches + Self.swatches + saved
+        return all
+            .compactMap { hex -> (String, Double)? in
+                guard let c = Color(hex: hex), matches(c) else { return nil }
+                return (hex, distance(to: c))
+            }
+            .min { $0.1 < $1.1 }?.0
+    }
+
+    /// How far `current` is from a colour, in the same three axes `matches`
+    /// uses. Hue counts most: two purples of different brightness still read
+    /// as the same colour, two hues apart do not.
+    private func distance(to other: Color) -> Double {
+        let a = ColorEditor.hsb(current), b = ColorEditor.hsb(other)
+        let dh = min(abs(a.h - b.h), 1 - abs(a.h - b.h))
+        return dh * 4 + abs(a.s - b.s) + abs(a.b - b.b)
+    }
+
     private func swatch(_ hex: String, removable: Bool = false) -> some View {
         let c = Color(hex: hex) ?? .gray
-        let selected = matches(c)
+        let selected = (hex == selectedSwatch)
         return Button {
             setFromColor(c)
             push()
