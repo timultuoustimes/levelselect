@@ -184,15 +184,31 @@ struct MemoryView: View {
             .sorted { $0.addedAt < $1.addedAt }
     }
 
+    /// A picture at a fixed height, cut to its cell.
+    ///
+    /// **The size comes from a shape, and the clip is outermost.** Setting
+    /// `.frame(height:)` on the image constrains one axis only: a 16:9
+    /// screenshot 108 tall is 192 wide, which overflows a 118pt grid column,
+    /// and `clipShape` then rounds the *overflowing* rectangle rather than the
+    /// cell — so three photos bled to the screen edges with no gaps and no
+    /// corners. `DayCell` had the same bug for the same reason; a shape takes
+    /// the cell's width, the image rides as an overlay, and one clip at the
+    /// end cuts whatever escaped.
+    private func photo(_ data: Data, height: CGFloat, radius: CGFloat) -> some View {
+        Rectangle()
+            .fill(LSTheme.cardFill)
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay { LocalArtworkThumb(data: data, contentMode: .fill) }
+            .clipShape(.rect(cornerRadius: radius))
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if images.count == 1, let data = images[0].data {
                     Button { viewingImage = images[0] } label: {
-                        LocalArtworkThumb(data: data, contentMode: .fill)
-                            .frame(height: 240)
-                            .frame(maxWidth: .infinity)
-                            .clipShape(.rect(cornerRadius: 14))
+                        photo(data, height: 240, radius: 14)
                     }
                     .buttonStyle(.plain)
                 } else if images.count > 1 {
@@ -201,9 +217,7 @@ struct MemoryView: View {
                         ForEach(images) { image in
                             if let data = image.data {
                                 Button { viewingImage = image } label: {
-                                    LocalArtworkThumb(data: data, contentMode: .fill)
-                                        .frame(height: 108)
-                                        .clipShape(.rect(cornerRadius: 10))
+                                    photo(data, height: 108, radius: 10)
                                 }
                                 .buttonStyle(.plain)
                             }
