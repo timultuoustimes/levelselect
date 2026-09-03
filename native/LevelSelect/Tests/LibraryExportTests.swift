@@ -257,3 +257,54 @@ struct Build36MemoryExportTests {
         #expect((root["memories"] as? [[String: Any]])?.isEmpty == true)
     }
 }
+
+/// Build 36 — a backup made by an older build still restores.
+///
+/// `formatVersion` went to 2 for memories, and the importer's gate was
+/// `version == supportedVersion`. That was correct with one version and a bug
+/// with two: it refused every file made before memories existed, which is
+/// precisely the backup someone restoring is most likely to be holding.
+@MainActor
+struct Build36ImportVersionTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func file(version: Int) -> Data {
+        Data("""
+        {"manifest":{"formatVersion":\(version),"games":1},
+         "games":[{"id":"\(UUID().uuidString)","name":"Sonic the Hedgehog 2"}]}
+        """.utf8)
+    }
+
+    @Test("A version 1 export — made before memories existed — still imports")
+    func readsTheOlderFormat() throws {
+        let context = makeContext()
+        let outcome = try LibraryImport.apply(data: file(version: 1), context: context)
+        #expect(outcome.created["games"] == 1)
+        // Nothing to restore, and nothing to complain about: v1 has no
+        // memories key and the importer treats a missing key as none.
+        #expect(outcome.created["memories"] == nil)
+        #expect(try context.fetch(FetchDescriptor<Game>()).count == 1)
+    }
+
+    @Test("The current format imports")
+    func readsItsOwnFormat() throws {
+        let outcome = try LibraryImport.apply(
+            data: file(version: LibraryImport.supportedVersion), context: makeContext())
+        #expect(outcome.created["games"] == 1)
+    }
+
+    @Test("A file from a newer build is refused rather than silently thinned")
+    func refusesTheNewerFormat() {
+        // The opposite direction stays strict on purpose: a newer file carries
+        // records this build has no model for, and dropping them quietly is
+        // the exact failure the version bump exists to prevent.
+        #expect(throws: LibraryImport.ImportError.self) {
+            _ = try LibraryImport.apply(
+                data: file(version: LibraryImport.supportedVersion + 1),
+                context: makeContext())
+        }
+    }
+}

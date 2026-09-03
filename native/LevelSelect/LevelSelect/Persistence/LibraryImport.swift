@@ -25,6 +25,8 @@ enum LibraryImport {
 
     /// Mirror of `LibraryExport.formatVersion`, nonisolated so error text can
     /// use it; a test pins that the two never drift.
+    /// The newest format this build understands. **Older files are read, not
+    /// refused** — see the gate in `root(of:)`.
     nonisolated static let supportedVersion = 2
 
     enum ImportError: LocalizedError {
@@ -37,7 +39,7 @@ enum LibraryImport {
             case .notAnExport:
                 "This file isn't a LevelSelect export — no manifest found."
             case .unsupportedVersion(let v):
-                "This export is format version \(v); this build reads version \(LibraryImport.supportedVersion)."
+                "This export is format version \(v); this build reads up to version \(LibraryImport.supportedVersion). It was made by a newer version of LevelSelect."
             case .malformed(let what):
                 "The export is damaged: \(what)."
             }
@@ -73,7 +75,17 @@ enum LibraryImport {
             throw ImportError.notAnExport
         }
         let version = (manifest["formatVersion"] as? Int) ?? 0
-        guard version == Self.supportedVersion else {
+        // **Older is fine; newer is not.** Equality was right when there was
+        // only one version, and became a bug the moment there were two: it
+        // refused every backup made before memories existed, which is exactly
+        // the file someone restoring from a backup is most likely to hold.
+        //
+        // Reading down is safe because the format only ever gains keys — a v1
+        // file simply has no `memories`, and every lookup here already treats
+        // a missing key as an empty list. Reading *up* is not: a newer file
+        // carries records this build has no model for, and dropping them
+        // silently is the failure v2 exists to fix.
+        guard version >= 1, version <= Self.supportedVersion else {
             throw ImportError.unsupportedVersion(version)
         }
         return root
