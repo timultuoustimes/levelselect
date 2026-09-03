@@ -77,6 +77,7 @@ struct JournalTab: View {
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             #endif
             .navigationDestination(for: JournalRoute.self) { JournalRouteDestination(route: $0) }
+            .navigationDestination(for: CalendarMonth.self) { CalendarMonthView(month: $0.start) }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }

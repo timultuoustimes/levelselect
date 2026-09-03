@@ -909,6 +909,45 @@ struct Build36CalendarGridTests {
         }
     }
 
+    @Test("The heatmap counts a memory as a day that happened, with no hours on it")
+    func heatCountsMemoriesWithNoDuration() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let cal = JournalBuilder.calendar
+
+        let game = Game(name: "Hades")
+        let playthrough = Playthrough()
+        playthrough.game = game
+        context.insert(game)
+        context.insert(playthrough)
+        let start = cal.date(from: DateComponents(year: 2026, month: 6, day: 3, hour: 12))!
+        let session = Session(startDate: start, state: .stopped)
+        session.playthrough = playthrough
+        session.endDate = start.addingTimeInterval(1800)
+        session.accumulatedDuration = 1800
+        context.insert(session)
+
+        // A memory on a different day, carrying no time at all.
+        let memory = Memory()
+        memory.title = "Got a Genesis"
+        _ = Repository(context).saveMemory(
+            memory,
+            on: Memory.calendar.date(from: DateComponents(year: 2026, month: 6, day: 10))!,
+            precision: "day", words: nil)
+
+        let periods = JournalBuilder.periods(from: [game], standalone: [memory])
+        let load = JournalCalendarView.load(from: periods, calendar: cal)
+
+        let played = cal.date(from: DateComponents(year: 2026, month: 6, day: 3))!
+        let remembered = cal.date(from: DateComponents(year: 2026, month: 6, day: 10))!
+
+        #expect(load[played]?.seconds == 1800)
+        #expect(load[played]?.entries == 1)
+        // The point: zero seconds, but not an empty day. A heatmap keyed only
+        // on duration would draw the day you got your first console as blank.
+        #expect(load[remembered]?.seconds == 0)
+        #expect(load[remembered]?.entries == 1)
+    }
+
     @Test("A local session keeps the day it was played on")
     func sessionKeepsItsDay() {
         // A late-night session is still that evening, not the next morning.
