@@ -849,3 +849,73 @@ struct Build36MemoryPhotoTests {
         #expect(JournalBuilder.entry(for: memory).images.isEmpty)
     }
 }
+
+/// Build 36 — the calendar grid, where the app's two calendars meet.
+///
+/// The journal dates a session where you were sitting and a memory in UTC, on
+/// purpose. A grid has to draw both, and the naive conversion — treating a
+/// stored instant as if it were already in the grid's calendar — is off by a
+/// day for half the world. These pin the rule from Sydney, where the bug is
+/// visible; running them only in the machine's own timezone would pass either
+/// way.
+@MainActor
+struct Build36CalendarGridTests {
+    private var sydney: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Australia/Sydney")!
+        return c
+    }
+
+    private func utcDay(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        Memory.calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    @Test("A UTC-dated memory lands on the square it prints, not the one before")
+    func memoryKeepsItsDay() {
+        // Christmas 1995, stored as a UTC calendar fact. In Sydney that instant
+        // is 11am on the 25th — but the *instant* is 25 Dec 00:00 UTC, which
+        // startOfDay in Sydney would file as the 25th only by luck of the sign.
+        // Boxing Day is the real trap: 26 Dec 00:00 UTC is 11am on the 26th.
+        let christmas = utcDay(1995, 12, 25)
+        let square = JournalBuilder.square(for: christmas, in: Memory.calendar, grid: sydney)
+
+        #expect(sydney.component(.day, from: square) == 25)
+        #expect(sydney.component(.month, from: square) == 12)
+        #expect(sydney.component(.year, from: square) == 1995)
+    }
+
+    @Test("A tapped square becomes that same day in the calendar a memory is stored in")
+    func tappedSquareRoundTrips() {
+        // The square for 14 March 2026 as Sydney draws it.
+        let square = sydney.date(from: DateComponents(year: 2026, month: 3, day: 14))!
+        let stored = JournalBuilder.memoryDate(for: square, grid: sydney)
+
+        // Sydney midnight is the previous day in UTC; going through the
+        // components rather than the instant is what keeps it on the 14th.
+        #expect(Memory.calendar.component(.day, from: stored) == 14)
+        #expect(Memory.calendar.component(.month, from: stored) == 3)
+        #expect(stored == utcDay(2026, 3, 14))
+    }
+
+    @Test("Tapping a square and reading it back gives the same square")
+    func creationAndDisplayAgree() {
+        // The property that matters to someone using the app: write a memory on
+        // a day, and it appears on the day you wrote it on.
+        for day in [1, 14, 25, 26, 31] {
+            let square = sydney.date(from: DateComponents(year: 2026, month: 12, day: day))!
+            let stored = JournalBuilder.memoryDate(for: square, grid: sydney)
+            let back = JournalBuilder.square(for: stored, in: Memory.calendar, grid: sydney)
+            #expect(back == square, "December \(day) did not come back to its own square")
+        }
+    }
+
+    @Test("A local session keeps the day it was played on")
+    func sessionKeepsItsDay() {
+        // A late-night session is still that evening, not the next morning.
+        let lateNight = sydney.date(from: DateComponents(
+            year: 2026, month: 6, day: 3, hour: 23, minute: 40))!
+        let square = JournalBuilder.square(for: lateNight, in: sydney, grid: sydney)
+
+        #expect(square == sydney.date(from: DateComponents(year: 2026, month: 6, day: 3)))
+    }
+}

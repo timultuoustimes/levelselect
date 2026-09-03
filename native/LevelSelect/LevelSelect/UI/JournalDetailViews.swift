@@ -65,9 +65,27 @@ struct JournalDayView: View {
         #endif
     }
 
+    /// The header is a link to the game.
+    ///
+    /// This view reads; the game page is where things are changed. Tim: *"when
+    /// you tap the game it opens the game's page… that way they can view the
+    /// game info and make edits to sessions and stuff from there."* Rather
+    /// than growing an editor here, the read view points at the one that
+    /// already exists — and the game page already owns session editing,
+    /// artwork, trackers and everything else.
+    @ViewBuilder
     private var header: some View {
+        if let game = entry.game {
+            NavigationLink(value: game) { headerContent(game) }
+                .buttonStyle(.plain)
+        } else {
+            headerContent(nil)
+        }
+    }
+
+    private func headerContent(_ game: Game?) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            if let game = entry.game {
+            if let game {
                 CoverThumb(urlString: game.displayCoverURLString)
                     .frame(width: 74, height: 99)
                     .clipShape(.rect(cornerRadius: 8))
@@ -86,6 +104,11 @@ struct JournalDayView: View {
                 }
             }
             Spacer(minLength: 0)
+            if game != nil {
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .lsCard()
     }

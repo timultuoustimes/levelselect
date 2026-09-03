@@ -239,6 +239,41 @@ enum JournalBuilder {
             headingOverride: memory.isUncertain ? memory.dateText : nil)
     }
 
+    /// The square a date belongs in, whichever calendar dated it.
+    ///
+    /// **This grid is where the app's two calendars meet.** A session is
+    /// dated where you were sitting; a memory is a UTC calendar fact. Both
+    /// have to land on the square whose number they would print, so the
+    /// conversion goes through year/month/day rather than the instant — a
+    /// UTC midnight on 25 December is 24 December in Sydney, and "Christmas
+    /// 1995" filed under the 24th is the calendar quietly rewriting someone's
+    /// history.
+    /// - Parameter grid: the calendar the squares are drawn in. Defaults to
+    ///   the journal's own; a parameter so the rule can be tested from a
+    ///   timezone other than the one the tests happen to run in.
+    static func square(for date: Date, in source: Calendar,
+                       grid: Calendar = calendar) -> Date {
+        let parts = source.dateComponents([.year, .month, .day], from: date)
+        return grid.date(from: DateComponents(year: parts.year,
+                                              month: parts.month,
+                                              day: parts.day))
+            ?? grid.startOfDay(for: date)
+    }
+
+    /// A tapped square, named in the calendar a `Memory` is stored in.
+    ///
+    /// The inverse of `square(for:in:)`, and needed for the same reason:
+    /// `Repository.saveMemory` truncates through `Memory.calendar`, so handing
+    /// it a local midnight would file the 14th as the 13th for anyone east of
+    /// Greenwich.
+    static func memoryDate(for square: Date, grid: Calendar = calendar) -> Date {
+        let parts = grid.dateComponents([.year, .month, .day], from: square)
+        return Memory.calendar.date(from: DateComponents(year: parts.year,
+                                                         month: parts.month,
+                                                         day: parts.day))
+            ?? square
+    }
+
     private static func group(_ entries: [JournalEntry]) -> [JournalPeriod] {
         var buckets: [String: (start: Date, grain: JournalPeriod.Grain,
                                calendar: Calendar, items: [JournalEntry])] = [:]

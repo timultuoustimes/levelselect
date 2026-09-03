@@ -18,17 +18,23 @@ import SwiftData
 /// SwiftUI merges in.
 struct JournalTab: View {
     enum Lens: String, CaseIterable, Identifiable {
-        case timeline, charts
+        /// Three readings of one record set: what happened in order, what
+        /// happened when, and what it all adds up to. The calendar sits in the
+        /// middle because it is the bridge — a shape you scan rather than
+        /// read, and a way into any day.
+        case timeline, calendar, charts
         var id: String { rawValue }
         var label: String {
             switch self {
             case .timeline: "Timeline"
+            case .calendar: "Calendar"
             case .charts:   "Charts"
             }
         }
         var icon: String {
             switch self {
             case .timeline: "list.bullet.indent"
+            case .calendar: "calendar"
             case .charts:   "chart.bar.fill"
             }
         }
@@ -60,6 +66,7 @@ struct JournalTab: View {
 
                 switch lens {
                 case .timeline: JournalTimeline()
+                case .calendar: JournalCalendarView()
                 case .charts:   StatsCards()
                 }
             }
@@ -69,10 +76,60 @@ struct JournalTab: View {
             #if os(macOS)
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             #endif
+            .navigationDestination(for: JournalRoute.self) { JournalRouteDestination(route: $0) }
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
             .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: CompletionYearRoute.self) { CompletionYearView(year: $0.year) }
+        }
+    }
+}
+
+/// Resolves a `JournalRoute` to the thing it names.
+///
+/// **A view with its own queries, rather than a closure inside one lens.** It
+/// used to live in `JournalTimeline`, on the reasoning that that was where the
+/// data was — but a destination is only registered while the view declaring it
+/// is on screen, so adding the calendar lens gave it rows that looked tappable
+/// and did nothing. Registered beside the other destinations on the stack that
+/// owns them, every lens can navigate.
+///
+/// A route carries ids, not objects: `JournalEntry` holds live SwiftData
+/// references and is rebuilt every pass, which makes it the wrong thing to
+/// hand a navigation path.
+private struct JournalRouteDestination: View {
+    let route: JournalRoute
+
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
+    private var games: [Game]
+    @Query(filter: #Predicate<Memory> { $0.deletedAt == nil && $0.game == nil })
+    private var standaloneMemories: [Memory]
+
+    private var memory: Memory? {
+        let all = standaloneMemories + games.flatMap { $0.memories ?? [] }
+        return all.first { $0.id.uuidString == route.id && $0.deletedAt == nil }
+    }
+
+    private var playEntry: JournalEntry? {
+        guard let gameID = route.gameID,
+              let game = games.first(where: { $0.id == gameID })
+        else { return nil }
+        return JournalBuilder.playEntries(for: game).first { $0.id == route.id }
+    }
+
+    var body: some View {
+        if route.isMemory {
+            if let memory {
+                MemoryView(memory: memory)
+            } else {
+                ContentUnavailableView("Gone", systemImage: "questionmark",
+                                       description: Text("This entry no longer exists."))
+            }
+        } else if let playEntry {
+            JournalDayView(entry: playEntry)
+        } else {
+            ContentUnavailableView("Gone", systemImage: "questionmark",
+                                   description: Text("This day no longer has anything in it."))
         }
     }
 }
@@ -90,18 +147,6 @@ struct JournalTimeline: View {
     /// The memory being written or edited. `.some(nil)` means a new one, which
     /// is why this is a double optional rather than a Bool beside a Memory?.
     @State private var editingMemory: Memory??
-
-    private func memory(for route: JournalRoute) -> Memory? {
-        let all = standaloneMemories + games.flatMap { $0.memories ?? [] }
-        return all.first { $0.id.uuidString == route.id && $0.deletedAt == nil }
-    }
-
-    private func playEntry(for route: JournalRoute) -> JournalEntry? {
-        guard let gameID = route.gameID,
-              let game = games.first(where: { $0.id == gameID })
-        else { return nil }
-        return JournalBuilder.playEntries(for: game).first { $0.id == route.id }
-    }
 
     var body: some View {
         // Built once per pass and held in a `let`, the same shape StatsCards
@@ -127,25 +172,6 @@ struct JournalTimeline: View {
         // and it knows that a paused session's editable end is not its stored
         // end, which a note-only sheet would have had to learn again.
         .sheet(item: $editing) { EditSessionSheet(session: $0) }
-        // Resolved here rather than in JournalTab because this is where the
-        // data lives. A route carries ids, not objects — JournalEntry holds
-        // live SwiftData references and is rebuilt every pass, which makes it
-        // the wrong thing to hand a navigation path.
-        .navigationDestination(for: JournalRoute.self) { route in
-            if route.isMemory {
-                if let memory = memory(for: route) {
-                    MemoryView(memory: memory)
-                } else {
-                    ContentUnavailableView("Gone", systemImage: "questionmark",
-                                           description: Text("This entry no longer exists."))
-                }
-            } else if let entry = playEntry(for: route) {
-                JournalDayView(entry: entry)
-            } else {
-                ContentUnavailableView("Gone", systemImage: "questionmark",
-                                       description: Text("This day no longer has anything in it."))
-            }
-        }
         .sheet(isPresented: Binding(
             get: { editingMemory != nil },
             set: { if !$0 { editingMemory = nil } })) {

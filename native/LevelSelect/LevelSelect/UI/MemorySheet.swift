@@ -17,6 +17,10 @@ struct MemorySheet: View {
     let existing: Memory?
     /// Pre-attached when opened from a game.
     var game: Game?
+    /// The day a new memory starts on. Set when it was created by tapping a
+    /// square in the calendar — the date is already answered, so the form
+    /// should not ask again.
+    var initialDate: Date?
 
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
@@ -66,9 +70,10 @@ struct MemorySheet: View {
         }
     }
 
-    init(existing: Memory? = nil, game: Game? = nil) {
+    init(existing: Memory? = nil, game: Game? = nil, initialDate: Date? = nil) {
         self.existing = existing
         self.game = game
+        self.initialDate = initialDate
     }
 
     var body: some View {
@@ -93,12 +98,20 @@ struct MemorySheet: View {
 
                     switch howKnown {
                     case .day:
+                        // **Shown in the calendar it is stored in.** A Memory's
+                        // dates are UTC calendar facts, so a picker left in the
+                        // device's timezone renders UTC midnight on the 5th as
+                        // the 4th — the app showing someone a different day
+                        // from the one it just saved. Tapping the 5th on the
+                        // calendar grid is where that first bit.
                         DatePicker("When", selection: $date, displayedComponents: .date)
+                            .lsMemoryCalendar()
                     case .month, .year:
                         // The same picker, and the app throws away what it was
                         // not told: a month-precision memory keeps the month
                         // and prints only that.
                         DatePicker("Around when", selection: $date, displayedComponents: .date)
+                            .lsMemoryCalendar()
                     case .unsure:
                         TextField("Christmas 1995 or 1996", text: $words)
                         // `verbatim:`, because interpolating an Int into a
@@ -226,7 +239,10 @@ struct MemorySheet: View {
     }
 
     private func load() {
-        guard let existing else { return }
+        guard let existing else {
+            if let initialDate { date = initialDate }
+            return
+        }
         title = existing.title
         body_ = existing.body ?? ""
         kind = existing.kind
@@ -262,5 +278,18 @@ struct MemorySheet: View {
             try? repo.addImage(to: memory, data: data)
         }
         dismiss()
+    }
+}
+
+private extension View {
+    /// Renders a date control in `Memory.calendar` rather than the device's.
+    ///
+    /// Applied per control rather than to the enclosing `Section`: a modifier
+    /// on a Section is applied to each child, which is harmless for
+    /// `environment` but has bitten this app before with presentation
+    /// modifiers — so the habit is to attach to the view that needs it.
+    func lsMemoryCalendar() -> some View {
+        environment(\.calendar, Memory.calendar)
+            .environment(\.timeZone, Memory.calendar.timeZone)
     }
 }
