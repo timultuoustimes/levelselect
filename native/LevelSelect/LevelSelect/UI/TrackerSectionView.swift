@@ -355,8 +355,12 @@ struct TrackerSectionView: View {
                     .disabled(isGenerating)
                 }
 
-                Spacer(minLength: 8)
-
+                // **No Spacer here.** `FlowLayout` places its subviews itself
+                // at a fixed 18pt; a Spacer is not a gap to it but a subview
+                // with a width, so it opened an uneven hole after "Generate
+                // with AI" and left the row stopping short of the trailing
+                // edge. What pushed the menus right in an HStack just makes a
+                // flow layout look broken.
                 Menu {
                     // Suggest Categories is already a button on an empty
                     // tracker, where "what should I even be tracking?" is the

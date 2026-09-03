@@ -637,7 +637,16 @@ struct GameDetailView: View {
     }
 
     private func standardScroll(stageMode: Bool, topInset: CGFloat) -> some View {
-        ScrollView {
+        // **The ground is a SIBLING of the scroll view, not a background on
+        // it.** As `.lsBackground()` — a `.background(…)` — it silently killed
+        // the scroll edge effect, so the bar lost its material and the game's
+        // name sat directly on whatever text was scrolling under it. Behind
+        // the scroll view in a ZStack, the page still stands on the theme and
+        // the scroll view keeps the identity the effect needs.
+        ZStack {
+            LSTheme.ground(tintedBy: ThemePalette.backgroundOverride)
+                .ignoresSafeArea()
+            ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 hero
                 if game.livePlaythroughs.count > 1 {
@@ -657,18 +666,16 @@ struct GameDetailView: View {
             .background(alignment: .top) { scrollingBackdrop(topInset: topInset) }
         }
         .scrollIndicators(.hidden)
-        // The themed ground, UNDER the backdrop rather than instead of it.
-        //
-        // The page had no ground of its own — it leaned on the cover art at
-        // the top and fell through to the system default everywhere below,
-        // which read as plain grey once the app could be light and ignored a
-        // chosen background entirely. The art still owns the top; this is what
-        // the rest of the page stands on.
-        .lsBackground()
         // Soft, not the default `.hard`. See RootView: iOS 26's scroll edge
         // effect draws a crisp line where content meets a bar unless told
         // otherwise, and one screen fading while the rest cut is worse than
         // either done consistently.
+        //
+        // **Before `.lsBackground()`, not after.** `lsBackground` is a
+        // `.background(…)`, and putting it first meant this modifier attached
+        // to the wrapper rather than to the scroll view — so the bar lost its
+        // material entirely and the game's name sat directly on whatever text
+        // was scrolling under it.
         .scrollEdgeEffectStyle(.soft, for: .top)
         // The handoff point is the header card's own title. Below it the name
         // is on screen in full; above it, the bar takes over.
@@ -699,6 +706,7 @@ struct GameDetailView: View {
             } else {
                 withAnimation(.easeInOut(duration: 0.18)) { titleInBar = handedOver }
             }
+        }
         }
     }
 
