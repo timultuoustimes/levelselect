@@ -192,7 +192,12 @@ private struct YearGrid: View {
     let load: [Date: DayLoad]
     let peak: TimeInterval
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
+    /// **Adaptive, not three fixed columns.** Three columns on an iPad is a
+    /// 340pt mini-month — day squares the size of the month view's own cells,
+    /// and a "year at a glance" that scrolls past December. Sizing by the cell
+    /// instead gives 3 columns on a phone and 7 on an iPad, and the whole
+    /// point of the view — a year without scrolling — survives both.
+    private let columns = [GridItem(.adaptive(minimum: 108, maximum: 160), spacing: 14)]
 
     var body: some View {
         LazyVGrid(columns: columns, spacing: 18) {
@@ -305,17 +310,38 @@ struct CalendarMonthView: View {
 
     private var calendar: Calendar { JournalBuilder.calendar }
 
+    /// Everything that happened inside this month.
+    private func entries(in byDay: [Date: [JournalPeriod]]) -> [JournalEntry] {
+        guard let interval = calendar.dateInterval(of: .month, for: month) else { return [] }
+        return byDay
+            .filter { interval.contains($0.key) }
+            .values.flatMap { $0.flatMap(\.entries) }
+    }
+
     var body: some View {
         let periods = JournalBuilder.periods(from: games, standalone: standaloneMemories)
         let byDay = Dictionary(grouping: periods.filter { $0.grain == .day },
                                by: { JournalBuilder.square(for: $0.start, in: $0.calendar) })
 
+        let mine = entries(in: byDay)
+
         ScrollView {
-            MonthGrid(month: month,
-                      calendar: calendar,
-                      periods: byDay,
-                      onCreate: { creatingOn = CreationDay(date: JournalBuilder.memoryDate(for: $0)) })
-                .padding()
+            VStack(spacing: 20) {
+                MonthGrid(month: month,
+                          calendar: calendar,
+                          periods: byDay,
+                          onCreate: { creatingOn = CreationDay(date: JournalBuilder.memoryDate(for: $0)) })
+
+                if !mine.isEmpty {
+                    MonthSummary(entries: mine)
+                }
+            }
+            .padding()
+            // **Capped, not full-bleed.** Seven columns across an iPad is a
+            // 190pt cell — box art blown up past its own resolution, and a
+            // month grid that scrolls. The same 640 the reading views use.
+            .frame(maxWidth: 640)
+            .frame(maxWidth: .infinity)
         }
         .scrollIndicators(.hidden)
         .lsBackground()
@@ -326,6 +352,47 @@ struct CalendarMonthView: View {
         .sheet(item: $creatingOn) { day in
             MemorySheet(initialDate: day.date)
         }
+    }
+}
+
+/// What the month added up to.
+///
+/// **The grid says which days; this says how much.** The year view can only
+/// draw shape and the squares can only say "something happened here", so the
+/// one number neither can give — that August was 41 hours across 19 sessions —
+/// has nowhere else to live. It also means the page below the grid is
+/// information rather than the whitespace it was.
+private struct MonthSummary: View {
+    let entries: [JournalEntry]
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 2)
+
+    private var played: TimeInterval { entries.reduce(0) { $0 + $1.duration } }
+    private var sessions: Int { entries.reduce(0) { $0 + $1.sessions.count } }
+    private var finishes: Int { entries.reduce(0) { $0 + $1.finishes.count } }
+    private var memories: Int { entries.filter { $0.kind == .memory }.count }
+    /// Games, not entries — the same game on nine days is one game.
+    private var games: Int {
+        Set(entries.compactMap { $0.game?.id }).count
+    }
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 10) {
+            LSStatTile(icon: "clock.fill", number: Format.duration(played), label: "Played")
+            LSStatTile(icon: "timer", number: "\(sessions)", label: sessions == 1 ? "Session" : "Sessions")
+            LSStatTile(icon: "gamecontroller.fill", number: "\(games)", label: games == 1 ? "Game" : "Games")
+            // The fourth tile is whichever of the two the month actually has.
+            // A row of zeroes is not a summary, and a month with a memory in it
+            // and nothing beaten should say so.
+            if finishes > 0 || memories == 0 {
+                LSStatTile(icon: "flag.checkered", number: "\(finishes)",
+                           label: finishes == 1 ? "Finish" : "Finishes")
+            } else {
+                LSStatTile(icon: "sparkles", number: "\(memories)",
+                           label: memories == 1 ? "Memory" : "Memories")
+            }
+        }
+        .lsCard()
     }
 }
 
@@ -401,6 +468,13 @@ private struct MonthGrid: View {
 }
 
 private struct DayCell: View {
+    /// **Portrait, because cover art is.** A square cell centre-cropped every
+    /// cover in the month — Tim, on the month getting its own page: *"the tap
+    /// into the month view could do the full game art on the days, instead of
+    /// it being so compact."* 3:4 is the shape box art has always been, so the
+    /// art stops being cropped rather than merely getting bigger.
+    static let shape: CGFloat = 3.0 / 4.0
+
     let day: Date
     let calendar: Calendar
     let entries: [JournalEntry]
@@ -437,18 +511,18 @@ private struct DayCell: View {
     }
 
     private var empty: some View {
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: 10)
             .fill(LSTheme.cardFill)
-            .frame(height: 46)
+            .aspectRatio(DayCell.shape, contentMode: .fit)
             .overlay {
                 Image(systemName: "plus")
-                    .font(.caption)
+                    .font(.body)
                     .foregroundStyle(.tertiary)
             }
             .overlay(alignment: .topLeading) { number.padding(3) }
             .overlay {
                 if isToday {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(LSTheme.accent, lineWidth: 1.5)
                 }
             }
@@ -460,9 +534,9 @@ private struct DayCell: View {
     /// other. Clipping the composed cell — rather than asking every layer to
     /// behave — is the version that cannot come apart when a layer is added.
     private var filled: some View {
-        RoundedRectangle(cornerRadius: 8)
+        RoundedRectangle(cornerRadius: 10)
             .fill(LSTheme.elevatedFill)
-            .frame(height: 46)
+            .aspectRatio(DayCell.shape, contentMode: .fit)
             .overlay {
                 if let art {
                     if let data = art.data {
@@ -489,30 +563,30 @@ private struct DayCell: View {
                 // not in a game art frame."*
                 if art == nil, let kind = entries.first?.kind {
                     Image(systemName: kind.icon)
-                        .font(.caption)
+                        .font(.body)
                         .foregroundStyle(LSTheme.accent)
                 }
             }
             .overlay(alignment: .topLeading) {
                 Text("\(calendar.component(.day, from: day))")
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(art == nil ? AnyShapeStyle(.secondary)
                                                 : AnyShapeStyle(Color.white))
-                    .padding(3)
+                    .padding(5)
             }
             .overlay(alignment: .bottomTrailing) {
                 if entries.count > 1 {
                     Text("\(entries.count)")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(art == nil ? AnyShapeStyle(.secondary)
                                                     : AnyShapeStyle(Color.white))
-                        .padding(2)
+                        .padding(4)
                 }
             }
-            .clipShape(.rect(cornerRadius: 8))
+            .clipShape(.rect(cornerRadius: 10))
             .overlay {
                 if isToday {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(LSTheme.accent, lineWidth: 1.5)
                 }
             }

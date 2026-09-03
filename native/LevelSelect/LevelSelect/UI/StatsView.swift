@@ -343,24 +343,7 @@ struct StatsCards: View {
     }
 
     private func statTile(_ icon: String, _ number: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption)
-                .foregroundStyle(LSTheme.accent)
-            Text(number)
-                .font(.title2.bold().monospacedDigit())
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background(LSTheme.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(label): \(number)")
+        LSStatTile(icon: icon, number: number, label: label)
     }
 
     private func recentCard(sessions: [Session]) -> some View {
@@ -1344,5 +1327,38 @@ extension Array {
     /// column back.
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
+    }
+}
+
+/// One number with its icon and caption.
+///
+/// Lifted out of `StatsCards` when the month page needed the same four tiles:
+/// a summary that looked *almost* like the Charts lens would read as a second
+/// design rather than the same one, and the two would drift the first time
+/// either was touched.
+struct LSStatTile: View {
+    let icon: String
+    let number: String
+    let label: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(LSTheme.accent)
+            Text(number)
+                .font(.title2.bold().monospacedDigit())
+                .minimumScaleFactor(0.6)
+                .lineLimit(1)
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(LSTheme.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(number)")
     }
 }
