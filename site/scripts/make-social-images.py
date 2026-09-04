@@ -42,7 +42,10 @@ MUTED       = (153, 144, 184)
 #
 # The iPad shot is a game page with its tracker open, which keeps the pairing
 # honest: the unfurl shows where you land and where you end up.
-PHONE_SHOT = "iphone-33-home-profile.webp"
+# Build 36 renamed the fourth tab and gave the app the Journal, so the
+# build-33 capture showed a tab bar that no longer exists — on the one image
+# that represents the app everywhere it is linked.
+PHONE_SHOT = "iphone-36-home-profile.webp"
 IPAD_SHOT  = "ipad-01-split-tracker.webp"
 
 PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
