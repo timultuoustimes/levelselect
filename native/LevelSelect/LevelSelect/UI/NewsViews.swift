@@ -18,7 +18,14 @@ struct WhatsNewView: View {
 
     var body: some View {
         SettingsPage(title: "What's New",
-                     icon: "sparkles",
+                     // **Not `sparkles`.** That glyph means "the AI made this"
+                     // everywhere else in the app — Generate, the generating
+                     // screen, the tracker section — so putting it on the
+                     // changelog quietly claimed the release notes were
+                     // generated. Tim spotted it the day the screen went live.
+                     // A newspaper is what this actually is: what was added,
+                     // what got better, what was broken and isn't now.
+                     icon: "newspaper.fill",
                      blurb: "Every build, newest first — what was added, what got better, and what was broken and isn't now.") {
             switch state {
             case nil:
@@ -100,7 +107,11 @@ struct WhatsComingView: View {
 
     var body: some View {
         SettingsPage(title: "What's Coming",
-                     icon: "map",
+                     // A map is a PLACE; this screen is a DIRECTION, which its
+                     // own blurb says in the next line. The path runs from a
+                     // point you are standing on to an arrow pointing away
+                     // from it.
+                     icon: "point.bottomleft.forward.to.point.topright.scurvepath",
                      blurb: "A direction, not a set of promises — what's being worked on now, what's next, and what's being explored.") {
             switch state {
             case nil:
@@ -152,7 +163,7 @@ struct WhatsComingView: View {
         }
 
         Section {
-            SettingsRow(title: "What's New", icon: "sparkles") { WhatsNewView() }
+            SettingsRow(title: "What's New", icon: "newspaper.fill") { WhatsNewView() }
         } footer: {
             Text("For what's already shipped.")
         }

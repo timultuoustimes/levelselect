@@ -129,10 +129,10 @@ struct SettingsView: View {
 
                 // Nothing in this group leaves the app any more.
                 Section {
-                    SettingsRow(title: "What's New", icon: "sparkles") {
+                    SettingsRow(title: "What's New", icon: "newspaper.fill") {
                         WhatsNewView()
                     }
-                    SettingsRow(title: "What's Coming", icon: "map") {
+                    SettingsRow(title: "What's Coming", icon: "point.bottomleft.forward.to.point.topright.scurvepath") {
                         WhatsComingView()
                     }
                     SettingsRow(title: "Send feedback", icon: "paperplane") {
