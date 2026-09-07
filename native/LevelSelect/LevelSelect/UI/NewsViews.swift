@@ -23,9 +23,16 @@ struct WhatsNewView: View {
                      // screen, the tracker section — so putting it on the
                      // changelog quietly claimed the release notes were
                      // generated. Tim spotted it the day the screen went live.
-                     // A newspaper is what this actually is: what was added,
-                     // what got better, what was broken and isn't now.
-                     icon: "newspaper.fill",
+                     //
+                     // **And not `newspaper` either, deliberately.** A
+                     // newspaper is the right glyph for game news, which is on
+                     // the roadmap under Exploring ("a reader for releases and
+                     // news you choose to follow"). Spending it here would
+                     // leave that screen borrowing something already taken.
+                     // This is a page with an info mark, which is what a
+                     // changelog is — and an outline, like every other row in
+                     // this list.
+                     icon: "info.circle.text.page",
                      blurb: "Every build, newest first — what was added, what got better, and what was broken and isn't now.") {
             switch state {
             case nil:
@@ -163,7 +170,7 @@ struct WhatsComingView: View {
         }
 
         Section {
-            SettingsRow(title: "What's New", icon: "newspaper.fill") { WhatsNewView() }
+            SettingsRow(title: "What's New", icon: "info.circle.text.page") { WhatsNewView() }
         } footer: {
             Text("For what's already shipped.")
         }
