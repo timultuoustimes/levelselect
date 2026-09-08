@@ -112,6 +112,16 @@ struct ColorEditor: View {
     @State private var saturation: Double = 0.7
     @State private var brightness: Double = 0.9
     @State private var loaded = false
+    /// The palette pair the accent currently IS, when it is one. The editor
+    /// derives brightness from hue and saturation, and a pair is an authored
+    /// hex that derivation cannot reproduce — so while a pair is chosen the
+    /// pair is the color, and the plane only takes over once it is moved.
+    @State private var chosenPair: LSPalette.Pair?
+    /// The plane's position as last LOADED from a stored color. The sync
+    /// that follows a load is not a choice, so `push` ignores it — opening
+    /// the editor and leaving used to re-derive the stored accent and write
+    /// it back, which is how a pair's hex turned into a nearby custom one.
+    @State private var loadedHSB: [Double] = []
     @State private var hexDraft = ""
     @State private var hexBad = false
 
@@ -499,9 +509,16 @@ struct ColorEditor: View {
                     // the preview writes through so you can see a color on
                     // the real app behind the sheet.
                     Button("Cancel") {
-                        // Everything the sheet touched, not just the last one.
+                        // Everything the sheet touched, not just the last one —
+                        // and only what it touched: writing an untouched
+                        // target back stored its built-in value as a custom
+                        // one, and four writes in a row are what tore the
+                        // tint off the Settings list behind this sheet.
                         for t in targets {
-                            if let was = originals[t.id] { t.binding.wrappedValue = was }
+                            guard let was = originals[t.id],
+                                  was.hexString() != t.binding.wrappedValue.hexString()
+                            else { continue }
+                            t.binding.wrappedValue = was
                         }
                         dismiss()
                     }
@@ -515,6 +532,7 @@ struct ColorEditor: View {
                 loaded = true
                 for t in targets { originals[t.id] = t.binding.wrappedValue }
                 setFromColor(target.binding.wrappedValue)
+                chosenPair = pairBehind(target)
             }
             // Switching target loads ITS color without writing — otherwise
             // the sliders' current position would immediately overwrite the
@@ -522,6 +540,7 @@ struct ColorEditor: View {
             .onChange(of: selectedID) { _, _ in
                 loading = true
                 setFromColor(target.binding.wrappedValue)
+                chosenPair = pairBehind(target)
                 loading = false
                 // The typed hex belongs to the target it was typed for.
                 //
@@ -582,12 +601,19 @@ struct ColorEditor: View {
     /// answer linking exists to compute.
     private func choosePalette(_ pair: LSPalette.Pair) {
         if linkedMode { linked = false }
+        chosenPair = pair
         loading = true
         for t in targets where t.id.hasPrefix("accent-") {
             t.binding.wrappedValue = pair.accentColor
         }
         setFromColor(pair.accentColor)
         loading = false
+    }
+
+    /// The pair a target's stored color belongs to, for an accent target.
+    private func pairBehind(_ t: ColorTarget) -> LSPalette.Pair? {
+        guard t.id.hasPrefix("accent-") else { return nil }
+        return LSPalette.pair(matching: t.binding.wrappedValue.hexString())
     }
 
     @ViewBuilder
@@ -664,7 +690,7 @@ struct ColorEditor: View {
         // edit on each; an accent has a value per appearance.
         let accent = target.specimenName == nil ? previewAccent(dark: dark) : current
         let ground = ThemePalette.groundBase(dark: dark)
-        let ratio = ThemePalette.contrast(accent, ground)
+        let ratio = ThemePalette.contrast(ink(for: accent, dark: dark), ground)
         let softened = linkedMode && linkedKind == .accent
             ? derived(dark: dark).saturation < derived(dark: dark).requested - 0.001
             : false
@@ -851,6 +877,7 @@ struct ColorEditor: View {
             linkedSaturation.wrappedValue = v.s
         } else {
             setFromColor(c)
+            loadedHSB = []   // typed, not loaded: this one is a choice
             push()
         }
     }
@@ -1083,9 +1110,18 @@ struct ColorEditor: View {
     /// field, "keep this color", and the contrast readout — all of which
     /// reported the unlinked state regardless of mode before.
     private var current: Color {
-        linkedMode
+        if !editingGround, let pair = chosenPair { return pair.accentColor }
+        return linkedMode
             ? resolved(hue: linkedHue.wrappedValue, saturation: linkedSaturation.wrappedValue)
             : resolved(hue: hue, saturation: saturation)
+    }
+
+    /// What is actually read on a ground: a pair's ink on the light ground is
+    /// its step, not the accent — the accent is a fill there. Everything else
+    /// is read as itself.
+    private func ink(for accent: Color, dark: Bool) -> Color {
+        if dark { return accent }
+        return LSPalette.pair(matching: accent.hexString())?.stepColor ?? accent
     }
 
     private var hueTrack: LinearGradient {
@@ -1115,7 +1151,8 @@ struct ColorEditor: View {
     /// Nil when this target is not ink and has nothing to fail against.
     private func ratio(_ candidate: Color) -> Double? {
         guard let ground = target.contrastGround else { return nil }
-        return ThemePalette.contrast(candidate, ground)
+        let onLight = target.id.hasSuffix("-light")
+        return ThemePalette.contrast(ink(for: candidate, dark: !onLight), ground)
     }
 
     /// 4.5:1 — the floor for normal text. Not 3:1: the accent is used at
@@ -1129,7 +1166,13 @@ struct ColorEditor: View {
     }
 
     private func push() {
-        guard !loading else { return }
+        guard !loading, loadedHSB != [hue, saturation, brightness] else { return }
+        // Moving the plane off the pair's own hue and saturation is choosing
+        // something else; the sync right after a palette tap is not.
+        if let pair = chosenPair {
+            let v = ColorEditor.hsb(pair.accentColor)
+            if abs(v.h - hue) > 0.003 || abs(v.s - saturation) > 0.003 { chosenPair = nil }
+        }
         // **A failing color is never committed.**
         //
         // Build 37: an accent has to be legible on the ground of the
@@ -1164,6 +1207,7 @@ struct ColorEditor: View {
     private func setFromColor(_ c: Color) {
         let v = ColorEditor.hsb(c)
         hue = v.h; saturation = v.s; brightness = v.b
+        loadedHSB = [v.h, v.s, v.b]
     }
 
     static func hsb(_ color: Color) -> (h: Double, s: Double, b: Double) {

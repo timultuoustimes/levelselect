@@ -112,8 +112,27 @@ struct SettingsRow<Destination: View>: View {
                     Text(value)
                 }
             } label: {
-                Label(title, systemImage: icon)
+                SettingsRowLabel(title: title, icon: icon)
             }
+        }
+    }
+}
+
+/// The row's label with its icon painted in the accent OUTRIGHT, not left to
+/// the inherited tint. The list's cells are UIKit's, and a burst of theme
+/// writes while a color sheet was closing left some of them on the app's
+/// default tint — torch icons beside a blue Done, two rows apart. A color
+/// the row sets itself cannot be dropped by a cell.
+struct SettingsRowLabel: View {
+    let title: String
+    let icon: String
+
+    var body: some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: icon)
+                .foregroundStyle(LSTheme.accent)
         }
     }
 }
@@ -234,7 +253,7 @@ struct ExternalSettingsRow: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)
             } label: {
-                Label(title, systemImage: icon)
+                SettingsRowLabel(title: title, icon: icon)
             }
         }
     }
