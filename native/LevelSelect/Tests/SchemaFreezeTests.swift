@@ -71,10 +71,11 @@ struct SchemaFreezeTests {
         #expect(LevelSelectSchemaV2.versionIdentifier == Schema.Version(2, 0, 0))
         #expect(LevelSelectSchemaV3.versionIdentifier == Schema.Version(3, 0, 0))
         #expect(LevelSelectSchemaV5.versionIdentifier == Schema.Version(5, 0, 0))
-        // Four, not five: V4 added per-platform release dates as a FIELD on
+        #expect(LevelSelectSchemaV6.versionIdentifier == Schema.Version(6, 0, 0))
+        // Five, not six: V4 added per-platform release dates as a FIELD on
         // Game and no new model, and a VersionedSchema lists models. The gap
         // in the numbering is the record being accurate rather than tidy.
-        #expect(LevelSelectMigrationPlan.schemas.count == 4,
+        #expect(LevelSelectMigrationPlan.schemas.count == 5,
                 "Adding a version? Record it here too — this list is the written history of the shape.")
     }
 
@@ -148,6 +149,13 @@ struct SchemaFreezeTests {
             // added 2026-08-27 build 31 (spans — "Dec 2025 → Jan 2026").
             // Seed-and-promote before any build that writes them ships.
             "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
+            // Console — new in V6 (build 39), the model that turns the
+            // systems shelf from a grouping into things you own. Keyed by
+            // PlatformKey.canonical so two spellings are one console.
+            // `declinedOwnership` is how "no, I don't own the hardware" is
+            // remembered, so the question is asked once; without it the app
+            // would ask again on the next game forever.
+            "Console: acquiredAt,createdAt,declinedOwnership,deletedAt,id,images,legacyID,notes,ownership,platform,revision,updatedAt,userID,variant",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             // backdropURLString/logoURLString/images added 2026-08-28 build 32
             // (artwork roles + user-added images). platformReleasesData added
@@ -163,7 +171,11 @@ struct SchemaFreezeTests {
             // a memory instead of a game. Reused rather than given its own
             // model precisely so the deployed CKAsset fields are not
             // duplicated — see GameImage.memory.
-            "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,memory,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
+            // console added 2026-09-08 build 39 (V6): a picture can belong to
+            // a console — the display case is a thing people photograph.
+            // Ahead of the feature, so the CKAsset fields are not promoted
+            // twice. See Console.images.
+            "GameImage: addedAt,byteCount,caption,console,createdAt,data,deletedAt,game,id,legacyID,memory,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
             // exploredAt added 2026-09-08 build 38: the state a pin never had.
@@ -232,12 +244,12 @@ struct SchemaFreezeTests {
             // id added 2026-09-07 build 37: a SYNCED tie-break for the singleton
             // fold. Without it two devices could keep different duplicate rows
             // and delete each other's winner.
-            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,expandedSectionsRaw,gamePageLayoutRaw,homeLayoutRaw,homeSystemsRaw,id,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,updatedAt",
+            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,dismissedConsolesRaw,expandedSectionsRaw,gamePageLayoutRaw,homeLayoutRaw,homeSystemsRaw,id,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,selectedVariantUpdatedAt,updatedAt,userID",
         ]
-        #expect(Self.fingerprint(LevelSelectSchemaV5.self) == expected,
-                "Schema V5 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
+        #expect(Self.fingerprint(LevelSelectSchemaV6.self) == expected,
+                "Schema V6 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
     }
 }

@@ -482,6 +482,35 @@ enum CloudKitSchemaSeeder {
         player.useHandleAsName = true                 // build 33, second deploy
         context.insert(player)
 
+        // --- Console (build 39, Schema V6) ---
+        //
+        // Every field is written, including the ones a real console usually
+        // leaves nil: CloudKit creates a field the first time it SEES a value,
+        // so a property never populated here has no column in Production and
+        // fails to sync forever after. `variant`, `acquiredAt`, `notes` and
+        // `declinedOwnership` are exactly the optional-in-practice fields that
+        // would be missed — and `declinedOwnership` is the one that would hurt
+        // most, since it is how the app remembers that you said no.
+        let console = Console(platform: marker, ownership: [Ownership.physical.rawValue])
+        console.userID = UUID()
+        console.deletedAt = now
+        console.legacyID = marker
+        console.declinedOwnership = [Ownership.emulated.rawValue]
+        console.variant = marker
+        console.acquiredAt = now
+        console.notes = marker
+        context.insert(console)
+
+        // The `console` side of GameImage (V6). The seeded picture below is
+        // attached to the seeded console so the reference field materializes;
+        // both are removed whole by purge.
+        let consolePhoto = GameImage(role: .gallery, data: Self.smallSeedImage)
+        consolePhoto.legacyID = marker
+        consolePhoto.userID = UUID()
+        consolePhoto.deletedAt = now
+        consolePhoto.console = console
+        context.insert(consolePhoto)
+
         // --- Profile (no soft-delete field; purge removes it) ---
         let profile = Profile(appleUserIdentifier: marker, email: marker, displayName: marker)
         profile.appleUserIdentifier = marker
@@ -514,6 +543,7 @@ enum CloudKitSchemaSeeder {
             // choice is the same trap as the accent.
             if existingTheme.defaultMergeModeRaw == nil { existingTheme.defaultMergeModeRaw = marker }
             if existingTheme.overlappingTimerPolicyRaw == nil { existingTheme.overlappingTimerPolicyRaw = marker }
+            if existingTheme.dismissedConsolesRaw == nil { existingTheme.dismissedConsolesRaw = marker }
             if existingTheme.platformIconVariantsData == nil { existingTheme.platformIconVariantsData = stamp }
             if existingTheme.dekuWishlistURLString == nil { existingTheme.dekuWishlistURLString = marker }
             if existingTheme.starNamesData == nil { existingTheme.starNamesData = stamp }
@@ -554,6 +584,7 @@ enum CloudKitSchemaSeeder {
             theme.overlappingTimerPolicyRaw = marker     // V2
             theme.platformIconVariantsData = stamp       // V2
             theme.dekuWishlistURLString = marker         // V2
+            theme.dismissedConsolesRaw = marker          // build 39, V6
             theme.starNamesData = stamp                  // build 31
             theme.backdropIntensityRaw = marker           // build 32
             theme.gamePageLayoutRaw = marker              // build 33
@@ -609,6 +640,7 @@ enum CloudKitSchemaSeeder {
         purgeAll(EarnedBadge.self) { $0.legacyID == marker }
         purgeAll(GameImage.self) { $0.legacyID == marker }
         purgeAll(Memory.self) { $0.legacyID == marker }
+        purgeAll(Console.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(PlayerProfile.self) { $0.displayName == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
@@ -623,6 +655,7 @@ enum CloudKitSchemaSeeder {
             if theme.statusColorsData == Data("{}".utf8) {
                 theme.statusColorsData = nil
             }
+            if theme.dismissedConsolesRaw == marker { theme.dismissedConsolesRaw = nil }
             if theme.defaultMergeModeRaw == marker { theme.defaultMergeModeRaw = nil }
             if theme.overlappingTimerPolicyRaw == marker { theme.overlappingTimerPolicyRaw = nil }
             if theme.platformIconVariantsData == Data("{}".utf8) { theme.platformIconVariantsData = nil }

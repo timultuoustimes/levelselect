@@ -102,6 +102,32 @@ enum LevelSelectSchemaV5: VersionedSchema {
     }
 }
 
+/// V6 (2026-09-08) — the consoles become records.
+///
+/// One new model, `Console`, plus the `console` side of `GameImage`. Additive
+/// like everything before it, for the same unbreakable reason.
+///
+/// V5's own note said hardware was "a `platform` string rather than an entity
+/// — so 'consoles you own' can later be derived from acquisition events
+/// without this promote having to guess what that model should look like."
+/// This is that later, and it did not have to guess: the design came out of
+/// Tim's four photographs of game rooms on 08-31 and was written down before
+/// a line of it was built. See `Console`.
+///
+/// `GameImage.console` ships AHEAD of the feature that uses it, the way
+/// `Game.wikidataID` did in build 37: the display case is a thing people
+/// photograph, and an unused optional relation costs nothing where a second
+/// promote cycle costs a seed, a diff, a deploy, a purge and a restore.
+enum LevelSelectSchemaV6: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(6, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        LevelSelectSchemaV5.models + [
+            Console.self,
+        ]
+    }
+}
+
 /// Deliberately NO `SchemaMigrationPlan`.
 ///
 /// A staged plan crashed every existing library on first launch:
@@ -127,7 +153,8 @@ enum LevelSelectSchemaV5: VersionedSchema {
 enum LevelSelectMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [LevelSelectSchemaV1.self, LevelSelectSchemaV2.self,
-         LevelSelectSchemaV3.self, LevelSelectSchemaV5.self]
+         LevelSelectSchemaV3.self, LevelSelectSchemaV5.self,
+         LevelSelectSchemaV6.self]
     }
 }
 
@@ -164,7 +191,7 @@ enum LevelSelectStore {
 
     @MainActor
     static func makeContainer(inMemory: Bool = false, demo: Bool = false) -> ModelContainer {
-        let schema = Schema(versionedSchema: LevelSelectSchemaV5.self)
+        let schema = Schema(versionedSchema: LevelSelectSchemaV6.self)
         // Never use CloudKit under XCTest (the app is the test host) or in-memory.
         let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let memory = inMemory || underTest

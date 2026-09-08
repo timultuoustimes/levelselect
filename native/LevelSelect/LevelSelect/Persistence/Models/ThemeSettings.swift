@@ -154,6 +154,19 @@ final class ThemeSettings {
     /// one he called "personal favorite".
     var homeSystemsRaw: String?
 
+    /// Consoles you have said you do not want a record for — canonical
+    /// platform names, comma-separated. Build 39, Schema V6.
+    ///
+    /// **Why a permanent list rather than a tombstone.** Consoles are created
+    /// for you from the games you add, so "I deleted this one" has to outlive
+    /// the deletion or the next pass over your library brings it straight
+    /// back. A soft-deleted record would do that until Recently Deleted
+    /// purged it thirty days later, and then the Dreamcast you removed would
+    /// quietly reappear — precisely the sort of wrongness the asking rule
+    /// exists to avoid. Deleting a console writes its name here; adding one
+    /// by hand takes it out again.
+    var dismissedConsolesRaw: String?
+
     /// **Which game-page sections open by default, library-wide.**
     ///
     /// Comma-joined `GamePageSection` raw values; nil means the built-in set.

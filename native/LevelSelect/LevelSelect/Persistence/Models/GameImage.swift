@@ -64,6 +64,13 @@ final class GameImage {
     /// doing that twice is worth more than a tidy model name.
     var memory: Memory?
 
+    /// The console this picture belongs to, when it belongs to one. Schema V6.
+    ///
+    /// Same bargain as `memory`: a photograph of the hardware costs no new
+    /// binary field, because the asset fields on this record are already
+    /// deployed. See `Console.images`.
+    var console: Console?
+
     init(id: UUID = UUID(), role: ArtworkRole = .gallery, data: Data? = nil) {
         self.id = id
         self.createdAt = .now

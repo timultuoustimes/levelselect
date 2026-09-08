@@ -876,52 +876,11 @@ enum PlatformShort {
     /// widget palette's caches.
     nonisolated(unsafe) static var displayOverrides: [String: String] = [:]
 
-    /// The app's own short name, before the user has a say. Pure, so the
-    /// folding can be tested without a store or a running app.
-    static func builtinName(_ p: String) -> String {
-        switch p {
-        case "PC (Microsoft Windows)": "PC"
-        case "Nintendo Switch": "Switch"
-        case "Nintendo Switch 2": "Switch 2"
-        case "PlayStation 5": "PS5"
-        case "PlayStation 4": "PS4"
-        case "PlayStation 3": "PS3"
-        case "PlayStation 2": "PS2"
-        // IGDB calls the original console simply "PlayStation"; PS1 is
-        // clearer beside PS2/PS3 and is what everyone says anyway.
-        case "PlayStation": "PS1"
-        case "PlayStation Portable": "PSP"
-        case "PlayStation Vita", "PlayStation Vita (PS Vita)": "Vita"
-        case "Xbox Series X|S", "Xbox Series X/S", "Xbox Series X", "Xbox Series": "Xbox Series"
-        case "Xbox One": "Xbox One"
-        case "Xbox 360": "Xbox 360"
-        case "Nintendo 3DS", "New Nintendo 3DS": "3DS"
-        case "Nintendo DS", "Nintendo DSi": "DS"
-        case "Wii U": "Wii U"
-        case "Nintendo Wii", "Wii": "Wii"
-        case "Super Nintendo Entertainment System", "SNES", "Super NES": "SNES"
-        case "Nintendo Entertainment System", "NES": "NES"
-        case "Family Computer", "Famicom", "Family Computer Disk System": "Famicom"
-        case "Super Famicom": "Super Famicom"
-        case "Nintendo 64": "N64"
-        case "Nintendo GameCube", "GameCube": "GameCube"
-        case "Game Boy Advance": "GBA"
-        case "Game Boy Color": "GBC"
-        case "Sega Mega Drive/Genesis", "Sega Genesis", "Genesis", "Mega Drive": "Genesis"
-        case "Sega Master System/Mark III", "Sega Master System": "Master System"
-        case "Sega Dreamcast", "Dreamcast": "Dreamcast"
-        case "Sega Saturn": "Saturn"
-        case "Sega Game Gear", "Game Gear": "Game Gear"
-        // Folded together so the Sega CD / Mega-CD choice has one console to
-        // apply to rather than two half-shelves. The 32X stays on its own —
-        // it is a different device, not another word for this one.
-        case "Sega Mega-CD", "Sega CD", "Mega-CD": "Sega CD"
-        case "Sega 32X": p
-        case "TurboGrafx-16/PC Engine", "TurboGrafx-16": "TurboGrafx-16"
-        case "Other", "": "Other"
-        default: p
-        }
-    }
+    /// The app's own short name, before the user has a say.
+    ///
+    /// The fold itself lives in `PlatformKey` (Domain) since build 39, because
+    /// the console record is keyed by it and the store cannot reach `UI`.
+    static func builtinName(_ p: String) -> String { PlatformKey.canonical(p) }
 
     /// The systems present across these games' platform lists, one entry per
     /// name the user actually sees.
