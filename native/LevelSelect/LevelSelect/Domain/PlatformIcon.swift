@@ -176,11 +176,71 @@ struct PlatformMenuIcon: View {
 /// This is deliberately NOT `PlatformShort.rank`, which is a taste heuristic
 /// for deciding which platform LABELS a game and ranks emulators last. Two
 /// different questions; two different tables.
+/// Who made it. Keyed by the icon slug, the way `PlatformEra` is, so a
+/// platform can never have art without a maker — `PlatformEraTests` holds the
+/// lists together.
+///
+/// **This exists so a list of consoles can be ordered by something other than
+/// an opinion.** Any hand-written order is a claim about what matters most,
+/// and the app's was a claim about its author: newest Nintendo first, because
+/// that is what he plays. Tim, 2026-09-08: *"I think the list when adding
+/// consoles this way should be sorted alphabetically by company, then by
+/// release date. That way it's not opinionated in any way… this list starts
+/// with switch 2."*
+///
+/// The entries that had no maker get their own name rather than a bucket at
+/// the end, because "everything else, last" is another opinion. A PC is a PC.
+enum PlatformMaker {
+    static func of(_ platform: String) -> String? {
+        guard let asset = PlatformIcon.assetName(platform) else { return nil }
+        return makers[String(asset.dropFirst("platform-".count))]
+    }
+
+    static let makers: [String: String] = [
+        "nes": "Nintendo", "snes": "Nintendo", "n64": "Nintendo", "gamecube": "Nintendo",
+        "wii": "Nintendo", "wiiu": "Nintendo", "switch": "Nintendo", "switch2": "Nintendo",
+        "gameboy": "Nintendo", "gbc": "Nintendo", "gba": "Nintendo", "3ds": "Nintendo",
+        "ds": "Nintendo", "famicom": "Nintendo", "superfamicom": "Nintendo",
+        "famicom-disk": "Nintendo", "virtualboy": "Nintendo", "64dd": "Nintendo",
+        "ps1": "Sony", "ps2": "Sony", "ps3": "Sony", "ps4": "Sony", "ps5": "Sony",
+        "vita": "Sony", "psp": "Sony",
+        "xbox": "Microsoft", "xbox360": "Microsoft", "xbox-series": "Microsoft",
+        "genesis": "Sega", "32x": "Sega", "dreamcast": "Sega", "saturn": "Sega",
+        "mastersystem": "Sega", "gamegear": "Sega",
+        "turbografx16": "NEC",
+        "steamdeck": "Valve", "steammachine": "Valve",
+        "mac": "Apple", "iphone": "Apple", "ipad": "Apple",
+        "android": "Google",
+        // Not companies, and not pretending to be — a PC is a PC, and these
+        // sort among the makers rather than into an "other" bin that would
+        // put them last on somebody's say-so.
+        "pc": "PC", "linux": "Linux", "recalbox": "Recalbox",
+    ]
+}
+
 enum PlatformEra {
     static func releaseYear(_ platform: String) -> Int? {
+        // A console that BORROWS another's art would otherwise borrow its
+        // year — see `sharedArtYears`.
+        if let own = sharedArtYears[PlatformKey.canonical(platform)] { return own }
         guard let asset = PlatformIcon.assetName(platform) else { return nil }
         return years[String(asset.dropFirst("platform-".count))]
     }
+
+    /// **Consoles with no art of their own, and a year that is their own.**
+    ///
+    /// The table below is keyed by icon slug, which is what keeps art and
+    /// years honest with each other — but it means two consoles sharing one
+    /// icon share its year. The Xbox One has no render, so it draws the 2001
+    /// Xbox and, until this existed, sorted as a 2001 console: in a list
+    /// ordered by release it landed ahead of the Xbox 360. Found sorting the
+    /// console picker by maker and date, 2026-09-08.
+    ///
+    /// Keyed by the canonical platform NAME rather than the slug, because the
+    /// whole point is to say something the slug cannot.
+    static let sharedArtYears: [String: Int] = [
+        "Xbox One": 2013,
+    ]
 
     /// Keyed by the icon slug, so a platform can never have art without a year
     /// or a year without art — `PlatformEraTests` holds the two lists together.

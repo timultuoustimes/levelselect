@@ -190,10 +190,22 @@ struct MemorySheet: View {
                             // The words are the user's, always. The stored
                             // months are northern-hemisphere and never shown —
                             // see `Memory.seasonInterval`.
-                            TextField("Summer 1998", text: $words)
+                            //
+                            // **The example takes its year from the picker
+                            // above, not from a year somebody once had.** A
+                            // placeholder reading "Summer 1998" teaches the
+                            // shape and, to anyone whose 1998 was nothing in
+                            // particular, reads as the app describing a life
+                            // that is not theirs. Tim, 2026-09-08: *"the
+                            // placeholder text [is] a little directed at me."*
+                            TextField("Summer \(Memory.calendar.component(.year, from: date).description)",
+                                      text: $words)
                         }
                     case .unsure:
-                        TextField("Christmas 1995 or 1996", text: $words)
+                        // The two years are right there in the steppers below;
+                        // the field is for how YOU say it. See the season
+                        // field above for why this stopped naming a Christmas.
+                        TextField("In your own words", text: $words)
                         // `verbatim:`, because interpolating an Int into a
                         // LocalizedStringKey groups it — the stepper read
                         // "From 1,995". A year is a label, not a quantity.

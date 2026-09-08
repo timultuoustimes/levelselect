@@ -221,7 +221,10 @@ struct ConsoleEditor: View {
                     }
 
                     Section {
-                        TextField("My brother's. Bought at a yard sale in 1997.",
+                        // Not a life someone else had — same reason the
+                        // memory sheet's date fields stopped naming a
+                        // Christmas and a year.
+                        TextField("Anything you want to remember",
                                   text: $notes, axis: .vertical)
                             .lineLimit(2...6)
                     } header: {
@@ -367,19 +370,58 @@ struct AddConsoleSheet: View {
             .filter { search.isEmpty || PlatformShort.name($0).localizedCaseInsensitiveContains(search) }
     }
 
+    /// **By maker, alphabetically; inside each, oldest first.**
+    ///
+    /// The catalogue's own order was a hand-written list, and any hand-written
+    /// list is a claim about what matters most — this one opened with Switch 2
+    /// because that is what its author plays. Tim: *"That way it's not
+    /// opinionated in any way."* Alphabetical needs no defending, and
+    /// chronology inside a maker is the shelf a company actually built.
+    private var grouped: [(maker: String, platforms: [String])] {
+        var byMaker: [String: [String]] = [:]
+        for platform in options {
+            // A platform with no maker recorded is named for itself rather
+            // than dropped — the picker must never quietly omit something the
+            // catalogue offers.
+            let maker = PlatformMaker.of(platform) ?? PlatformShort.name(platform)
+            byMaker[maker, default: []].append(platform)
+        }
+        return byMaker
+            .map { maker, platforms in
+                (maker: maker, platforms: platforms.sorted {
+                    let a = PlatformEra.releaseYear($0) ?? Int.max
+                    let b = PlatformEra.releaseYear($1) ?? Int.max
+                    return a == b
+                        ? PlatformShort.name($0) < PlatformShort.name($1)
+                        : a < b
+                })
+            }
+            .sorted { $0.maker.localizedCaseInsensitiveCompare($1.maker) == .orderedAscending }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 10) {
-                    ForEach(options, id: \.self) { platform in
-                        Button {
-                            repo.addConsole(platform: platform)
-                            dismiss()
-                        } label: {
-                            ConsolePlateTile(platform: platform)
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    ForEach(grouped, id: \.maker) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(group.maker)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 4)
+                            LazyVGrid(columns: columns, spacing: 10) {
+                                ForEach(group.platforms, id: \.self) { platform in
+                                    Button {
+                                        repo.addConsole(platform: platform)
+                                        dismiss()
+                                    } label: {
+                                        ConsolePlateTile(platform: platform)
+                                    }
+                                    .buttonStyle(PressableCardStyle())
+                                    .accessibilityLabel(PlatformShort.name(platform))
+                                }
+                            }
                         }
-                        .buttonStyle(PressableCardStyle())
-                        .accessibilityLabel(PlatformShort.name(platform))
                     }
                 }
                 .padding(.horizontal)

@@ -108,4 +108,43 @@ struct PlatformEraTests {
         let noArt = PlatformCatalog.all.filter { PlatformIcon.assetName($0) == nil }
         #expect(noArt == ["itch.io"], Comment(rawValue: "catalogue entries with no icon: \(noArt)"))
     }
+
+    /// A console that borrows another's art must not borrow its year. The
+    /// Xbox One draws the 2001 Xbox because no Xbox One render exists, and in
+    /// a list ordered by release that put it ahead of the Xbox 360.
+    @Test func aConsoleSharingArtKeepsItsOwnYear() {
+        #expect(PlatformIcon.assetName("Xbox One") == PlatformIcon.assetName("Xbox"),
+                "if Xbox One ever gets its own art, this override can go")
+        #expect(PlatformEra.releaseYear("Xbox One") == 2013)
+        #expect(PlatformEra.releaseYear("Xbox") == 2001)
+        #expect(PlatformEra.releaseYear("Xbox 360") == 2005)
+        #expect(PlatformEra.releaseYear("Xbox Series X") == 2020)
+
+        // Which is the order the picker shows them in.
+        let microsoft = PlatformCatalog.all
+            .filter { PlatformMaker.of($0) == "Microsoft" }
+            .sorted { (PlatformEra.releaseYear($0) ?? .max) < (PlatformEra.releaseYear($1) ?? .max) }
+        #expect(microsoft == ["Xbox", "Xbox 360", "Xbox One", "Xbox Series X"])
+    }
+
+    /// Every console the picker offers has a maker, or it would be filed
+    /// under its own name in a list grouped by company.
+    @Test func everythingTheCatalogueOffersHasAMaker() {
+        let noMaker = PlatformCatalog.all.filter { PlatformMaker.of($0) == nil }
+        #expect(noMaker == ["itch.io"], Comment(rawValue: "catalogue entries with no maker: \(noMaker)"))
+    }
+
+    /// Art and makers cover the same set, the way art and years do.
+    @Test func artAndMakersCoverTheSameSetOfPlatforms() throws {
+        let assetsDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LevelSelect/Assets.xcassets")
+        let names = try FileManager.default.contentsOfDirectory(atPath: assetsDir.path)
+        let slugs = Set(names
+            .filter { $0.hasPrefix("platform-") && $0.hasSuffix(".imageset") }
+            .map { $0.replacingOccurrences(of: "platform-", with: "")
+                     .replacingOccurrences(of: ".imageset", with: "") })
+        let missing = slugs.subtracting(PlatformMaker.makers.keys)
+        #expect(missing.isEmpty, Comment(rawValue: "art with no maker: \(missing.sorted())"))
+    }
 }
