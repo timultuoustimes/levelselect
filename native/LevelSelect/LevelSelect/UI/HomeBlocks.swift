@@ -233,6 +233,12 @@ enum HomeShelf {
 /// you as a gamer" first run (build 39) answers it without a game.
 struct EmptySystemsCase: View {
     var onAdd: () -> Void
+    /// **The question can be answered directly now.** This asked "which
+    /// consoles are yours?" and then went to Add Game — the honest compromise
+    /// while a console could only exist by way of a game on it. Build 39 makes
+    /// a console a record you own, so the screen that asks the question offers
+    /// the answer, and a game is the other way in rather than the only one.
+    var onAddConsole: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -241,7 +247,7 @@ struct EmptySystemsCase: View {
                         tint: LSTheme.accent)
             HStack(spacing: 10) {
                 ForEach(["SNES?", "Switch?", "＋"], id: \.self) { word in
-                    Button(action: onAdd) {
+                    Button(action: onAddConsole ?? onAdd) {
                         Text(word)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(LSTheme.accent)
@@ -257,9 +263,11 @@ struct EmptySystemsCase: View {
             }
             .padding(.horizontal)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Which consoles are yours? Add a game to put one here.")
+            .accessibilityLabel("Which consoles are yours? Add one here.")
             .accessibilityAddTraits(.isButton)
-            Text("Which consoles are yours? Add a game on one and it sits here, in your order.")
+            Text(onAddConsole == nil
+                 ? "Which consoles are yours? Add a game on one and it sits here, in your order."
+                 : "Which consoles are yours? Add one, or add a game on it — either way it sits here, in your order.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)

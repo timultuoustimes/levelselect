@@ -127,4 +127,35 @@ struct HomeSystemsTests {
         let ordered = HomeSystems.ordered(raw: "sort=custom,NES,Switch 2", available: folded)
         #expect(ordered.map { PlatformShort.builtinName($0.platform) } == ["NES", "Switch 2"])
     }
+
+    @Test("Order I got them: dated consoles lead in the order they arrived, undated sink to release order")
+    func acquiredSort() {
+        let groups: [HomeSystems.Group] = [
+            ("SNES", 3), ("Switch", 9), ("Genesis", 2), ("N64", 4), ("Dreamcast", 0),
+        ]
+        func day(_ y: Int) -> Date {
+            Calendar(identifier: .gregorian).date(from: DateComponents(year: y, month: 6, day: 1))!
+        }
+        // A childhood SNES, a hand-me-down Genesis years later, a Switch on
+        // launch day. The N64 and Dreamcast were never dated.
+        let acquired = ["SNES": day(1992), "Switch": day(2017), "Genesis": day(1999)]
+
+        let out = HomeSystems.sorted(groups, by: .acquired, acquired: acquired)
+            .map { PlatformShort.builtinName($0.platform) }
+        #expect(out == ["SNES", "Genesis", "Switch", "N64", "Dreamcast"],
+                "dated first in arrival order; undated after, oldest console first")
+
+        // The whole point: it is NOT release order. The Genesis came out
+        // before the SNES and after it into this person's house.
+        let byRelease = HomeSystems.sorted(groups, by: .release)
+            .map { PlatformShort.builtinName($0.platform) }
+        #expect(byRelease.firstIndex(of: "Genesis")! < byRelease.firstIndex(of: "SNES")!)
+        #expect(out.firstIndex(of: "SNES")! < out.firstIndex(of: "Genesis")!)
+
+        // With nothing dated at all it degrades to release order rather than
+        // to whatever the array happened to hold.
+        let none = HomeSystems.sorted(groups, by: .acquired)
+            .map { PlatformShort.builtinName($0.platform) }
+        #expect(none == byRelease)
+    }
 }

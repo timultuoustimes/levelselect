@@ -235,6 +235,18 @@ struct ArrangeSystemsView: View {
 
     @State private var order: [HomeSystems.Group] = []
     @State private var sort: SystemsSort = .custom
+    /// When each console arrived, for the "Order I got them" sort.
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
+
+    /// Keyed by canonical platform name, and only the ones actually dated —
+    /// an entry with no date must not be mistaken for one at the epoch.
+    private var acquiredDates: [String: Date] {
+        var out: [String: Date] = [:]
+        for console in consoles {
+            if let date = console.acquiredAt { out[console.platform] = date }
+        }
+        return out
+    }
 
     private var available: [HomeSystems.Group] {
         var counts: [String: Int] = [:]
@@ -278,7 +290,7 @@ struct ArrangeSystemsView: View {
                 }
                 .onChange(of: sort) { _, new in
                     guard new != .custom else { return }
-                    order = HomeSystems.sorted(order, by: new)
+                    order = HomeSystems.sorted(order, by: new, acquired: acquiredDates)
                     write()
                 }
             } footer: {

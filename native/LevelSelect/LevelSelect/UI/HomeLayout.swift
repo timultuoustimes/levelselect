@@ -241,12 +241,18 @@ struct HomeLayout: Equatable {
 /// them" is deliberately absent: it needs the console record (build 39) and
 /// arrives as a fourth sort with it.
 enum SystemsSort: String, CaseIterable, Identifiable {
-    case custom, release, mostGames, alphabetical
+    case custom, release, acquired, mostGames, alphabetical
     var id: String { rawValue }
     var label: String {
         switch self {
         case .custom:       "Custom"
         case .release:      "Release order (North America)"
+        // **The order they came into your life**, which is a different shelf
+        // from the order they came out — a childhood NES and a hand-me-down
+        // SNES sit where you got them, not where Nintendo shipped them. It
+        // needs the console record to exist, which is why it arrives with it:
+        // `Console.acquiredAt` is the only place that date has ever lived.
+        case .acquired:     "Order I got them"
         case .mostGames:    "Most games"
         case .alphabetical: "A–Z"
         }
@@ -255,6 +261,7 @@ enum SystemsSort: String, CaseIterable, Identifiable {
         switch self {
         case .custom:       "hand.draw"
         case .release:      "calendar"
+        case .acquired:     "shippingbox"
         case .mostGames:    "number"
         case .alphabetical: "textformat.abc"
         }
@@ -348,10 +355,38 @@ enum HomeSystems {
         return result
     }
 
-    static func sorted(_ groups: [Group], by sort: SystemsSort) -> [Group] {
+    /// - Parameter acquired: when each console arrived, keyed by canonical
+    ///   platform name. Only `.acquired` reads it, and only the consoles you
+    ///   have given a date — see that case.
+    static func sorted(_ groups: [Group], by sort: SystemsSort,
+                       acquired: [String: Date] = [:]) -> [Group] {
         switch sort {
         case .custom:
             return groups
+        case .acquired:
+            // **Undated consoles sink rather than sort as ancient.** Treating
+            // a missing date as `.distantPast` would put every console you
+            // have not dated in front of the ones you have, which is the
+            // opposite of what the sort is for. Same shape as `.release`
+            // sinking a platform with no year, and they fall back to release
+            // order among themselves rather than to A–Z: if you have not said
+            // when you got them, when they came out is the next best guess at
+            // the shelf you meant.
+            return groups.sorted {
+                let a = acquired[PlatformKey.canonical($0.platform)]
+                let b = acquired[PlatformKey.canonical($1.platform)]
+                switch (a, b) {
+                case let (x?, y?) where x != y: return x < y
+                case (nil, _?): return false
+                case (_?, nil): return true
+                default:
+                    let ya = PlatformEra.releaseYear($0.platform) ?? Int.max
+                    let yb = PlatformEra.releaseYear($1.platform) ?? Int.max
+                    return ya == yb
+                        ? PlatformShort.name($0.platform) < PlatformShort.name($1.platform)
+                        : ya < yb
+                }
+            }
         case .release:
             // Unknown years — "Other", a storefront — sink to the end, A–Z.
             return groups.sorted {

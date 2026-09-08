@@ -507,6 +507,7 @@ struct HomeTab: View {
     private var collections: [GameCollection]
     @State private var arrangingHome = false
     @State private var arrangingSystems = false
+    @State private var addingConsole = false
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -645,6 +646,7 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet().lsSheet() }
         .sheet(isPresented: $arrangingHome) { ArrangeHomeSheet().lsSheet() }
+        .sheet(isPresented: $addingConsole) { AddConsoleSheet().lsSheet() }
         .sheet(isPresented: $arrangingSystems) { ArrangeSystemsSheet().lsSheet([.large]) }
         // `onDismiss`, not the sheet's own `onDisappear`: this fires ONCE when
         // Settings actually closes, where that fired on any disappearance —
@@ -1116,7 +1118,8 @@ struct HomeTab: View {
             if games.isEmpty {
                 // The case before there is anything in it — the question a
                 // new Home leads with. See `EmptySystemsCase`.
-                EmptySystemsCase { showingAdd = true }
+                EmptySystemsCase(onAdd: { showingAdd = true },
+                                 onAddConsole: { addingConsole = true })
             } else {
                 let all = systemGroups
                 let shown = Array(all.prefix(layout.systemsCount))
