@@ -294,6 +294,11 @@ struct RecentlyDeletedView: View {
     /// picture is hard to recognize from a thumbnail alone.
     private func imageDetail(_ image: GameImage) -> String {
         var parts: [String] = []
+        if let map = repo.map(backedBy: image) {
+            // Say it is a map, and how many pins come back with it.
+            let pins = (map.markers ?? []).filter { $0.deletedAt == nil }.count
+            parts.append(pins == 0 ? "map" : "map · \(pins) pin\(pins == 1 ? "" : "s")")
+        }
         if let game = image.game {
             parts.append(game.name)
         } else if let memory = image.memory {

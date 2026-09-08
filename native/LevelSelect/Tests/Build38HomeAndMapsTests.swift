@@ -151,3 +151,51 @@ struct Build38MapsTests {
         #expect(imported.first?.label == "Bench")
     }
 }
+
+/// A map and its picture leave together and come back together.
+@MainActor
+struct Build38MapTrashTests {
+    private func store() -> Repository {
+        Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+    }
+    private var png: Data {
+        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")!
+    }
+
+    @Test("Restoring a map's picture restores the map, pins and all")
+    func restoreBringsTheMapBack() throws {
+        let repo = store()
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let map = try repo.addMap(to: game, data: png, name: "Hallownest", kind: .world)
+        _ = repo.addMarker(to: map, x: 0.5, y: 0.5, label: "Bench")
+        let image = try #require(repo.image(for: map))
+        repo.deleteMap(map)
+        #expect(repo.liveMaps(of: game).isEmpty)
+        repo.restore(image)
+        #expect(map.deletedAt == nil)
+        #expect(repo.liveMaps(of: game).count == 1)
+        #expect(repo.liveMarkers(of: map).count == 1)
+    }
+
+    @Test("Delete Forever on a map's picture removes the map record too")
+    func deleteForeverTakesTheMap() throws {
+        let repo = store()
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let map = try repo.addMap(to: game, data: png, name: "Hallownest", kind: .world)
+        let image = try #require(repo.image(for: map))
+        repo.deleteMap(map)
+        repo.deleteForever(image)
+        #expect(((try? repo.context.fetch(FetchDescriptor<GameMap>())) ?? []).isEmpty)
+        #expect(((try? repo.context.fetch(FetchDescriptor<GameImage>())) ?? []).isEmpty)
+    }
+
+    @Test("An expired map purges with its picture")
+    func expiredMapPurges() throws {
+        let repo = store()
+        let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let map = try repo.addMap(to: game, data: png, name: "Hallownest", kind: .world)
+        repo.deleteMap(map, at: .now.addingTimeInterval(-Repository.trashRetention - 60))
+        #expect(repo.purgeExpiredTrash() == 2)
+        #expect(((try? repo.context.fetch(FetchDescriptor<GameMap>())) ?? []).isEmpty)
+    }
+}

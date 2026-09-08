@@ -473,6 +473,11 @@ struct Repository {
         }
     }
 
+    func trashedMaps() -> [GameMap] {
+        let d = FetchDescriptor<GameMap>(predicate: #Predicate { $0.deletedAt != nil })
+        return (try? context.fetch(d)) ?? []
+    }
+
     /// Removed memories, newest first.
     ///
     /// **They were the only user-authored record absent from Recently
@@ -563,6 +568,11 @@ struct Repository {
             context.delete(memory)
             purged += 1
         }
+        // A trashed map expires with its picture.
+        for map in trashedMaps() where expired(map.deletedAt) {
+            context.delete(map)
+            purged += 1
+        }
         // Pictures last, and only the ones still standing: a picture under a
         // game or memory purged above went with it.
         for image in trashedImages() where expired(image.deletedAt) {
@@ -601,6 +611,9 @@ struct Repository {
     /// `GameImage.data` is `.externalStorage`, so this is what actually
     /// reclaims the file rather than leaving it beside the store.
     func deleteForever(_ image: GameImage) {
+        // A map without its picture is nothing; the record and its pins go
+        // with the bytes.
+        if let map = map(backedBy: image) { context.delete(map) }
         context.delete(image)
         persist()
     }
@@ -2499,6 +2512,14 @@ struct Repository {
         image.deletedAt = nil
         image.updatedAt = .now
         image.revision += 1
+        // A map's picture comes back WITH the map — the pins, the name, the
+        // kind. Without this a restored map image was an orphan: a picture
+        // with the map role and no map record, invisible everywhere.
+        if let map = map(backedBy: image), map.deletedAt != nil {
+            map.deletedAt = nil
+            map.updatedAt = .now
+            map.revision += 1
+        }
         persist()
     }
 
