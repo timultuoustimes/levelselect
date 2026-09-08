@@ -11,7 +11,16 @@ struct LibraryImportView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
+    /// The picker opens by itself on iPhone and iPad. On the Mac it does not:
+    /// a sheet that presents an NSOpenPanel the instant it appears races its
+    /// own presentation and is left blank behind the panel — the "empty
+    /// Import Library sheet" from build 37. There, the sheet shows its own
+    /// "Choose an export file" row and the person taps it.
+    #if os(macOS)
+    @State private var pickingFile = false
+    #else
     @State private var pickingFile = true
+    #endif
     @State private var data: Data?
     @State private var preview: LibraryImport.Preview?
     @State private var outcome: LibraryImport.Outcome?

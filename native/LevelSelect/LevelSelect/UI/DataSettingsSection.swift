@@ -154,7 +154,7 @@ struct DataSettingsSection: View {
             // workflows, which already explain themselves — a footer is read
             // after a row has been found, so it can't repair a wrong guess,
             // and this one ran longer than a phone screen.
-            Text("iCloud keeps your devices in sync, but it isn't a backup — the export is. It writes your library to a readable JSON file, pictures you've added included. Map images are still saved as links rather than embedded.")
+            Text("iCloud keeps your devices in sync, but it isn't a backup — the export is. It writes your library to a readable JSON file, pictures you've added included.")
         }
     }
 
