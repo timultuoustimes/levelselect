@@ -66,7 +66,16 @@ enum RelatedGames {
 
     /// Other games in the same series.
     static func sameFranchise(as game: Game, in library: [Game], limit: Int = 10) -> [Game] {
-        guard let franchise = game.franchise, !franchise.isEmpty else { return [] }
+        sameFranchise(as: game, named: game.franchise, in: library, limit: limit)
+    }
+
+    /// The series by a name the game itself may not carry — Wikidata's,
+    /// when IGDB filed the game under no franchise. Matched against the
+    /// other games' stored franchise, exactly, so a second source can find
+    /// siblings without inventing any.
+    static func sameFranchise(as game: Game, named franchise: String?, in library: [Game],
+                              limit: Int = 10) -> [Game] {
+        guard let franchise, !franchise.isEmpty else { return [] }
         return library
             .filter { $0.id != game.id && $0.deletedAt == nil && $0.franchise == franchise }
             .sorted { ($0.firstReleaseDate ?? .distantPast, $0.name)

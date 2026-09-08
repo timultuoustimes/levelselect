@@ -790,7 +790,7 @@ struct GameDetailView: View {
         case .connections:
             CollapsibleSection("Connections", icon: "point.3.connected.trianglepath.dotted",
                                caption: caption(for: .connections), isExpanded: expansion(.connections)) {
-                RelatedGamesSection(game: game)
+                RelatedGamesSection(game: game, seriesHint: wikidata?.series)
             }
         case .tags:
             CollapsibleSection("Tags", icon: "tag",
@@ -1733,7 +1733,9 @@ struct GameDetailView: View {
                         .foregroundStyle(LSTheme.working)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("Credits from Wikidata.")
+                Text(game.franchise == nil && wikidata?.series != nil
+                     ? "Credits and series from Wikidata."
+                     : "Credits from Wikidata.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
@@ -1776,7 +1778,11 @@ struct GameDetailView: View {
                         infoCell("Released", game.firstReleaseDate.map {
                             String(ReleaseCountdown.utc.component(.year, from: $0))
                         }, kind: .year)
-                        infoCell("Series", game.franchise, kind: .franchise)
+                        // IGDB's franchise first; Wikidata's series when
+                        // IGDB filed the game under none. A second source
+                        // fills a blank, never replaces an answer — and says
+                        // so under the credits.
+                        infoCell("Series", game.franchise ?? wikidata?.series, kind: .franchise)
                     }
                     GridRow {
                         infoCell("Developer", game.developers.first, kind: .developer)

@@ -11,6 +11,10 @@ import SwiftData
 /// to stop reading the section.
 struct RelatedGamesSection: View {
     let game: Game
+    /// A series name from a second source — Wikidata's — used only when
+    /// the game carries no franchise of its own. Build 39's "series
+    /// surfaced", pulled into 38: the shelf that IGDB's data could not draw.
+    var seriesHint: String? = nil
 
     /// Cover width scales with text size, so the two-line title underneath
     /// stays readable rather than truncating to nothing at accessibility
@@ -39,7 +43,8 @@ struct RelatedGamesSection: View {
     }
 
     var body: some View {
-        let series = RelatedGames.sameFranchise(as: game, in: library)
+        let seriesName = game.franchise ?? seriesHint
+        let series = RelatedGames.sameFranchise(as: game, named: seriesName, in: library)
         let studio = series.isEmpty ? RelatedGames.sameDeveloper(as: game, in: library) : nil
         let alike = RelatedGames.similar(to: game, in: library)
 
@@ -56,8 +61,9 @@ struct RelatedGamesSection: View {
                     // two things when there is one.
                     chips("Your Collections", personalLists, systemImage: "square.stack")
                 }
-                if !series.isEmpty, let franchise = game.franchise {
-                    shelf("More from \(franchise)", games: series)
+                if !series.isEmpty, let seriesName {
+                    shelf("More from \(seriesName)", games: series,
+                          footnote: game.franchise == nil ? "Series from Wikidata." : nil)
                 }
                 if let studio {
                     shelf("More from \(studio.developer)", games: studio.games)

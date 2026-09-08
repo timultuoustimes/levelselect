@@ -17,6 +17,11 @@ struct TrackerListImportView: View {
     @State private var parsed = TrackerListParser.Result()
     @State private var flipped: Set<String> = []
     @State private var showingPreview = false
+    /// A Google Sheets link, read into the editor as a table. See
+    /// `SheetsLinkImport` for why this tier and not the API.
+    @State private var link = ""
+    @State private var fetchingLink = false
+    @State private var linkNote: String?
 
     private var repo: Repository { Repository(context) }
 
@@ -50,11 +55,16 @@ struct TrackerListImportView: View {
                         Button("Import") { apply() }
                     } else {
                         Button("Preview") {
-                            parsed = TrackerListParser.parse(text, defaultCategoryName: "Imported")
-                            flipped = []
-                            showingPreview = true
+                            // A bare Sheets link in the editor is the same
+                            // ask as the field above it.
+                            if SheetsLinkImport.looksLikeLink(text) {
+                                link = text
+                                Task { await fetchLink(thenPreview: true) }
+                            } else {
+                                previewNow()
+                            }
                         }
-                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || fetchingLink)
                     }
                 }
             }
@@ -70,6 +80,32 @@ struct TrackerListImportView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
 
+            // Or a Google Sheets link. The tab's rows come back as the
+            // table below, where they can be read before anything is kept.
+            HStack(spacing: 8) {
+                TextField("Or paste a Google Sheets link", text: $link)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.caption)
+                    #if !os(macOS)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    #endif
+                    .autocorrectionDisabled()
+                    .onSubmit { Task { await fetchLink(thenPreview: false) } }
+                Button(fetchingLink ? "Reading…" : "Read") {
+                    Task { await fetchLink(thenPreview: false) }
+                }
+                .disabled(fetchingLink || !SheetsLinkImport.looksLikeLink(link))
+            }
+            .padding(.horizontal)
+            if let linkNote {
+                Text(linkNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             TextEditor(text: $text)
                 .font(.system(.caption, design: .monospaced))
                 .scrollContentBackground(.hidden)
@@ -79,6 +115,29 @@ struct TrackerListImportView: View {
         }
         .padding(.vertical)
         .lsBackground()
+    }
+
+    private func previewNow() {
+        parsed = TrackerListParser.parse(text, defaultCategoryName: "Imported")
+        flipped = []
+        showingPreview = true
+    }
+
+    /// The link becomes the sheet's rows, in the editor — so what is about
+    /// to be parsed is on screen, the same as a paste. Nothing is kept yet.
+    private func fetchLink(thenPreview: Bool) async {
+        fetchingLink = true
+        linkNote = nil
+        defer { fetchingLink = false }
+        do {
+            let table = try await SheetsLinkImport.table(from: link)
+            text = table
+            let rows = max(0, table.split(separator: "\n").count - 2)
+            linkNote = "Read \(rows) row\(rows == 1 ? "" : "s") from the sheet. Check the columns below, then Preview."
+            if thenPreview { previewNow() }
+        } catch {
+            linkNote = error.localizedDescription
+        }
     }
 
     // MARK: Preview

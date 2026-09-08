@@ -199,3 +199,21 @@ struct Build38MapTrashTests {
         #expect(((try? repo.context.fetch(FetchDescriptor<GameMap>())) ?? []).isEmpty)
     }
 }
+
+/// Wikidata's series fills the blank IGDB left, and finds siblings by it.
+@MainActor
+struct Build38SeriesHintTests {
+    @Test("A series name from a second source finds games that carry it as a franchise")
+    func namedSeriesFindsSiblings() {
+        let repo = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+        let hollow = repo.addGame(name: "Hollow Knight", status: .playing)       // IGDB gave it no franchise
+        let silksong = repo.addGame(name: "Hollow Knight: Silksong", status: .queued)
+        silksong.franchise = "Hollow Knight"
+        let other = repo.addGame(name: "Celeste", status: .completed)
+        other.franchise = "Celeste"
+        #expect(RelatedGames.sameFranchise(as: hollow, in: [hollow, silksong, other]).isEmpty)
+        let named = RelatedGames.sameFranchise(as: hollow, named: "Hollow Knight", in: [hollow, silksong, other])
+        #expect(named.map(\.name) == ["Hollow Knight: Silksong"])
+        #expect(RelatedGames.sameFranchise(as: hollow, named: nil, in: [hollow, silksong]).isEmpty)
+    }
+}
