@@ -78,33 +78,136 @@ struct SystemsCase: View {
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(groups, id: \.platform) { g in
-                    BouncyTap {
-                        onOpen(g.platform)
-                    } label: {
-                        VStack(spacing: 6) {
-                            PlatformIconView(platform: g.platform, size: 58)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 78)
-                            Text(PlatformShort.name(g.platform))
-                                .font(.caption.weight(.medium))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.center)
-                            Text(Format.gameCount(g.count))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 6)
-                        .frame(maxWidth: .infinity)
-                        .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
-                        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(LSTheme.hairline))
-                    }
-                    .accessibilityLabel("\(PlatformShort.name(g.platform)), \(Format.gameCount(g.count))")
+                    SystemTile(group: g, onOpen: onOpen)
                 }
             }
             .padding(.horizontal)
         }
+    }
+}
+
+/// One console in the case: its art, its name, what you have on it.
+///
+/// Extracted so the case and the full grid behind "See all" cannot drift —
+/// the grid IS the case with every console in it, and a tile that looked
+/// different in the two places would say they were different things.
+struct SystemTile: View {
+    let group: HomeSystems.Group
+    var onOpen: (String) -> Void
+
+    var body: some View {
+        BouncyTap {
+            onOpen(group.platform)
+        } label: {
+            VStack(spacing: 6) {
+                PlatformIconView(platform: group.platform, size: 58)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 78)
+                Text(PlatformShort.name(group.platform))
+                    .font(.caption.weight(.medium))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                Text(Format.gameCount(group.count))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 6)
+            .frame(maxWidth: .infinity)
+            .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(LSTheme.hairline))
+        }
+        .accessibilityLabel("\(PlatformShort.name(group.platform)), \(Format.gameCount(group.count))")
+    }
+}
+
+/// Where "See all" on the systems header goes.
+struct SystemsRoute: Hashable {}
+
+/// **Every console you own, as the case rather than as a tab switch.**
+///
+/// "See all" used to change tabs — it left Home, landed in Library, and
+/// showed the games rather than the consoles. Tim, 2026-09-08: *"it should
+/// open a screen that's just a grid of all the consoles. Then tapping a
+/// console would show your full library of games for that console."* So the
+/// case keeps its six and this holds the rest, in the same order, with the
+/// same tiles; a tap goes on to that console's games.
+struct AllSystemsView: View {
+    var onOpen: (String) -> Void
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+    #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
+    @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
+
+    /// The person's own order, and the same folding Home uses — so a console
+    /// stored under two spellings is one tile here too.
+    private var groups: [HomeSystems.Group] {
+        HomeSystems.ordered(raw: themeSettings.first?.homeSystemsRaw,
+                            available: HomeSystems.folded(games.filter { $0.status != .wishlist }))
+    }
+
+    private var wide: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+
+    private var columns: [GridItem] {
+        let count = typeSize.isAccessibilitySize ? (wide ? 3 : 2) : (wide ? 6 : 3)
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(groups, id: \.platform) { g in
+                    SystemTile(group: g, onOpen: onOpen)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 10)
+        }
+        .scrollIndicators(.hidden)
+        .lsBackground()
+        .navigationTitle("Systems")
+        #if !os(macOS)
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
+        .overlay {
+            if groups.isEmpty {
+                ContentUnavailableView("No consoles yet",
+                                       systemImage: "arcade.stick.console.fill",
+                                       description: Text("Add a game on a console and it appears here."))
+            }
+        }
+    }
+}
+
+/// Whether a collection sits on Home, and putting it there.
+///
+/// The layout string is the only record of what Home shows, so both menus
+/// that offer it — the shelf card's press-and-hold and the collection page's
+/// ⋯ — read and write it through here rather than each parsing the grammar.
+@MainActor
+enum HomeShelf {
+    static func isOnHome(_ collection: GameCollection, in context: ModelContext) -> Bool {
+        let raw = ThemePalette.fetchOrCreate(in: context).homeLayoutRaw
+        return HomeLayout.resolve(raw: raw).pinnedCollections.contains(collection.id)
+    }
+
+    static func setOnHome(_ collection: GameCollection, _ on: Bool, in context: ModelContext) {
+        let settings = ThemePalette.fetchOrCreate(in: context)
+        var layout = HomeLayout.resolve(raw: settings.homeLayoutRaw)
+        if on { layout.pin(collection: collection.id) } else { layout.unpin(collection: collection.id) }
+        settings.homeLayoutRaw = layout.raw
+        settings.updatedAt = .now
+        PersistenceMonitor.shared.commit(context)
     }
 }
 

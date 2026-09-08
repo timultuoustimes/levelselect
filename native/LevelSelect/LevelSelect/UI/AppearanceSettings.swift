@@ -112,7 +112,14 @@ struct AppearanceSettingsSection: View {
             // One row, because they are one decision. An accent is chosen
             // against a ground and a ground against an accent; two sheets
             // turned a comparison into a memory test.
-            colorRow("Colors", swatch: LSTheme.accent,
+            // **The color you PICKED, not the ink it becomes.**
+            //
+            // The swatch drew `accent`, which on the light ground is the
+            // pair's darker step — so choosing Yellow put a dark mustard dot
+            // beside the word "Custom" and the row disagreed with the circle
+            // that had just been tapped. It wears the fill, ringed by the step,
+            // exactly like the seven circles in the editor.
+            colorRow("Colors", swatch: LSTheme.accentFill, ring: LSTheme.accentStep,
                      isCustom: anyAccentChosen || anyBackgroundChosen) {
                 ColorEditor(title: "Colors", targets: themeColorTargets)
             }
@@ -392,7 +399,8 @@ struct AppearanceSettingsSection: View {
     /// the row's tap then dismissed Settings instead of opening anything.
     /// Same trap as the tracker sheet in build 30.
     private func colorRow<Destination: View>(
-        _ title: String, icon: String? = nil, swatch: Color, isCustom: Bool,
+        _ title: String, icon: String? = nil, swatch: Color, ring: Color? = nil,
+        isCustom: Bool,
         @ViewBuilder destination: () -> Destination
     ) -> some View {
         NavigationLink {
@@ -410,7 +418,10 @@ struct AppearanceSettingsSection: View {
                 Circle()
                     .fill(swatch)
                     .frame(width: 24, height: 24)
-                    .overlay { Circle().strokeBorder(LSTheme.hairline, lineWidth: 1) }
+                    .overlay {
+                        Circle().strokeBorder(ring ?? LSTheme.hairline,
+                                              lineWidth: ring == nil ? 1 : 2)
+                    }
             }
         }
     }

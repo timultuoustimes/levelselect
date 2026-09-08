@@ -88,6 +88,7 @@ struct CollectionShelf: View {
     let games: [Game]
     var onNew: () -> Void
     var onNewFromTemplate: (() -> Void)?
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -139,6 +140,22 @@ struct CollectionShelf: View {
                             CollectionCard(collection: collection, members: members(of: collection))
                         }
                         .buttonStyle(PressableCardStyle())
+                        // **Putting one on Home, from where you look at it.**
+                        //
+                        // It was only possible through Arrange Home's "Add a
+                        // collection to Home…", which is a place you go if you
+                        // already know it exists. Tim, 2026-09-08: *"I'm not
+                        // exactly sure how I show one as a row on home
+                        // currently."*
+                        .contextMenu {
+                            let onHome = HomeShelf.isOnHome(collection, in: context)
+                            Button {
+                                HomeShelf.setOnHome(collection, !onHome, in: context)
+                            } label: {
+                                Label(onHome ? "Remove from Home" : "Show on Home",
+                                      systemImage: onHome ? "pin.slash" : "pin")
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -184,6 +201,8 @@ struct CollectionDetailView: View {
     private var members: [Game] {
         collection.members(in: allGames)
     }
+
+    private var onHome: Bool { HomeShelf.isOnHome(collection, in: context) }
 
     var body: some View {
         ScrollView {
@@ -268,6 +287,14 @@ struct CollectionDetailView: View {
                     Button {
                         nameField = collection.name; renaming = true
                     } label: { Label("Rename…", systemImage: "pencil") }
+                    // Its own shelf on Home, its covers under its name. See
+                    // `HomeShelf` and `PinnedCollectionShelf`.
+                    Button {
+                        HomeShelf.setOnHome(collection, !onHome, in: context)
+                    } label: {
+                        Label(onHome ? "Remove from Home" : "Show on Home",
+                              systemImage: onHome ? "pin.slash" : "pin")
+                    }
                     Toggle(isOn: Binding(
                         get: { collection.isBundle },
                         set: { repo.setBundle(collection, isBundle: $0) })

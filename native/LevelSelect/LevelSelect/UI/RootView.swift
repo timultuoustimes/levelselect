@@ -585,6 +585,9 @@ struct HomeTab: View {
             .navigationDestination(for: GameStatus.self) { StatusListView(status: $0) }
             .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
             .navigationDestination(for: PlatformRoute.self) { PlatformGamesView(platform: $0.platform) }
+            .navigationDestination(for: SystemsRoute.self) { _ in
+                AllSystemsView { path.append(PlatformRoute(platform: $0)) }
+            }
             .navigationDestination(for: CollectionRoute.self) { CollectionRouteView(route: $0) }
             .toolbar {
                 #if !os(macOS)
@@ -1109,7 +1112,9 @@ struct HomeTab: View {
                     case .grid:
                         SystemsCase(groups: shown, total: all.count,
                                     onOpen: { path.append(PlatformRoute(platform: $0)) },
-                                    onSeeAll: { nav.selectedTab = .library },
+                                    // The consoles, not the games — see
+                                    // `AllSystemsView`.
+                                    onSeeAll: { path.append(SystemsRoute()) },
                                     onArrange: { arrangingSystems = true },
                                     onArrangeHome: { arrangingHome = true },
                                     onHide: { setHidden(block: .systems, true) })

@@ -63,6 +63,15 @@ struct SettingsHero: View {
     let title: String
     let icon: String
     let blurb: String
+    /// **Re-read when the theme record changes.**
+    ///
+    /// `LSTheme.accent` is a static, not observed state, so a page built
+    /// before the accent changed kept the old one — Tim, 2026-09-08, with a
+    /// gold app and an indigo hero glyph two rows above the swatch that had
+    /// just set it. The rows below already re-key on this stamp (see
+    /// `AppearanceSettingsSection`); the hero sits outside that block and did
+    /// not. A `@Query` republishes on any write, which is what redraws it.
+    @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
 
     /// Grows with the type rather than being overrun by it — the same fix the
     /// profile avatar needed.
@@ -86,6 +95,7 @@ struct SettingsHero: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 4)
             .accessibilityElement(children: .combine)
+            .id(themeSettings.first?.updatedAt)
         }
     }
 }
