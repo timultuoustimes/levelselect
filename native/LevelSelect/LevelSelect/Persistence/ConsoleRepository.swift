@@ -253,6 +253,7 @@ extension Repository {
     /// are left alone. Safe to run on every launch, and it is.
     @discardableResult
     func backfillConsoles(in games: [Game]) -> Int {
+        refoldStoredPlatforms()
         let dismissed = dismissedConsoles()
         var known = Set(liveConsoles().map(\.platform))
         // A tombstoned console counts as known: it is in Recently Deleted
@@ -281,5 +282,47 @@ extension Repository {
         }
         if created > 0 { persist() }
         return created
+    }
+
+    /// **A console keeps the name it was stored under; the fold can change.**
+    ///
+    /// `Console.platform` holds the canonical name as it read at write time,
+    /// and every lookup compares against it exactly. So when `PlatformKey`
+    /// learns a new fold — Recalbox becoming Raspberry Pi, Linux becoming PC,
+    /// both on 2026-09-08 — a record written yesterday keeps yesterday's name
+    /// and stops matching its own tile: the console groups under the new name
+    /// on Home while `console(forPlatform:)` looks for the old one and finds
+    /// nothing, so the tile offers no console actions at all.
+    ///
+    /// `Schema.swift` says where this belongs: transforming data on a
+    /// CloudKit-backed store is "an idempotent pass in app code — not a custom
+    /// stage." This is that pass. Second runs do nothing, because a name that
+    /// already folds to itself is not written.
+    ///
+    /// Where the fold merges two records into one name, the older row wins and
+    /// the newer is deleted outright rather than tombstoned — it is a rename
+    /// collision, not something anyone chose to throw away, and leaving it in
+    /// Recently Deleted would offer to restore a duplicate.
+    private func refoldStoredPlatforms() {
+        var changed = false
+        var byName: [String: Console] = [:]
+        // Oldest first, so the record that has been there longest is the one
+        // that keeps its ownership, notes and photos through a merge.
+        for console in (liveConsoles() + trashedConsoles()).sorted(by: { $0.createdAt < $1.createdAt }) {
+            let folded = PlatformKey.canonical(console.platform)
+            if let winner = byName[folded] {
+                if console.deletedAt == nil && winner.deletedAt != nil { winner.deletedAt = nil }
+                context.delete(console)
+                changed = true
+                continue
+            }
+            if folded != console.platform {
+                console.platform = folded
+                touch(console)
+                changed = true
+            }
+            byName[folded] = console
+        }
+        if changed { persist() }
     }
 }

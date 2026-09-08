@@ -18,7 +18,14 @@ enum PlatformKey {
     /// `PlatformShort.name(_:)` applies their renames on top of this.
     static func canonical(_ p: String) -> String {
         switch p {
-        case "PC (Microsoft Windows)": "PC"
+        // **One computer, whatever it boots.** The app has never had a
+        // "Windows" console — a PC is a PC — so a separate Linux one made the
+        // operating system the machine for exactly one of the two. Tim,
+        // 2026-09-08: *"Linux feels like the odd one out. We don't specify
+        // windows PC, so a pc gamer can be playing on windows or Linux."*
+        // Steam Deck and Steam Machine stay their own consoles; they are
+        // hardware you can hold, not a choice of OS on a box you already own.
+        case "PC (Microsoft Windows)", "Linux", "PC (Linux)", "Windows": "PC"
         case "Nintendo Switch": "Switch"
         case "Nintendo Switch 2": "Switch 2"
         case "PlayStation 5": "PS5"

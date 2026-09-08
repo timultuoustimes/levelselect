@@ -109,12 +109,14 @@ struct PlatformEraTests {
         #expect(noArt == ["itch.io"], Comment(rawValue: "catalogue entries with no icon: \(noArt)"))
     }
 
-    /// A console that borrows another's art must not borrow its year. The
-    /// Xbox One draws the 2001 Xbox because no Xbox One render exists, and in
-    /// a list ordered by release that put it ahead of the Xbox 360.
-    @Test func aConsoleSharingArtKeepsItsOwnYear() {
-        #expect(PlatformIcon.assetName("Xbox One") == PlatformIcon.assetName("Xbox"),
-                "if Xbox One ever gets its own art, this override can go")
+    /// The Xbox One drew the 2001 Xbox for want of a render of its own, and
+    /// because a console's year is read off its art, it sorted as a 2001
+    /// console — ahead of the Xbox 360. A `sharedArtYears` override held the
+    /// line until Codex drew it one the same day. The bug this guards against
+    /// is the ordering, not the override, so the test outlives it.
+    @Test func theXboxesSortByTheirOwnYears() {
+        #expect(PlatformIcon.assetName("Xbox One") == "platform-xbox-one")
+        #expect(PlatformIcon.assetName("Xbox") == "platform-xbox")
         #expect(PlatformEra.releaseYear("Xbox One") == 2013)
         #expect(PlatformEra.releaseYear("Xbox") == 2001)
         #expect(PlatformEra.releaseYear("Xbox 360") == 2005)
@@ -148,6 +150,22 @@ struct PlatformEraTests {
         #expect(missing.isEmpty, Comment(rawValue: "art with no maker: \(missing.sorted())"))
     }
 
+    /// **A PC is a PC whatever it boots.** There has never been a "Windows"
+    /// console in this app, so a Linux one made the operating system the
+    /// machine for one of the two and not the other. The penguin's art went
+    /// with the name: a folded console must not draw a picture no other PC
+    /// draws.
+    @Test func linuxIsAPC() {
+        #expect(PlatformKey.canonical("Linux") == "PC")
+        #expect(PlatformKey.canonical("PC (Microsoft Windows)") == "PC")
+        #expect(PlatformIcon.assetName("Linux") == "platform-pc")
+        #expect(PlatformEra.releaseYear("Linux") == 1981, "the PC's year, since it is one")
+        #expect(!PlatformCatalog.all.contains("Linux"))
+        // Valve's boxes are hardware, not a choice of OS on a box you own.
+        #expect(PlatformKey.canonical("Steam Deck") == "Steam Deck")
+        #expect(PlatformIcon.assetName("Steam Machine") == "platform-steammachine")
+    }
+
     /// Recalbox was the name of one operating system for a board the art has
     /// always drawn as a Raspberry Pi. Old libraries fold into the new name
     /// rather than standing a second console beside it.
@@ -167,7 +185,7 @@ struct PlatformEraTests {
         for phone in ["iOS", "Android", "iPad"] {
             #expect(PlatformMaker.of(phone) == "Mobile", Comment(rawValue: phone))
         }
-        for computer in ["PC", "Mac", "Linux", "Raspberry Pi"] {
+        for computer in ["PC", "Mac", "Raspberry Pi"] {
             #expect(PlatformMaker.of(computer) == "Computers", Comment(rawValue: computer))
         }
         // The console makers stay themselves.

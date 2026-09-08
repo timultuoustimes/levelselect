@@ -53,6 +53,11 @@ enum PlatformIcon {
         // the platform-xbox-series art was unreachable.
         if p.contains("xbox 360")                              { return "platform-xbox360" }
         if p.contains("xbox series")                           { return "platform-xbox-series" }
+        // The 2013 box. It borrowed the 2001 original's picture until Codex
+        // drew it one, 2026-09-08 — and because sorting reads a console's year
+        // off its ART, borrowing a picture meant borrowing 2001 and landing
+        // ahead of the Xbox 360. Its own art, its own year, no override.
+        if p.contains("xbox one")                              { return "platform-xbox-one" }
         if p.contains("xbox")                                  { return "platform-xbox" }
         // The slug stays `recalbox` — renaming an imageset renames it in the
         // year and maker tables and in every test that holds those together,
@@ -82,7 +87,10 @@ enum PlatformIcon {
         if p.contains("nintendo ds") || p == "ds" || p == "dsi" { return "platform-ds" }
         if p.contains("wii u")                                 { return "platform-wiiu" }
         if p.contains("wii")                                   { return "platform-wii" }
-        if p.contains("microsoft windows") || p == "pc"
+        // Linux is here rather than on a penguin of its own: `PlatformKey`
+        // folds it into PC, so the art has to follow the name or a folded
+        // console would draw a picture no other PC draws.
+        if p.contains("microsoft windows") || p == "pc" || p == "linux"
             || p == "windows" || p == "steam"                  { return "platform-pc" }
         // Game Boy family: the longer names contain "game boy", so they must
         // be tested first or every handheld collapses to the 1989 DMG.
@@ -92,7 +100,6 @@ enum PlatformIcon {
         if p == "ios" || p.contains("iphone")                  { return "platform-iphone" }
         if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "android"                                      { return "platform-android" }
-        if p == "linux"                                        { return "platform-linux" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
         return nil
     }
@@ -210,7 +217,8 @@ enum PlatformMaker {
         "famicom-disk": "Nintendo", "virtualboy": "Nintendo", "64dd": "Nintendo",
         "ps1": "Sony", "ps2": "Sony", "ps3": "Sony", "ps4": "Sony", "ps5": "Sony",
         "vita": "Sony", "psp": "Sony",
-        "xbox": "Microsoft", "xbox360": "Microsoft", "xbox-series": "Microsoft",
+        "xbox": "Microsoft", "xbox360": "Microsoft", "xbox-one": "Microsoft",
+        "xbox-series": "Microsoft",
         "genesis": "Sega", "32x": "Sega", "dreamcast": "Sega", "saturn": "Sega",
         "mastersystem": "Sega", "gamegear": "Sega",
         "turbografx16": "NEC",
@@ -222,35 +230,26 @@ enum PlatformMaker {
         // and Google phones to Mobile, windows/linux/mac/raspberry pi to
         // computers."* A heading is there to help someone find their console,
         // and "Computers" finds a Mac faster than "Apple" does.
-        "pc": "Computers", "mac": "Computers", "linux": "Computers",
-        "recalbox": "Computers",
+        "pc": "Computers", "mac": "Computers", "recalbox": "Computers",
         "iphone": "Mobile", "ipad": "Mobile", "android": "Mobile",
     ]
 }
 
 enum PlatformEra {
+    /// A console's year, read off its art.
+    ///
+    /// That indirection is deliberate — it is what stops art and years from
+    /// drifting apart — but it means a console with no render of its own
+    /// borrows whichever year came with the picture it borrowed. That happened
+    /// exactly once, to the Xbox One, and a `sharedArtYears` override carried
+    /// it from 09-08 until the render arrived later the same day. Every
+    /// console now has its own art, so the override is gone rather than
+    /// sitting empty; the comment is the record that it was needed.
     static func releaseYear(_ platform: String) -> Int? {
-        // A console that BORROWS another's art would otherwise borrow its
-        // year — see `sharedArtYears`.
-        if let own = sharedArtYears[PlatformKey.canonical(platform)] { return own }
         guard let asset = PlatformIcon.assetName(platform) else { return nil }
         return years[String(asset.dropFirst("platform-".count))]
     }
 
-    /// **Consoles with no art of their own, and a year that is their own.**
-    ///
-    /// The table below is keyed by icon slug, which is what keeps art and
-    /// years honest with each other — but it means two consoles sharing one
-    /// icon share its year. The Xbox One has no render, so it draws the 2001
-    /// Xbox and, until this existed, sorted as a 2001 console: in a list
-    /// ordered by release it landed ahead of the Xbox 360. Found sorting the
-    /// console picker by maker and date, 2026-09-08.
-    ///
-    /// Keyed by the canonical platform NAME rather than the slug, because the
-    /// whole point is to say something the slug cannot.
-    static let sharedArtYears: [String: Int] = [
-        "Xbox One": 2013,
-    ]
 
     /// Keyed by the icon slug, so a platform can never have art without a year
     /// or a year without art — `PlatformEraTests` holds the two lists together.
@@ -263,7 +262,7 @@ enum PlatformEra {
         "ps1": 1995, "ps2": 2000, "ps3": 2006, "ps4": 2013, "ps5": 2020,
         "vita": 2012,
         // Microsoft
-        "xbox": 2001, "xbox360": 2005, "xbox-series": 2020,
+        "xbox": 2001, "xbox360": 2005, "xbox-one": 2013, "xbox-series": 2020,
         "famicom": 1983, "superfamicom": 1990, "famicom-disk": 1986,
         "64dd": 1999, "virtualboy": 1995, "ds": 2004,
         // Sony
@@ -283,7 +282,7 @@ enum PlatformEra {
         // `platform-steammachine` is the new one, so this is the new one.
         "steamdeck": 2022, "steammachine": 2026,
         // Computers — the platform's own first release, not a console launch.
-        "pc": 1981, "mac": 1984, "linux": 1991,
+        "pc": 1981, "mac": 1984,
         // Phones and tablets, same rule.
         "iphone": 2007, "ipad": 2010, "android": 2008,
         // Emulation frontends take their project's first public release.

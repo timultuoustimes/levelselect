@@ -207,8 +207,10 @@ struct Build34LibraryTests {
         #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "Vita"))
 
         // `matches` still answers the availability question, for callers that
-        // genuinely mean it.
-        #expect(PlatformShort.matches(game.platforms, short: "Linux"))
+        // genuinely mean it. Asked under "PC", because that is what a Linux
+        // build folds to since build 39 — see `PlatformEraTests.linuxIsAPC`.
+        #expect(PlatformShort.matches(game.platforms, short: "PC"))
+        #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "PC"))
     }
 
     /// A game with no platforms at all is nobody's system.
@@ -241,10 +243,13 @@ struct Build34LibraryTests {
         #expect(PlatformIcon.assetName("Steam") == "platform-pc")
     }
 
-    /// Linux is not a device, so it gets the mascot — the only unambiguous
-    /// signifier, and Steam Deck already has its own platform and icon.
-    @Test func linuxGetsAnIcon() {
-        #expect(PlatformIcon.assetName("Linux") == "platform-linux")
+    /// Linux HAD the Tux mascot of its own, on the reasoning that it is not a
+    /// device and the penguin was the only unambiguous signifier. Build 39
+    /// folded it into PC instead — the app has never had a "Windows" console,
+    /// so a Linux one made the operating system the machine for one of the two
+    /// and not the other. See `PlatformEraTests.linuxIsAPC`.
+    @Test func linuxDrawsThePC() {
+        #expect(PlatformIcon.assetName("Linux") == "platform-pc")
     }
 
     /// `platform-xbox-series` art shipped but was unreachable: bare "xbox"
@@ -253,7 +258,9 @@ struct Build34LibraryTests {
     @Test func eachXboxGenerationGetsItsOwnIcon() {
         #expect(PlatformIcon.assetName("Xbox Series X|S") == "platform-xbox-series")
         #expect(PlatformIcon.assetName("Xbox 360") == "platform-xbox360")
-        #expect(PlatformIcon.assetName("Xbox One") == "platform-xbox")
+        // The One shared the 2001 original's picture until it got its own on
+        // 09-08. "Xbox One" contains "xbox", so it has to be tested above it.
+        #expect(PlatformIcon.assetName("Xbox One") == "platform-xbox-one")
         #expect(PlatformIcon.assetName("Xbox") == "platform-xbox")
     }
 

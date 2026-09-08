@@ -254,4 +254,48 @@ struct ConsoleRecordTests {
         _ = try LibraryImport.apply(data: data, context: fresh.context)
         #expect(fresh.liveConsoles().count == 1)
     }
+
+    // MARK: A rename reaches records already written
+
+    @Test("A console stored under an old name follows the fold, and does not stand beside its new self")
+    func storedPlatformsRefold() {
+        let repo = store()
+        // Written before 09-08, when both names still stood on their own.
+        let old = Console(platform: "Recalbox", ownership: [Ownership.physical.rawValue])
+        old.createdAt = Date(timeIntervalSince1970: 1_000_000)
+        repo.context.insert(old)
+        let linux = Console(platform: "Linux", ownership: [Ownership.digital.rawValue])
+        linux.createdAt = Date(timeIntervalSince1970: 1_000_100)
+        repo.context.insert(linux)
+
+        repo.backfillConsoles(in: [])
+
+        let names = repo.liveConsoles().map(\.platform).sorted()
+        #expect(names == ["PC", "Raspberry Pi"])
+        // The record kept its ownership through the rename; nothing was
+        // recreated empty beside it.
+        #expect(repo.console(forPlatform: "Raspberry Pi")?.ownership
+                    == [Ownership.physical.rawValue])
+        #expect(repo.console(forPlatform: "Recalbox")?.id == old.id)
+    }
+
+    @Test("Where a fold merges two records the older one wins, and no duplicate is left behind")
+    func refoldMergesCollidingRecords() {
+        let repo = store()
+        let pc = Console(platform: "PC", ownership: [Ownership.physical.rawValue])
+        pc.createdAt = Date(timeIntervalSince1970: 1_000_000)
+        pc.notes = "the tower under the desk"
+        repo.context.insert(pc)
+        let linux = Console(platform: "Linux", ownership: [Ownership.digital.rawValue])
+        linux.createdAt = Date(timeIntervalSince1970: 2_000_000)
+        repo.context.insert(linux)
+
+        repo.backfillConsoles(in: [])
+
+        #expect(repo.liveConsoles().map(\.platform) == ["PC"])
+        #expect(repo.console(forPlatform: "PC")?.notes == "the tower under the desk")
+        // And a second pass changes nothing.
+        repo.backfillConsoles(in: [])
+        #expect(repo.liveConsoles().count == 1)
+    }
 }
