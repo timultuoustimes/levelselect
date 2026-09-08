@@ -236,14 +236,36 @@ struct ColorEditor: View {
     // MARK: Preview
 
     /// Both grounds, touching, so the pair is judged as one thing.
+    ///
+    /// **Its type is capped, and that is not an accessibility lapse.** This is
+    /// a picture of the app's own controls — a specimen, the way a paint chip
+    /// is a picture of a wall. At Accessibility XXXL the words inside it grew
+    /// past their pills and "Sample" came apart into a column of single
+    /// letters, which destroys the one thing the preview exists to show: what
+    /// this color looks like as a button. The words are not the content here;
+    /// the color is. Everything that IS reading — the caption under the
+    /// circles, the segment, the titles — scales all the way, and VoiceOver
+    /// reads the halves regardless.
     private var preview: some View {
         HStack(spacing: 0) {
             previewHalf(dark: false)
             previewHalf(dark: true)
         }
+        .dynamicTypeSize(...DynamicTypeSize.large)
         .clipShape(.rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14)
             .strokeBorder(LSTheme.hairline, lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(previewDescription)
+    }
+
+    /// What the preview shows, for anyone who cannot see it.
+    private var previewDescription: String {
+        let name = chosen?.name ?? "A custom color"
+        if isThemeEditor, role == .background {
+            return "Preview: \(name) as the ground, light and dark."
+        }
+        return "Preview: \(name) as a button and a tinted pill, on the light ground and the dark one."
     }
 
     private func previewHalf(dark: Bool) -> some View {
