@@ -235,7 +235,7 @@ struct ConsoleEditor: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .background(LSTheme.liveGround)
+            .background(LSTheme.liveSheetGround)
             .navigationTitle(PlatformShort.name(console.platform))
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -274,17 +274,81 @@ struct ConsoleEditor: View {
     }
 }
 
+/// A console on its own plate, for choosing one.
+///
+/// **The art is the content here, so it gets something to sit on.** A card
+/// fill is 6% white in dark mode and a Switch 2, a Steam Deck and a PS4 are
+/// all essentially black — Tim, 2026-09-08: *"the color is a bit dark behind
+/// them, so there's not enough contrast between some of the consoles and the
+/// sheet."* This is a lit shelf rather than a flat card: brighter at the top
+/// where a product photo's light comes from, so a black console has an edge
+/// against it in either theme.
+struct ConsolePlateTile: View {
+    let platform: String
+    var size: CGFloat = 58
+
+    private var plate: LinearGradient {
+        LinearGradient(colors: [
+            .lsDynamic(light: .black.opacity(0.04), dark: .white.opacity(0.17)),
+            .lsDynamic(light: .black.opacity(0.09), dark: .white.opacity(0.08)),
+        ], startPoint: .top, endPoint: .bottom)
+    }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            PlatformIconView(platform: platform, size: size)
+                .frame(maxWidth: .infinity)
+                .frame(height: size * 1.34)
+            Text(PlatformShort.name(platform))
+                .font(.caption.weight(.medium))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
+        .background(plate, in: .rect(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .strokeBorder(LSTheme.hairline))
+    }
+}
+
 /// Add a console you own, with or without games on it.
 ///
 /// The Dreamcast in the display case that the computed shelf could never
 /// show, because it was computed from games.
+///
+/// **A grid, not a list.** A row of names with a thumbnail beside it makes the
+/// name the thing you read and the console the decoration, which is backwards
+/// for a picker whose whole subject is the hardware — Tim: *"this could be a
+/// bit bigger of a grid, maybe even the 3 across… instead of having it be so
+/// much of a name focused list."* Three across is the case's own shape, so
+/// choosing a console looks like the shelf it is about to join.
 struct AddConsoleSheet: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var typeSize
+    #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @State private var search = ""
 
     private var repo: Repository { Repository(context) }
+
+    private var wide: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+
+    private var columns: [GridItem] {
+        let count = typeSize.isAccessibilitySize ? (wide ? 3 : 2) : (wide ? 5 : 3)
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
+    }
 
     /// Everything the catalogue knows, minus what you already have.
     private var options: [String] {
@@ -298,24 +362,24 @@ struct AddConsoleSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(options, id: \.self) { platform in
-                    Button {
-                        repo.addConsole(platform: platform)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 12) {
-                            PlatformIconView(platform: platform, size: 30)
-                                .frame(width: 40, height: 40)
-                            Text(PlatformShort.name(platform))
-                            Spacer(minLength: 0)
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(options, id: \.self) { platform in
+                        Button {
+                            repo.addConsole(platform: platform)
+                            dismiss()
+                        } label: {
+                            ConsolePlateTile(platform: platform)
                         }
+                        .buttonStyle(PressableCardStyle())
+                        .accessibilityLabel(PlatformShort.name(platform))
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 10)
             }
-            .scrollContentBackground(.hidden)
-            .background(LSTheme.liveGround)
+            .scrollIndicators(.hidden)
+            .background(LSTheme.liveSheetGround)
             .searchable(text: $search, prompt: "Search consoles")
             .navigationTitle("Add a console")
             #if !os(macOS)

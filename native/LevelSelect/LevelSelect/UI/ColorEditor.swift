@@ -148,7 +148,7 @@ struct ColorEditor: View {
             }
             .padding()
         }
-        .background(LSTheme.liveGround)
+        .background(LSTheme.liveSheetGround)
         .navigationTitle(title)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)

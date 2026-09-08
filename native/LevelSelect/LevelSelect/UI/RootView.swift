@@ -1115,7 +1115,15 @@ struct HomeTab: View {
             }
 
         case .systems:
-            if games.isEmpty {
+            // **Empty means nothing to SHOW, not "no games".** Keyed on the
+            // games alone, a console you added by hand had nowhere to appear:
+            // it was created, it left the picker, and Home went on drawing the
+            // invitation. Tim, 2026-09-08: *"I tapped to add switch 2 and the
+            // sheet closed but nothing happened on home."* `systemGroups`
+            // already unions the consoles you own with the platforms your
+            // games are on, which is exactly the question this branch is
+            // asking.
+            if systemGroups.isEmpty {
                 // The case before there is anything in it — the question a
                 // new Home leads with. See `EmptySystemsCase`.
                 EmptySystemsCase(onAdd: { showingAdd = true },

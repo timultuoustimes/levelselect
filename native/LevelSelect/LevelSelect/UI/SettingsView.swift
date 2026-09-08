@@ -178,13 +178,20 @@ struct SettingsView: View {
             // footers that wrap, sections that read as sections.
             #if os(macOS)
             .formStyle(.grouped)
+            #endif
             // The app's own ground, not the system's gray. A sheet that keeps
             // the platform default reads as a different app bolted on — most
             // obvious on the Mac, where the window behind it is the purple
             // gradient and the sheet was flat gray.
+            //
+            // **On iOS too, since build 39.** The macOS guard meant the root
+            // sheet was system grey on the phone while every page pushed
+            // inside it painted the ground — so Settings changed colour as you
+            // went one level in. `sheetGround` is the shallow ramp that keeps
+            // its colour at any detent; see it for why the full-height sheet
+            // used to drain.
             .scrollContentBackground(.hidden)
-            .background(LSTheme.background)
-            #endif
+            .background(LSTheme.liveSheetGround)
             .navigationTitle("Settings")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

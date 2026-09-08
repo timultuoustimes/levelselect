@@ -95,6 +95,14 @@ extension LSTheme {
         ground(lightTint: ThemePalette.backgroundOverrideLight,
                darkTint: ThemePalette.backgroundOverrideDark)
     }
+
+    /// The chosen ground, for a surface whose height changes — see
+    /// `sheetGround`. Every settings page and picker stands on this.
+    @MainActor
+    static var liveSheetGround: LinearGradient {
+        sheetGround(lightTint: ThemePalette.backgroundOverrideLight,
+                    darkTint: ThemePalette.backgroundOverrideDark)
+    }
 }
 
 extension View {

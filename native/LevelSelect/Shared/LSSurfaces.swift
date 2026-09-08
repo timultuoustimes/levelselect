@@ -97,6 +97,45 @@ enum LSTheme {
         )
     }
 
+    /// **The ground for a sheet, which is a different shape of room.**
+    ///
+    /// `ground` runs from the theme's colour at the top to nearly black at the
+    /// bottom, which is right for a full screen: it is a lit room with a floor.
+    /// A sheet is the same gradient over a much shorter frame, so at the medium
+    /// detent you see only its coloured top — and dragging it open replaces
+    /// that with the dark end, so the colour appears to drain out of the sheet
+    /// as it grows. Tim, 2026-09-08, with the Statuses page at both detents:
+    /// *"Can a fully open menu continue to have the colored plates behind them
+    /// like they do before it's open all the way?"*
+    ///
+    /// So a sheet gets the top of the range and only a hint of fall — enough
+    /// to have depth, not enough to lose the colour at any height.
+    static func sheetGround(lightTint: Color?, darkTint: Color?,
+                            scheme: ColorScheme? = nil) -> LinearGradient {
+        let lightHue = lightTint?.lsHueSaturation
+        let darkHue = darkTint?.lsHueSaturation
+        func pick(_ light: Color, _ dark: Color) -> Color {
+            switch scheme {
+            case .light: light
+            case .dark:  dark
+            default:     .lsDynamic(light: light, dark: dark)
+            }
+        }
+        return LinearGradient(
+            colors: [
+                pick(shade(lightHue, brightness: 0.97, saturation: 0.06,
+                           fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
+                     shade(darkHue, brightness: 0.16, saturation: 0.55,
+                           fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
+                pick(shade(lightHue, brightness: 0.94, saturation: 0.08,
+                           fallback: Color(red: 0.93, green: 0.92, blue: 0.97)),
+                     shade(darkHue, brightness: 0.135, saturation: 0.58,
+                           fallback: Color(red: 0.085, green: 0.06, blue: 0.15))),
+            ],
+            startPoint: .top, endPoint: .bottom
+        )
+    }
+
     /// One stop: the picked hue at the brightness this theme allows, or the
     /// built-in color when nothing was picked.
     private static func shade(_ hue: (hue: Double, saturation: Double)?,
