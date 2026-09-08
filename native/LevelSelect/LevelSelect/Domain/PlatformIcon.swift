@@ -9,6 +9,27 @@ import Foundation
 /// 2026-08-31, when refresh started merging platforms and the watch build
 /// broke on the reference.
 enum PlatformIcon {
+    /// **A temporary test set, 2026-09-08.** Eight of Caz Wolf's 32×32
+    /// "Pixel Fantasy" consoles (cazwolf.itch.io/caz-pixel-consoles), for
+    /// Tim to judge a commission in the app rather than on a store page. Only
+    /// machines his library and the demo library actually show, and only
+    /// the ones the pack has — Mac, PC, Genesis, Recalbox and Switch 2 keep
+    /// the soft-3D art. Remove this and the `pixel-*` imagesets together.
+    static func pixelAssetName(_ platform: String) -> String? {
+        guard let soft = assetName(platform) else { return nil }
+        switch soft {
+        case "platform-switch":   return "pixel-switch"
+        case "platform-nes":      return "pixel-nes"
+        case "platform-snes":     return "pixel-snes"
+        case "platform-ps1":      return "pixel-ps1"
+        case "platform-xbox360":  return "pixel-xbox360"
+        case "platform-ps5":      return "pixel-ps5"
+        case "platform-n64":      return "pixel-n64"
+        case "platform-gamecube": return "pixel-gamecube"
+        default: return nil
+        }
+    }
+
     static func assetName(_ platform: String) -> String? {
         let p = platform.lowercased()
         if p.contains("switch 2")                              { return "platform-switch2" }

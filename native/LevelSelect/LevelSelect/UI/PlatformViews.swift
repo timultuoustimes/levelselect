@@ -26,9 +26,25 @@ struct PlatformIconView: View {
     let platform: String
     var size: CGFloat = 52
 
+    /// Pixel art scales cleanly only by whole pixels. 32 source pixels at
+    /// 64pt is 4× on a 2× screen and 6× on a 3× screen — both integers, so
+    /// every source pixel is a crisp square; 58pt would be 5.4375× on a 3×
+    /// phone, which is rows of five and rows of six, and reads as blur.
+    /// 64pt sits inside the 78pt and 84pt tiles the shelves already give it.
+    private var pixelSide: CGFloat { size >= 40 ? 64 : 32 }
+
     var body: some View {
         Group {
-            if let asset = PlatformIcon.assetName(platform) {
+            if let pixel = PlatformIcon.pixelAssetName(platform) {
+                Image(pixel)
+                    .resizable()
+                    .interpolation(.none)
+                    .antialiased(false)
+                    .scaledToFit()
+                    .frame(width: pixelSide, height: pixelSide)
+                    // A hard step, not a blur — pixel art never has one.
+                    .shadow(color: .black.opacity(0.35), radius: 0, y: 2)
+            } else if let asset = PlatformIcon.assetName(platform) {
                 Image(asset)
                     .resizable()
                     .scaledToFit()
