@@ -56,6 +56,14 @@ async function verified(list: FoundMap[]): Promise<FoundMap[]> {
       }
       const type = res.headers.get('content-type') ?? '';
       if (!res.ok || !type.startsWith('image/')) return null;
+      // An icon is an image too. A map is not 12KB. A CDN that omits the
+      // length on HEAD tells it on a one-byte ranged GET.
+      let length = Number(res.headers.get('content-length') ?? '0');
+      if (length === 0) {
+        const probe = await fetch(s.url, { method: 'GET', headers: { ...headers, Range: 'bytes=0-0' }, redirect: 'follow', signal: controller.signal });
+        length = Number(probe.headers.get('content-range')?.split('/')[1] ?? probe.headers.get('content-length') ?? '0');
+      }
+      if (length > 0 && length < 30_000) return null;
       // The URL after redirects is the one the app should keep.
       return { ...s, url: res.url || s.url };
     } catch {
@@ -65,6 +73,66 @@ async function verified(list: FoundMap[]): Promise<FoundMap[]> {
     }
   });
   return (await Promise.all(checks)).filter((s): s is FoundMap => s !== null);
+}
+
+
+/**
+ * Read a page the person gave us and take its images off it — no model.
+ *
+ * A search model asked for "the map images on this page" composes paths;
+ * the page itself has them. MediaWiki thumbnails (`/images/thumb/…/300px-X.png`)
+ * are unwound to the original. Icons, logos and sprites are dropped by name;
+ * what survives is verified like everything else.
+ */
+async function imagesOnPage(pageUrl: string): Promise<FoundMap[]> {
+  let html = '';
+  try {
+    const res = await fetch(pageUrl, {
+      headers: { ...BROWSER_HEADERS, Accept: 'text/html,*/*;q=0.8' },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return [];
+    html = await res.text();
+  } catch {
+    return [];
+  }
+  const found = new Map<string, FoundMap>();
+  const add = (raw: string, alt: string) => {
+    let url: URL;
+    try { url = new URL(raw.replace(/&amp;/g, '&'), pageUrl); } catch { return; }
+    if (!/\.(png|jpe?g|webp|gif)(\?.*)?$/i.test(url.pathname) && !url.pathname.includes('/images/')) return;
+    // MediaWiki thumb → original.
+    const thumb = url.pathname.match(/^(.*)\/thumb(\/.+)\/[^/]+$/);
+    if (thumb) url.pathname = thumb[1] + thumb[2];
+    if (url.pathname.includes('/resources/assets/')) return;
+    const file = decodeURIComponent(url.pathname.split('/').pop() ?? '');
+    const fileName = file.replace(/\.[a-z0-9]+$/i, '').replace(/_/g, ' ').trim();
+    // The filename says "Forgotten Crossroads Map"; the alt says "Marked".
+    // The filename wins whenever it names a map.
+    const name = (/map/i.test(fileName) || !alt) ? fileName : alt.replace(/_/g, ' ').trim();
+    if (/\b(icon|logo|sprite|button|badge|favicon|arrow|wordmark|powered by)\b/i.test(fileName) || /^\d+px-/.test(file)) return;
+    if (!name) return;
+    const key = url.origin + url.pathname;
+    if (!found.has(key)) {
+      const type = /world/i.test(fileName) ? 'world' : /map|region|area/i.test(fileName) ? 'area' : 'other';
+      found.set(key, { url: url.toString(), name, type });
+    }
+  };
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const tag = m[0];
+    const src = tag.match(/\ssrc="([^"]+)"/i)?.[1] ?? '';
+    const alt = tag.match(/\salt="([^"]*)"/i)?.[1] ?? '';
+    if (src) add(src, alt);
+    const set = tag.match(/\ssrcset="([^"]+)"/i)?.[1] ?? '';
+    for (const part of set.split(',')) { const u = part.trim().split(/\s+/)[0]; if (u) add(u, alt); }
+  }
+  for (const m of html.matchAll(/href="([^"]+\.(?:png|jpe?g|webp|gif))"/gi)) add(m[1], '');
+  const list = [...found.values()];
+  // Files called maps first, world maps before area maps, the rest after.
+  const rank = (m: FoundMap) => (m.type === 'world' ? 0 : m.type === 'area' ? 1 : 2);
+  list.sort((a, b) => rank(a) - rank(b));
+  return list.slice(0, 20);
 }
 
 serve(async (req: Request) => {
@@ -104,6 +172,12 @@ serve(async (req: Request) => {
     }
     if (pageUrl && (pageUrl.length > MAX_URL || !/^https:\/\/[\w.-]+\//.test(pageUrl))) {
       return jsonResponse({ error: 'Page URL must be a plain https link.' }, 400);
+    }
+
+    // A page in hand needs no model: read it, verify what is on it.
+    if (pageUrl) {
+      const onPage = await verified(await imagesOnPage(pageUrl));
+      if (onPage.length > 0) return jsonResponse({ suggestions: onPage });
     }
 
     const meta: string[] = [];

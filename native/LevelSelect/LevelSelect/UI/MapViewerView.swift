@@ -45,6 +45,9 @@ struct MapViewerView: View {
     @State private var pan: CGSize = .zero
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
+    /// Where the finger last went down, in map points — read by the
+    /// long-press, which has no location of its own.
+    @State private var lastTouch: CGPoint?
 
     private var repo: Repository { Repository(context) }
     private var game: Game { target.game }
@@ -209,7 +212,21 @@ struct MapViewerView: View {
                 }
             }
             .frame(width: fitted.width, height: fitted.height)
-            .coordinateSpace(name: "map")
+            // On the content, before the transform: a gesture here reports
+            // the map's own untransformed points, so zoom and pan need no
+            // undoing. A zero-distance drag notes where the finger went
+            // down; the long-press has no location and reads that.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in lastTouch = value.startLocation }
+            )
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        guard placing == nil, let point = lastTouch else { return }
+                        drop(at: point, fitted: fitted)
+                    }
+            )
             .scaleEffect(scale)
             .offset(offset)
             .frame(width: geo.size.width, height: geo.size.height)
@@ -225,18 +242,6 @@ struct MapViewerView: View {
                     .onEnded { value in
                         pan = CGSize(width: pan.width + value.translation.width,
                                      height: pan.height + value.translation.height)
-                    }
-            )
-            .simultaneousGesture(
-                // Long-press drops a pin under the finger. The drag half of the
-                // sequence exists only to learn where the finger was — the
-                // named space is the untransformed map, so the location is
-                // already in map points and needs no undoing of zoom or pan.
-                LongPressGesture(minimumDuration: 0.45)
-                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named("map")))
-                    .onEnded { value in
-                        guard placing == nil, case .second(true, let d) = value, let d else { return }
-                        drop(at: d.startLocation, fitted: fitted)
                     }
             )
             .onTapGesture(count: 2) {
