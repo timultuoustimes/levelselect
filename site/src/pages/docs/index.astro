@@ -66,6 +66,12 @@ const sections = [
     a: 'Settings → System names. Your name for a console changes every shelf, chip and widget.' },
   { id: 'ownership',         q: 'I borrowed it. I rented it. I played it in an arcade.',
     a: 'Nine ways to say how you have a game, and you choose which ones your library uses.' },
+  { id: 'home',              q: 'Can I change what is on Home?',
+    a: 'Press and hold any shelf → Arrange Home. Drag the blocks, switch any off, and it follows you to your other devices.' },
+  { id: 'systems',           q: 'I am a Nintendo person',
+    a: 'Your consoles sit under your name in a case. Press and hold it to choose how many, in what order, and whether it scrolls.' },
+  { id: 'smartcollections',  q: 'A collection that fills itself',
+    a: 'Set Library\'s filters, then save them as a collection. Add a game that fits and it is in.' },
   { id: 'paste',             q: 'I have a checklist from a wiki',
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
@@ -76,6 +82,8 @@ const sections = [
     a: 'Settings → Game pages & trackers turns off the hints a generated or imported list carries.' },
   { id: 'retroachievements', q: 'I want my retro achievements in here',
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
+  { id: 'maps',              q: 'Where is that thing on the map?',
+    a: 'A game page holds its maps — your own pictures of the world — and a pin on one can tick the tracker.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently. Stopping one asks what happened.' },
   { id: 'carriedover',       q: 'Steam says I have 42 hours in this',
@@ -109,7 +117,8 @@ const sections = [
 const moments = [
   { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors', 'itch'] },
   { t: 'It should use my words',          ids: ['systemnames', 'ownership'] },
-  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements'] },
+  { t: 'Home should look like me',        ids: ['home', 'systems', 'smartcollections'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements', 'maps'] },
   { t: 'My playtime looks wrong',         ids: ['sessions', 'carriedover'] },
   { t: 'I am waiting for a game',         ids: ['releases'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
@@ -282,6 +291,43 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="home" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'home')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'home')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Home used to decide what came first. It is your page, so now it asks. <strong>Press and hold any shelf &rarr; Arrange Home.</strong> Drag the blocks into the order you want, switch any of them off, and bring Backlog or Finished up from Library if you want them here.</p>
+    <p>This order <strong>follows you to your other devices</strong>. Which sections you closed on a game page stays with the device, because an iPad has more room; how Home is composed is about you, not the screen.</p>
+
+    <h3>A collection can be a shelf</h3>
+    <p><strong>Add a collection to Home</strong> from the bottom of Arrange Home, and &ldquo;Six That Made Me&rdquo; sits on your page with its covers under its name. Remove it with a swipe. Everything stays in Library whether it is on Home or not.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="systems" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'systems')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'systems')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Someone&rsquo;s consoles say more about them than their backlog does. So they sit under your name on Home in a three-wide case, six at a time, the rest behind <strong>See all</strong>.</p>
+    <p><strong>Press and hold the case &rarr; Arrange Systems.</strong> Choose how many reach Home, drag them into your order &mdash; or pick one in a tap: North American release order, most games, or A&ndash;Z &mdash; and choose a scrolling row instead of the case if you would rather, or if four systems look better in a line than in a grid. Drag after a sort and the order is yours again.</p>
+    <p>A console appears here when a game does. Add a game on the SNES and the SNES is in the case.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="smartcollections" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'smartcollections')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'smartcollections')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A collection is usually a list you picked by hand. It can also be a rule.</p>
+    <p><strong>Library &rarr; Filter &amp; Sort</strong>, set the filters &mdash; Backlog, on the SNES, physical &mdash; then <strong>Save These Filters as a Collection</strong>. Name it, choose whether it belongs on Home, and it fills itself: add a game that fits and it is in; change the game and it may leave. It opens like any other collection, and the rule is shown as chips at the top so it is never a mystery why something is there.</p>
+      </div>
+    </details>
+
     <details class="qa" id="paste" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'paste')!.q}</span>
@@ -372,6 +418,21 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
     <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. The Journal&rsquo;s charts gain a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="maps" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'maps')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'maps')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A game page has a <strong>Maps</strong> section. A map is a picture you own of the game &mdash; add one from your Photo Library, from Files, by pasting, or with <strong>Find One</strong>: give it a wiki page and it reads the map images off that page, checks each one actually exists, and keeps the site it came from with the map.</p>
+    <p>Open a map to pinch, pan, and drop pins &mdash; press and hold anywhere, or tap <strong>Place</strong> and pan the map under the ring. A pin is a collectible, a note, a warning or a secret, and the legend at the bottom is also the filter. Mark a pin <strong>explored</strong> and it dims with a check; <strong>Left</strong> and <strong>Explored</strong> split what is still out there from what is not.</p>
+
+    <h3>A pin that ticks the tracker</h3>
+    <p>Link a pin to a tracker item and they become one thing: the pin takes the item&rsquo;s name and shows its checkbox, and ticking either one ticks the other &mdash; with the same journal line. In the tracker, an item with a pin says <strong>On the map</strong>; press and hold one without a pin for <strong>Pin on Map</strong>, which opens the map with that item already chosen.</p>
+    <p>Maps sync with your library, go to Recently Deleted when you delete them (and come back with their pins), and come with an export.</p>
       </div>
     </details>
 

@@ -8,9 +8,15 @@
  */
 
 /** Shown on both surfaces, so the app can say when this was last honest. */
-export const reviewed = '7 September 2026';
+export const reviewed = '8 September 2026';
 
 export const shipped = [
+  { t: 'Home is yours to arrange', build: 38,
+    d: 'Your consoles in a case under your name, every shelf a choice, a collection as its own shelf — in the order you drag, following you to every device.' },
+  { t: 'Maps, with pins that mean something', build: 38,
+    d: 'Your own pictures of a game world, with pins you drop. Link a pin to a tracker item and ticking either one ticks the other.' },
+  { t: 'A collection that fills itself', build: 38,
+    d: "Save Library's filters as a collection and it keeps itself current — add a game that fits and it's in." },
   { t: 'Your words for your library', build: 37,
     d: 'Call a console whatever you call it — Mega Drive or Genesis, Super Nintendo or SNES — and it changes every shelf, chip and widget that names it. Rename statuses and stars too.' },
   { t: 'Nine ways a game can be yours', build: 37,
