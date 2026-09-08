@@ -508,6 +508,8 @@ struct HomeTab: View {
     @State private var arrangingHome = false
     @State private var arrangingSystems = false
     @State private var addingConsole = false
+    @State private var editingConsole: Console?
+    @State private var deletingConsole: Console?
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -647,6 +649,19 @@ struct HomeTab: View {
         .sheet(isPresented: $showingAdd) { AddGameSheet().lsSheet() }
         .sheet(isPresented: $arrangingHome) { ArrangeHomeSheet().lsSheet() }
         .sheet(isPresented: $addingConsole) { AddConsoleSheet().lsSheet() }
+        .sheet(item: $editingConsole) { ConsoleEditor(console: $0).lsSheet() }
+        .confirmationDialog("Delete this console?",
+                            isPresented: Binding(get: { deletingConsole != nil },
+                                                 set: { if !$0 { deletingConsole = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete Console", role: .destructive) {
+                if let console = deletingConsole { Repository(context).softDelete(console) }
+                deletingConsole = nil
+            }
+            Button("Cancel", role: .cancel) { deletingConsole = nil }
+        } message: {
+            Text("It goes to Recently Deleted for 30 days. Your games are untouched, and it won't be added back from them.")
+        }
         .sheet(isPresented: $arrangingSystems) { ArrangeSystemsSheet().lsSheet([.large]) }
         // `onDismiss`, not the sheet's own `onDisappear`: this fires ONCE when
         // Settings actually closes, where that fired on any disappearance —
@@ -1060,6 +1075,14 @@ struct HomeTab: View {
         settings.updatedAt = .now
     }
 
+    /// The console record behind a tile, when there is one — a platform your
+    /// games are on that you never kept a console for has none, and its tile
+    /// simply offers no console actions.
+    private func console(for platform: String) -> Console? {
+        let key = PlatformKey.canonical(platform)
+        return consoles.first { $0.platform == key }
+    }
+
     /// Every system in the library with a count, in the person's order.
     /// The consoles you hold a record for — they stand in the case whether or
     /// not a game sits on them. See `HomeSystems.folded`.
@@ -1141,7 +1164,10 @@ struct HomeTab: View {
                                     onSeeAll: { path.append(SystemsRoute()) },
                                     onArrange: { arrangingSystems = true },
                                     onArrangeHome: { arrangingHome = true },
-                                    onHide: { setHidden(block: .systems, true) })
+                                    onHide: { setHidden(block: .systems, true) },
+                                    onAddConsole: { addingConsole = true },
+                                    onEditConsole: { editingConsole = console(for: $0) },
+                                    onDeleteConsole: { deletingConsole = console(for: $0) })
                     case .row:
                         SystemsRow(groups: shown) { path.append(PlatformRoute(platform: $0)) }
                             .contextMenu {

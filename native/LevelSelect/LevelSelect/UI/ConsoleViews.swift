@@ -179,63 +179,70 @@ struct ConsoleEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    HStack(spacing: 12) {
-                        PlatformIconView(platform: console.platform, size: 44)
-                            .frame(width: 58, height: 58)
-                        Text(PlatformShort.name(console.platform))
-                            .font(.title3.weight(.semibold))
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.vertical, 2)
-                }
-
-                Section {
-                    OwnershipControl(ownership: $console.ownership)
+                // The app's own card fill, so the rows keep the theme at any
+                // detent — see `SettingsPage` for why the system's grey drains.
+                Group {
+                    Section {
+                        HStack(spacing: 12) {
+                            PlatformIconView(platform: console.platform, size: 44)
+                                .frame(width: 58, height: 58)
+                            Text(PlatformShort.name(console.platform))
+                                .font(.title3.weight(.semibold))
+                            Spacer(minLength: 0)
+                        }
                         .padding(.vertical, 2)
-                } header: {
-                    Text("How you have it")
-                } footer: {
-                    // The rule that makes the whole feature honest, said once
-                    // where it applies.
-                    Text("The console's own answer. Selling it doesn't change your games, and selling the games doesn't change it.")
-                }
-
-                Section {
-                    TextField("Model 1, OLED, modded…", text: $variant)
-                } header: {
-                    Text("Which one")
-                } footer: {
-                    Text("Free text on purpose — hardware variants go deep, and this is the part worth writing down.")
-                }
-
-                Section {
-                    Toggle("Say when you got it", isOn: $knowsAcquired.animation())
-                        .tint(LSTheme.accent)
-                    if knowsAcquired {
-                        DatePicker("Got it", selection: $acquired, displayedComponents: .date)
                     }
-                }
 
-                Section {
-                    TextField("My brother's. Bought at a yard sale in 1997.",
-                              text: $notes, axis: .vertical)
-                        .lineLimit(2...6)
-                } header: {
-                    Text("Notes")
-                }
-
-                Section {
-                    Button(role: .destructive) { confirmingDelete = true } label: {
-                        Label("Delete Console", systemImage: "trash")
+                    Section {
+                        OwnershipControl(ownership: $console.ownership)
+                            .padding(.vertical, 2)
+                    } header: {
+                        Text("How you have it")
+                    } footer: {
+                        // The rule that makes the whole feature honest, said once
+                        // where it applies.
+                        Text("The console's own answer. Selling it doesn't change your games, and selling the games doesn't change it.")
                     }
-                } footer: {
-                    Text("Your games stay exactly as they are. The console won't be added back from them.")
+
+                    Section {
+                        TextField("Model 1, OLED, modded…", text: $variant)
+                    } header: {
+                        Text("Which one")
+                    } footer: {
+                        Text("Free text on purpose — hardware variants go deep, and this is the part worth writing down.")
+                    }
+
+                    Section {
+                        Toggle("Say when you got it", isOn: $knowsAcquired.animation())
+                            .tint(LSTheme.accent)
+                        if knowsAcquired {
+                            DatePicker("Got it", selection: $acquired, displayedComponents: .date)
+                        }
+                    }
+
+                    Section {
+                        TextField("My brother's. Bought at a yard sale in 1997.",
+                                  text: $notes, axis: .vertical)
+                            .lineLimit(2...6)
+                    } header: {
+                        Text("Notes")
+                    }
+
+                    Section {
+                        Button(role: .destructive) { confirmingDelete = true } label: {
+                            Label("Delete Console", systemImage: "trash")
+                        }
+                    } footer: {
+                        Text("Your games stay exactly as they are. The console won't be added back from them.")
+                    }
+
                 }
+                .listRowBackground(LSTheme.cardFill)
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(LSTheme.liveSheetGround)
+
             .navigationTitle(PlatformShort.name(console.platform))
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

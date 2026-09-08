@@ -31,8 +31,21 @@ struct SettingsPage<Content: View>: View {
         Form {
             if let icon, let blurb {
                 SettingsHero(title: title, icon: icon, blurb: blurb)
+                    .listRowBackground(LSTheme.cardFill)
             }
             content
+                // **The rows carry the theme, not the system's grey.**
+                //
+                // A grouped row's fill is the system's, and inside a sheet it
+                // is translucent at the medium detent and opaque at full
+                // height — so the cards were tinted by the ground behind them
+                // and then, as the sheet grew, went flat grey. Tim, with both
+                // detents side by side: *"this menu looses its colors on the
+                // cards too."* The app's own card fill sits on the app's own
+                // ground and reads the same at any height. A row that sets its
+                // own background still wins; this is the default, not a
+                // clamp.
+                .listRowBackground(LSTheme.cardFill)
         }
         #if !os(macOS)
         .listSectionSpacing(.compact)

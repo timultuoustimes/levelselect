@@ -31,6 +31,15 @@ struct SystemsCase: View {
     /// to hide from home, just like the others."*
     var onArrangeHome: (() -> Void)?
     var onHide: (() -> Void)?
+    /// **The way to add a second console.** The empty case offers one and then
+    /// stops existing, and "See all" only appears once there are more consoles
+    /// than fit — so with exactly one console there was no route to the picker
+    /// at all. Tim, 2026-09-08: *"now that I've added one console, I have no
+    /// way of adding more."* Collections has carried a "+" in its header since
+    /// build 34; this is the same affordance for the same reason.
+    var onAddConsole: (() -> Void)?
+    var onEditConsole: ((String) -> Void)?
+    var onDeleteConsole: ((String) -> Void)?
 
     /// Three across on a phone; on an iPad or a Mac the six fit in one row,
     /// which is how a shelf of hardware sits when there is room for it —
@@ -57,8 +66,23 @@ struct SystemsCase: View {
                         count: total,
                         systemImage: "arcade.stick.console.fill",
                         tint: LSTheme.accent,
-                        onSeeAll: total > groups.count ? onSeeAll : nil)
+                        onSeeAll: total > groups.count ? onSeeAll : nil) {
+                if let onAddConsole {
+                    Button { onAddConsole() } label: {
+                        Image(systemName: "plus").font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(LSTheme.accent)
+                    .lsTapTargetInline()
+                    .accessibilityLabel("Add a console")
+                }
+            }
                 .contextMenu {
+                    if let onAddConsole {
+                        Button { onAddConsole() } label: {
+                            Label("Add a Console…", systemImage: "plus")
+                        }
+                    }
                     if let onArrange {
                         Button { onArrange() } label: {
                             Label("Arrange Systems…", systemImage: "arrow.up.arrow.down")
@@ -78,7 +102,9 @@ struct SystemsCase: View {
 
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(groups, id: \.platform) { g in
-                    SystemTile(group: g, onOpen: onOpen)
+                    SystemTile(group: g, onOpen: onOpen,
+                               onEdit: onEditConsole.map { act in { act(g.platform) } },
+                               onDelete: onDeleteConsole.map { act in { act(g.platform) } })
                 }
             }
             .padding(.horizontal)
@@ -94,6 +120,11 @@ struct SystemsCase: View {
 struct SystemTile: View {
     let group: HomeSystems.Group
     var onOpen: (String) -> Void
+    /// Press and hold: the console is a record now, so the tile is a way to
+    /// its own settings and to removing it. Nil where there is no record —
+    /// a platform your games are on that you have not kept a console for.
+    var onEdit: (() -> Void)?
+    var onDelete: (() -> Void)?
 
     var body: some View {
         BouncyTap {
@@ -119,6 +150,18 @@ struct SystemTile: View {
                 .strokeBorder(LSTheme.hairline))
         }
         .accessibilityLabel("\(PlatformShort.name(group.platform)), \(Format.gameCount(group.count))")
+        .contextMenu {
+            if let onEdit {
+                Button { onEdit() } label: {
+                    Label("Console Settings…", systemImage: "slider.horizontal.3")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete Console…", systemImage: "trash")
+                }
+            }
+        }
     }
 }
 
