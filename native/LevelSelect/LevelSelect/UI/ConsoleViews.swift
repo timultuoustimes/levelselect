@@ -296,6 +296,7 @@ struct ConsoleEditor: View {
 struct ConsolePlateTile: View {
     let platform: String
     var size: CGFloat = 58
+    var isSelected = false
 
     private var plate: LinearGradient {
         LinearGradient(colors: [
@@ -320,7 +321,17 @@ struct ConsolePlateTile: View {
         .frame(maxWidth: .infinity)
         .background(plate, in: .rect(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .strokeBorder(LSTheme.hairline))
+            .strokeBorder(isSelected ? LSTheme.accentFill : LSTheme.hairline,
+                          lineWidth: isSelected ? 2.5 : 1))
+        .overlay(alignment: .topTrailing) {
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.subheadline)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(LSTheme.onAccent, LSTheme.accentFill)
+                    .padding(7)
+            }
+        }
     }
 }
 
@@ -344,6 +355,11 @@ struct AddConsoleSheet: View {
     #endif
     @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @State private var search = ""
+    /// **Several at once.** Somebody setting the app up has a shelf of
+    /// consoles, not one, and adding them one at a time means the sheet opens
+    /// and closes for each. Tim, 2026-09-08: *"Can we let users tap to select
+    /// multiple consoles to add them in one go?"*
+    @State private var picked: Set<String> = []
 
     private var repo: Repository { Repository(context) }
 
@@ -365,6 +381,13 @@ struct AddConsoleSheet: View {
         let have = Set(consoles.map(\.platform))
         var seen = Set<String>()
         return PlatformCatalog.all
+            // **A storefront is not a console.** itch.io belongs in the
+            // catalogue — it is the one platform whose games routinely have
+            // no IGDB entry, so a game has to be nameable as itch.io — but
+            // this sheet is a shelf of hardware you own, and you do not own an
+            // itch.io. Tim: *"Not sure what to do with itch either. It's not a
+            // device."*
+            .filter { PlatformIcon.assetName($0) != nil }
             .filter { !have.contains(PlatformKey.canonical($0)) }
             .filter { seen.insert(PlatformKey.canonical($0)).inserted }
             .filter { search.isEmpty || PlatformShort.name($0).localizedCaseInsensitiveContains(search) }
@@ -412,13 +435,15 @@ struct AddConsoleSheet: View {
                             LazyVGrid(columns: columns, spacing: 10) {
                                 ForEach(group.platforms, id: \.self) { platform in
                                     Button {
-                                        repo.addConsole(platform: platform)
-                                        dismiss()
+                                        if picked.contains(platform) { picked.remove(platform) }
+                                        else { picked.insert(platform) }
                                     } label: {
-                                        ConsolePlateTile(platform: platform)
+                                        ConsolePlateTile(platform: platform,
+                                                         isSelected: picked.contains(platform))
                                     }
                                     .buttonStyle(PressableCardStyle())
                                     .accessibilityLabel(PlatformShort.name(platform))
+                                    .accessibilityAddTraits(picked.contains(platform) ? .isSelected : [])
                                 }
                             }
                         }
@@ -438,9 +463,23 @@ struct AddConsoleSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(picked.count > 1 ? "Add \(picked.count)" : "Add") {
+                        // In the order they are shown rather than the order
+                        // they were tapped, so a shelf added in one go lands
+                        // in the order the picker just presented.
+                        for group in grouped {
+                            for platform in group.platforms where picked.contains(platform) {
+                                repo.addConsole(platform: platform)
+                            }
+                        }
+                        dismiss()
+                    }
+                    .disabled(picked.isEmpty)
+                }
             }
             .overlay {
-                if options.isEmpty {
+                if options.isEmpty && search.isEmpty {
                     ContentUnavailableView("Nothing left to add",
                                            systemImage: "checkmark.circle",
                                            description: Text("Every console the app knows about is already yours."))

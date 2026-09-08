@@ -54,7 +54,13 @@ enum PlatformIcon {
         if p.contains("xbox 360")                              { return "platform-xbox360" }
         if p.contains("xbox series")                           { return "platform-xbox-series" }
         if p.contains("xbox")                                  { return "platform-xbox" }
-        if p.contains("recalbox")                              { return "platform-recalbox" }
+        // The slug stays `recalbox` — renaming an imageset renames it in the
+        // year and maker tables and in every test that holds those together,
+        // for a string nobody sees. The NAME is what changed; see
+        // `PlatformKey.canonical`.
+        if p.contains("recalbox") || p.contains("raspberry")
+            || p.contains("retropie") || p.contains("batocera")
+                                                               { return "platform-recalbox" }
         if p.contains("steam deck")                            { return "platform-steamdeck" }
         // Valve's living-room box. No conflict with the bare `steam` test
         // further down — that one is an exact match, not a substring.
@@ -209,12 +215,16 @@ enum PlatformMaker {
         "mastersystem": "Sega", "gamegear": "Sega",
         "turbografx16": "NEC",
         "steamdeck": "Valve", "steammachine": "Valve",
-        "mac": "Apple", "iphone": "Apple", "ipad": "Apple",
-        "android": "Google",
-        // Not companies, and not pretending to be — a PC is a PC, and these
-        // sort among the makers rather than into an "other" bin that would
-        // put them last on somebody's say-so.
-        "pc": "PC", "linux": "Linux", "recalbox": "Recalbox",
+        // **Where the maker is not the point, the kind is.** By company alone
+        // this list opened with Apple and Google — two names that make phones
+        // — above every console anyone came here for. Tim: *"It also feels
+        // weird that Apple and Google are both first. Maybe we combine Apple
+        // and Google phones to Mobile, windows/linux/mac/raspberry pi to
+        // computers."* A heading is there to help someone find their console,
+        // and "Computers" finds a Mac faster than "Apple" does.
+        "pc": "Computers", "mac": "Computers", "linux": "Computers",
+        "recalbox": "Computers",
+        "iphone": "Mobile", "ipad": "Mobile", "android": "Mobile",
     ]
 }
 

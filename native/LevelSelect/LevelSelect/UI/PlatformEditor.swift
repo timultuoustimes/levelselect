@@ -17,7 +17,7 @@ enum PlatformCatalog {
         // art. Build 39, when the consoles became records worth adding by
         // hand rather than only names a game arrived under.
         "Famicom", "Super Famicom", "Virtual Boy", "TurboGrafx-16",
-        "Recalbox", "iOS", "Android",
+        "Raspberry Pi", "iOS", "Android",
         // A storefront, not a machine — and the one platform whose games
         // routinely have no IGDB entry at all, which is exactly why it has to
         // be nameable by hand.

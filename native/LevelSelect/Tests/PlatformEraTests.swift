@@ -147,4 +147,43 @@ struct PlatformEraTests {
         let missing = slugs.subtracting(PlatformMaker.makers.keys)
         #expect(missing.isEmpty, Comment(rawValue: "art with no maker: \(missing.sorted())"))
     }
+
+    /// Recalbox was the name of one operating system for a board the art has
+    /// always drawn as a Raspberry Pi. Old libraries fold into the new name
+    /// rather than standing a second console beside it.
+    @Test func recalboxFoldsIntoRaspberryPi() {
+        #expect(PlatformKey.canonical("Recalbox") == "Raspberry Pi")
+        #expect(PlatformKey.canonical("Raspberry Pi") == "Raspberry Pi")
+        #expect(PlatformKey.canonical("RetroPie") == "Raspberry Pi")
+        #expect(PlatformIcon.assetName("Raspberry Pi") == "platform-recalbox")
+        #expect(PlatformIcon.assetName("Recalbox") == "platform-recalbox")
+        #expect(PlatformEra.releaseYear("Raspberry Pi") == 2015)
+    }
+
+    /// Grouped by maker, a picker of consoles opened with Apple and Google —
+    /// two names that make phones — above every console anyone came for. The
+    /// headings that are not console makers say what the thing IS.
+    @Test func phonesAndComputersGroupByKindRatherThanCompany() {
+        for phone in ["iOS", "Android", "iPad"] {
+            #expect(PlatformMaker.of(phone) == "Mobile", Comment(rawValue: phone))
+        }
+        for computer in ["PC", "Mac", "Linux", "Raspberry Pi"] {
+            #expect(PlatformMaker.of(computer) == "Computers", Comment(rawValue: computer))
+        }
+        // The console makers stay themselves.
+        #expect(PlatformMaker.of("Switch") == "Nintendo")
+        #expect(PlatformMaker.of("Steam Deck") == "Valve")
+        #expect(!PlatformMaker.makers.values.contains("Apple"))
+        #expect(!PlatformMaker.makers.values.contains("Google"))
+    }
+
+    /// A storefront is not hardware. itch.io stays in the catalogue, because
+    /// its games routinely have no IGDB entry and must be nameable — but it
+    /// has no console art, which is exactly what keeps it out of a picker of
+    /// consoles you own.
+    @Test func aStorefrontIsNotAConsole() {
+        #expect(PlatformCatalog.all.contains("itch.io"))
+        #expect(PlatformIcon.assetName("itch.io") == nil)
+        #expect(PlatformMaker.of("itch.io") == nil)
+    }
 }

@@ -56,6 +56,15 @@ enum PlatformKey {
         case "Sega Mega-CD", "Sega CD", "Mega-CD": "Sega CD"
         case "Sega 32X": p
         case "TurboGrafx-16/PC Engine", "TurboGrafx-16": "TurboGrafx-16"
+        // **The picture was always a Raspberry Pi.** The art in
+        // `platform-recalbox` is a Pi board in a case, logo and all, so the
+        // NAME was the part that did not match. Recalbox is one distribution
+        // that runs on it, and naming the hardware after one of its operating
+        // systems implied the app owed the same courtesy to AYANEO, Anbernic,
+        // Retroid and Analogue. Tim, 2026-09-08: *"we rename recalbox to
+        // Raspberry Pi to make it fit more people."* Old libraries fold into
+        // the new name rather than splitting, which is what this line is for.
+        case "Recalbox", "Raspberry Pi", "RetroPie", "Batocera": "Raspberry Pi"
         case "Other", "": "Other"
         default: p
         }
