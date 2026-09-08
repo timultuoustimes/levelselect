@@ -141,13 +141,19 @@ struct AllSystemsView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
+    @State private var adding = false
 
     /// The person's own order, and the same folding Home uses — so a console
-    /// stored under two spellings is one tile here too.
+    /// stored under two spellings is one tile here too. Consoles you own with
+    /// nothing logged on them stand here as well: that is the whole point of
+    /// the record, and a display case does not only hold the machines you
+    /// happen to have games for.
     private var groups: [HomeSystems.Group] {
         HomeSystems.ordered(raw: themeSettings.first?.homeSystemsRaw,
-                            available: HomeSystems.folded(games.filter { $0.status != .wishlist }))
+                            available: HomeSystems.folded(games.filter { $0.status != .wishlist },
+                                                          consoles: consoles.map(\.platform)))
     }
 
     private var wide: Bool {
@@ -179,11 +185,19 @@ struct AllSystemsView: View {
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar {
+            ToolbarItem {
+                Button { adding = true } label: {
+                    Label("Add a console", systemImage: "plus")
+                }
+            }
+        }
+        .sheet(isPresented: $adding) { AddConsoleSheet().lsSheet() }
         .overlay {
             if groups.isEmpty {
                 ContentUnavailableView("No consoles yet",
                                        systemImage: "arcade.stick.console.fill",
-                                       description: Text("Add a game on a console and it appears here."))
+                                       description: Text("Add a game on a console, or add the console itself."))
             }
         }
     }

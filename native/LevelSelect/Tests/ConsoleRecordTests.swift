@@ -204,4 +204,54 @@ struct ConsoleRecordTests {
         // PlatformShort still answers the same, for every existing call site.
         #expect(PlatformShort.builtinName("Nintendo Switch 2") == PlatformKey.canonical("Nintendo Switch 2"))
     }
+
+    // MARK: The shelf, and the round trip
+
+    @Test("A console with no games still stands on the shelf — that is what the record is for")
+    func shelfIncludesGamelessConsoles() {
+        let repo = store()
+        let games = [game(repo, "Sonic 2", on: "Genesis", [.emulated])]
+        repo.backfillConsoles(in: games)
+        repo.addConsole(platform: "Sega Dreamcast", ownership: [.physical])
+
+        let groups = HomeSystems.folded(games, consoles: repo.liveConsoles().map(\.platform))
+        let byName = Dictionary(groups.map { (PlatformShort.builtinName($0.platform), $0.count) },
+                                uniquingKeysWith: { a, _ in a })
+        #expect(byName["Genesis"] == 1)
+        #expect(byName["Dreamcast"] == 0, "owned, nothing logged on it, still on the shelf")
+        // And it does not double a console that DOES have games.
+        #expect(groups.filter { PlatformShort.builtinName($0.platform) == "Genesis" }.count == 1)
+    }
+
+    @Test("Consoles survive a backup and a restore, including the questions already answered")
+    func exportRoundTrip() throws {
+        let repo = store()
+        let console = repo.addConsole(platform: "Sega Mega Drive/Genesis", ownership: [.physical, .emulated])
+        repo.updateConsole(console, variant: "Model 1", acquiredAt: .some(Date(timeIntervalSince1970: 800_000_000)), notes: "My brother's")
+        console.declinedOwnership = [Ownership.digital.rawValue]
+
+        let data = try LibraryExport.makeJSON(context: repo.context)
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let consoles = try #require(root["consoles"] as? [[String: Any]])
+        #expect(consoles.count == 1)
+        #expect(consoles[0]["platform"] as? String == "Genesis")
+        #expect(consoles[0]["variant"] as? String == "Model 1")
+        #expect((consoles[0]["declinedOwnership"] as? [String]) == [Ownership.digital.rawValue])
+
+        // Into an empty library.
+        let fresh = store()
+        _ = try LibraryImport.apply(data: data, context: fresh.context)
+        let restored = try #require(fresh.liveConsoles().first)
+        #expect(restored.platform == "Genesis")
+        #expect(Set(restored.ownership) == [Ownership.physical.rawValue, Ownership.emulated.rawValue])
+        #expect(restored.variant == "Model 1")
+        #expect(restored.notes == "My brother's")
+        #expect(restored.acquiredAt != nil)
+        #expect(restored.declinedOwnership == [Ownership.digital.rawValue],
+                "a question already answered must not be asked again after a restore")
+
+        // Importing the same file twice does not stand a second Genesis.
+        _ = try LibraryImport.apply(data: data, context: fresh.context)
+        #expect(fresh.liveConsoles().count == 1)
+    }
 }

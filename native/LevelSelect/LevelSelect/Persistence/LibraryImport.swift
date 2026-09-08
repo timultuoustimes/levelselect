@@ -27,7 +27,7 @@ enum LibraryImport {
     /// use it; a test pins that the two never drift.
     /// The newest format this build understands. **Older files are read, not
     /// refused** — see the gate in `root(of:)`.
-    nonisolated static let supportedVersion = 3
+    nonisolated static let supportedVersion = 4
 
     enum ImportError: LocalizedError {
         case notAnExport
@@ -135,6 +135,9 @@ enum LibraryImport {
         var markers = Set<UUID>(), collections = Set<UUID>()
         var images = Set<UUID>()
         var memories = Set<UUID>()
+        /// Consoles are matched by their folded platform name, not by id —
+        /// see the import below.
+        var consolePlatforms = Set<String>()
         var trackerItemDetails = Set<UUID>()
         /// The profile is a singleton, so it is present-or-absent rather than
         /// matched by id — but the preview still has to say which.
@@ -154,6 +157,7 @@ enum LibraryImport {
             collections = Set(try context.fetch(FetchDescriptor<GameCollection>()).map(\.id))
             images = Set(try context.fetch(FetchDescriptor<GameImage>()).map(\.id))
             memories = Set(try context.fetch(FetchDescriptor<Memory>()).map(\.id))
+            consolePlatforms = Set(try context.fetch(FetchDescriptor<Console>()).map(\.platform))
             trackerItemDetails = Set(try context.fetch(FetchDescriptor<TrackerItemDetail>()).map(\.id))
             hasProfile = !(try context.fetch(FetchDescriptor<PlayerProfile>()).isEmpty)
         }
@@ -204,6 +208,14 @@ enum LibraryImport {
         }
         for c in (root["collections"] as? [[String: Any]]) ?? [] {
             visit("collections", c, in: existing.collections)
+        }
+        // Consoles are the one record matched by NAME rather than id — two
+        // devices that each back-filled their own library hold a Genesis with
+        // two different ids and one meaning. See the import below.
+        for c in (root["consoles"] as? [[String: Any]]) ?? [] {
+            let key = (c["platform"] as? String).map(PlatformKey.canonical) ?? ""
+            if existing.consolePlatforms.contains(key) { onSkip("consoles") }
+            else { onCreate("consoles") }
         }
         for m in (root["memories"] as? [[String: Any]]) ?? [] {
             visit("memories", m, in: existing.memories)
@@ -493,6 +505,38 @@ enum LibraryImport {
                 image.memory = memory
                 outcome.created["images", default: 0] += 1
             }
+        }
+
+        // **Consoles, matched by platform rather than only by id.** Two
+        // devices that each back-filled their own library have a Genesis with
+        // two different ids and the same meaning; keying on the folded name as
+        // well is what stops a restore standing a second one beside it. A
+        // console already present keeps its own answers — the file does not
+        // get to overwrite what you have said here since.
+        var consolesByPlatform: [String: Console] = [:]
+        for console in (try? context.fetch(
+            FetchDescriptor<Console>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? [] {
+            consolesByPlatform[console.platform] = console
+        }
+        for cDict in (root["consoles"] as? [[String: Any]]) ?? [] {
+            guard let platform = cDict["platform"] as? String, !platform.isEmpty else { continue }
+            let key = PlatformKey.canonical(platform)
+            if consolesByPlatform[key] != nil {
+                outcome.skipped["consoles", default: 0] += 1
+                continue
+            }
+            let made = Console(platform: key,
+                               ownership: (cDict["ownership"] as? [String]) ?? [])
+            if let id = uuid(cDict["id"]) { made.id = id }
+            made.declinedOwnership = (cDict["declinedOwnership"] as? [String]) ?? []
+            made.variant = cDict["variant"] as? String
+            made.notes = cDict["notes"] as? String
+            made.acquiredAt = date(cDict["acquiredAt"])
+            made.createdAt = date(cDict["createdAt"]) ?? .now
+            context.insert(made)
+            consolesByPlatform[key] = made
+            outcome.created["consoles", default: 0] += 1
         }
 
         applyProfile(root["profile"] as? [String: Any], context: context, outcome: &outcome)

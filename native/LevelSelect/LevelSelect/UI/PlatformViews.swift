@@ -199,6 +199,10 @@ struct PlatformGamesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // **The hardware above the games.** This page was a filtered list
+            // that happened to be titled "Genesis"; the console is a thing you
+            // own and the games are what you have on it.
+            ConsoleCard(platform: platform, games: allGames)
             filterBar
             content
         }
@@ -301,10 +305,20 @@ struct PlatformGamesView: View {
         .overlay {
             if visible.isEmpty {
                 if searchText.isEmpty {
+                    // **Empty and filtered-empty are different sentences.**
+                    // Until build 39 a console page could only be reached
+                    // THROUGH a game, so "nothing matches those filters" was
+                    // always true. A console record can now exist with nothing
+                    // on it — the Dreamcast in the display case — and telling
+                    // that person their filters are wrong would be the app
+                    // being confidently incorrect about their own shelf.
                     ContentUnavailableView {
-                        Label("Nothing here", systemImage: "gamecontroller")
+                        Label(onPlatform.isEmpty ? "No games yet" : "Nothing here",
+                              systemImage: "gamecontroller")
                     } description: {
-                        Text("No games on this console match those filters.")
+                        Text(onPlatform.isEmpty
+                             ? "You own this console. Games you add on it show up here."
+                             : "No games on this console match those filters.")
                     }
                 } else {
                     ContentUnavailableView.search(text: searchText)

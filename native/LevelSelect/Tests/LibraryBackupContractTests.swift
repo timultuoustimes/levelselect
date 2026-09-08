@@ -234,10 +234,12 @@ struct LibraryBackupContractTests {
 
     // MARK: Version gate
 
-    /// v3 must not be silently thinned by an older importer, which is the same
-    /// reason the Memory fix bumped v1 → v2.
+    /// v4 must not be silently thinned by an older importer, which is the same
+    /// reason the Memory fix bumped v1 → v2. A console you own with nothing
+    /// logged on it exists ONLY as a console record, so an older build reading
+    /// a v4 file would restore a library quietly missing hardware.
     @Test func formatVersionIsCurrentAndImporterAcceptsOlderFiles() throws {
-        #expect(LibraryExport.formatVersion == 3)
+        #expect(LibraryExport.formatVersion == 4)
         #expect(LibraryImport.supportedVersion == LibraryExport.formatVersion)
 
         // An older file still restores: accept older, refuse newer.

@@ -293,7 +293,13 @@ enum HomeSystems {
     /// One group per console the person SEES, counting every stored spelling
     /// of it. The representative string is the spelling behind most games,
     /// so the tile keeps the art it had and the route opens the same shelf.
-    static func folded(_ games: [Game]) -> [Group] {
+    ///
+    /// `consoles` are the platforms you hold a RECORD for (build 39). They
+    /// join the shelf whether or not a game sits on them — a Dreamcast you
+    /// own and have logged nothing for is exactly what the record exists to
+    /// make possible, and a display case is not a list of what you have games
+    /// for.
+    static func folded(_ games: [Game], consoles: [String] = []) -> [Group] {
         var counts: [String: Int] = [:]
         for game in games {
             let owned = game.ownedPlatformNames
@@ -301,7 +307,12 @@ enum HomeSystems {
                 counts[platform, default: 0] += 1
             }
         }
-        return fold(counts.map { (platform: $0.key, count: $0.value) })
+        var groups = fold(counts.map { (platform: $0.key, count: $0.value) })
+        let known = Set(groups.map { PlatformShort.builtinName($0.platform) })
+        for platform in consoles where !known.contains(PlatformShort.builtinName(platform)) {
+            groups.append((platform: platform, count: 0))
+        }
+        return groups
     }
 
     /// Pure, so the folding can be tested without a store.

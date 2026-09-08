@@ -500,6 +500,9 @@ struct HomeTab: View {
     /// because a preference that silently doesn't sync is otherwise read as a
     /// bug rather than a decision.
     @AppStorage("homeHiddenStatuses") private var hiddenRaw = ""
+    /// The consoles you own — the case shows them whether or not a game sits
+    /// on one. Build 39.
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.sortIndex)
     private var collections: [GameCollection]
     @State private var arrangingHome = false
@@ -548,6 +551,13 @@ struct HomeTab: View {
             // that will eventually have a surprising one.
             .task(id: games.count) {
                 ThemePalette.refreshOwnershipUsage(from: games)
+                // **Give an existing library its consoles**, and keep giving
+                // new ones theirs. Idempotent by construction — a platform
+                // with a record already, live or dismissed, is left alone —
+                // so running it whenever the library's size changes costs one
+                // pass and closes the gap for games added on other devices.
+                // See `backfillConsoles`.
+                Repository(context).backfillConsoles(in: games)
             }
             #if os(macOS)
             .navigationTitle("LevelSelect")
@@ -1049,6 +1059,8 @@ struct HomeTab: View {
     }
 
     /// Every system in the library with a count, in the person's order.
+    /// The consoles you hold a record for — they stand in the case whether or
+    /// not a game sits on them. See `HomeSystems.folded`.
     private var systemGroups: [HomeSystems.Group] {
         // Folded by the name people see, not the stored string. "Nintendo
         // Switch 2" from IGDB and "Switch 2" typed by hand are one console;
@@ -1056,7 +1068,8 @@ struct HomeTab: View {
         // 09-08: *"I'm seeing switch 2 twice in my consoles."* The Library's
         // menu learned this on 09-06; the case now follows the same rule.
         return HomeSystems.ordered(raw: themeSettings.first?.homeSystemsRaw,
-                                   available: HomeSystems.folded(games.filter { $0.status != .wishlist }))
+                                   available: HomeSystems.folded(games.filter { $0.status != .wishlist },
+                                                                 consoles: consoles.map(\.platform)))
     }
 
     @ViewBuilder

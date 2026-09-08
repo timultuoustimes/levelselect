@@ -21,13 +21,16 @@ import SwiftData
 @MainActor
 enum LibraryExport {
     /// Bump when the shape changes; importers should refuse unknown majors.
-    /// **2 — memories, and the pictures on them.**
+    /// **2 — memories, and the pictures on them. 4 — the consoles you own.**
     ///
     /// Bumped rather than added quietly. The importer gates strictly on this
     /// number, so a build that predates memories now refuses the file and says
     /// why, instead of restoring a library with every memory silently missing
-    /// — which is the failure this version exists to fix.
-    static let formatVersion = 3
+    /// — which is the failure this version exists to fix. A console record is
+    /// the same kind of thing: a Dreamcast you own with nothing logged on it
+    /// exists ONLY as a console record, so an older build reading a v4 file
+    /// would restore a library that had quietly lost hardware.
+    static let formatVersion = 4
 
     struct Manifest: Codable {
         var formatVersion: Int
@@ -45,6 +48,8 @@ enum LibraryExport {
         var markers: Int
         var collections: Int
         var memories: Int
+        /// The consoles you own. New in v4.
+        var consoles: Int
         /// The user's own notes and renames on tracker items. Absent from the
         /// file until v3, which is the whole reason v3 exists.
         var trackerItemDetails: Int
@@ -373,6 +378,31 @@ enum LibraryExport {
             gameObjects.append(dict.compactMapValues { $0 })
         }
 
+        // **Consoles are top-level, and not derived from the games.** That is
+        // the entire point of the record: a console you own with nothing
+        // logged on it has no game to hang off, and re-deriving the list on
+        // import would restore a display case missing exactly the machines
+        // that were only ever recorded here. `declinedOwnership` travels too —
+        // it is the memory of a question already answered, and losing it would
+        // make the app ask again about hardware you have already said no to.
+        let consoleObjects = ((try? context.fetch(
+            FetchDescriptor<Console>(predicate: #Predicate { $0.deletedAt == nil })
+        )) ?? [])
+            .sorted { $0.platform < $1.platform }
+            .map { console -> [String: Any] in
+                var c: [String: Any] = [
+                    "id": console.id.uuidString,
+                    "platform": console.platform,
+                    "ownership": console.ownership,
+                    "declinedOwnership": console.declinedOwnership,
+                    "createdAt": iso(console.createdAt),
+                ]
+                c["variant"] = console.variant
+                c["notes"] = console.notes
+                if let acquired = console.acquiredAt { c["acquiredAt"] = iso(acquired) }
+                return c
+            }
+
         // **Memories are top-level, not nested under their game.** A memory
         // can stand alone — "first LAN party" belongs to no game — so nesting
         // would have exported only the ones that happened to be attached.
@@ -467,6 +497,7 @@ enum LibraryExport {
             markers: counts.markers,
             collections: collectionObjects.count,
             memories: memoryObjects.count,
+            consoles: consoleObjects.count,
             trackerItemDetails: counts.trackerItemDetails,
             images: counts.images,
             imageBytes: counts.imageBytes,
@@ -478,6 +509,7 @@ enum LibraryExport {
             "games": gameObjects,
             "collections": collectionObjects,
             "memories": memoryObjects,
+            "consoles": consoleObjects,
         ]
         // The player's own identity. NOT the obsolete `Profile` bookkeeping
         // row this file's comment excludes — this is the name, the handles and

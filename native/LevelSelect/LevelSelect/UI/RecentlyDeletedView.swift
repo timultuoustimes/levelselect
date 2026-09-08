@@ -37,6 +37,7 @@ struct RecentlyDeletedView: View {
     @State private var playthroughs: [Playthrough] = []
     @State private var collections: [GameCollection] = []
     @State private var memories: [Memory] = []
+    @State private var consoles: [Console] = []
     @State private var images: [GameImage] = []
     @State private var confirmingForever: ForeverTarget?
 
@@ -46,6 +47,7 @@ struct RecentlyDeletedView: View {
         case game(Game), playthrough(Playthrough), collection(GameCollection)
         case memory(Memory)
         case image(GameImage)
+        case console(Console)
         var id: UUID {
             switch self {
             case .game(let g): g.id
@@ -53,6 +55,7 @@ struct RecentlyDeletedView: View {
             case .collection(let c): c.id
             case .memory(let m): m.id
             case .image(let i): i.id
+            case .console(let c): c.id
             }
         }
         var name: String {
@@ -60,6 +63,10 @@ struct RecentlyDeletedView: View {
             case .game(let g): g.name
             case .playthrough(let p): p.name
             case .collection(let c): c.name
+            // The stored fold, not the display name: reaching
+            // `PlatformShort.name` from this nonisolated accessor is the same
+            // data race the image case below explains.
+            case .console(let c): c.platform
             case .memory(let m):
                 {
                     let title = m.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -188,6 +195,27 @@ struct RecentlyDeletedView: View {
                     }
                 }
             }
+            if !consoles.isEmpty {
+                Section {
+                    ForEach(consoles) { console in
+                        row(name: PlatformShort.name(console.platform),
+                            detail: consoleDetail(console),
+                            cover: nil) {
+                            repo.restore(console)
+                            reload()
+                        } forever: {
+                            confirmingForever = .console(console)
+                        }
+                    }
+                } header: {
+                    Text("Consoles")
+                } footer: {
+                    // Why a deleted console does not simply come back on its
+                    // own, which is otherwise the obvious question given that
+                    // consoles are created FOR you.
+                    Text("A console you delete isn't added back from your games. Restoring one here starts that again.")
+                }
+            }
             if !images.isEmpty {
                 Section {
                     ForEach(images) { image in
@@ -221,6 +249,7 @@ struct RecentlyDeletedView: View {
                 case .collection(let c): repo.deleteForever(c)
                 case .memory(let m): repo.deleteForever(m)
                 case .image(let i): repo.deleteForever(i)
+                case .console(let c): repo.deleteForever(c)
                 case nil: break
                 }
                 confirmingForever = nil
@@ -378,11 +407,22 @@ struct RecentlyDeletedView: View {
         return "deleted \(date.formatted(.relative(presentation: .named)))"
     }
 
+    /// How you had it, and when it went.
+    private func consoleDetail(_ console: Console) -> String {
+        var parts: [String] = []
+        let owned = console.ownership.compactMap { Ownership(rawValue: $0)?.label }
+        if !owned.isEmpty { parts.append(owned.joined(separator: " · ")) }
+        if let variant = console.variant, !variant.isEmpty { parts.append(variant) }
+        parts.append(deletedLine(console.deletedAt))
+        return parts.joined(separator: " · ")
+    }
+
     private func reload() {
         games = repo.trashedGames()
         playthroughs = repo.trashedPlaythroughs()
         collections = repo.trashedCollections()
         memories = repo.trashedMemories()
+        consoles = repo.trashedConsoles()
         images = repo.trashedImages()
     }
 }
