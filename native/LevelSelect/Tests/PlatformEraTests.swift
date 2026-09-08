@@ -63,4 +63,49 @@ struct PlatformEraTests {
         let sony = ["ps1", "ps2", "ps3", "ps4", "ps5"].compactMap { PlatformEra.years[$0] }
         #expect(sony == sony.sorted())
     }
+
+    /// **The waterfall's order is the whole correctness of it.** Every one of
+    /// these names contains another name tested nearby, and each was wrong
+    /// before build 39 added the art: "Super Famicom" resolved to the SNES,
+    /// "Nintendo 64DD" to the N64, "Famicom Disk System" to nothing, and the
+    /// bare "DS" would have been swallowed by "3DS".
+    @Test func namesThatContainOtherNamesResolveToTheirOwnArt() {
+        #expect(PlatformIcon.assetName("Super Famicom") == "platform-superfamicom")
+        #expect(PlatformIcon.assetName("Famicom") == "platform-famicom")
+        #expect(PlatformIcon.assetName("Family Computer") == "platform-famicom")
+        #expect(PlatformIcon.assetName("Family Computer Disk System") == "platform-famicom-disk")
+        #expect(PlatformIcon.assetName("Nintendo 64DD") == "platform-64dd")
+        #expect(PlatformIcon.assetName("Nintendo 64") == "platform-n64")
+        #expect(PlatformIcon.assetName("Nintendo DS") == "platform-ds")
+        #expect(PlatformIcon.assetName("Nintendo DSi") == "platform-ds")
+        #expect(PlatformIcon.assetName("Nintendo 3DS") == "platform-3ds")
+        #expect(PlatformIcon.assetName("PlayStation Portable") == "platform-psp")
+        #expect(PlatformIcon.assetName("PlayStation") == "platform-ps1")
+        #expect(PlatformIcon.assetName("Sega 32X") == "platform-32x")
+        #expect(PlatformIcon.assetName("Sega Mega Drive/Genesis") == "platform-genesis")
+        #expect(PlatformIcon.assetName("TurboGrafx-16/PC Engine") == "platform-turbografx16")
+        #expect(PlatformIcon.assetName("Sega Master System/Mark III") == "platform-mastersystem")
+        // And the SNES kept its own.
+        #expect(PlatformIcon.assetName("SNES") == "platform-snes")
+        #expect(PlatformIcon.assetName("Super Nintendo Entertainment System") == "platform-snes")
+    }
+
+    /// The consoles that had no art at all until build 39 — a game on any of
+    /// them drew a generic controller, and the catalogue offered four of them
+    /// with nothing to show.
+    @Test func theConsolesThatHadNoArtNowHaveIt() {
+        for name in ["Sega Dreamcast", "Sega Saturn", "Sega Game Gear",
+                     "Nintendo DS", "PlayStation Portable", "Virtual Boy"] {
+            #expect(PlatformIcon.assetName(name) != nil, Comment(rawValue: name))
+            #expect(PlatformEra.releaseYear(name) != nil, Comment(rawValue: "\(name) has no year"))
+        }
+    }
+
+    /// Every console the catalogue offers can be drawn. Offering one with no
+    /// art puts a generic controller in the display case, which is the one
+    /// place the app is claiming to show your actual hardware.
+    @Test func everythingTheCatalogueOffersHasArt() {
+        let noArt = PlatformCatalog.all.filter { PlatformIcon.assetName($0) == nil }
+        #expect(noArt == ["itch.io"], Comment(rawValue: "catalogue entries with no icon: \(noArt)"))
+    }
 }

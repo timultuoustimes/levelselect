@@ -13,12 +13,39 @@ enum PlatformIcon {
         let p = platform.lowercased()
         if p.contains("switch 2")                              { return "platform-switch2" }
         if p.contains("switch")                                { return "platform-switch" }
-        if p.contains("super nintendo") || p == "snes"
-            || p.contains("super famicom")                     { return "platform-snes" }
+        // **Japan's machines are their own machines**, and they have to be
+        // tested before the Western names that contain them. "Super Famicom"
+        // used to resolve to the SNES's art — a fair stand-in while there was
+        // no Super Famicom render, and wrong now that there is: the SFC is
+        // rounded and grey where the SNES is boxy and angular. "Famicom Disk
+        // System" contains "famicom", and "Nintendo 64DD" contains
+        // "nintendo 64", so both go above what they would otherwise match.
+        if p.contains("famicom disk") || p.contains("family computer disk")
+                                                               { return "platform-famicom-disk" }
+        if p.contains("super famicom")                         { return "platform-superfamicom" }
+        if p.contains("famicom") || p.contains("family computer")
+                                                               { return "platform-famicom" }
+        if p.contains("super nintendo") || p == "snes"         { return "platform-snes" }
+        if p.contains("64dd")                                  { return "platform-64dd" }
         if p.contains("nintendo 64") || p == "n64"             { return "platform-n64" }
         if p == "nes" || p.contains("nintendo entertainment")  { return "platform-nes" }
+        if p.contains("virtual boy")                           { return "platform-virtualboy" }
         if p.contains("gamecube")                              { return "platform-gamecube" }
+        // The 32X is a Genesis wearing a mushroom, so its art IS a Genesis
+        // with the 32X seated in it — and it has to be tested first or the
+        // add-on would resolve to the console underneath.
+        if p.contains("32x")                                   { return "platform-32x" }
         if p.contains("genesis") || p.contains("mega drive")   { return "platform-genesis" }
+        if p.contains("dreamcast")                             { return "platform-dreamcast" }
+        if p.contains("saturn")                                { return "platform-saturn" }
+        if p.contains("master system") || p.contains("mark iii")
+                                                               { return "platform-mastersystem" }
+        if p.contains("game gear")                             { return "platform-gamegear" }
+        // NEC's, under the name the app already folds it to. "PC Engine"
+        // contains "pc", and the bare PC test further down is an exact match
+        // rather than a substring, so this sits here for clarity rather than
+        // out of necessity.
+        if p.contains("turbografx") || p.contains("pc engine") { return "platform-turbografx16" }
         // Order matters: more specific strings first, since these are
         // substring matches ("xbox series" before "xbox", "ps5" before "ps").
         // This block used to violate its own rule — bare "xbox" sat above
@@ -41,8 +68,12 @@ enum PlatformIcon {
         // "PlayStation Vita" contains "playstation", so it has to be tested
         // before the bare check above would ever see it — it is above by
         // virtue of `vita` being the more specific string.
+        if p.contains("playstation portable") || p == "psp"    { return "platform-psp" }
         if p.contains("vita")                                  { return "platform-vita" }
         if p.contains("3ds")                                   { return "platform-3ds" }
+        // AFTER the 3DS, which contains "ds" — and matched by the full
+        // "nintendo ds" or an exact short name, never a bare substring.
+        if p.contains("nintendo ds") || p == "ds" || p == "dsi" { return "platform-ds" }
         if p.contains("wii u")                                 { return "platform-wiiu" }
         if p.contains("wii")                                   { return "platform-wii" }
         if p.contains("microsoft windows") || p == "pc"
@@ -163,8 +194,19 @@ enum PlatformEra {
         "vita": 2012,
         // Microsoft
         "xbox": 2001, "xbox360": 2005, "xbox-series": 2020,
-        // Sega
-        "genesis": 1989,
+        "famicom": 1983, "superfamicom": 1990, "famicom-disk": 1986,
+        "64dd": 1999, "virtualboy": 1995, "ds": 2004,
+        // Sony
+        "psp": 2005,
+        // Sega. North American dates, the same rule the rest of the table
+        // follows — Genesis is 1989 rather than the 1988 Mega Drive, so the
+        // Dreamcast is 1999 rather than the 1998 Japanese launch, and the
+        // Saturn is its 1995 US release rather than 1994.
+        "genesis": 1989, "32x": 1994, "dreamcast": 1999, "saturn": 1995,
+        "mastersystem": 1986, "gamegear": 1991,
+        // NEC, by the American name and date: the PC Engine was 1987 in
+        // Japan, the TurboGrafx-16 was 1989 here.
+        "turbografx16": 1989,
         // Valve. `steammachine` is the 2026 console, which shipped in June —
         // NOT the 2015 Steam Machine, a line of third-party PCs that shared
         // the name and died quietly. Two products, one name; the art in
