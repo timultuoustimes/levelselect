@@ -28,3 +28,4 @@ extension GameVideo: Syncable {}
 extension GameCollection: Syncable {}
 extension TrackerItemDetail: Syncable {}
 extension EarnedBadge: Syncable {}
+extension Console: Syncable {}
