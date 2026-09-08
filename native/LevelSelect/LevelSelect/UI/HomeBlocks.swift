@@ -18,17 +18,32 @@ import SwiftData
 /// count is what sits behind it.
 struct SystemsCase: View {
     @Environment(\.dynamicTypeSize) private var typeSize
+    #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     let groups: [HomeSystems.Group]
     let total: Int
     var onOpen: (String) -> Void
     var onSeeAll: () -> Void
     var onArrange: (() -> Void)?
 
+    /// Three across on a phone; on an iPad or a Mac the six fit in one row,
+    /// which is how a shelf of hardware sits when there is room for it —
+    /// three huge tiles two deep was a phone layout stretched, not a case.
+    private var wide: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+
     private var columns: [GridItem] {
         // At accessibility sizes three tiles across cannot hold a name; two
         // can, and the case still reads as a case.
-        Array(repeating: GridItem(.flexible(), spacing: 10),
-              count: typeSize.isAccessibilitySize ? 2 : 3)
+        let count = typeSize.isAccessibilitySize ? (wide ? 3 : 2)
+            : wide ? min(max(groups.count, 3), 6) : 3
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
     }
 
     var body: some View {
