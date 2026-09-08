@@ -1098,7 +1098,7 @@ struct TrackerSectionView: View {
                     } label: { Label("Delete Category", systemImage: "trash") }
                 }
             }
-            .tint(.secondary)
+            .tint(LSTheme.accent)
         }
     }
 
@@ -1241,8 +1241,11 @@ struct TrackerSectionView: View {
                     repo.setTrackerItem(pt, itemID: item.id, done: false)
                 }
             } label: {
+                // Both states in the accent — Tim, 09-08: *"Glyphs should take
+                // the accent color on the tracker page."* The empty ring is
+                // lighter, so done and not-done still read apart at a glance.
                 Image(systemName: done ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(done ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.secondary))
+                    .foregroundStyle(done ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(LSTheme.accent.opacity(0.55)))
                     .font(.body)
                     // The glyph is ~22pt; the thing you have to hit shouldn't
                     // be. Top-aligned so it still lines up with the first line

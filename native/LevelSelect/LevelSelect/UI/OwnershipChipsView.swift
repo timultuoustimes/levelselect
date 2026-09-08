@@ -69,22 +69,6 @@ struct OwnershipChipsView: View {
                 Text(order.blurb)
             }
 
-            if order == .custom {
-                Section {
-                    ForEach(chosen, id: \.self) { kind in
-                        Label(kind.label, systemImage: kind.systemImage)
-                    }
-                    .onMove(perform: move)
-                } header: {
-                    Text("Drag to arrange")
-                } footer: {
-                    Text("The same order on every game page, and on your other devices.")
-                }
-                #if !os(macOS)
-                .environment(\.editMode, .constant(.active))
-                #endif
-            }
-
             if chosen.count == 1 {
                 Section {
                     Label("One chip left. Turning off the last one puts all six back — a game page with no way to say you own the game isn't a state worth having.",
@@ -98,26 +82,62 @@ struct OwnershipChipsView: View {
 
     /// What the row will actually look like, which `Most used` needs: it is
     /// the one order you cannot work out by reading the list above.
+    ///
+    /// **In Custom, the chips themselves are the arranger.** Each one grows a
+    /// grip and can be dragged onto another to take its place — the order is
+    /// edited where it is seen, rather than in a second list below. Tim,
+    /// 09-08: *"custom order button for ownership & access should add the
+    /// grips to the different ones in place, instead of opening a new
+    /// reordering thing below it."*
     private var preview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 6) {
             ForEach(chosen, id: \.self) { kind in
-                HStack(spacing: 4) {
-                    Image(systemName: kind.systemImage)
-                    Text(kind.label)
-                }
-                .font(.caption2.weight(.medium))
-                .lineLimit(1)
-                .padding(.horizontal, 7).padding(.vertical, 4)
-                .background(LSTheme.cardFill, in: .capsule)
-                .overlay(Capsule().strokeBorder(LSTheme.hairline, lineWidth: 1))
+                chip(kind)
             }
         }
         .foregroundStyle(.secondary)
         .padding(.vertical, 2)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: order == .custom ? .contain : .combine)
         .accessibilityLabel("Preview: " + chosen.map(\.label).joined(separator: ", "))
+    }
+
+    @ViewBuilder
+    private func chip(_ kind: Ownership) -> some View {
+        let label = HStack(spacing: 4) {
+            if order == .custom {
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            Image(systemName: kind.systemImage)
+            Text(kind.label)
+        }
+        .font(.caption2.weight(.medium))
+        .lineLimit(1)
+        .padding(.horizontal, 7).padding(.vertical, 4)
+        .background(LSTheme.cardFill, in: .capsule)
+        .overlay(Capsule().strokeBorder(LSTheme.hairline, lineWidth: 1))
+
+        if order == .custom {
+            label
+                .draggable(kind.rawValue)
+                .dropDestination(for: String.self) { dropped, _ in
+                    guard let raw = dropped.first, let moved = Ownership(rawValue: raw),
+                          moved != kind,
+                          let from = chosen.firstIndex(of: moved),
+                          let to = chosen.firstIndex(of: kind) else { return false }
+                    var list = chosen
+                    list.remove(at: from)
+                    list.insert(moved, at: to)
+                    write(chips: list, order: .custom)
+                    return true
+                }
+                .accessibilityHint("Drag onto another chip to take its place")
+        } else {
+            label
+        }
     }
 
     private func binding(for kind: Ownership) -> Binding<Bool> {
@@ -136,12 +156,6 @@ struct OwnershipChipsView: View {
                     : Ownership.allCases.filter(next.contains)
                 write(chips: list, order: order)
             })
-    }
-
-    private func move(from source: IndexSet, to destination: Int) {
-        var list = chosen
-        list.move(fromOffsets: source, toOffset: destination)
-        write(chips: list, order: .custom)
     }
 
     /// Switching modes rewrites the stored list in that mode's own order, so

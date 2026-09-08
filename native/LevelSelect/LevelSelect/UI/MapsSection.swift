@@ -14,6 +14,11 @@ struct MapsSection: View {
 
     @State private var viewing: MapViewerTarget?
     @State private var photoItem: PhotosPickerItem?
+    /// A `PhotosPicker` INSIDE a `Menu` never presents — the menu dismisses
+    /// and the picker's presentation goes with it. Tim, 09-08: *"tapping add
+    /// map from photo library doesn't open the photo picker."* The menu item
+    /// is a button, and the picker is a modifier on the section.
+    @State private var choosingPhoto = false
     @State private var choosingFile = false
     @State private var finding = false
     @State private var naming: PendingMap?
@@ -74,6 +79,8 @@ struct MapsSection: View {
             }
             .lsSheet([.large])
         }
+        .photosPicker(isPresented: $choosingPhoto, selection: $photoItem,
+                      matching: .images, photoLibrary: .shared())
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task {
@@ -133,7 +140,7 @@ struct MapsSection: View {
 
     private var addMenu: some View {
         Menu {
-            PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+            Button { choosingPhoto = true } label: {
                 Label("Photo Library", systemImage: "photo.on.rectangle")
             }
             Button { choosingFile = true } label: {

@@ -50,7 +50,7 @@ struct SettingsPage<Content: View>: View {
         // Statuses, 2026-09-08: grey words over Balatro. The glass stays at
         // the edges; the words get the same bed the root has.
         .scrollContentBackground(.hidden)
-        .background(LSTheme.background)
+        .background(LSTheme.liveGround)
         .navigationTitle(title)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)

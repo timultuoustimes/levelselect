@@ -977,8 +977,12 @@ struct HomeTab: View {
     /// Hiding writes the synced layout now. The old device-local set is read
     /// once, as the starting point, and then it is spent — see `HomeLayout`.
     private func setHidden(_ status: GameStatus, _ hidden: Bool) {
+        setHidden(block: .status(status), hidden)
+    }
+
+    private func setHidden(block: HomeBlock, _ hidden: Bool) {
         var next = layout
-        next.setHidden(.status(status), hidden)
+        next.setHidden(block, hidden)
         write(next)
     }
 
@@ -1043,15 +1047,13 @@ struct HomeTab: View {
 
     /// Every system in the library with a count, in the person's order.
     private var systemGroups: [HomeSystems.Group] {
-        var counts: [String: Int] = [:]
-        for game in games where game.status != .wishlist {
-            let owned = game.ownedPlatformNames
-            for platform in (owned.isEmpty ? ["Other"] : owned) {
-                counts[platform, default: 0] += 1
-            }
-        }
+        // Folded by the name people see, not the stored string. "Nintendo
+        // Switch 2" from IGDB and "Switch 2" typed by hand are one console;
+        // grouped raw they were two tiles, one with the generic icon. Tim,
+        // 09-08: *"I'm seeing switch 2 twice in my consoles."* The Library's
+        // menu learned this on 09-06; the case now follows the same rule.
         return HomeSystems.ordered(raw: themeSettings.first?.homeSystemsRaw,
-                                   available: counts.map { (platform: $0.key, count: $0.value) })
+                                   available: HomeSystems.folded(games.filter { $0.status != .wishlist }))
     }
 
     @ViewBuilder
@@ -1108,13 +1110,21 @@ struct HomeTab: View {
                         SystemsCase(groups: shown, total: all.count,
                                     onOpen: { path.append(PlatformRoute(platform: $0)) },
                                     onSeeAll: { nav.selectedTab = .library },
-                                    onArrange: { arrangingSystems = true })
+                                    onArrange: { arrangingSystems = true },
+                                    onArrangeHome: { arrangingHome = true },
+                                    onHide: { setHidden(block: .systems, true) })
                     case .row:
                         SystemsRow(groups: shown) { path.append(PlatformRoute(platform: $0)) }
                             .contextMenu {
                                 Button { arrangingSystems = true } label: {
                                     Label("Arrange Systems…", systemImage: "arrow.up.arrow.down")
                                 }
+                                Button { arrangingHome = true } label: {
+                                    Label("Arrange Home…", systemImage: "arrow.up.arrow.down")
+                                }
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.25)) { setHidden(block: .systems, true) }
+                                } label: { Label("Hide from Home", systemImage: "eye.slash") }
                             }
                     }
                 }

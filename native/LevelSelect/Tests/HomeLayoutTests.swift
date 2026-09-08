@@ -113,4 +113,18 @@ struct HomeSystemsTests {
         #expect(HomeSystems.parse(raw).order == [snes])
         #expect(HomeSystems.parse("sort=nonsense,X").sort == .custom)
     }
+
+    @Test("Two spellings of one console fold into one tile with the sum, keeping the busier spelling")
+    func systemsFoldBySeenName() {
+        let folded = HomeSystems.fold([(platform: "Nintendo Switch 2", count: 13),
+                                       (platform: "Switch 2", count: 4),
+                                       (platform: "NES", count: 7)])
+        #expect(folded.count == 2)
+        let switch2 = folded.first { PlatformShort.builtinName($0.platform) == "Switch 2" }
+        #expect(switch2?.count == 17)
+        #expect(switch2?.platform == "Nintendo Switch 2")
+        // And a stored order written with the other spelling still places it.
+        let ordered = HomeSystems.ordered(raw: "sort=custom,NES,Switch 2", available: folded)
+        #expect(ordered.map { PlatformShort.builtinName($0.platform) } == ["NES", "Switch 2"])
+    }
 }

@@ -55,6 +55,7 @@ enum ProfileNameColor {
         if raw == accent, !ThemePalette.accentIsCustom { return LSTheme.torchShadow }
         // A palette pair carries its own step; nothing to derive.
         if raw == accent, ThemePalette.activePair != nil { return ThemePalette.accentStep }
+        if let pair = LSPalette.pair(matching: raw) { return pair.stepColor }
         return LSTheme.hardStep(under: ink)
     }
 

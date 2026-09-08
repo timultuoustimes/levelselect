@@ -297,6 +297,10 @@ struct RecentlyDeletedView: View {
         if let map = repo.map(backedBy: image) {
             // Say it is a map, and how many pins come back with it.
             let pins = (map.markers ?? []).filter { $0.deletedAt == nil }.count
+            // The map's own name leads — "World · map · 6 pins" — because a
+            // thumbnail of a map is not a thing anyone recognizes. Tim, 09-08.
+            let name = map.name.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty { parts.append(name) }
             parts.append(pins == 0 ? "map" : "map · \(pins) pin\(pins == 1 ? "" : "s")")
         }
         if let game = image.game {

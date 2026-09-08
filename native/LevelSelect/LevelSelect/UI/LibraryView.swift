@@ -280,11 +280,20 @@ struct LibraryTab: View {
             .sorted { ($1.count, $0.platform) < ($0.count, $1.platform) }
     }
 
+    /// The collections worth showing right now. While searching, only the
+    /// ones a matching game is in — a search for "Zelda" should not put
+    /// every collection above the results. Tim, 09-08.
+    private var shelfCollections: [GameCollection] {
+        guard !searchText.isEmpty else { return collections }
+        let hits = visible
+        return collections.filter { !$0.members(in: hits).isEmpty }
+    }
+
     @ViewBuilder
     private var collectionShelf: some View {
-        if !collections.isEmpty {
+        if !shelfCollections.isEmpty {
             CollectionShelf(
-                collections: collections, games: games,
+                collections: shelfCollections, games: games,
                 onNew: { newCollectionName = ""; newCollection = true },
                 onNewFromTemplate: { sheet = .collectionTemplates })
         }
@@ -402,7 +411,7 @@ struct LibraryTab: View {
 
     private var listView: some View {
         List {
-            if !collections.isEmpty {
+            if !shelfCollections.isEmpty {
                 collectionShelf
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 8, trailing: 0))

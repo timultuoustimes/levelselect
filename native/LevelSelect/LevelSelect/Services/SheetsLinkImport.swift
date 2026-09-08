@@ -88,16 +88,52 @@ enum SheetsLinkImport {
     static func markdownTable(fromCSV csv: String) -> String {
         let rows = CSVImport.parseCSV(csv)
             .map { $0.map { $0.replacingOccurrences(of: "|", with: "/").trimmingCharacters(in: .whitespaces) } }
-            .filter { row in row.contains { !$0.isEmpty } }
-        guard let header = rows.first else { return "" }
-        let width = rows.map(\.count).max() ?? header.count
-        func line(_ cells: [String]) -> String {
-            let padded = cells + Array(repeating: "", count: max(0, width - cells.count))
-            return "| " + padded.joined(separator: " | ") + " |"
+        func blank(_ row: [String]) -> Bool { !row.contains { !$0.isEmpty } }
+        func cell(_ row: [String], _ i: Int) -> String { row.indices.contains(i) ? row[i] : "" }
+        func words(_ s: String) -> Int { s.split(separator: " ").count }
+        /// A sentence in a cell, not a name — the calculator's caption.
+        func prose(_ s: String) -> Bool { s.count > 40 || words(s) > 5 }
+
+        // **The list is not always the first thing on the tab.** Tim's Hollow
+        // Knight sheet opens with a banner ("Created by…", "MAKE A COPY…"),
+        // then a blank row, THEN the charm table — with three calculators
+        // beside it and a notes block below. Read top to bottom as one table
+        // it became 229 "items" with "Input 1" among the charms.
+        //
+        // So: the header is the first row that names a thing the parser
+        // recognizes ("Charm", "Name", "Boss"…), else the first row with two
+        // filled cells. The table is that row's contiguous columns, up to
+        // its first empty one — the gap where a neighboring table begins.
+        // A blank row inside a list is skipped; a blank row followed by
+        // prose, or by a row with nothing in the name column, is the end.
+        let nameKeys = ["name", "item", "trinket", "title", "collectible", "charm", "boss", "objective", "thing"]
+        let headerIdx = rows.firstIndex { row in
+            row.contains { c in nameKeys.contains(where: { c.lowercased().contains($0) }) && !prose(c) }
+        } ?? rows.firstIndex { row in row.filter { !$0.isEmpty }.count >= 2 && !prose(cell(row, 0)) }
+        guard let headerIdx else { return "" }
+        let header = rows[headerIdx]
+        var end = header.count
+        for i in header.indices where header[i].isEmpty { end = i; break }
+        guard end >= 1, !cell(header, 0).isEmpty else { return "" }
+
+        func line(_ row: [String]) -> String {
+            "| " + (0..<end).map { cell(row, $0) }.joined(separator: " | ") + " |"
         }
-        var out = [line(header), "|" + String(repeating: " --- |", count: width)]
-        out += rows.dropFirst().map(line)
-        return out.joined(separator: "\n")
+        var out = [line(header), "|" + String(repeating: " --- |", count: end)]
+        var i = headerIdx + 1
+        while i < rows.count {
+            let row = rows[i]
+            if blank(row) {
+                // Look past the gap: more of the list, or something else?
+                let next = rows[(i + 1)...].first { !blank($0) }
+                guard let next, !cell(next, 0).isEmpty, !prose(cell(next, 0)) else { break }
+                i += 1
+                continue
+            }
+            if (0..<end).contains(where: { !cell(row, $0).isEmpty }) { out.append(line(row)) }
+            i += 1
+        }
+        return out.count > 2 ? out.joined(separator: "\n") : ""
     }
 
     /// The whole road: link → export → CSV → table text ready to parse.

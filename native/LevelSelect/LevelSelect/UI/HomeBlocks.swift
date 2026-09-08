@@ -26,6 +26,11 @@ struct SystemsCase: View {
     var onOpen: (String) -> Void
     var onSeeAll: () -> Void
     var onArrange: (() -> Void)?
+    /// The same two choices every other shelf offers on a long-press. Tim,
+    /// 09-08: *"it should prompt to let me arrange library to arrange home and
+    /// to hide from home, just like the others."*
+    var onArrangeHome: (() -> Void)?
+    var onHide: (() -> Void)?
 
     /// Three across on a phone; on an iPad or a Mac the six fit in one row,
     /// which is how a shelf of hardware sits when there is room for it —
@@ -58,6 +63,16 @@ struct SystemsCase: View {
                         Button { onArrange() } label: {
                             Label("Arrange Systems…", systemImage: "arrow.up.arrow.down")
                         }
+                    }
+                    if let onArrangeHome {
+                        Button { onArrangeHome() } label: {
+                            Label("Arrange Home…", systemImage: "arrow.up.arrow.down")
+                        }
+                    }
+                    if let onHide {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) { onHide() }
+                        } label: { Label("Hide from Home", systemImage: "eye.slash") }
                     }
                 }
 

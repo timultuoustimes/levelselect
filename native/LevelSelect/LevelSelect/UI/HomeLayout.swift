@@ -290,14 +290,46 @@ enum HomeSystems {
         (["sort=\(sort.rawValue)"] + order).joined(separator: ",")
     }
 
+    /// One group per console the person SEES, counting every stored spelling
+    /// of it. The representative string is the spelling behind most games,
+    /// so the tile keeps the art it had and the route opens the same shelf.
+    static func folded(_ games: [Game]) -> [Group] {
+        var counts: [String: Int] = [:]
+        for game in games {
+            let owned = game.ownedPlatformNames
+            for platform in (owned.isEmpty ? ["Other"] : owned) {
+                counts[platform, default: 0] += 1
+            }
+        }
+        return fold(counts.map { (platform: $0.key, count: $0.value) })
+    }
+
+    /// Pure, so the folding can be tested without a store.
+    static func fold(_ raw: [Group]) -> [Group] {
+        var byShort: [String: Group] = [:]
+        for g in raw {
+            let key = PlatformShort.builtinName(g.platform)
+            if let have = byShort[key] {
+                byShort[key] = (platform: have.count >= g.count ? have.platform : g.platform,
+                                count: have.count + g.count)
+            } else {
+                byShort[key] = g
+            }
+        }
+        return Array(byShort.values)
+    }
+
     /// Every system in the library, in the stored order, newcomers last.
+    ///
+    /// Matched by short name on both sides, so an order stored as "Switch 2"
+    /// still places a group whose representative string is "Nintendo Switch 2".
     static func ordered(raw: String?, available: [Group]) -> [Group] {
         let stored = parse(raw)
         var byName: [String: Group] = [:]
-        for g in available { byName[g.platform] = g }
+        for g in available { byName[PlatformShort.builtinName(g.platform)] = g }
         var result: [Group] = []
         for name in stored.order {
-            if let g = byName.removeValue(forKey: name) { result.append(g) }
+            if let g = byName.removeValue(forKey: PlatformShort.builtinName(name)) { result.append(g) }
         }
         // Newcomers in the app's own order, so two devices agree on where a
         // new console lands.

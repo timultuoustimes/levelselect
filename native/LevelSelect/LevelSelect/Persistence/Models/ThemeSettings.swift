@@ -58,7 +58,9 @@ final class ThemeSettings {
     var pageBackgroundRaw: String = ThemePageBackground.cover.rawValue
     /// Library-wide default tracker display ("inline"/"compact"). Per-game
     /// overrides (Game.trackerDisplayRaw) always win over this.
-    var defaultTrackerDisplayRaw: String = TrackerDisplay.inline.rawValue
+    // Compact by default since build 38 (Tim, 09-08): the playthrough card
+    // and its own page, rather than the whole tracker inline on the game page.
+    var defaultTrackerDisplayRaw: String = TrackerDisplay.compact.rawValue
 
     // MARK: Schema V2
     //

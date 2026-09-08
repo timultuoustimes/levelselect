@@ -46,4 +46,52 @@ struct SheetsLinkImportTests {
         let parsed = TrackerListParser.parse(table, defaultCategoryName: "Sheet")
         #expect(parsed.itemCount == 2)
     }
+
+    @Test("The list is found under a banner, trimmed to its own columns, and ends where the calculators begin")
+    func listFoundOnABusyTab() {
+        let csv = """
+        Created by someone,,,Today's Date:,9/8/2026
+        ,,,,
+        Charm,Equipped,Boost Value,,Owned,Normal Spell
+        Unbreakable Strength,TRUE,50%,,TRUE,Vengeful Spirit
+        Shaman Stone,FALSE,33%,,TRUE,Desolate Dive
+        ,,,,
+        Soul Catcher,FALSE,3,,,
+        ,,,,
+        All values are under an ideal scenario where all attacks hit,,,,
+        ,Nail Damage,Spell Damage,,
+        Input 1,Pure Nail,Shade Soul,,
+        Output 1,21,20,,
+        """
+        let table = SheetsLinkImport.markdownTable(fromCSV: csv)
+        #expect(table.hasPrefix("| Charm | Equipped | Boost Value |"))
+        #expect(!table.contains("Owned"))          // the neighbor table to the right is not this list
+        #expect(!table.contains("Input 1"))        // the calculator below is not a list
+        #expect(!table.contains("Created by"))     // the banner above is not the header
+        let parsed = TrackerListParser.parse(table)
+        #expect(parsed.categories.count == 1)
+        #expect(parsed.categories.first?.name == "Charm")
+        #expect(parsed.itemCount == 3)             // the blank row inside the list is skipped
+    }
+
+    @Test("Two tables under headings become two categories")
+    func headedTables() {
+        let text = """
+        ## Bosses
+        | Name | Location |
+        | --- | --- |
+        | False Knight | Forgotten Crossroads |
+        | Hornet | Greenpath |
+
+        ## Charms
+        | Name | Notes |
+        | --- | --- |
+        | Wayward Compass | Iselda |
+        """
+        let parsed = TrackerListParser.parse(text)
+        #expect(parsed.categories.map(\.name) == ["Bosses", "Charms"])
+        #expect(parsed.categories[0].items.map(\.name) == ["False Knight", "Hornet"])
+        #expect(parsed.categories[0].items[0].location == "Forgotten Crossroads")
+        #expect(parsed.categories[1].items.count == 1)
+    }
 }

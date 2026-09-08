@@ -144,6 +144,7 @@ struct TrackerPageView: View {
     @Bindable var game: Game
     @Environment(\.modelContext) private var context
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.dismiss) private var dismiss
     @State private var tab: Tab = .tracker
     @State private var playing: GameVideo?
@@ -244,6 +245,18 @@ struct TrackerPageView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            // The game's logo where its name would be, when it has one and
+            // logos are on — Tim, 09-08: *"Tracker page's game title should be
+            // the logo."* The title string stays for VoiceOver and for games
+            // without one.
+            if ThemePalette.showGameLogos, !typeSize.isAccessibilitySize,
+               !game.resolvedArtwork(.logo).isEmpty {
+                ToolbarItem(placement: .principal) {
+                    ArtworkView(game.resolvedArtwork(.logo), contentMode: .fit)
+                        .frame(maxWidth: 200, maxHeight: 30)
+                        .accessibilityLabel(trackerTitle)
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     tab = .videos

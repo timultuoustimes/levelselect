@@ -16,6 +16,21 @@ import PhotosUI
 struct ProfileHeader: View {
     let profile: PlayerProfile?
     let summary: PlayerSummary
+    #if !os(macOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+    /// A wide page centers the identity and gives it room — an 84pt portrait
+    /// against the left edge of a 1,000pt Home read as a footnote. Tim,
+    /// 09-08: *"iPad profile name and image should be centered maybe? right
+    /// now it is left aligned and feels a bit small."*
+    private var wide: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+    private var portraitSize: CGFloat { wide ? Self.portrait * 1.35 : Self.portrait }
     /// Extra art drawn ABOVE the header's own top edge, so it reaches up
     /// behind the toolbar. Home passes the top safe-area inset.
     var topOverscan: CGFloat = 0
@@ -159,7 +174,8 @@ struct ProfileHeader: View {
     }
 
     private func identity(_ profile: PlayerProfile) -> some View {
-        HStack(alignment: .bottom, spacing: 12) {
+        HStack(alignment: .bottom, spacing: wide ? 18 : 12) {
+            if wide { Spacer(minLength: 0) }
             avatar(profile)
             VStack(alignment: .leading, spacing: 6) {
                 if let name = profile.resolvedDisplayName {
@@ -177,7 +193,7 @@ struct ProfileHeader: View {
                     let ink = ProfileNameColor.resolve(profile.nameColorRaw ?? "")
                     Text(name)
                         .foregroundStyle(ink)
-                        .font(LSTheme.pixel(22))
+                        .font(LSTheme.pixel(wide ? 28 : 22))
                         .fontDesign(nil)   // never let an app-wide design override the pixel face
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -202,7 +218,7 @@ struct ProfileHeader: View {
                         // which carries the measurement and the reasoning.
                         .shadow(color: ProfileNameColor.step(
                                     under: ink, raw: profile.nameColorRaw ?? ""),
-                                radius: 0, y: LSTheme.pixelStep(for: 22))
+                                radius: 0, y: LSTheme.pixelStep(for: wide ? 28 : 22))
                 }
                 handleChips(profile)
             }
@@ -308,7 +324,7 @@ struct ProfileHeader: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
         }
-        .frame(width: Self.portrait, height: Self.portrait)
+        .frame(width: portraitSize, height: portraitSize)
         .shadow(color: .black.opacity(0.55), radius: 10, y: 5)
     }
 

@@ -32,6 +32,33 @@ struct LSPaletteTests {
         }
     }
 
+    @Test("Pink's step is the one Tim corrected, and every step is darker than its accent")
+    func stepsAreAuthored() {
+        #expect(LSPalette.pair(matching: "#FF74D9")?.step == "#8C2D8D")
+        for p in LSPalette.pairs {
+            #expect(LSContrast.luminance(of: p.stepColor) < LSContrast.luminance(of: p.accentColor),
+                    Comment(rawValue: p.name))
+        }
+    }
+
+    @Test("The ground is the pair laid over the base: purple reproduces Tim's sheet, and no tint means purple")
+    func groundIsAnOverlay() throws {
+        let purple = LSPalette.pair(matching: "#976EF5")!
+        let dark = try #require(LSPalette.ground(tint: purple.accentColor, dark: true).lsRGB)
+        let light = try #require(LSPalette.ground(tint: purple.accentColor, dark: false).lsRGB)
+        // #2E214F and #F0E5FE on the sheet; within a few units either way.
+        #expect(abs(dark.r - 0x2E / 255.0) < 0.03 && abs(dark.g - 0x21 / 255.0) < 0.03 && abs(dark.b - 0x4F / 255.0) < 0.03)
+        #expect(abs(light.r - 0xF0 / 255.0) < 0.03 && abs(light.g - 0xE5 / 255.0) < 0.03 && abs(light.b - 0xFE / 255.0) < 0.03)
+        // Nothing stored is the same as purple.
+        #expect(LSPalette.ground(tint: nil, dark: true).hexString() == LSPalette.ground(tint: purple.accentColor, dark: true).hexString())
+        // Every pair's dark ground stays dark and light ground stays light —
+        // the overlay cannot take the base past legibility.
+        for p in LSPalette.pairs {
+            #expect(LSContrast.luminance(of: LSPalette.ground(tint: p.accentColor, dark: true)) < 0.1, Comment(rawValue: p.name))
+            #expect(LSContrast.luminance(of: LSPalette.ground(tint: p.accentColor, dark: false)) > 0.7, Comment(rawValue: p.name))
+        }
+    }
+
     @Test("Lookup is case- and hash-insensitive, and misses honestly")
     func lookup() {
         #expect(LSPalette.pair(matching: "#f2a24b")?.name == "Torch")

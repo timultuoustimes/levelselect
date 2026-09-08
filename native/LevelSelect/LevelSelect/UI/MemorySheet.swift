@@ -23,6 +23,7 @@ struct MemorySheet: View {
     var initialDate: Date?
 
     @Environment(\.modelContext) private var context
+    @State private var confirmingDelete = false
     @Environment(\.dismiss) private var dismiss
 
     @State private var title = ""
@@ -306,8 +307,29 @@ struct MemorySheet: View {
                     TextField("Console or platform", text: $platform)
                     TextField("Where (a place name, not an address)", text: $place)
                 }
+                if existing != nil {
+                    Section {
+                        Button(role: .destructive) { confirmingDelete = true } label: {
+                            Label("Delete Memory", systemImage: "trash")
+                        }
+                    }
+                }
             }
             .navigationTitle(existing == nil ? "New memory" : "Memory")
+            // Tim, 09-08: *"I can't find a way to delete a memory."* It goes
+            // to Recently Deleted with its pictures, the same as everything.
+            .confirmationDialog("Delete this memory?", isPresented: $confirmingDelete,
+                                titleVisibility: .visible) {
+                Button("Delete Memory", role: .destructive) {
+                    if let existing {
+                        Repository(context).deleteMemory(existing)
+                    }
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It moves to Recently Deleted for 30 days, with its pictures.")
+            }
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif

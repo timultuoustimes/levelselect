@@ -335,7 +335,7 @@ struct ContinueHeroCard: View {
                 VStack(spacing: 4) {
                     Image(systemName: "play.fill")
                     if !typeSize.isAccessibilitySize {
-                        Text("Play").font(.caption.weight(.semibold))
+                        Text("Play").font(.caption.weight(.bold))
                     }
                 }
                 .frame(width: 56, height: 56)
@@ -385,8 +385,7 @@ struct ContinueHeroCard: View {
                     //
                     // The glow above stays: it does the lifting, this does the
                     // shape.
-                    .shadow(color: LSTheme.hardStep(under: LSTheme.accent),
-                            radius: 0, y: 3)
+                    .shadow(color: LSTheme.accentStep, radius: 0, y: 3)
             }
             .foregroundStyle(LSTheme.onAccent)
         }

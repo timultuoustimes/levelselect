@@ -208,7 +208,10 @@ struct SessionControlsView: View {
                 Label("Start Session", systemImage: "play.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            // The palette's button, not the system's: accent fill, the
+            // pair's step as ink and as the hard edge beneath — white text
+            // on a light ground was the giveaway. See `LSPrimaryButtonStyle`.
+            .buttonStyle(LSPrimaryButtonStyle())
 
             Button {
                 showingLog = true

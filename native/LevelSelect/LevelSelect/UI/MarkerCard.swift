@@ -9,6 +9,8 @@ import SwiftData
 struct MarkerCard: View {
     let marker: Marker
     let game: Game
+    /// Asked to move this pin: the viewer enters place mode with it in hand.
+    var onMove: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var context
 
@@ -95,6 +97,12 @@ struct MarkerCard: View {
                 }
 
                 Section {
+                    if let onMove {
+                        // Tim, 09-08: *"I need to be able to move a location pin."*
+                        Button { save(); onMove(); dismiss() } label: {
+                            Label("Move Pin", systemImage: "arrow.up.and.down.and.arrow.left.and.right")
+                        }
+                    }
                     Button(role: .destructive) { confirmingDelete = true } label: {
                         Label("Delete Pin", systemImage: "trash")
                     }

@@ -66,6 +66,8 @@ struct MapViewerView: View {
 
     struct Placing {
         var item: TrackerItemDTO?
+        /// An existing pin being moved, rather than a new one being dropped.
+        var moving: Marker? = nil
     }
 
     private var maps: [GameMap] { repo.liveMaps(of: game) }
@@ -167,7 +169,10 @@ struct MapViewerView: View {
                 }
             }
             .sheet(item: $editing) { marker in
-                MarkerCard(marker: marker, game: game).lsSheet()
+                MarkerCard(marker: marker, game: game) {
+                    placing = Placing(item: nil, moving: marker)
+                }
+                .lsSheet()
             }
             .alert("Rename map", isPresented: $renaming) {
                 TextField("Name", text: $mapName)
@@ -255,12 +260,14 @@ struct MapViewerView: View {
                     Button {
                         placeAtCenter(fitted: fitted, container: geo.size)
                     } label: {
-                        Label(placing?.item.map { "Place \"\($0.name)\" here" } ?? "Place here",
+                        Label(placing?.moving != nil ? "Move here"
+                              : placing?.item.map { "Place \"\($0.name)\" here" } ?? "Place here",
                               systemImage: "mappin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(LSTheme.accentFill, in: .capsule)
-                            .foregroundStyle(ThemePalette.knockout(on: LSTheme.accentFill))
+                            .background(Capsule().fill(LSTheme.accentFill)
+                                .shadow(color: LSTheme.accentStep, radius: 0, y: 3))
+                            .foregroundStyle(LSTheme.onAccent)
                     }
                     .buttonStyle(.plain)
                     .padding(.bottom, 130)
@@ -287,6 +294,11 @@ struct MapViewerView: View {
         guard let map, fitted.width > 0, fitted.height > 0 else { return }
         let x = point.x / fitted.width, y = point.y / fitted.height
         guard (0...1).contains(x), (0...1).contains(y) else { return }
+        if let moving = placing?.moving {
+            repo.moveMarker(moving, x: x, y: y)
+            placing = nil
+            return
+        }
         let item = placing?.item
         let marker = repo.addMarker(to: map, x: x, y: y,
                                     category: item == nil ? .note : .collectible,

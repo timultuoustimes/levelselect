@@ -552,7 +552,7 @@ struct AppearanceSettingsSection: View {
     private var trackerDisplayBinding: Binding<TrackerDisplay> {
         Binding(
             get: {
-                settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
+                settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .compact
             },
             set: { choice in
                 let s = ensureSettings()

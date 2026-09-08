@@ -86,6 +86,17 @@ extension LSTheme {
     }
 }
 
+extension LSTheme {
+    /// The ground as chosen — the tinted gradient every page stands on.
+    /// `background` (Shared) is the untinted default the widgets use; a page
+    /// in the app should stand on THIS, or a chosen ground stops at Home.
+    @MainActor
+    static var liveGround: LinearGradient {
+        ground(lightTint: ThemePalette.backgroundOverrideLight,
+               darkTint: ThemePalette.backgroundOverrideDark)
+    }
+}
+
 extension View {
     /// Full-bleed themed background.
     func lsBackground() -> some View {
@@ -296,16 +307,61 @@ extension View {
     /// Deliberately soft: strong enough to rescue a control on white key art,
     /// weak enough to be invisible on the dark art that never needed it.
     func lsToolbarScrim(over hasArt: Bool) -> some View {
-        shadow(color: .black.opacity(hasArt ? 0.5 : 0), radius: 3, y: 1)
+        modifier(LSToolbarScrim(hasArt: hasArt))
+    }
+}
+
+/// The scrim, weighed per appearance. In dark mode a 0.5 shadow under the
+/// glyph vanishes into the art; in light mode the same shadow sat under the
+/// glass ring as a grey smear — Tim, 09-08: *"shadow under the ellipses menu
+/// is currently very weird looking on light mode."* Light gets a quarter
+/// of it, which still separates the ring from bright art.
+private struct LSToolbarScrim: ViewModifier {
+    let hasArt: Bool
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        content
+            .shadow(color: .black.opacity(hasArt ? (dark ? 0.5 : 0.12) : 0),
+                    radius: dark ? 3 : 1.5, y: 1)
             .background {
                 if hasArt {
                     Circle()
                         .fill(RadialGradient(
-                            colors: [.black.opacity(0.34), .black.opacity(0)],
+                            colors: [.black.opacity(dark ? 0.34 : 0.14), .black.opacity(0)],
                             center: .center, startRadius: 1, endRadius: 20))
                         .frame(width: 40, height: 40)
                         .allowsHitTesting(false)
                 }
             }
+    }
+}
+
+/// **The primary button, as Tim drew it.** The accent as the fill, the
+/// pair's step as the ink AND as a hard edge along the bottom — a pixel-art
+/// object standing on its own shadow, not a glass pill. Tim, 09-08: *"I also
+/// prefer how my buttons look, and they should be like that throughout the
+/// app. I think to start, at the very least, change the Play button to match.
+/// right now it's still white text when in light mode."*
+///
+/// Bold, not semibold: SF Pro is the app's face for everything but the
+/// wordmark, and the sheet was set in SF Pro Display Bold.
+struct LSPrimaryButtonStyle: ButtonStyle {
+    var cornerRadius: CGFloat = 12
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.callout.weight(.bold))
+            .foregroundStyle(LSTheme.onAccent)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(LSTheme.accentFill)
+                    .shadow(color: LSTheme.accentStep, radius: 0, y: configuration.isPressed ? 1 : 3)
+            }
+            .offset(y: configuration.isPressed ? 2 : 0)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
     }
 }

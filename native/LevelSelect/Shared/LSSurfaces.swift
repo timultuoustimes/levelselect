@@ -70,8 +70,15 @@ enum LSTheme {
     /// so a warm light ground and a cool dark one do not have to compromise.
     static func ground(lightTint: Color?, darkTint: Color?,
                        scheme: ColorScheme? = nil) -> LinearGradient {
-        let lightHue = lightTint?.lsHueSaturation
-        let darkHue = darkTint?.lsHueSaturation
+        // **The ground is the tint laid over a base, not a hue re-shaded.**
+        //
+        // Build 37 took hue and saturation from the tint and fixed brightness
+        // per appearance. Build 38 replaced the picker with seven pairs, and
+        // Tim built the grounds for them himself: the pair's accent as a 100%
+        // overlay on a base grey and a base charcoal — see
+        // `LSPalette.ground(tint:dark:bottom:)`. Same safety property as
+        // before (an overlay cannot take the base past legibility) and the
+        // grounds now match his sheet exactly.
         func pick(_ light: Color, _ dark: Color) -> Color {
             switch scheme {
             case .light: light
@@ -81,14 +88,10 @@ enum LSTheme {
         }
         return LinearGradient(
             colors: [
-                pick(shade(lightHue, brightness: 0.97, saturation: 0.06,
-                           fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
-                     shade(darkHue, brightness: 0.16, saturation: 0.55,
-                           fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
-                pick(shade(lightHue, brightness: 0.88, saturation: 0.10,
-                           fallback: Color(red: 0.88, green: 0.86, blue: 0.94)),
-                     shade(darkHue, brightness: 0.07, saturation: 0.60,
-                           fallback: Color(red: 0.05, green: 0.04, blue: 0.09))),
+                pick(LSPalette.ground(tint: lightTint, dark: false),
+                     LSPalette.ground(tint: darkTint, dark: true)),
+                pick(LSPalette.ground(tint: lightTint, dark: false, bottom: true),
+                     LSPalette.ground(tint: darkTint, dark: true, bottom: true)),
             ],
             startPoint: .top, endPoint: .bottom
         )

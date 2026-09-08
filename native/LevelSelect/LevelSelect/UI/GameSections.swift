@@ -14,7 +14,9 @@ import SwiftData
 /// section that's absent anyway — Runs without a template and About without a
 /// summary never render regardless of this preference.
 enum GamePageSection: String, CaseIterable, Identifiable {
-    case sessions, beaten, runs, tracker, videos, about, media, maps, info
+    // Maps sit between the tracker and the videos: a map answers "where",
+    // which is the tracker's next question, not the media's. Tim, 09-08.
+    case sessions, beaten, runs, tracker, maps, videos, about, media, info
     case connections, tags, review, notes
 
     var id: String { rawValue }

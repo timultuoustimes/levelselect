@@ -442,9 +442,12 @@ struct AccentContrastTests {
     @Test func theDefaultAccentGetsTheHigherContrastOption() {
         ThemePalette.refresh(from: nil)
         for dark in [false, true] {
-            let accent = dark ? LSTheme.torch : LSTheme.torchInk
-            let ink = ThemePalette.knockoutPreview(on: accent,
-                                                   ground: ThemePalette.groundBase(dark: dark))
+            // As the app resolves it: the default ink is corrected against the
+            // ground first (build 38's ground is the purple overlay, a shade
+            // deeper than 37's), and the knockout is asked about THAT.
+            let ground = ThemePalette.groundBase(dark: dark)
+            let accent = LSTheme.legible(dark ? LSTheme.torch : LSTheme.torchInk, on: ground)
+            let ink = ThemePalette.knockoutPreview(on: accent, ground: ground)
             #expect(ThemePalette.contrast(ink, accent) >= 4.5,
                     "default accent unreadable in \(dark ? "dark" : "light")")
         }

@@ -271,6 +271,7 @@ private struct JournalRow: View {
     let entry: JournalEntry
     @Binding var editing: Session?
     @Binding var editingMemory: Memory??
+    @Environment(\.modelContext) private var context
 
     var body: some View {
         // **Tap reads, long-press edits.** They were the same gesture, so
@@ -283,6 +284,11 @@ private struct JournalRow: View {
                 if let memory = entry.memory {
                     Button { editingMemory = .some(memory) } label: {
                         Label("Edit memory", systemImage: "square.and.pencil")
+                    }
+                    Button(role: .destructive) {
+                        Repository(context).deleteMemory(memory)
+                    } label: {
+                        Label("Delete memory", systemImage: "trash")
                     }
                 } else if entry.sessions.count == 1, let only = entry.sessions.first {
                     // One session is unambiguous, so the shortcut is safe.

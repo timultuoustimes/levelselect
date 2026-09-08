@@ -108,9 +108,57 @@ enum TrackerListParser {
             result.warnings.append("Column “\(unknown)” wasn't recognized and was ignored.")
         }
 
-        var items: [ParsedItem] = []
+        // **One paste can carry several tables**, each under a `## Heading`
+        // — which is what a spreadsheet tab with a block per section becomes
+        // (`SheetsLinkImport`). Each table reads with ITS OWN header and lands
+        // in its own category; a heading in force names it. Without headings
+        // this is exactly the single-table read it always was.
+        var categories: [ParsedCategory] = []
         var seen = Set<String>()
-        for line in lines[(headerIdx + 2)...] where line.hasPrefix("|") {
+        var seenCategoryIDs = Set<String>()
+        // "Charm" over a column of charms is the category's name, and so is a
+        // heading written above the table — unless the caller already chose
+        // one ("Trinkets"), which is not the generic "Imported" and wins for
+        // the first table. Headings between later tables always count.
+        let callerNamed = !["imported", "sheet", ""].contains(defaultCategoryName.lowercased())
+        var heading: String? = callerNamed ? nil
+            : lines[..<headerIdx].last { $0.hasPrefix("#") && !$0.hasPrefix("###") }
+                .map { String($0.drop(while: { $0 == "#" })).trimmingCharacters(in: .whitespaces) }
+                .flatMap { $0.isEmpty ? nil : $0 }
+        var columns = map
+        var items: [ParsedItem] = []
+        var tableName: String? = callerNamed ? nil : ColumnMap.tableName(from: rawHeaders, nameColumn: map.name)
+
+        func close() {
+            guard !items.isEmpty else { items = []; return }
+            let name = heading ?? tableName ?? defaultCategoryName
+            let id = uniqueID(from: name, seen: &seenCategoryIDs)
+            categories.append(ParsedCategory(id: id, name: name, items: items,
+                                             leadingSegmentIsLocation: false))
+            items = []
+        }
+
+        var i = headerIdx + 2
+        while i < lines.count {
+            let line = lines[i]
+            defer { i += 1 }
+            if line.hasPrefix("#"), !line.hasPrefix("###") {
+                close()
+                let name = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
+                heading = name.isEmpty ? nil : name
+                continue
+            }
+            guard line.hasPrefix("|") else { continue }
+            let next = lines.indices.contains(i + 1) ? lines[i + 1] : ""
+            if next.hasPrefix("|"), next.contains("-"), next.allSatisfy({ "|-: \t".contains($0) }) {
+                // A new header row: the table before it is complete.
+                close()
+                let headers = cells(line)
+                columns = ColumnMap(headers: headers.map { $0.lowercased() })
+                tableName = callerNamed ? nil : ColumnMap.tableName(from: headers, nameColumn: columns.name)
+                i += 1
+                continue
+            }
             let values = cells(line)
             guard !values.isEmpty else { continue }
             func value(_ index: Int?) -> String? {
@@ -118,22 +166,20 @@ enum TrackerListParser {
                 let cleaned = stripMarkdown(values[index])
                 return cleaned.isEmpty ? nil : cleaned
             }
-            let name = value(map.name ?? 0) ?? ""
+            let name = value(columns.name ?? 0) ?? ""
             guard !name.isEmpty else { continue }
 
             items.append(ParsedItem(
                 id: uniqueID(from: name, seen: &seen),
                 name: name,
-                location: value(map.location),
-                detail: value(map.detail),
-                source: value(map.source)))
+                location: value(columns.location),
+                detail: value(columns.detail),
+                source: value(columns.source)))
         }
+        close()
 
-        guard !items.isEmpty else { return result }
-        result.categories = [ParsedCategory(id: slug(defaultCategoryName),
-                                            name: defaultCategoryName,
-                                            items: items,
-                                            leadingSegmentIsLocation: false)]
+        guard !categories.isEmpty else { return result }
+        result.categories = categories
         return result
     }
 
@@ -160,6 +206,17 @@ enum TrackerListParser {
                 if detail == nil, Self.detailKeys.contains(where: key.contains) { detail = i; continue }
                 if source == nil, Self.sourceKeys.contains(where: key.contains) { source = i; continue }
             }
+        }
+
+        /// A header that names the THING — "Charm", "Boss", "Trinket" — is a
+        /// category name. "Name" and "Item" are not; they say nothing about
+        /// what the rows are.
+        static func tableName(from headers: [String], nameColumn: Int?) -> String? {
+            guard let nameColumn, headers.indices.contains(nameColumn) else { return nil }
+            let word = headers[nameColumn].trimmingCharacters(in: .whitespaces)
+            let generic = ["name", "item", "items", "title", "thing", "things", "collectible", "collectibles", "objective", "#"]
+            guard !word.isEmpty, !generic.contains(word.lowercased()) else { return nil }
+            return word
         }
 
         func unrecognized(_ headers: [String]) -> [String] {

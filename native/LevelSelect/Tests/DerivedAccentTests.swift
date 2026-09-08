@@ -14,8 +14,8 @@ import SwiftUI
 @MainActor
 struct DerivedAccentTests {
 
-    private var lightGround: Color { ThemePalette.groundBase(dark: false) }
-    private var darkGround: Color { ThemePalette.groundBase(dark: true) }
+    private var lightGround: Color { Color(red: 0.97, green: 0.96, blue: 1.00) }
+    private var darkGround: Color { Color(red: 0.10, green: 0.07, blue: 0.18) }
 
     /// Torch's own hue and saturation, from `LSTheme.torch` — rgb(0.96, 0.64, 0.30).
     private var torchHS: (hue: Double, saturation: Double) {
@@ -154,8 +154,8 @@ struct DerivedAccentTests {
 /// `LSTheme.legible` — the guarantee that lets the accent stay ink.
 @MainActor
 struct LegibleAccentTests {
-    private var lightGround: Color { ThemePalette.groundBase(dark: false) }
-    private var darkGround: Color { ThemePalette.groundBase(dark: true) }
+    private var lightGround: Color { Color(red: 0.97, green: 0.96, blue: 1.00) }
+    private var darkGround: Color { Color(red: 0.10, green: 0.07, blue: 0.18) }
 
     /// A color that already reads must come back untouched. Anything else
     /// would move the accent of every user whose choice was already fine.
@@ -190,7 +190,7 @@ struct LegibleAccentTests {
 @MainActor
 struct Build37HeaderInkTests {
 
-    private var lightGround: Color { ThemePalette.groundBase(dark: false) }
+    private var lightGround: Color { Color(red: 0.97, green: 0.96, blue: 1.00) }
 
     /// **The name keeps the color you picked.** Accent and Custom resolve to
     /// the same thing by construction now, which is what stopped them

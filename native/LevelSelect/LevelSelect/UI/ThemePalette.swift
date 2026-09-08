@@ -38,12 +38,14 @@ enum ThemePalette {
     /// The palette pair the accent belongs to, when it is one of the seven —
     /// see `LSPalette`. Nil for the default and for a custom color.
     private(set) static var activePair: LSPalette.Pair?
+    /// The pair the ground is tinted with, when it is one of the seven.
+    private(set) static var groundPair: LSPalette.Pair?
     /// The hard step under pixel type in the accent, and the accent's ink on
     /// the light ground. Authored when the accent is a palette pair; derived
     /// otherwise, the way it always was.
     private(set) static var accentStep: Color = LSTheme.torchShadow
     private(set) static var pageBackground: ThemePageBackground = .cover
-    private(set) static var defaultTrackerDisplay: TrackerDisplay = .inline
+    private(set) static var defaultTrackerDisplay: TrackerDisplay = .compact
     private static var statusOverrides: [GameStatus: Color] = [:]
     /// Custom words on the five stars ([] = the built-in labels).
     private(set) static var starNames: [String] = []
@@ -232,25 +234,11 @@ enum ThemePalette {
     /// whatever trait happens to be current when it is sampled — which is how
     /// you get a light-mode answer applied to a dark-mode screen.
     static func groundBase(dark: Bool) -> Color {
-        let tint = dark ? backgroundOverrideDark : backgroundOverrideLight
-        if let tint {
-            let hs = tint.lsHueSaturation
-            return Color(hue: hs?.hue ?? 0,
-                         saturation: (hs?.saturation ?? 0) < 0.05 ? 0 : 0.06,
-                         brightness: dark ? 0.16 : 0.97)
-        }
-        return dark ? Color(red: 0.10, green: 0.07, blue: 0.18)
-                    : Color(red: 0.97, green: 0.96, blue: 1.00)
+        LSPalette.ground(tint: dark ? backgroundOverrideDark : backgroundOverrideLight, dark: dark)
     }
 
     static var groundBase: Color {
-        backgroundOverride.map { tint in
-            let hs = tint.lsHueSaturation
-            return Color(hue: hs?.hue ?? 0,
-                         saturation: (hs?.saturation ?? 0) < 0.05 ? 0 : 0.06,
-                         brightness: 0.97)
-        } ?? .lsDynamic(light: Color(red: 0.97, green: 0.96, blue: 1.00),
-                        dark:  Color(red: 0.10, green: 0.07, blue: 0.18))
+        .lsDynamic(light: groundBase(dark: false), dark: groundBase(dark: true))
     }
 
     static func refresh(from settings: ThemeSettings?) {
@@ -277,40 +265,32 @@ enum ThemePalette {
         // computes against the candidate ground. Codex K1.
         backgroundOverrideLight = settings?.backgroundHex(dark: false).flatMap(Color.init(hex:))
         backgroundOverrideDark = settings?.backgroundHex(dark: true).flatMap(Color.init(hex:))
-        var linkedLight: Color?
-        var linkedDark: Color?
-        if let s = settings, s.paletteLinked, let hue = s.accentHue {
-            let saturation = s.accentSaturation ?? 0.7
-            linkedLight = LSTheme.derivedAccent(hue: hue, saturation: saturation,
-                                                dark: false,
-                                                ground: groundBase(dark: false)).color
-            linkedDark = LSTheme.derivedAccent(hue: hue, saturation: saturation,
-                                               dark: true,
-                                               ground: groundBase(dark: true)).color
-        }
-        let lightCustom = linkedLight
-            ?? settings?.accentHex(dark: false).flatMap { Color(hex: $0) }
-        let darkCustom = linkedDark
-            ?? settings?.accentHex(dark: true).flatMap { Color(hex: $0) }
-        // Corrected only if it fails. A color picked through the build 37
-        // picker already clears the floor; this catches the ones stored before
-        // it existed, which were never checked against anything.
-        let lightAccent = LSTheme.legible(lightCustom ?? LSTheme.torchInk,
-                                          on: groundBase(dark: false))
-        let darkAccent = LSTheme.legible(darkCustom ?? LSTheme.torch,
-                                         on: groundBase(dark: true))
+        let lightCustom = settings?.accentHex(dark: false).flatMap { Color(hex: $0) }
+        let darkCustom = settings?.accentHex(dark: true).flatMap { Color(hex: $0) }
+        // A pair is recognized by its stored hex, on either appearance —
+        // choosing one writes the same accent to both. The linked hue model
+        // (build 37) is no longer read: the palette IS the linking.
+        let pair = LSPalette.pair(matching: settings?.accentHex(dark: false))
+            ?? LSPalette.pair(matching: settings?.accentHex(dark: true))
+        activePair = pair
+        groundPair = LSPalette.pair(matching: settings?.backgroundHex(dark: false))
+            ?? LSPalette.pair(matching: settings?.backgroundHex(dark: true))
+        // **A pair's ink is its step on light and its accent on dark** — the
+        // palette's own rule, authored rather than solved. Anything else is
+        // corrected only if it fails: a color picked through the build 37
+        // picker already clears the floor; this catches the ones stored
+        // before it existed, which were never checked against anything.
+        let lightAccent = pair?.stepColor
+            ?? LSTheme.legible(lightCustom ?? LSTheme.torchInk, on: groundBase(dark: false))
+        let darkAccent = pair?.accentColor
+            ?? LSTheme.legible(darkCustom ?? LSTheme.torch, on: groundBase(dark: true))
         accent = .lsDynamic(light: lightAccent, dark: darkAccent)
         // No `legible()` here, and torch on BOTH grounds by default — the
         // hard step is the legibility mechanism. See `displayAccent`.
         displayAccent = .lsDynamic(light: lightCustom ?? LSTheme.torch,
                                    dark: darkCustom ?? LSTheme.torch)
         accentIsCustom = lightCustom != nil || darkCustom != nil
-        // A pair is recognized by its stored hex, on either appearance —
-        // choosing one writes the same accent to both.
-        let pair = LSPalette.pair(matching: settings?.accentHex(dark: false))
-            ?? LSPalette.pair(matching: settings?.accentHex(dark: true))
-        activePair = (settings?.paletteLinked == true && settings?.accentHue != nil) ? nil : pair
-        accentStep = activePair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
+        accentStep = pair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
             ?? (accentIsCustom ? LSTheme.hardStep(under: displayAccent) : LSTheme.torchShadow)
         // A knockout, not simply a contrasting ink — see `knockout(on:)`.
         //
@@ -318,11 +298,14 @@ enum ThemePalette {
         // rather than letting a dynamic color resolve itself: the arithmetic
         // needs real components, and sampling a dynamic color picks whichever
         // trait is current when it is read.
-        onAccent = .lsDynamic(
-            light: knockoutPreview(on: lightAccent, ground: groundBase(dark: false)),
-            dark: knockoutPreview(on: darkAccent, ground: groundBase(dark: true)))
+        // A pair's fill carries its own step as ink, on both grounds — Tim's
+        // Play button. Anything else keeps the knockout.
+        onAccent = pair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
+            ?? .lsDynamic(
+                light: knockoutPreview(on: lightAccent, ground: groundBase(dark: false)),
+                dark: knockoutPreview(on: darkAccent, ground: groundBase(dark: true)))
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
-        defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .inline
+        defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .compact
         var overrides: [GameStatus: Color] = [:]
         for (raw, hex) in settings?.statusColors ?? [:] {
             if let status = GameStatus(rawValue: raw), let color = Color(hex: hex) {
