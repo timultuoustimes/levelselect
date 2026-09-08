@@ -14,6 +14,14 @@ extension LSTheme {
     /// The accent for large display type — see `ThemePalette.displayAccent`.
     @MainActor
     static var displayAccent: Color { ThemePalette.displayAccent }
+    /// **The accent as a fill**, with `knockout(on:)` as its ink — the raw
+    /// chosen color, never legibility-corrected, because a filled control
+    /// does not read against the ground the way text does. `accent` stays
+    /// the corrected value for the places that draw it as ink.
+    @MainActor static var accentFill: Color { ThemePalette.displayAccent }
+    /// The hard step under pixel type in the accent; the accent's ink on the
+    /// light ground. See `LSPalette`.
+    @MainActor static var accentStep: Color { ThemePalette.accentStep }
 
     /// What to draw on top of a filled accent surface. See
     /// `ThemePalette.onAccent` — chosen by contrast, because the accent is the

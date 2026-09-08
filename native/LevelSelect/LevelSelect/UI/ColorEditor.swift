@@ -403,6 +403,12 @@ struct ColorEditor: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
+                // **The palette leads.** Seven pairs Tim chose, each with its
+                // own step, each working on both grounds as a fill — so
+                // nothing here is ever struck through. The plane and the hex
+                // field below are for a color that is not one of these.
+                if offersLinking { paletteRow }
+
                 if offersLinking {
                     // Bound to `linkedMode`, not the raw flag.
                     //
@@ -534,6 +540,54 @@ struct ColorEditor: View {
         #if os(macOS)
         .frame(minWidth: 380, minHeight: 560)
         #endif
+    }
+
+    /// Seven circles, the step as a ring, the chosen one marked.
+    private var paletteRow: some View {
+        let chosen = LSPalette.pair(matching: currentHex)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Palette")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+            HStack(spacing: 10) {
+                ForEach(LSPalette.pairs) { pair in
+                    Button {
+                        choosePalette(pair)
+                    } label: {
+                        Circle()
+                            .fill(pair.accentColor)
+                            .frame(height: 40)
+                            .overlay {
+                                Circle().strokeBorder(pair.stepColor, lineWidth: chosen?.id == pair.id ? 3 : 1.5)
+                            }
+                            .overlay {
+                                if chosen?.id == pair.id {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.weight(.black))
+                                        .foregroundStyle(ThemePalette.knockout(on: pair.accentColor))
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(pair.name)
+                    .accessibilityAddTraits(chosen?.id == pair.id ? .isSelected : [])
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// One accent for both appearances, exactly as authored, and the plane
+    /// follows it. Linking is switched off, because a pair is already the
+    /// answer linking exists to compute.
+    private func choosePalette(_ pair: LSPalette.Pair) {
+        if linkedMode { linked = false }
+        loading = true
+        for t in targets where t.id.hasPrefix("accent-") {
+            t.binding.wrappedValue = pair.accentColor
+        }
+        setFromColor(pair.accentColor)
+        loading = false
     }
 
     @ViewBuilder
@@ -672,13 +726,21 @@ struct ColorEditor: View {
                                    startPoint: .top, endPoint: .bottom),
                     in: .rect(cornerRadius: 10))
 
+                // **The tinted pill: the accent at 5%, and the ink is the
+                // step on light, the accent on dark** — Tim's palette sheet.
+                // A pair's step is authored; anything else gets a derived one.
+                let pillInk: Color = {
+                    if dark { return accent }
+                    if let pair = LSPalette.pair(matching: accent.hexString()) { return pair.stepColor }
+                    return LSTheme.hardStep(under: accent)
+                }()
                 Text("Sample")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(accent)
+                    .foregroundStyle(pillInk)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .background(accent.opacity(0.16), in: .capsule)
-                    .overlay(Capsule().strokeBorder(accent.opacity(0.5), lineWidth: 1))
+                    .background(accent.opacity(LSPalette.tintFillOpacity), in: .capsule)
+                    .overlay(Capsule().strokeBorder(pillInk.opacity(0.7), lineWidth: 1))
 
                 Spacer(minLength: 0)
             }

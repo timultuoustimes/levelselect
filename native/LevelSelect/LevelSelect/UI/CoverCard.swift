@@ -359,7 +359,7 @@ struct ContinueHeroCard: View {
             .background {
                 RoundedRectangle(cornerRadius: 14)
                     .fill(LinearGradient(
-                        colors: [LSTheme.accent, LSTheme.accent.opacity(0.78)],
+                        colors: [LSTheme.accentFill, LSTheme.accentFill.opacity(0.78)],
                         startPoint: .top, endPoint: .bottom))
                     .overlay {
                         RoundedRectangle(cornerRadius: 14)

@@ -35,6 +35,13 @@ enum ThemePalette {
     /// True once the user has picked their own accent. The wordmark keeps its
     /// brand torch-orange until then, so the default look is unchanged.
     private(set) static var accentIsCustom = false
+    /// The palette pair the accent belongs to, when it is one of the seven —
+    /// see `LSPalette`. Nil for the default and for a custom color.
+    private(set) static var activePair: LSPalette.Pair?
+    /// The hard step under pixel type in the accent, and the accent's ink on
+    /// the light ground. Authored when the accent is a palette pair; derived
+    /// otherwise, the way it always was.
+    private(set) static var accentStep: Color = LSTheme.torchShadow
     private(set) static var pageBackground: ThemePageBackground = .cover
     private(set) static var defaultTrackerDisplay: TrackerDisplay = .inline
     private static var statusOverrides: [GameStatus: Color] = [:]
@@ -298,6 +305,13 @@ enum ThemePalette {
         displayAccent = .lsDynamic(light: lightCustom ?? LSTheme.torch,
                                    dark: darkCustom ?? LSTheme.torch)
         accentIsCustom = lightCustom != nil || darkCustom != nil
+        // A pair is recognized by its stored hex, on either appearance —
+        // choosing one writes the same accent to both.
+        let pair = LSPalette.pair(matching: settings?.accentHex(dark: false))
+            ?? LSPalette.pair(matching: settings?.accentHex(dark: true))
+        activePair = (settings?.paletteLinked == true && settings?.accentHue != nil) ? nil : pair
+        accentStep = activePair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
+            ?? (accentIsCustom ? LSTheme.hardStep(under: displayAccent) : LSTheme.torchShadow)
         // A knockout, not simply a contrasting ink — see `knockout(on:)`.
         //
         // Computed per appearance against that appearance's ACTUAL ground,

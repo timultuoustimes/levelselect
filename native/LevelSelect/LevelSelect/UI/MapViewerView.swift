@@ -259,8 +259,8 @@ struct MapViewerView: View {
                               systemImage: "mappin")
                             .font(.subheadline.weight(.semibold))
                             .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(LSTheme.accent, in: .capsule)
-                            .foregroundStyle(ThemePalette.knockout(on: LSTheme.accent))
+                            .background(LSTheme.accentFill, in: .capsule)
+                            .foregroundStyle(ThemePalette.knockout(on: LSTheme.accentFill))
                     }
                     .buttonStyle(.plain)
                     .padding(.bottom, 130)

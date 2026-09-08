@@ -53,6 +53,8 @@ enum ProfileNameColor {
         // both the Default ink and the Accent ink until an accent is picked.
         if raw == plain { return LSTheme.torchShadow }
         if raw == accent, !ThemePalette.accentIsCustom { return LSTheme.torchShadow }
+        // A palette pair carries its own step; nothing to derive.
+        if raw == accent, ThemePalette.activePair != nil { return ThemePalette.accentStep }
         return LSTheme.hardStep(under: ink)
     }
 

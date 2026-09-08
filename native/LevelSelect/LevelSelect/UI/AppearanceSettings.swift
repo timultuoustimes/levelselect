@@ -269,7 +269,7 @@ struct AppearanceSettingsSection: View {
                         // together.
                         Text(status.blurb)
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 2)
                 }

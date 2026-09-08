@@ -42,9 +42,15 @@ struct SettingsPage<Content: View>: View {
         // a different app bolted on.
         #if os(macOS)
         .formStyle(.grouped)
+        #endif
+        // **Every page paints the ground, on every platform.** The root
+        // sheet always did; the pages only did on the Mac, so on iOS 27 a
+        // page at the glass detent let Home's covers through and set its
+        // descriptions on whatever art was behind — Tim's screenshot of
+        // Statuses, 2026-09-08: grey words over Balatro. The glass stays at
+        // the edges; the words get the same bed the root has.
         .scrollContentBackground(.hidden)
         .background(LSTheme.background)
-        #endif
         .navigationTitle(title)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
