@@ -36,6 +36,7 @@ struct RecentlyDeletedView: View {
     @State private var games: [Game] = []
     @State private var playthroughs: [Playthrough] = []
     @State private var collections: [GameCollection] = []
+    @State private var memories: [Memory] = []
     @State private var images: [GameImage] = []
     @State private var confirmingForever: ForeverTarget?
 
@@ -43,12 +44,14 @@ struct RecentlyDeletedView: View {
 
     enum ForeverTarget: Identifiable {
         case game(Game), playthrough(Playthrough), collection(GameCollection)
+        case memory(Memory)
         case image(GameImage)
         var id: UUID {
             switch self {
             case .game(let g): g.id
             case .playthrough(let p): p.id
             case .collection(let c): c.id
+            case .memory(let m): m.id
             case .image(let i): i.id
             }
         }
@@ -57,6 +60,11 @@ struct RecentlyDeletedView: View {
             case .game(let g): g.name
             case .playthrough(let p): p.name
             case .collection(let c): c.name
+            case .memory(let m):
+                {
+                    let title = m.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    return title.isEmpty ? "Memory" : title
+                }()
             // Inline rather than calling the view's helper: crossing out of
             // this nonisolated accessor with a model object is a data race
             // the compiler is right to refuse.
@@ -78,6 +86,8 @@ struct RecentlyDeletedView: View {
             switch self {
             case .image:
                 "The picture and its file are removed from this device and from iCloud. This is the only delete in the app that can't be undone."
+            case .memory:
+                "The memory and any pictures on it are removed from this device and from iCloud. This is the only delete in the app that can't be undone."
             default:
                 "Gone from every device, sessions and progress included. This is the only delete in the app that can't be undone."
             }
@@ -98,7 +108,7 @@ struct RecentlyDeletedView: View {
     var body: some View {
         List {
             if games.isEmpty && playthroughs.isEmpty && collections.isEmpty
-                && images.isEmpty {
+                && memories.isEmpty && images.isEmpty {
                 ContentUnavailableView {
                     Label("Nothing deleted", systemImage: "trash.slash")
                 } description: {
@@ -163,6 +173,21 @@ struct RecentlyDeletedView: View {
                     }
                 }
             }
+            if !memories.isEmpty {
+                Section("Memories") {
+                    ForEach(memories) { memory in
+                        row(name: memoryTitle(memory),
+                            detail: memoryDetail(memory),
+                            cover: memory.game?.displayCoverURLString,
+                            artwork: memory.game?.resolvedArtwork(.cover)) {
+                            repo.restore(memory)
+                            reload()
+                        } forever: {
+                            confirmingForever = .memory(memory)
+                        }
+                    }
+                }
+            }
             if !images.isEmpty {
                 Section {
                     ForEach(images) { image in
@@ -194,6 +219,7 @@ struct RecentlyDeletedView: View {
                 case .game(let g): repo.deleteForever(g)
                 case .playthrough(let p): repo.deleteForever(p)
                 case .collection(let c): repo.deleteForever(c)
+                case .memory(let m): repo.deleteForever(m)
                 case .image(let i): repo.deleteForever(i)
                 case nil: break
                 }
@@ -318,6 +344,26 @@ struct RecentlyDeletedView: View {
         }
     }
 
+    /// A memory is the one row here that may have no name of its own: an
+    /// untitled memory is common, since the date and the game often say it
+    /// all. Fall back to when it was, never to "Untitled".
+    private func memoryTitle(_ memory: Memory) -> String {
+        let title = memory.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? memory.dateText : title
+    }
+
+    /// When, what game, how many pictures ride along — then the clock.
+    private func memoryDetail(_ memory: Memory) -> String {
+        var parts: [String] = []
+        let title = memory.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { parts.append(memory.dateText) }
+        if let game = memory.game { parts.append(game.name) }
+        let pictures = (memory.images ?? []).filter { $0.deletedAt == memory.deletedAt }.count
+        if pictures > 0 { parts.append("\(pictures) picture\(pictures == 1 ? "" : "s")") }
+        parts.append(deletedLine(memory.deletedAt))
+        return parts.joined(separator: " · ")
+    }
+
     private func deletedLine(_ date: Date?) -> String {
         guard let date else { return "deleted" }
         return "deleted \(date.formatted(.relative(presentation: .named)))"
@@ -327,6 +373,7 @@ struct RecentlyDeletedView: View {
         games = repo.trashedGames()
         playthroughs = repo.trashedPlaythroughs()
         collections = repo.trashedCollections()
+        memories = repo.trashedMemories()
         images = repo.trashedImages()
     }
 }

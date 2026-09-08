@@ -215,6 +215,7 @@ struct RootView: View {
         // runs — one fetch of rows that have a `deletedAt`, which on a healthy
         // library is none.
         repo.purgeExpiredTrash()
+        repo.repairDeadPreferenceValues()
         LiveActivityManager.sync(unstopped: repo.unstoppedSessions())
         WidgetBridge.refresh()
     }
@@ -852,7 +853,9 @@ struct HomeTab: View {
                 // belongs after the first game."* The card already answers
                 // through the same composer as Send feedback, so the only
                 // thing wrong with it was when it appeared.
-                if !games.isEmpty { BetaQuestionCard() }
+                if BetaQuestionCard.isTimeToAsk(firstGameAdded: games.map(\.createdAt).min()) {
+                    BetaQuestionCard()
+                }
             }
                 .padding(.bottom)
                 // The art runs to the top edge, under the toolbar. Everything

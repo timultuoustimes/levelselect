@@ -230,6 +230,27 @@ extension Memory {
     /// is the bug.
     static var calendar: Calendar { ReleaseCountdown.utc }
 
+    /// The UTC calendar day that a date picked on a local calendar meant.
+    ///
+    /// **A memory written after 8 PM in New York was filed on tomorrow.** The
+    /// sheet's picker starts at `Date.now` and hands it to the model, which
+    /// takes `startOfDay` in UTC — so at 22:30 EDT, which is 02:30 UTC, "today"
+    /// became the next day. Fable and the day-section test both saw the four
+    /// hour gap; this is the other half of it. The picker speaks the local
+    /// calendar; the model speaks UTC days; the year, month and day are the
+    /// only thing they agree on, so those are what cross the boundary.
+    static func utcDay(fromLocal date: Date, local: Calendar = .current) -> Date {
+        let parts = local.dateComponents([.year, .month, .day], from: date)
+        return calendar.date(from: parts) ?? date
+    }
+
+    /// The reverse, for showing a stored UTC day in a local picker without it
+    /// sliding to the evening before.
+    static func localDay(fromUTC date: Date, local: Calendar = .current) -> Date {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return local.date(from: parts) ?? date
+    }
+
     /// The first instant the memory could have happened, given its precision.
     static func intervalStart(of date: Date, precision: String?) -> Date {
         switch precision {

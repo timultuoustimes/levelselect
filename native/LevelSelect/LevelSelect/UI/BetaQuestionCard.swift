@@ -86,6 +86,23 @@ struct BetaQuestionCard: View {
         questions.first { !answered.contains($0.id) }
     }
 
+    /// How long a library has to have existed before anything is asked.
+    static let settlingPeriod: TimeInterval = 24 * 60 * 60
+
+    /// Whether it is time to ask at all.
+    ///
+    /// **A question asked four minutes in answers nothing.** The card used to
+    /// appear as soon as one game existed, which put "have you written
+    /// anything down yet?" in front of somebody still typing their first
+    /// title. Tim, 2026-09-06: *"say nothing, and only pop up after at least
+    /// one game has been in the app for a day."* A day is measured from the
+    /// oldest game's `createdAt` — a fact about the library that syncs, not a
+    /// launch count that restarts on every device. No games, no questions.
+    static func isTimeToAsk(firstGameAdded: Date?, now: Date = .now) -> Bool {
+        guard let firstGameAdded else { return false }
+        return now.timeIntervalSince(firstGameAdded) >= settlingPeriod
+    }
+
     private var current: Question? { Self.nextQuestion(answered: answered) }
 
     private func markAnswered(_ question: Question) {

@@ -1,7 +1,12 @@
 import SwiftUI
 import SwiftData
 
-/// Which ownership chips this library uses.
+/// Which ownership and access chips this library uses.
+///
+/// "Ownership & access", not "Ownership chips": four of the nine words are
+/// not ownership at all — Subscription, Rented, Borrowed, Shared and Arcade
+/// are ways you *reach* a game — and the row title should not argue with the
+/// chips under it. Tim, build 37 brief: *"ownership & access chips."*
 ///
 /// Ownership is the one vocabulary in the app that is genuinely
 /// person-specific. A PC-only library has no use for Physical; somebody
@@ -36,7 +41,7 @@ struct OwnershipChipsView: View {
     }
 
     private var page: some View {
-        SettingsPage(title: "Ownership chips",
+        SettingsPage(title: "Ownership & access",
                      icon: "shippingbox",
                      blurb: "How you have each game. Turn off the ones your library never uses.") {
             Section {

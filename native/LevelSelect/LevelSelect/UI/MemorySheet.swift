@@ -425,7 +425,7 @@ struct MemorySheet: View {
                 // The uncertain years follow the tapped day too, so switching
                 // to "Not sure" cannot file the memory in a different decade
                 // from the one the user was looking at.
-                let year = Memory.calendar.component(.year, from: initialDate)
+                let year = Memory.calendar.component(.year, from: Memory.utcDay(fromLocal: initialDate))
                 fromYear = year
                 toYear = year
             }
@@ -436,7 +436,8 @@ struct MemorySheet: View {
         kind = existing.kind
         place = existing.place ?? ""
         platform = existing.platform ?? ""
-        date = existing.earliest
+        // Stored as a UTC day; shown on the local picker as that same day.
+        date = Memory.localDay(fromUTC: existing.earliest)
         words = existing.whenText ?? ""
         howKnown = HowKnown.allCases.first { $0.precision == existing.precision } ?? .unsure
         fromYear = Memory.calendar.component(.year, from: existing.earliest)
@@ -496,7 +497,10 @@ struct MemorySheet: View {
             // is what gets shown, and the stored months only decide where it
             // sorts. Every other precision re-renders exactly, so storing a
             // copy of the words would only give the two a chance to disagree.
-            repo.saveMemory(memory, on: date, precision: howKnown.precision,
+            // The picker's date is a local calendar day; the model wants the
+            // same day in UTC. See `Memory.utcDay(fromLocal:)`.
+            repo.saveMemory(memory, on: Memory.utcDay(fromLocal: date),
+                            precision: howKnown.precision,
                             words: howKnown == .season ? words : nil)
         }
         for data in pendingPhotos.map(\.data) {

@@ -470,6 +470,20 @@ struct Repository {
         }
     }
 
+    /// Removed memories, newest first.
+    ///
+    /// **They were the only user-authored record absent from Recently
+    /// Deleted.** `deleteMemory` tombstoned them and their pictures, and then
+    /// nothing listed them, so a memory deleted by a slip was gone for good
+    /// while the screen promised thirty days for "anything you delete".
+    /// Logged 2026-09-03, shipped build 38.
+    func trashedMemories() -> [Memory] {
+        let d = FetchDescriptor<Memory>(predicate: #Predicate { $0.deletedAt != nil })
+        return ((try? context.fetch(d)) ?? []).sorted {
+            ($0.deletedAt ?? .distantPast) > ($1.deletedAt ?? .distantPast)
+        }
+    }
+
     func trashedPlaythroughs() -> [Playthrough] {
         let d = FetchDescriptor<Playthrough>(predicate: #Predicate { $0.deletedAt != nil })
         return ((try? context.fetch(d)) ?? [])
@@ -540,8 +554,14 @@ struct Repository {
             context.delete(collection)
             purged += 1
         }
+        // A memory's pictures cascade with it (`Memory.images`), the same as
+        // a game's.
+        for memory in trashedMemories() where expired(memory.deletedAt) {
+            context.delete(memory)
+            purged += 1
+        }
         // Pictures last, and only the ones still standing: a picture under a
-        // game purged above went with it.
+        // game or memory purged above went with it.
         for image in trashedImages() where expired(image.deletedAt) {
             context.delete(image)
             purged += 1
@@ -596,6 +616,29 @@ struct Repository {
         pt.deletedAt = nil
         touch(pt)
         if let game = pt.game { recomputeProgress(game) }
+        persist()
+    }
+
+    /// A memory comes back with the pictures that left with it — and only
+    /// those. `deleteMemory` stamps them with the memory's own `deletedAt`, so
+    /// a picture removed from the memory *before* it was deleted keeps its own
+    /// earlier stamp and stays in the trash, which is what the person chose.
+    func restore(_ memory: Memory) {
+        let stamp = memory.deletedAt
+        memory.deletedAt = nil
+        for image in (memory.images ?? []) where image.deletedAt != nil && image.deletedAt == stamp {
+            image.deletedAt = nil
+            image.updatedAt = .now
+            image.revision += 1
+        }
+        touch(memory)
+        persist()
+    }
+
+    /// Gone, and its pictures' bytes with it — the cascade on `Memory.images`
+    /// is what reclaims the external-storage files.
+    func deleteForever(_ memory: Memory) {
+        context.delete(memory)
         persist()
     }
 
@@ -2951,6 +2994,33 @@ struct Repository {
     }
 
     // MARK: Overlapping timers
+
+    /// Preference values no shipping build can read any more.
+    ///
+    /// `06f2be5` ("Drop banner, ship four layouts") removed `GamePageLayout`'s
+    /// `banner` case, and any device that had picked it kept the string:
+    /// `ThemePalette` decodes it to nil and silently shows `.showcase`, so the
+    /// UI was right and the record was wrong — a dead value that syncs to
+    /// every device and would be exported and re-imported forever. Found on
+    /// King Kai 2026-09-03. Repaired here, on the same foreground pass as the
+    /// rest of the sync repair, so it happens once per device and then never.
+    /// Returns how many fields were repaired, for the test.
+    @discardableResult
+    func repairDeadPreferenceValues() -> Int {
+        let all = (try? context.fetch(FetchDescriptor<ThemeSettings>())) ?? []
+        var repaired = 0
+        for settings in all {
+            if let raw = settings.gamePageLayoutRaw, GamePageLayout(rawValue: raw) == nil {
+                settings.gamePageLayoutRaw = GamePageLayout.showcase.rawValue
+                // `ThemeSettings` is not `Syncable`; stamp it the way its
+                // other writers do so the repair syncs like any edit.
+                settings.updatedAt = .now
+                repaired += 1
+            }
+        }
+        if repaired > 0 { persist() }
+        return repaired
+    }
 
     /// The user's answer to "two devices are timing the same game". Read from
     /// the synced settings record, so choosing on one device answers for all

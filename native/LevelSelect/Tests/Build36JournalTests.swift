@@ -1277,7 +1277,11 @@ struct Build37OneDayOneSectionTests {
         memory.game = game
         // `precision: "day"` is what makes it a memory ABOUT a day — with
         // nil it is dayless and correctly never reaches a day square at all.
-        _ = repo.saveMemory(memory, on: today, precision: "day", words: nil, span: nil)
+        // The sheet hands the model the local day as a UTC day — without
+        // that step this test fails after 8 PM Eastern, which is exactly the
+        // bug the sheet had.
+        _ = repo.saveMemory(memory, on: Memory.utcDay(fromLocal: today),
+                            precision: "day", words: nil, span: nil)
 
         let periods = JournalBuilder.periods(from: [game])
         let dayPeriods = periods.filter { $0.grain == .day }
