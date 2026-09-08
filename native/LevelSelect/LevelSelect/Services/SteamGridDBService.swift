@@ -33,7 +33,7 @@ enum SteamGridDBService {
             case .logo:     self = .logos
             // The gallery role is a scrapbook of the user's own images; it
             // isn't a slot a stranger's artwork should fill.
-            case .gallery:  return nil
+            case .gallery, .map: return nil
             }
         }
     }

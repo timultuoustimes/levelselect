@@ -104,6 +104,11 @@ enum ArtworkRole: String, Codable, CaseIterable, Sendable, Identifiable {
     /// Not a slot: images kept with the game, shown in Media beside the
     /// screenshots IGDB provides.
     case gallery
+    /// **A map is a picture you own of the game.** Same record, same ingest,
+    /// same Recently Deleted, same export, same sync — which is the whole
+    /// argument for CloudKit over the web-era storage bucket. `GameMap` holds
+    /// the markers and points here through `storageType == "image"`.
+    case map
 
     var id: String { rawValue }
 
@@ -113,6 +118,7 @@ enum ArtworkRole: String, Codable, CaseIterable, Sendable, Identifiable {
         case .logo:     "Logo"
         case .backdrop: "Backdrop"
         case .gallery:  "Gallery"
+        case .map:      "Map"
         }
     }
 
@@ -122,6 +128,7 @@ enum ArtworkRole: String, Codable, CaseIterable, Sendable, Identifiable {
         case .logo:     "Falls back to the game's name in text — always, and at large text sizes."
         case .backdrop: "Falls back to the cover, blurred."
         case .gallery:  "Kept with the game and shown under Media."
+        case .map:      "Kept with the game and shown under Maps, with its markers."
         }
     }
 

@@ -83,6 +83,9 @@ struct TrackerSectionView: View {
     /// has twice lost a presentation. Mutually exclusive taps were never the
     /// risk; the timer was.
     @State private var sheet: TrackerSheet?
+    /// The map, opened from an item — in place mode for one that has no
+    /// pin yet, centered on its pin otherwise.
+    @State private var mapTarget: MapViewerTarget?
     /// Pushed rather than presented — a list of candidates wants a full screen
     /// and a back button, and it keeps the single sheet slot free.
     @State private var importingAchievements = false
@@ -567,6 +570,7 @@ struct TrackerSectionView: View {
         } message: {
             Text(removalWarning)
         }
+        .lsFullScreen(item: $mapTarget) { MapViewerView(target: $0) }
         .sheet(item: $sheet) { which in
             Group {
                 switch which {
@@ -1296,6 +1300,19 @@ struct TrackerSectionView: View {
                         .font(.caption2)
                         .foregroundStyle(.orange.opacity(0.9))
                 }
+                if !hidden, repo.linkedMarkers(in: game)[item.id] != nil {
+                    // Pinned. Tapping the glyph is the same as the menu's
+                    // "Show on Map" — the pin is the affordance.
+                    Button {
+                        mapTarget = MapViewerTarget(game: game, map: repo.linkedMarkers(in: game)[item.id]?.map)
+                    } label: {
+                        Label("On the map", systemImage: "mappin.circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(LSTheme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .lsTapTargetInline()
+                }
                 if !hidden, !hideLocation, hintsShown, let location = item.location {
                     Text(location)
                         .font(.caption)
@@ -1335,6 +1352,21 @@ struct TrackerSectionView: View {
         // tracker.
         .opacity({ if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 } }())
         .contextMenu {
+            // Where it is, on the map. An item with a pin opens the map on
+            // it; one without opens the map in place mode with this item
+            // already chosen — two taps from "where is it" to a pin that
+            // ticks. Only offered once the game has a map to pin on.
+            if !repo.liveMaps(of: game).isEmpty {
+                if let pinned = repo.linkedMarkers(in: game)[item.id] {
+                    Button {
+                        mapTarget = MapViewerTarget(game: game, map: pinned.map)
+                    } label: { Label("Show on Map", systemImage: "mappin.and.ellipse") }
+                } else {
+                    Button {
+                        mapTarget = MapViewerTarget(game: game, placingItem: item)
+                    } label: { Label("Pin on Map…", systemImage: "mappin") }
+                }
+            }
             // Two doors into the same sheet, because "Edit" alone never told
             // anyone a per-item note existed — the feature was documented as a
             // promise ("regenerating won't touch your note") and hidden behind

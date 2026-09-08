@@ -48,6 +48,7 @@ struct StatusCarousel: View {
     var onSeeAll: () -> Void
     var onToggleCollapse: () -> Void = {}
     var onHide: (() -> Void)?
+    var onArrange: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -81,6 +82,11 @@ struct StatusCarousel: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) { onHide() }
                     } label: { Label("Hide from Home", systemImage: "eye.slash") }
+                }
+                if let onArrange {
+                    Button { onArrange() } label: {
+                        Label("Arrange Home…", systemImage: "arrow.up.arrow.down")
+                    }
                 }
             }
 

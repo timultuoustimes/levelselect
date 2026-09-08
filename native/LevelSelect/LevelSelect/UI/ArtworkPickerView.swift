@@ -235,6 +235,10 @@ struct ArtworkPickerView: View {
             }
         case .gallery:
             EmptyView()
+        case .map:
+            // Maps come through the Maps section — Files, Photos, a pasted image
+            // or the map finder — never this picker.
+            EmptyView()
         }
     }
 

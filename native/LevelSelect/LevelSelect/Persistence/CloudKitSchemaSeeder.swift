@@ -350,6 +350,7 @@ enum CloudKitSchemaSeeder {
         pin.normalizedX = 0.5
         pin.normalizedY = 0.5
         pin.category = .note
+        pin.exploredAt = now                          // build 38
         pin.label = marker
         pin.notes = marker
         pin.linkedTrackerItemID = marker

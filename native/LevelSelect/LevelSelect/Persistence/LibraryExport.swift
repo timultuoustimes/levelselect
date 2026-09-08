@@ -360,6 +360,7 @@ enum LibraryExport {
                         "x": marker.normalizedX,
                         "y": marker.normalizedY,
                         "category": marker.category.rawValue,
+                        "exploredAt": marker.exploredAt.map(iso) as Any,
                         "label": marker.label,
                     ]
                     mk["notes"] = marker.notes

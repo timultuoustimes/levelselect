@@ -34,6 +34,7 @@ struct LibraryTab: View {
         var id: String { rawValue }
     }
     @State private var newCollection = false
+    @State private var savingSmart = false
     @State private var newCollectionName = ""
     @AppStorage("libraryHideBundled") private var hideBundled = false
 
@@ -163,6 +164,13 @@ struct LibraryTab: View {
                     }
                 }
             }
+            .lsSheet()
+        }
+        .sheet(isPresented: $savingSmart) {
+            SaveSmartCollectionSheet(
+                rule: SmartCollectionRule(status: statusFilter, system: platformFilter,
+                                          ownership: ownershipFilter, tag: tagFilter),
+                matching: visible.count)
             .lsSheet()
         }
         .alert("New Collection", isPresented: $newCollection) {
@@ -624,6 +632,13 @@ struct LibraryTab: View {
                     Divider()
                     Toggle(isOn: $hideBundled) {
                         Label("Hide games in bundles", systemImage: "shippingbox")
+                    }
+                }
+                if anyFilterActive || tagFilter != nil {
+                    Divider()
+                    // The filters you set ARE the rule — see `SmartCollectionRule`.
+                    Button { savingSmart = true } label: {
+                        Label("Save These Filters as a Collection…", systemImage: "sparkles.rectangle.stack")
                     }
                 }
             } label: {

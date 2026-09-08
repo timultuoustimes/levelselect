@@ -663,7 +663,13 @@ struct GameDetailView: View {
             let summary = game.summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return summary.isEmpty ? nil : "From IGDB"
         case .media:
-            return plural(game.liveImages.count, "picture", "pictures")
+            return plural(game.liveImages.filter { $0.role != .map }.count, "picture", "pictures")
+        case .maps:
+            let maps = (game.maps ?? []).filter { $0.deletedAt == nil }
+            let pins = maps.reduce(0) { $0 + ($1.markers ?? []).filter { $0.deletedAt == nil }.count }
+            guard !maps.isEmpty else { return nil }
+            return pins == 0 ? plural(maps.count, "map", "maps")
+                : "\(plural(maps.count, "map", "maps") ?? "") · \(plural(pins, "pin", "pins") ?? "")"
         case .info:
             // Always has something to say — a platform, a release year, a
             // studio — so it is never "empty", just closed.
@@ -744,6 +750,14 @@ struct GameDetailView: View {
             CollapsibleSection("Media", icon: "photo.stack",
                                caption: caption(for: .media), isExpanded: expansion(.media)) {
                 ScreenshotStrip(game: game)
+            }
+        case .maps:
+            // The web app's largest surviving feature, native. Always
+            // present — an empty section is the only way "Add a map" is
+            // discoverable — and it says nothing until there is a map.
+            CollapsibleSection("Maps", icon: "map",
+                               caption: caption(for: .maps), isExpanded: expansion(.maps)) {
+                MapsSection(game: game)
             }
         case .info:
             CollapsibleSection("Game Info", icon: "info.circle",

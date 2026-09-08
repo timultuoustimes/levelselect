@@ -32,6 +32,41 @@ Rules:
 7. Skip screenshots, character art, or box art — only actual maps/level layouts.
 8. Return valid JSON only, no markdown, no explanation.`;
 
+const BROWSER_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  Accept: 'image/avif,image/webp,image/png,image/*,*/*;q=0.8',
+};
+
+type FoundMap = { url: string; name: string; type?: string };
+
+/** Keep only suggestions whose URL answers with an image. */
+async function verified(list: FoundMap[]): Promise<FoundMap[]> {
+  const checks = list.map(async (s) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8_000);
+    try {
+      let host = '';
+      try { host = new URL(s.url).host; } catch { return null as FoundMap | null; }
+      const headers = { ...BROWSER_HEADERS, Referer: `https://${host}/` };
+      // HEAD first; a CDN that rejects HEAD gets a one-byte GET.
+      let res = await fetch(s.url, { method: 'HEAD', headers, redirect: 'follow', signal: controller.signal });
+      if (res.status === 405 || res.status === 403) {
+        res = await fetch(s.url, { method: 'GET', headers: { ...headers, Range: 'bytes=0-0' }, redirect: 'follow', signal: controller.signal });
+      }
+      const type = res.headers.get('content-type') ?? '';
+      if (!res.ok || !type.startsWith('image/')) return null;
+      // The URL after redirects is the one the app should keep.
+      return { ...s, url: res.url || s.url };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+  return (await Promise.all(checks)).filter((s): s is FoundMap => s !== null);
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS_HEADERS });
@@ -151,6 +186,14 @@ serve(async (req: Request) => {
       if (!s.url || !s.name) return false;
       return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(s.url) || s.url.includes('/images/');
     });
+
+    // **Then check that each one exists.** A search model will happily
+    // compose a plausible wiki path that was never there — six confident
+    // Fandom URLs for Hollow Knight, all dead (2026-09-08). The app fetches
+    // the bytes itself, so a dead URL reached the person as "that site
+    // wouldn't hand the image over". Asking here, with the headers a
+    // browser sends, keeps the invented ones out of the list.
+    suggestions = await verified((suggestions as FoundMap[]).slice(0, 12));
 
     return jsonResponse({ suggestions });
   } catch (err) {

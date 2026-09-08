@@ -147,8 +147,7 @@ struct CollectionShelf: View {
     }
 
     private func members(of collection: GameCollection) -> [Game] {
-        let ids = Set(collection.gameIDs)
-        return games.filter { ids.contains($0.id.uuidString) }
+        collection.members(in: games)
     }
 }
 
@@ -169,20 +168,37 @@ struct CollectionDetailView: View {
 
     private var repo: Repository { Repository(context) }
 
+    /// The rule a smart collection is made of, as words.
+    private var ruleChips: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(collection.smartRule?.describe(statusName: { $0.sectionTitle }) ?? [], id: \.self) { word in
+                Text(word)
+                    .font(.caption.weight(.medium))
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(LSTheme.accent.opacity(0.16), in: .capsule)
+                    .foregroundStyle(LSTheme.accent)
+            }
+        }
+    }
+
     private var members: [Game] {
-        let ids = Set(collection.gameIDs)
-        return allGames.filter { ids.contains($0.id.uuidString) }
+        collection.members(in: allGames)
     }
 
     var body: some View {
         ScrollView {
             if members.isEmpty {
                 VStack(spacing: 10) {
-                    Image(systemName: "square.stack.3d.up")
+                    Image(systemName: collection.isSmart ? "sparkles.rectangle.stack" : "square.stack.3d.up")
                         .font(.system(size: 40)).foregroundStyle(.secondary)
-                    Text("No games yet").foregroundStyle(.secondary)
-                    Button("Add Games") { pickingMembers = true }
-                        .buttonStyle(.borderedProminent)
+                    Text(collection.isSmart ? "Nothing matches this rule yet" : "No games yet")
+                        .foregroundStyle(.secondary)
+                    if collection.isSmart {
+                        ruleChips
+                    } else {
+                        Button("Add Games") { pickingMembers = true }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
                 .frame(maxWidth: .infinity).padding(.top, 60)
             } else {
@@ -207,7 +223,9 @@ struct CollectionDetailView: View {
                         Text(collection.name)
                             .font(.title3.weight(.semibold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(Format.gameCount(members.count))
+                        Text(collection.isSmart
+                             ? "\(Format.gameCount(members.count)) · fills itself"
+                             : Format.gameCount(members.count))
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -216,6 +234,9 @@ struct CollectionDetailView: View {
                 .padding(.horizontal)
                 // The name is on screen twice otherwise — here and in the bar.
                 .accessibilityElement(children: .combine)
+                if collection.isSmart {
+                    ruleChips.padding(.horizontal)
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 105), spacing: 12)], spacing: 16) {
                     ForEach(members) { game in
                         NavigationLink(value: game) {
@@ -239,9 +260,11 @@ struct CollectionDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button {
-                        pickingMembers = true
-                    } label: { Label("Add / Remove Games…", systemImage: "plus.square.on.square") }
+                    if !collection.isSmart {
+                        Button {
+                            pickingMembers = true
+                        } label: { Label("Add / Remove Games…", systemImage: "plus.square.on.square") }
+                    }
                     Button {
                         nameField = collection.name; renaming = true
                     } label: { Label("Rename…", systemImage: "pencil") }

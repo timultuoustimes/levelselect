@@ -28,6 +28,10 @@ enum ImageIngest {
         case .logo:     1200
         case .backdrop: 2200
         case .gallery:  2200
+        // A map is read by zooming into it; 2200 turns a labelled world into
+        // mush. 4096 keeps a wiki-grade PNG legible and stays well inside
+        // what a CloudKit asset carries.
+        case .map:      4096
         }
     }
 

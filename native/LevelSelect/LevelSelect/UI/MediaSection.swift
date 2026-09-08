@@ -29,7 +29,8 @@ struct ScreenshotStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            let mine = game.liveImages
+            // Maps have their own section; here are the pictures.
+            let mine = game.liveImages.filter { $0.role != .map }
             if !mine.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {

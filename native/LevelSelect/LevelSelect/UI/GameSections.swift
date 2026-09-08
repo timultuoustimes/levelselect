@@ -14,7 +14,7 @@ import SwiftData
 /// section that's absent anyway — Runs without a template and About without a
 /// summary never render regardless of this preference.
 enum GamePageSection: String, CaseIterable, Identifiable {
-    case sessions, beaten, runs, tracker, videos, about, media, info
+    case sessions, beaten, runs, tracker, videos, about, media, maps, info
     case connections, tags, review, notes
 
     var id: String { rawValue }
@@ -28,6 +28,7 @@ enum GamePageSection: String, CaseIterable, Identifiable {
         case .videos:      "Guides & Videos"
         case .about:       "About"
         case .media:       "Media"
+        case .maps:        "Maps"
         case .info:        "Game Info"
         case .connections: "Connections"
         case .tags:        "Tags"
@@ -45,6 +46,7 @@ enum GamePageSection: String, CaseIterable, Identifiable {
         case .videos:      "play.rectangle"
         case .about:       "text.alignleft"
         case .media:       "photo.stack"
+        case .maps:        "map"
         case .info:        "info.circle"
         case .connections: "point.3.connected.trianglepath.dotted"
         case .tags:        "tag"

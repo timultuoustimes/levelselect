@@ -500,6 +500,10 @@ struct HomeTab: View {
     /// because a preference that silently doesn't sync is otherwise read as a
     /// bug rather than a decision.
     @AppStorage("homeHiddenStatuses") private var hiddenRaw = ""
+    @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.sortIndex)
+    private var collections: [GameCollection]
+    @State private var arrangingHome = false
+    @State private var arrangingSystems = false
 
     /// Trailing toolbar placement; declaration order controls layout there
     /// (lockup, then gear, then add).
@@ -627,6 +631,8 @@ struct HomeTab: View {
             }
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet().lsSheet() }
+        .sheet(isPresented: $arrangingHome) { ArrangeHomeSheet().lsSheet() }
+        .sheet(isPresented: $arrangingSystems) { ArrangeSystemsSheet().lsSheet([.large]) }
         // `onDismiss`, not the sheet's own `onDisappear`: this fires ONCE when
         // Settings actually closes, where that fired on any disappearance —
         // including pushing a subscreen onto the Settings stack, which re-keyed
@@ -762,72 +768,14 @@ struct HomeTab: View {
                 // only way to add a game, and the shelves are what the app is.
                 if games.isEmpty { emptyState }
 
-                if let cp = continueGame {
-                    VStack(alignment: .leading, spacing: 10) {
-                        // Capped, and only this. At Accessibility XXL a
-                        // `.caption` all-caps eyebrow scaled into the largest
-                        // thing on Home — bigger than the hero's own title and
-                        // its cover — which inverts the hierarchy it exists to
-                        // introduce. It still grows, just not past the content
-                        // it labels. Nothing here is truncated or hidden.
-                        Text("CONTINUE PLAYING")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .kerning(1)
-                            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                        BouncyTap {
-                            path.append(cp)
-                        } label: {
-                            ContinueHeroCard(game: cp) {
-                                play(cp)
-                            } onPauseResume: {
-                                togglePause(cp)
-                            } onStop: {
-                                stop(cp)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
+                // **What Home is made of is the person's call.** Continue
+                // Playing, the display case, the shelves, a pinned collection —
+                // in the order they arranged, from the synced layout. See
+                // `HomeLayout`; the blocks themselves are drawn by `homeBlock`.
+                ForEach(layout.visibleBlocks) { block in
+                    homeBlock(block)
                 }
 
-                // Any OTHER live timer, with its own controls. A running
-                // session used to be unreachable from Home unless it happened
-                // to be the Continue Playing game, which is how a forgotten
-                // timer turns into hours of imaginary playtime.
-                RunningTimersStrip(excluding: continueGame) { game in
-                    path.append(game)
-                }
-
-                // `homeOrder`, not `displayOrder`. Home carries what is live
-                // and what is next; the backlog, the finished pile, the
-                // shelved and the abandoned are facts about a collection and
-                // live in Library. Wishlist has its own tab.
-                ForEach(GameStatus.homeOrder, id: \.self) { status in
-                    let items = grouped[status] ?? []
-                    // A new library draws its empty shelves instead of hiding
-                    // them, captioned with the welcome's own promises. See
-                    // `AppPromise` and F1: one game in a screen of nothing
-                    // teaches nobody what the screen is, and the shelves are
-                    // the part of the app that keeps the promises.
-                    if items.isEmpty, showsPromiseShelves,
-                       !hiddenStatuses.contains(status.rawValue),
-                       let caption = status.emptyShelfCaption {
-                        PromiseShelf(status: status, caption: caption)
-                    }
-                    if !items.isEmpty, !hiddenStatuses.contains(status.rawValue) {
-                        StatusCarousel(
-                            status: status, games: items,
-                            collapsed: collapsedStatuses.contains(status.rawValue),
-                            onOpen: { path.append($0) },
-                            onSeeAll: {
-                                nav.pendingLibraryStatus = status
-                                nav.selectedTab = .library
-                            },
-                            onToggleCollapse: { toggleCollapse(status) },
-                            onHide: { setHidden(status, true) }
-                        )
-                    }
-                }
                 // After what's live and what's next, because that is when it
                 // happened. Beating a game is the one event Home had no words
                 // for — the game simply left Now Playing and nothing marked
@@ -1026,10 +974,12 @@ struct HomeTab: View {
         Set(hiddenRaw.split(separator: ",").map(String.init))
     }
 
+    /// Hiding writes the synced layout now. The old device-local set is read
+    /// once, as the starting point, and then it is spent — see `HomeLayout`.
     private func setHidden(_ status: GameStatus, _ hidden: Bool) {
-        var set = hiddenStatuses
-        if hidden { set.insert(status.rawValue) } else { set.remove(status.rawValue) }
-        hiddenRaw = set.sorted().joined(separator: ",")
+        var next = layout
+        next.setHidden(.status(status), hidden)
+        write(next)
     }
 
     /// The way back. A shelf that vanishes with no trace of how to restore it
@@ -1041,10 +991,10 @@ struct HomeTab: View {
         // otherwise be offered a button restoring a shelf that no longer
         // exists on this screen.
         let hidden = GameStatus.homeOrder.filter {
-            hiddenStatuses.contains($0.rawValue) && !(grouped[$0] ?? []).isEmpty
+            layout.isHidden(.status($0)) && !(grouped[$0] ?? []).isEmpty
         }
-        if !hidden.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            if !hidden.isEmpty {
                 Text("Hidden from Home")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1062,8 +1012,159 @@ struct HomeTab: View {
                     }
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 4)
+            // The full version of the long-press: every block, in order,
+            // with a switch. Where a new library's captions end and the
+            // rest of Home's tools begin.
+            if !games.isEmpty {
+                Button { arrangingHome = true } label: {
+                    Label("Arrange Home…", systemImage: "arrow.up.arrow.down")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .tint(.secondary)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Home's blocks
+
+    private var layout: HomeLayout {
+        HomeLayout.resolve(raw: themeSettings.first?.homeLayoutRaw,
+                           legacyHiddenStatuses: Set(hiddenStatuses.compactMap { GameStatus(rawValue: $0) }))
+    }
+
+    private func write(_ layout: HomeLayout) {
+        let settings = ThemePalette.fetchOrCreate(in: context)
+        settings.homeLayoutRaw = layout.raw
+        settings.updatedAt = .now
+    }
+
+    /// Every system in the library with a count, in the person's order.
+    private var systemGroups: [HomeSystems.Group] {
+        var counts: [String: Int] = [:]
+        for game in games where game.status != .wishlist {
+            let owned = game.ownedPlatformNames
+            for platform in (owned.isEmpty ? ["Other"] : owned) {
+                counts[platform, default: 0] += 1
+            }
+        }
+        return HomeSystems.ordered(raw: themeSettings.first?.homeSystemsRaw,
+                                   available: counts.map { (platform: $0.key, count: $0.value) })
+    }
+
+    @ViewBuilder
+    private func homeBlock(_ block: HomeBlock) -> some View {
+        switch block {
+        case .continuePlaying:
+            if let cp = continueGame {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Capped, and only this. At Accessibility XXL a
+                    // `.caption` all-caps eyebrow scaled into the largest
+                    // thing on Home — bigger than the hero's own title and
+                    // its cover — which inverts the hierarchy it exists to
+                    // introduce. It still grows, just not past the content
+                    // it labels. Nothing here is truncated or hidden.
+                    Text("CONTINUE PLAYING")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .kerning(1)
+                        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+                    BouncyTap {
+                        path.append(cp)
+                    } label: {
+                        ContinueHeroCard(game: cp) {
+                            play(cp)
+                        } onPauseResume: {
+                            togglePause(cp)
+                        } onStop: {
+                            stop(cp)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+            }
+            // Any OTHER live timer, with its own controls. A running
+            // session used to be unreachable from Home unless it happened
+            // to be the Continue Playing game, which is how a forgotten
+            // timer turns into hours of imaginary playtime.
+            RunningTimersStrip(excluding: continueGame) { game in
+                path.append(game)
+            }
+
+        case .systems:
+            if games.isEmpty {
+                // The case before there is anything in it — the question a
+                // new Home leads with. See `EmptySystemsCase`.
+                EmptySystemsCase { showingAdd = true }
+            } else {
+                let all = systemGroups
+                let shown = Array(all.prefix(layout.systemsCount))
+                if all.count > 1 || layout.systemsStyle == .grid {
+                    switch layout.systemsStyle {
+                    case .grid:
+                        SystemsCase(groups: shown, total: all.count,
+                                    onOpen: { path.append(PlatformRoute(platform: $0)) },
+                                    onSeeAll: { nav.selectedTab = .library },
+                                    onArrange: { arrangingSystems = true })
+                    case .row:
+                        SystemsRow(groups: shown) { path.append(PlatformRoute(platform: $0)) }
+                            .contextMenu {
+                                Button { arrangingSystems = true } label: {
+                                    Label("Arrange Systems…", systemImage: "arrow.up.arrow.down")
+                                }
+                            }
+                    }
+                }
+            }
+
+        case .status(let status):
+            let items = grouped[status] ?? []
+            // A new library draws its empty shelves instead of hiding
+            // them, captioned with the welcome's own promises. See
+            // `AppPromise` and F1: one game in a screen of nothing
+            // teaches nobody what the screen is, and the shelves are
+            // the part of the app that keeps the promises.
+            if items.isEmpty, showsPromiseShelves, let caption = status.emptyShelfCaption {
+                PromiseShelf(status: status, caption: caption)
+            }
+            if !items.isEmpty {
+                StatusCarousel(
+                    status: status, games: items,
+                    collapsed: collapsedStatuses.contains(status.rawValue),
+                    onOpen: { path.append($0) },
+                    onSeeAll: {
+                        nav.pendingLibraryStatus = status
+                        nav.selectedTab = .library
+                    },
+                    onToggleCollapse: { toggleCollapse(status) },
+                    onHide: { setHidden(status, true) },
+                    onArrange: { arrangingHome = true }
+                )
+            }
+
+        case .collections:
+            if !collections.isEmpty {
+                // Library's shelf, as a block. "+" goes where collections are
+                // made rather than growing a second creation flow here.
+                CollectionShelf(collections: collections, games: games,
+                                onNew: { nav.selectedTab = .library })
+            }
+
+        case .collection(let id):
+            if let collection = collections.first(where: { $0.id == id }) {
+                PinnedCollectionShelf(
+                    collection: collection,
+                    members: collection.members(in: games),
+                    onOpen: { path.append($0) },
+                    onOpenCollection: { path.append(CollectionRoute(id: id)) },
+                    onUnpin: {
+                        var next = layout
+                        next.unpin(collection: id)
+                        write(next)
+                    })
+            }
         }
     }
 

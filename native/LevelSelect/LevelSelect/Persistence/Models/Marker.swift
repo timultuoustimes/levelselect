@@ -19,6 +19,15 @@ final class Marker {
     var label: String = ""
     var notes: String?
     var linkedTrackerItemID: String?
+    /// When this spot was explored, found, done — nil until it is.
+    ///
+    /// **The field the roadmap named and never added.** Tim: *"drop location
+    /// pins for items, mark areas as explored/completed."* `MarkerCategory`
+    /// is all kinds and no states, so a pin could say what was here and never
+    /// whether you had been. A linked marker does not use this: it shows the
+    /// tracker item's state and ticking it ticks the item, so there is one
+    /// record of a thing being done, not two that can disagree.
+    var exploredAt: Date?
 
     var map: GameMap?
 

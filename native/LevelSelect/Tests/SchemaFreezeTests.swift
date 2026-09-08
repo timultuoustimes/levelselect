@@ -166,7 +166,8 @@ struct SchemaFreezeTests {
             "GameImage: addedAt,byteCount,caption,createdAt,data,deletedAt,game,id,legacyID,memory,pixelHeight,pixelWidth,revision,roleRaw,updatedAt,userID",
             "GameMap: addedAt,createdAt,deletedAt,game,id,kind,legacyID,localCacheURL,markers,name,pixelHeight,pixelWidth,remoteStoragePath,remoteURLString,revision,storageType,updatedAt,userID",
             "GameVideo: channel,createdAt,deletedAt,game,groupName,id,kindRaw,lastWatchedAt,legacyID,notes,orderIndex,partsData,revision,thumbnailURL,title,updatedAt,urlString,userID,watchedPartIndex,watchedSeconds,youtubeID",
-            "Marker: category,createdAt,deletedAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
+            // exploredAt added 2026-09-08 build 38: the state a pin never had.
+            "Marker: category,createdAt,deletedAt,exploredAt,id,label,legacyID,linkedTrackerItemID,map,normalizedX,normalizedY,notes,revision,updatedAt,userID",
             // Memory — new in V5 (build 36), the model that lets the library
             // hold things older than the install. earliest/latest are the
             // sortable interval; whenText is the user's words, kept verbatim

@@ -103,7 +103,7 @@ final class Game {
         case .cover:    coverOverrideURLString
         case .logo:     logoURLString
         case .backdrop: backdropURLString
-        case .gallery:  nil
+        case .gallery, .map: nil
         }
     }
 
@@ -112,7 +112,7 @@ final class Game {
         case .cover:    coverOverrideURLString = pointer
         case .logo:     logoURLString = pointer
         case .backdrop: backdropURLString = pointer
-        case .gallery:  break   // a pile, not a slot
+        case .gallery, .map: break   // piles, not slots
         }
     }
 
@@ -138,7 +138,7 @@ final class Game {
             // Falls back to whatever the cover resolves to, blurred by the
             // view. Recursion is safe: `.cover` never falls back to a role.
             return resolvedArtwork(.cover)
-        case .logo, .gallery:
+        case .logo, .gallery, .map:
             // A logo has no image fallback ON PURPOSE — the name in text is
             // the fallback, and that belongs to the view.
             return .none

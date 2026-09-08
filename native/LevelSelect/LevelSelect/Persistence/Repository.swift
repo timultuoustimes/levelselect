@@ -14,14 +14,17 @@ struct Repository {
 
     init(_ context: ModelContext) { self.context = context }
 
-    private func touch<T: Syncable>(_ model: T, at date: Date = .now) {
+    // Internal rather than private so `Repository` can grow by extension —
+    // `MapsRepository.swift` is the first — without every write path having
+    // to live in one 3,000-line file.
+    func touch<T: Syncable>(_ model: T, at date: Date = .now) {
         model.updatedAt = date
         model.revision += 1
     }
 
     /// Explicit commit after every mutation (beta P0). Failures surface in
     /// the retry banner via PersistenceMonitor instead of vanishing.
-    private func persist() {
+    func persist() {
         PersistenceMonitor.shared.commit(context)
     }
 

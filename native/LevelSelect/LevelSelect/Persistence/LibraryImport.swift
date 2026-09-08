@@ -795,6 +795,7 @@ enum LibraryImport {
             label: (d["label"] as? String) ?? "")
         marker.notes = d["notes"] as? String
         marker.linkedTrackerItemID = d["linkedTrackerItemID"] as? String
+        marker.exploredAt = date(d["exploredAt"])
         return marker
     }
 }
