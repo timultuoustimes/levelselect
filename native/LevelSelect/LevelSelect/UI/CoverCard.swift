@@ -156,6 +156,14 @@ struct ContinueHeroCard: View {
     /// passes these; other callers get the plain Play button.
     var onPauseResume: (() -> Void)? = nil
     var onStop: (() -> Void)? = nil
+    /// Opens the game page. **Supplied here rather than by wrapping the
+    /// whole card in a button**, because a card that is itself a button and
+    /// contains Play, Pause and Stop is nested controls: VoiceOver announced
+    /// one "Hollow Knight, button" holding three more, and a mis-hit near
+    /// Stop navigated instead. Open since 2026-08-13 as P1. Now the cover
+    /// and the words are the way in, and the buttons beside them are only
+    /// buttons.
+    var onOpen: (() -> Void)? = nil
 
     private var playthrough: Playthrough? {
         game.activePlaythrough
@@ -178,17 +186,25 @@ struct ContinueHeroCard: View {
             if typeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .center, spacing: 14) {
-                        cover(width: 96, height: 128)
+                        // The cover opens too, but the words below carry the
+                        // accessible button — one element per action.
+                        opens { cover(width: 96, height: 128) }
+                            .accessibilityHidden(onOpen != nil)
                         Spacer(minLength: 0)
                         actions
                     }
-                    details
+                    opens { details }
                 }
             } else {
                 HStack(spacing: 14) {
-                    cover(width: 76, height: 101)
-                    details
-                    Spacer(minLength: 0)
+                    opens {
+                        HStack(spacing: 14) {
+                            cover(width: 76, height: 101)
+                            details
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(.rect)
+                    }
                     actions
                 }
             }
@@ -202,6 +218,18 @@ struct ContinueHeroCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(LSTheme.accent.opacity(0.35), lineWidth: 1)
         )
+    }
+
+    /// The tappable half of the card, when a caller gives it somewhere to go.
+    @ViewBuilder
+    private func opens<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        if let onOpen {
+            BouncyTap(action: onOpen) { content() }
+                .accessibilityLabel(game.name)
+                .accessibilityHint("Opens the game")
+        } else {
+            content()
+        }
     }
 
     private func cover(width: CGFloat, height: CGFloat) -> some View {

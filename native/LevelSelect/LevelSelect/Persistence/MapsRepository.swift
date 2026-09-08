@@ -44,14 +44,6 @@ extension Repository {
         return map
     }
 
-    /// The map a picture is the image of, if any — including a tombstoned
-    /// map, which is what Recently Deleted needs to know.
-    func map(backedBy image: GameImage) -> GameMap? {
-        (image.game?.maps ?? []).first {
-            $0.storageType == Self.mapImageStorageType && $0.remoteStoragePath == image.id.uuidString
-        }
-    }
-
     /// The picture behind a map, if this build stores maps as pictures.
     /// A web-era map (`storageType == "upload"`) has none here, and shows as
     /// a map without an image rather than crashing the section.

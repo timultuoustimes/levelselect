@@ -473,6 +473,16 @@ struct Repository {
         }
     }
 
+    /// The map a picture is the image of, if any — including a tombstoned
+    /// map, which is what Recently Deleted needs to know. Here rather than in
+    /// `MapsRepository.swift` because restore, Delete Forever and the purge
+    /// call it, and the widget target compiles this file without that one.
+    func map(backedBy image: GameImage) -> GameMap? {
+        (image.game?.maps ?? []).first {
+            $0.storageType == "image" && $0.remoteStoragePath == image.id.uuidString
+        }
+    }
+
     func trashedMaps() -> [GameMap] {
         let d = FetchDescriptor<GameMap>(predicate: #Predicate { $0.deletedAt != nil })
         return (try? context.fetch(d)) ?? []

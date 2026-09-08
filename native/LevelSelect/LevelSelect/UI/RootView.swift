@@ -1071,16 +1071,17 @@ struct HomeTab: View {
                         .foregroundStyle(.secondary)
                         .kerning(1)
                         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-                    BouncyTap {
+                    // Not wrapped in a button any more — the card hands the
+                    // navigation to its cover and words, and Play, Pause and
+                    // Stop are siblings rather than children. See `onOpen`.
+                    ContinueHeroCard(game: cp) {
+                        play(cp)
+                    } onPauseResume: {
+                        togglePause(cp)
+                    } onStop: {
+                        stop(cp)
+                    } onOpen: {
                         path.append(cp)
-                    } label: {
-                        ContinueHeroCard(game: cp) {
-                            play(cp)
-                        } onPauseResume: {
-                            togglePause(cp)
-                        } onStop: {
-                            stop(cp)
-                        }
                     }
                 }
                 .padding(.horizontal)
