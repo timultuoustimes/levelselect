@@ -383,8 +383,15 @@ struct PlatformShortNameTests {
 
     /// Anything unmapped passes through unchanged rather than being mangled —
     /// a new console should print its real name until someone shortens it.
+    ///
+    /// The example used to be "Bandai WonderSwan", which stopped being
+    /// unmapped on 2026-09-08 when the WonderSwan got art and a fold. That is
+    /// the hazard with picking a real console to stand for an unknown one:
+    /// this app keeps learning consoles. The Sharp X68000 is a real machine
+    /// with no art here, and if it ever gets some, pick another.
     @Test func unmappedPlatformsPassThroughUnchanged() {
-        #expect(PlatformShort.name("Bandai WonderSwan") == "Bandai WonderSwan")
+        #expect(PlatformShort.name("Sharp X68000") == "Sharp X68000")
+        #expect(PlatformIcon.assetName("Sharp X68000") == nil, "still unmapped")
     }
 }
 

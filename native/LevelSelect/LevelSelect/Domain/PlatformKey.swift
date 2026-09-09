@@ -92,6 +92,19 @@ enum PlatformKey {
         case "Neo Geo AES", "Neo Geo", "NeoGeo", "SNK Neo Geo AES": "Neo Geo AES"
         case "Neo Geo MVS", "SNK Neo Geo MVS": "Neo Geo MVS"
         case "Neo Geo Pocket Color": "Neo Geo Pocket Color"
+        // The 1970s and 80s, and the two home computers people played on.
+        case "Mattel Intellivision", "Intellivision": "Intellivision"
+        case "ColecoVision", "Coleco Vision": "ColecoVision"
+        case "Vectrex", "GCE Vectrex": "Vectrex"
+        case "Sinclair ZX Spectrum", "ZX Spectrum", "ZX Spectrum 48K": "ZX Spectrum"
+        // MSX2 and the Turbo R fold into MSX: successive revisions of one
+        // standard, and one picture between them.
+        case "MSX", "MSX2", "MSX2+", "MSX Turbo R": "MSX"
+        case "3DO Interactive Multiplayer", "3DO", "Panasonic 3DO": "3DO"
+        case "WonderSwan Color", "Bandai WonderSwan Color": "WonderSwan Color"
+        case "WonderSwan", "Bandai WonderSwan": "WonderSwan"
+        // IGDB says "Arcade" and so does everyone else.
+        case "Arcade", "Arcade Cabinet": "Arcade"
         case "Other", "": "Other"
         default: p
         }

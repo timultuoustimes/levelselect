@@ -50,10 +50,12 @@ struct PlatformEraTests {
         #expect(PlatformEra.releaseYear("") == nil)
     }
 
-    /// Sanity on the shape of the data itself.
+    /// Sanity on the shape of the data itself. The floor was 1975 until the
+    /// arcade cabinet arrived on 09-08 — a bound set when everything in the
+    /// table was a home console, and arcade video games start in 1972.
     @Test func everyYearIsPlausible() {
         for (slug, year) in PlatformEra.years {
-            #expect(year >= 1975 && year <= 2030, Comment(rawValue: "\(slug) = \(year)"))
+            #expect(year >= 1971 && year <= 2030, Comment(rawValue: "\(slug) = \(year)"))
         }
     }
 
@@ -280,8 +282,40 @@ struct PlatformEraTests {
         #expect(PlatformIcon.assetName("Switch 2") == "platform-switch2")
         #expect(PlatformIcon.assetName("Nintendo Switch") == "platform-switch")
         #expect(!PlatformIcon.isStorefront("Switch"))
-        // A logo is drawn differently from a photograph of a machine.
-        #expect(PlatformIcon.isFlatMark("platform-itch"))
-        #expect(!PlatformIcon.isFlatMark("platform-switch"))
+        #expect(PlatformIcon.assetName("itch.io") == "platform-itch")
+    }
+
+    /// The machines that came before the ones anyone still sells, plus a
+    /// cabinet with nobody's name on it.
+    @Test func theEightiesMachinesResolveToTheirOwnArt() {
+        let expected = ["Intellivision": "platform-intellivision",
+                        "ColecoVision": "platform-colecovision",
+                        "Vectrex": "platform-vectrex",
+                        "ZX Spectrum": "platform-zxspectrum",
+                        "MSX": "platform-msx",
+                        "3DO": "platform-3do",
+                        "WonderSwan Color": "platform-wonderswan",
+                        "Arcade": "platform-arcade"]
+        for (name, asset) in expected {
+            #expect(PlatformIcon.assetName(name) == asset, Comment(rawValue: name))
+        }
+        // The mono WonderSwan shares the Color's body, so it shares the
+        // picture — the Neo Geo Pocket's rule again.
+        #expect(PlatformIcon.assetName("WonderSwan") == "platform-wonderswan")
+        // A NAMED cabinet is matched before the general one can catch it.
+        #expect(PlatformIcon.assetName("Neo Geo MVS") == "platform-neogeo-mvs")
+        // Folds, including the revisions of one standard.
+        #expect(PlatformKey.canonical("MSX2") == "MSX")
+        #expect(PlatformKey.canonical("3DO Interactive Multiplayer") == "3DO")
+        #expect(PlatformKey.canonical("Sinclair ZX Spectrum") == "ZX Spectrum")
+        // Headings: a maker where there is one, a kind where there is not.
+        #expect(PlatformMaker.of("Intellivision") == "Mattel")
+        #expect(PlatformMaker.of("3DO") == "Panasonic")
+        #expect(PlatformMaker.of("WonderSwan Color") == "Bandai")
+        #expect(PlatformMaker.of("MSX") == "Computers", "a standard, not one company's box")
+        #expect(PlatformMaker.of("Arcade") == "Arcade")
+        // The oldest thing the app can draw, and it sorts that way.
+        #expect(PlatformEra.releaseYear("Arcade") == 1972)
+        #expect(PlatformEra.years.values.min() == 1972)
     }
 }

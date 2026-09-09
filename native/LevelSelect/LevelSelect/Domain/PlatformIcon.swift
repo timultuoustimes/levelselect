@@ -71,6 +71,22 @@ enum PlatformIcon {
                                                                { return "platform-ngpc" }
         if p.contains("mvs")                                   { return "platform-neogeo-mvs" }
         if p.contains("neo geo") || p.contains("neogeo")       { return "platform-neogeo-aes" }
+        // The 1970s and 80s machines, and two home computers that were game
+        // machines in everything but name. "WonderSwan" catches the 1999
+        // mono alongside the Color: one body, one picture, the same rule the
+        // Neo Geo Pocket follows.
+        if p.contains("intellivision")                         { return "platform-intellivision" }
+        if p.contains("colecovision") || p.contains("coleco")  { return "platform-colecovision" }
+        if p.contains("vectrex")                               { return "platform-vectrex" }
+        if p.contains("zx spectrum") || p.contains("spectrum") { return "platform-zxspectrum" }
+        if p.contains("msx")                                   { return "platform-msx" }
+        if p.contains("3do")                                   { return "platform-3do" }
+        if p.contains("wonderswan") || p.contains("wonder swan")
+                                                               { return "platform-wonderswan" }
+        // LAST of the machines, because it is the general case: a cabinet
+        // with nobody's name on it. Every named cabinet — the Neo Geo MVS
+        // above — is matched before this can catch it.
+        if p.contains("arcade")                                { return "platform-arcade" }
         // Order matters: more specific strings first, since these are
         // substring matches ("xbox series" before "xbox", "ps5" before "ps").
         // This block used to violate its own rule — bare "xbox" sat above
@@ -126,13 +142,13 @@ enum PlatformIcon {
         if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "android"                                      { return "platform-android" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
-        // itch.io is a STOREFRONT, and the only mark in this set that is a
-        // logo rather than a photograph of a machine. It draws as a template
-        // (see `PlatformIcon.isFlatMark`) because a flat black glyph would
-        // vanish into a dark plate, and it is kept out of the console picker
-        // by `storefronts` below rather than by having no art — the picker's
-        // question is "is this hardware", which is not the same question as
-        // "can we draw it".
+        // itch.io is a STOREFRONT. It carried a flat black glyph for a few
+        // hours on 09-08, drawn as a template so it would not vanish into a
+        // dark plate; Codex then sculpted it in the set's own style, so it is
+        // an object like everything else and needs no special drawing. What
+        // has not changed is why it stays out of the console picker: that is
+        // `storefronts` below, because the picker's question is "is this
+        // hardware", which is not the same question as "can we draw it".
         // Matched EXACTLY, not as a substring: "switch" contains "itch". The
         // Switch tests sit at the top of this waterfall so it cannot bite
         // today, but a reorder would silently give every Switch game a
@@ -143,13 +159,6 @@ enum PlatformIcon {
 }
 
 extension PlatformIcon {
-    /// **Marks, not machines.** Every other icon is a lit render of hardware,
-    /// so `PlatformIconView` gives it one contact shadow and draws it in its
-    /// own colors. A flat single-color logo needs neither: a shadow under a
-    /// silhouette reads as a smudge, and black-on-dark-plate reads as a hole.
-    /// These draw as template images in the foreground color instead.
-    static func isFlatMark(_ asset: String) -> Bool { asset == "platform-itch" }
-
     /// **Places you buy games, which are not consoles you own.**
     ///
     /// They stay in the catalog, because "where did this game come from" is a
@@ -294,6 +303,23 @@ enum PlatformMaker {
         // "Computers" would split the family across the sheet.
         "c64": "Commodore", "amiga": "Commodore", "cd32": "Commodore",
         "neogeo-aes": "SNK", "neogeo-mvs": "SNK", "ngpc": "SNK",
+        "intellivision": "Mattel", "colecovision": "Coleco",
+        // General Consumer Electronics built the Vectrex; Milton Bradley
+        // bought GCE the year after and its own name went on later units.
+        // The heading is the maker on the launch machine, which is also the
+        // one the console is filed under everywhere else.
+        "vectrex": "GCE", "zxspectrum": "Sinclair", "wonderswan": "Bandai",
+        // The 3DO was a licensed standard rather than one company's box, and
+        // Panasonic's FZ-1 was the first and the one in the picture.
+        "3do": "Panasonic",
+        // The MSX was a STANDARD — Sony, Panasonic, Yamaha and a dozen others
+        // built one. There is no maker to head it with, and it is a home
+        // computer, so it files with the home computers. The render is Sony's
+        // HiT BiT because a standard has to be drawn as somebody's machine.
+        "msx": "Computers",
+        // Nobody's name on the cabinet, so the kind is the heading — the same
+        // rule Computers and Mobile follow.
+        "arcade": "Arcade",
         "steamdeck": "Valve", "steammachine": "Valve",
         // **Where the maker is not the point, the kind is.** By company alone
         // this list opened with Apple and Google — two names that make phones
@@ -359,6 +385,16 @@ enum PlatformEra {
         // two different buyers — you, and an arcade — so they share a year and
         // the picker keeps them in catalogue order.
         "neogeo-aes": 1990, "neogeo-mvs": 1990, "ngpc": 1999,
+        "intellivision": 1979, "colecovision": 1982, "vectrex": 1982,
+        "zxspectrum": 1982, "msx": 1983, "3do": 1993,
+        // The WonderSwan Color's Japanese date. It never had another —
+        // Bandai sold the line at home only.
+        "wonderswan": 2000,
+        // **The oldest thing in the table, and older than the table's floor
+        // was.** Arcade video games start in 1972 with Pong, two years before
+        // anything else here; `everyYearIsPlausible` said 1975 until this
+        // arrived, on the assumption that home consoles were the subject.
+        "arcade": 1972,
         // NEC, by the American name and date: the PC Engine was 1987 in
         // Japan, the TurboGrafx-16 was 1989 here.
         "turbografx16": 1989,

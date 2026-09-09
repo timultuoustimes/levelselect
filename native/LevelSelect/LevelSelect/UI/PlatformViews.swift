@@ -28,19 +28,7 @@ struct PlatformIconView: View {
 
     var body: some View {
         Group {
-            if let asset = PlatformIcon.assetName(platform),
-               PlatformIcon.isFlatMark(asset) {
-                // A logo, not a machine — see `PlatformIcon.isFlatMark`. No
-                // contact shadow, because a silhouette casting one reads as a
-                // smudge, and drawn in the foreground color so a black glyph
-                // does not vanish into a dark plate.
-                Image(asset)
-                    .renderingMode(.template)
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(.primary)
-                    .padding(size * 0.08)
-            } else if let asset = PlatformIcon.assetName(platform) {
+            if let asset = PlatformIcon.assetName(platform) {
                 Image(asset)
                     .resizable()
                     .scaledToFit()

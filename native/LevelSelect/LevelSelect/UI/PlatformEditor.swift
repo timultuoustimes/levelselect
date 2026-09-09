@@ -15,6 +15,8 @@ enum PlatformCatalog {
         "Atari 2600", "Atari 5200", "Atari 7800", "Atari Lynx", "Atari Jaguar",
         "Commodore 64", "Amiga", "Amiga CD32",
         "Neo Geo AES", "Neo Geo MVS", "Neo Geo Pocket Color",
+        "Intellivision", "ColecoVision", "Vectrex", "ZX Spectrum", "MSX",
+        "3DO", "WonderSwan Color", "Arcade",
         // Japan's own machines, which are not the Western ones renamed: the
         // Super Famicom is a different box from the SNES and now has its own
         // art. Build 39, when the consoles became records worth adding by
