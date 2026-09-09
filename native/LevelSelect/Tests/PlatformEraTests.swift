@@ -46,7 +46,7 @@ struct PlatformEraTests {
     /// A platform the app has never heard of sorts somewhere rather than
     /// crashing — the caller decides where.
     @Test func anUnknownPlatformHasNoYear() {
-        #expect(PlatformEra.releaseYear("Amstrad CPC") == nil)
+        #expect(PlatformEra.releaseYear("Philips CD-i") == nil)
         #expect(PlatformEra.releaseYear("") == nil)
     }
 
@@ -201,7 +201,14 @@ struct PlatformEraTests {
         #expect(PlatformMaker.of("Switch") == "Nintendo")
         #expect(PlatformMaker.of("Steam Deck") == "Valve")
         #expect(!PlatformMaker.makers.values.contains("Apple"))
-        #expect(!PlatformMaker.makers.values.contains("Google"))
+        // **Google heads Stadia and nothing else.** The rule was never "no
+        // company that makes a phone" — it was that a phone must not put its
+        // maker above every console, and Stadia is a games platform Google
+        // actually built. So the check is that no PHONE carries a company.
+        #expect(PlatformMaker.of("Stadia") == "Google")
+        for phone in ["iOS", "Android", "iPad"] {
+            #expect(PlatformMaker.of(phone) == "Mobile", Comment(rawValue: phone))
+        }
     }
 
     /// A storefront is not hardware. itch.io stays in the catalogue, because

@@ -22,6 +22,22 @@ enum PlatformIcon {
         // later is drawn without anyone having to remember to add its raw
         // spelling here too, which is exactly how those three were missed.
         let p = PlatformKey.canonical(platform).lowercased()
+        // **Headsets before consoles.** "PlayStation VR" contains
+        // "playstation", so the PS block would swallow it whole; the same is
+        // true of "Meta Quest" and nothing, but the rule is easier to keep if
+        // the whole family sits in one place at the top. `vr2` before `vr`,
+        // for the same reason "xbox series" sits above "xbox".
+        if p.contains("playstation vr2") || p.contains("psvr2")
+                                                               { return "platform-psvr2" }
+        if p.contains("playstation vr") || p.contains("psvr")  { return "platform-psvr" }
+        if p.contains("oculus quest") || p.contains("meta quest")
+                                                               { return "platform-quest" }
+        if p.contains("oculus")                                { return "platform-rift" }
+        if p.contains("vive")                                  { return "platform-vive" }
+        // SteamVR is the software platform Valve's headset runs; the Index is
+        // the machine you own, and there is no other. It does not collide with
+        // the Steam Deck or Machine below, which are two-word tests.
+        if p.contains("valve index") || p.contains("steamvr")  { return "platform-index" }
         if p.contains("switch 2")                              { return "platform-switch2" }
         if p.contains("switch")                                { return "platform-switch" }
         // **Japan's machines are their own machines**, and they have to be
@@ -153,6 +169,34 @@ enum PlatformIcon {
         if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "android"                                      { return "platform-android" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
+        // **DOS is a machine, not an operating system on yours.** Linux folds
+        // into PC because it is a choice of OS on the box you have today; the
+        // 486 that ran DOS will never run a modern game, and lumping them
+        // would make the app say something false about your hardware. Tim,
+        // 2026-09-09: *"they never played modern games on their computers that
+        // run DOS."* Exact, because `p == "pc"` above is exact and these two
+        // must not reach for each other.
+        if p == "dos" || p.contains("ms-dos")                  { return "platform-dos" }
+        if p.contains("amstrad")                               { return "platform-amstrad" }
+        // "Atari ST" reaches here rather than the Atari block above, which
+        // tests numbers and two cat names — none of which an ST contains.
+        if p.contains("atari st")                              { return "platform-atarist" }
+        if p.contains("fm towns")                              { return "platform-fmtowns" }
+        if p.contains("pc-98") || p.contains("pc-9800")        { return "platform-pc98" }
+        if p.contains("x68000")                                { return "platform-x68000" }
+        if p.contains("sharp x1") || p == "x1"                 { return "platform-x1" }
+        // Sega's add-on. Tested after the 32X above, which is the other one,
+        // and after `cd32`, which is Commodore's and shares three letters.
+        if p.contains("sega cd") || p.contains("mega-cd") || p.contains("mega cd")
+                                                               { return "platform-segacd" }
+        if p.contains("satellaview")                           { return "platform-satellaview" }
+        if p.contains("game & watch") || p.contains("game and watch")
+                                                               { return "platform-gameandwatch" }
+        if p.contains("tiger") || p.contains("handheld electronic")
+                                                               { return "platform-tigerlcd" }
+        if p.contains("ouya")                                  { return "platform-ouya" }
+        if p.contains("onlive")                                { return "platform-onlive" }
+        if p.contains("stadia")                                { return "platform-stadia" }
         // itch.io is a STOREFRONT. It carried a flat black glyph for a few
         // hours on 09-08, drawn as a template so it would not vanish into a
         // dark plate; Codex then sculpted it in the set's own style, so it is
@@ -325,7 +369,7 @@ enum PlatformMaker {
         "mastersystem": "Sega", "gamegear": "Sega",
         "turbografx16": "NEC",
         "atari2600": "Atari", "atari5200": "Atari", "atari7800": "Atari",
-        "lynx": "Atari", "jaguar": "Atari",
+        "lynx": "Atari", "jaguar": "Atari", "atarist": "Atari",
         // **Commodore, not Computers.** The kind-over-company rule above
         // exists because "Apple" and "Google" headed a console picker on the
         // strength of a phone each. Commodore is the opposite case: it made a
@@ -334,6 +378,20 @@ enum PlatformMaker {
         // "Computers" would split the family across the sheet.
         "c64": "Commodore", "amiga": "Commodore", "cd32": "Commodore",
         "neogeo-aes": "SNK", "neogeo-mvs": "SNK", "ngpc": "SNK",
+        "segacd": "Sega",
+        "satellaview": "Nintendo", "gameandwatch": "Nintendo",
+        "amstrad": "Amstrad", "fmtowns": "Fujitsu", "pc98": "NEC",
+        "x68000": "Sharp", "x1": "Sharp", "tigerlcd": "Tiger",
+        "ouya": "Ouya", "onlive": "OnLive", "stadia": "Google",
+        // **A headset is a headset.** Meta, HTC, Valve and Sony all make other
+        // things, and somebody looking for the one strapped to their face
+        // looks under VR — the same reason Computers, Mobile and Arcade are
+        // kinds rather than companies.
+        "psvr": "VR", "psvr2": "VR", "rift": "VR", "quest": "VR",
+        "vive": "VR", "index": "VR",
+        // DOS files with the computers, but as its own machine — see
+        // `assetName` for why it is not folded into PC.
+        "dos": "Computers",
         "intellivision": "Mattel", "colecovision": "Coleco",
         // General Consumer Electronics built the Vectrex; Milton Bradley
         // bought GCE the year after and its own name went on later units.
@@ -416,6 +474,13 @@ enum PlatformEra {
         // two different buyers — you, and an arcade — so they share a year and
         // the picker keeps them in catalogue order.
         "neogeo-aes": 1990, "neogeo-mvs": 1990, "ngpc": 1999,
+        "segacd": 1992, "satellaview": 1995, "gameandwatch": 1980,
+        "dos": 1981, "amstrad": 1984, "atarist": 1985, "x1": 1982,
+        "x68000": 1987, "pc98": 1982, "fmtowns": 1993, "tigerlcd": 1988,
+        "onlive": 2010, "ouya": 2013, "stadia": 2019,
+        // VR, by the year each headset shipped.
+        "rift": 2016, "vive": 2016, "psvr": 2016, "index": 2019,
+        "psvr2": 2023, "quest": 2023,
         "intellivision": 1979, "colecovision": 1982, "vectrex": 1982,
         "zxspectrum": 1982, "msx": 1983, "3do": 1993,
         // The WonderSwan Color's Japanese date. It never had another —

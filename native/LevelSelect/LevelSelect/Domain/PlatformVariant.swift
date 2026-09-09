@@ -66,8 +66,37 @@ enum PlatformVariant {
                     detail: "M-series, 2021", asset: "variant-mac-imac"),
             Variant(key: "imac-g3", label: "iMac G3",
                     detail: "Bondi Blue, 1998", asset: "variant-mac-imac-g3"),
+            Variant(key: "powerbook", label: "PowerBook 540c",
+                    detail: "Dark grey, 1994", asset: "variant-mac-powerbook"),
+            Variant(key: "lc", label: "Macintosh LC III",
+                    detail: "Pizza box, 1993", asset: "variant-mac-lc"),
             Variant(key: "compact", label: "Macintosh",
                     detail: "Compact, 1984", asset: "variant-mac-compact"),
+        ],
+        // **A PC is one machine continuously rebuilt for forty years**, which
+        // is why the modern RGB tower alone was wrong for anyone whose PC
+        // gaming started before it. DOS is a separate console rather than a
+        // variant here — see `PlatformIcon.assetName` — because that is an
+        // era, and these are shells.
+        "PC": [
+            Variant(key: "modern", label: "Gaming tower",
+                    detail: "RGB, today", asset: nil),
+            Variant(key: "laptop", label: "Gaming laptop",
+                    detail: "2020", asset: "variant-pc-laptop"),
+            Variant(key: "black", label: "Black tower",
+                    detail: "2007, before RGB", asset: "variant-pc-black"),
+            Variant(key: "beige", label: "Beige desktop",
+                    detail: "1999", asset: "variant-pc-beige"),
+            Variant(key: "486", label: "486 tower",
+                    detail: "1993", asset: "variant-pc-486"),
+        ],
+        // Nintendo sold the Color in a shelf of colors, and the grape one the
+        // app draws is only the one that got commissioned first.
+        "GBC": [
+            Variant(key: "grape", label: "Grape",
+                    detail: "Purple, 1998", asset: nil),
+            Variant(key: "dandelion", label: "Dandelion",
+                    detail: "Yellow, 1998", asset: "variant-gbc-yellow"),
         ],
         // A phone is a phone, and which one is entirely a matter of whose you
         // hold. The app draws a Galaxy because something had to be drawn.

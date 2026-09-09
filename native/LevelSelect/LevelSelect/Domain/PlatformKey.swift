@@ -57,6 +57,21 @@ enum PlatformKey {
         "WonderSwan Color", "Bandai WonderSwan Color",
         "WonderSwan", "Bandai WonderSwan",
         "Arcade", "Arcade Cabinet",
+        "DOS", "MS-DOS", "PC DOS",
+        "Amstrad CPC", "Amstrad CPC 464", "Amstrad CPC 6128",
+        "Atari ST/STE", "Atari ST", "Atari STE", "Atari 1040ST",
+        "FM Towns", "FM Towns Marty", "Fujitsu FM Towns",
+        "PC-9800 Series", "NEC PC-9800 Series", "PC-98",
+        "Sharp X68000", "X68000", "Sharp X1", "X1",
+        "Satellaview", "BS-X",
+        "Game & Watch", "Nintendo Game & Watch", "Game and Watch",
+        "Handheld Electronic LCD", "Tiger Electronics", "Tiger LCD",
+        "OnLive Game System", "OnLive", "Google Stadia", "Stadia",
+        "Ouya", "OUYA",
+        "PlayStation VR", "PSVR", "PlayStation VR2", "PSVR2",
+        "Oculus Rift", "Oculus VR", "Oculus Quest", "Meta Quest",
+        "Meta Quest 2", "Meta Quest 3", "HTC Vive", "Vive",
+        "Valve Index", "SteamVR",
     ]
 
     /// The app's own short name for a platform, before the user has a say.
@@ -157,6 +172,30 @@ enum PlatformKey {
         case "WonderSwan", "Bandai WonderSwan": "WonderSwan"
         // IGDB says "Arcade" and so does everyone else.
         case "Arcade", "Arcade Cabinet": "Arcade"
+        // **DOS is deliberately absent from any fold into PC.** See
+        // `PlatformIcon.assetName` — it is an era of machine, not a choice of
+        // operating system on the one you have.
+        case "MS-DOS", "PC DOS": "DOS"
+        case "Amstrad CPC", "Amstrad CPC 464", "Amstrad CPC 6128": "Amstrad CPC"
+        case "Atari ST/STE", "Atari ST", "Atari STE", "Atari 1040ST": "Atari ST"
+        case "FM Towns", "FM Towns Marty", "Fujitsu FM Towns": "FM Towns"
+        case "PC-9800 Series", "NEC PC-9800 Series", "PC-98": "PC-98"
+        case "Sharp X68000", "X68000": "Sharp X68000"
+        case "Sharp X1", "X1": "Sharp X1"
+        case "Satellaview", "BS-X": "Satellaview"
+        case "Game & Watch", "Nintendo Game & Watch", "Game and Watch": "Game & Watch"
+        case "Handheld Electronic LCD", "Tiger Electronics", "Tiger LCD": "Tiger LCD"
+        case "OnLive Game System", "OnLive": "OnLive"
+        case "Google Stadia", "Stadia": "Stadia"
+        case "Ouya", "OUYA": "Ouya"
+        // VR. IGDB names the software platform for two of these — SteamVR and
+        // Oculus VR — and the machine is what you own, so both land on one.
+        case "PlayStation VR", "PSVR": "PlayStation VR"
+        case "PlayStation VR2", "PSVR2": "PlayStation VR2"
+        case "Oculus Rift", "Oculus VR": "Oculus Rift"
+        case "Oculus Quest", "Meta Quest", "Meta Quest 2", "Meta Quest 3": "Meta Quest"
+        case "HTC Vive", "Vive": "HTC Vive"
+        case "Valve Index", "SteamVR": "Valve Index"
         case "Other", "": "Other"
         default: p
         }
