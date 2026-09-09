@@ -90,6 +90,16 @@ enum PlatformVariant {
             Variant(key: "486", label: "486 tower",
                     detail: "1993", asset: "variant-pc-486"),
         ],
+        // **The SP was the default until 2026-09-09**, which meant the app
+        // drew a 2003 clamshell for a console people picture as the 2001
+        // landscape slab. Codex drew the original that day; the SP keeps its
+        // render as the variant it always should have been.
+        "GBA": [
+            Variant(key: "agb", label: "Game Boy Advance",
+                    detail: "Indigo, 2001", asset: nil),
+            Variant(key: "sp", label: "Game Boy Advance SP",
+                    detail: "Silver clamshell, 2003", asset: "variant-gba-sp"),
+        ],
         // Nintendo sold the Color in a shelf of colors, and the grape one the
         // app draws is only the one that got commissioned first.
         "GBC": [
