@@ -34,10 +34,22 @@ struct LSPaletteTests {
 
     @Test("Pink's step is the one Tim corrected, and every step is darker than its accent")
     func stepsAreAuthored() {
-        #expect(LSPalette.pair(matching: "#FF74D9")?.step == "#8C2D8D")
+        #expect(LSPalette.pair(matching: "#FF74D9")?.step == "#6B1B6D")
         for p in LSPalette.pairs {
             #expect(LSContrast.luminance(of: p.stepColor) < LSContrast.luminance(of: p.accentColor),
                     Comment(rawValue: p.name))
+        }
+    }
+
+    // The step is also the ink on the accent itself — "Start Session" on the
+    // red button. Tim re-authored the set on 2026-09-09 after red's old step
+    // (#7E3047) sat at 2.12:1 there and read as maroon-on-red; the floor is
+    // the same 3:1 the light ground gets, and the weakest pairs sit at 3.6.
+    @Test("The step reads as ink on its own accent, for every pair")
+    func stepReadsOnAccent() {
+        for p in LSPalette.pairs {
+            let ratio = LSContrast.ratio(p.stepColor, p.accentColor)
+            #expect(ratio >= 3.0, Comment(rawValue: "\(p.name): \(ratio)"))
         }
     }
 

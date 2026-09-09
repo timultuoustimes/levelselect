@@ -28,13 +28,18 @@ enum LSPalette {
     }
 
     static let pairs: [Pair] = [
-        Pair(name: "Torch",  accent: "#F2A24B", step: "#A55410"),
-        Pair(name: "Purple", accent: "#976EF5", step: "#4324BA"),
-        Pair(name: "Yellow", accent: "#FBDB15", step: "#8F6B00"),
-        Pair(name: "Blue",   accent: "#2573DD", step: "#1B2E7A"),
-        Pair(name: "Pink",   accent: "#FF74D9", step: "#8C2D8D"),
-        Pair(name: "Green",  accent: "#44CC77", step: "#25701F"),
-        Pair(name: "Red",    accent: "#EE2C4C", step: "#7E3047"),
+        // Steps re-authored by Tim, 2026-09-09, against the accent as a
+        // surface (the ink on a Play button), not only against the light
+        // ground. Every step now clears 3:1 on its own accent — the old red
+        // (#7E3047) sat at 2.12:1 and read as maroon-on-red — and the two
+        // weakest, blue and red, were tuned last to the same 3.6 margin.
+        Pair(name: "Torch",  accent: "#F2A24B", step: "#894915"),
+        Pair(name: "Purple", accent: "#976EF5", step: "#331C72"),
+        Pair(name: "Yellow", accent: "#FBDB15", step: "#765302"),
+        Pair(name: "Blue",   accent: "#2573DD", step: "#0C1A4E"),
+        Pair(name: "Pink",   accent: "#FF74D9", step: "#6B1B6D"),
+        Pair(name: "Green",  accent: "#44CC77", step: "#134C0E"),
+        Pair(name: "Red",    accent: "#EE2C4C", step: "#530916"),
     ]
 
     /// The pair an accent hex belongs to, if it is one of the seven.
