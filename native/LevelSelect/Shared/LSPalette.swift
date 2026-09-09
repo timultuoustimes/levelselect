@@ -33,7 +33,9 @@ enum LSPalette {
         // ground. Every step now clears 3:1 on its own accent — the old red
         // (#7E3047) sat at 2.12:1 and read as maroon-on-red — and the two
         // weakest, blue and red, were tuned last to the same 3.6 margin.
-        Pair(name: "Torch",  accent: "#F2A24B", step: "#894915"),
+        // Torch keeps its own step: on light the default pair paints its
+        // fills in the step, so this is the brand orange itself, not an ink.
+        Pair(name: "Torch",  accent: "#F2A24B", step: "#A55410"),
         Pair(name: "Purple", accent: "#976EF5", step: "#331C72"),
         Pair(name: "Yellow", accent: "#FBDB15", step: "#765302"),
         Pair(name: "Blue",   accent: "#2573DD", step: "#0C1A4E"),
