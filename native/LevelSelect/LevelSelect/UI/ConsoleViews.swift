@@ -17,6 +17,7 @@ struct ConsoleCard: View {
     let games: [Game]
 
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @State private var editing = false
 
@@ -80,7 +81,11 @@ struct ConsoleCard: View {
             // machine takes the whole width and the one fact sits under it;
             // filling the record in is what splits the card.
             let rows = facts(console)
-            if rows.count < 2 {
+            // **The split needs room the largest text sizes do not leave.** At
+            // AX XXXL the right column is under half a phone, and a caption
+            // there truncated "Model" to "M…" and broke "Games" across two
+            // lines mid-word. Same answer as too few facts: stack it.
+            if rows.count < 2 || typeSize.isAccessibilitySize {
                 machine(console)
                     .frame(maxWidth: .infinity)
                     .frame(height: 132)
@@ -116,6 +121,7 @@ struct ConsoleCard: View {
                 Text("Tap to say how you have it.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let detail = detail(console) {
@@ -133,7 +139,11 @@ struct ConsoleCard: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Machines you have had")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        // `.tertiary` all but disappeared on the light ground
+                        // — it reads on charcoal and not on lavender. Same
+                        // weight as the line above it now.
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     HStack(alignment: .top, spacing: 10) {
                         ForEach(lineage) { option in
                             VStack(spacing: 3) {
@@ -167,16 +177,34 @@ struct ConsoleCard: View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, fact in
                 if index > 0 { Divider().overlay(LSTheme.hairline) }
-                HStack(spacing: 8) {
-                    Text(fact.key)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: 0)
-                    Text(fact.value)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                // Key over value once the text is large, side by side below
+                // that — the pattern a Settings row follows, and for the same
+                // reason: two pieces of text cannot share a line they no
+                // longer both fit on.
+                let stacked = typeSize.isAccessibilitySize
+                ViewThatFits(in: .horizontal) {
+                    if !stacked {
+                        HStack(spacing: 8) {
+                            Text(fact.key)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                            Text(fact.value)
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(fact.key)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(fact.value)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(.primary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.vertical, 7)
             }
