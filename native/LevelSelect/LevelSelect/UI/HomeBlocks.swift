@@ -186,7 +186,10 @@ struct AllSystemsView: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var games: [Game]
     @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
     @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
+    @Environment(\.modelContext) private var context
     @State private var adding = false
+    @State private var editingConsole: Console?
+    @State private var deletingConsole: Console?
 
     /// The person's own order, and the same folding Home uses — so a console
     /// stored under two spellings is one tile here too. Consoles you own with
@@ -207,6 +210,14 @@ struct AllSystemsView: View {
         #endif
     }
 
+    /// The console record behind a tile, when there is one — a platform your
+    /// games are on that you never kept a console for has none, and its tile
+    /// offers no console actions.
+    private func console(for platform: String) -> Console? {
+        let key = PlatformKey.canonical(platform)
+        return consoles.first { $0.platform == key }
+    }
+
     private var columns: [GridItem] {
         let count = typeSize.isAccessibilitySize ? (wide ? 3 : 2) : (wide ? 6 : 3)
         return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
@@ -216,7 +227,16 @@ struct AllSystemsView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(groups, id: \.platform) { g in
-                    SystemTile(group: g, onOpen: onOpen)
+                    // **The same press-and-hold Home has.** This grid was
+                    // built to show every console at once, which makes it the
+                    // natural place to correct or remove one — and it was the
+                    // one place with no menu at all, because `SystemTile`
+                    // draws none when both handlers are nil. Tim, 2026-09-08:
+                    // *"I can't press and hold a console to delete when I'm
+                    // viewing all from home."*
+                    SystemTile(group: g, onOpen: onOpen,
+                               onEdit: console(for: g.platform).map { c in { editingConsole = c } },
+                               onDelete: console(for: g.platform).map { c in { deletingConsole = c } })
                 }
             }
             .padding(.horizontal)
@@ -235,7 +255,25 @@ struct AllSystemsView: View {
                 }
             }
         }
-        .sheet(isPresented: $adding) { AddConsoleSheet().lsSheet() }
+        .sheet(isPresented: $adding,
+               onDismiss: { WidgetBridge.refresh() }) { AddConsoleSheet().lsSheet() }
+        .sheet(item: $editingConsole,
+               onDismiss: { WidgetBridge.refresh() }) { ConsoleEditor(console: $0).lsSheet() }
+        .confirmationDialog("Delete this console?",
+                            isPresented: Binding(get: { deletingConsole != nil },
+                                                 set: { if !$0 { deletingConsole = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete Console", role: .destructive) {
+                if let console = deletingConsole {
+                    Repository(context).softDelete(console)
+                    WidgetBridge.refresh()
+                }
+                deletingConsole = nil
+            }
+            Button("Cancel", role: .cancel) { deletingConsole = nil }
+        } message: {
+            Text("It goes to Recently Deleted for 30 days. Your games are untouched, and it won't be added back from them.")
+        }
         .overlay {
             if groups.isEmpty {
                 ContentUnavailableView("No consoles yet",

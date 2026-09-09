@@ -46,7 +46,14 @@ enum PlatformKey {
         case "Nintendo Wii", "Wii": "Wii"
         case "Super Nintendo Entertainment System", "SNES", "Super NES": "SNES"
         case "Nintendo Entertainment System", "NES": "NES"
-        case "Family Computer", "Famicom", "Family Computer Disk System": "Famicom"
+        // **The Disk System is not the Famicom.** It folded into it, so a
+        // game listing both arrived as two chips reading "Famicom" — with
+        // different pictures, because `assetName` has always told them apart.
+        // Tim, 2026-09-08: *"famicom is twice, but I think one is famicom one
+        // is an attachment console that has a different name."*
+        case "Family Computer Disk System", "Famicom Disk System",
+             "Family Computer Disk System (FDS)": "Famicom Disk System"
+        case "Family Computer", "Famicom": "Famicom"
         case "Super Famicom": "Super Famicom"
         case "Nintendo 64": "N64"
         case "Nintendo GameCube", "GameCube": "GameCube"

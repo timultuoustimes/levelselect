@@ -274,6 +274,40 @@ struct PlatformEraTests {
         }
     }
 
+    /// **The Disk System is not the Famicom.** It folded into the console it
+    /// plugs into, so a game listing both showed two chips reading "Famicom"
+    /// with different pictures — `assetName` had always told them apart, and
+    /// only the NAME collapsed them. Found by Tim on his own library, 09-08.
+    @Test func theFamicomAndItsDiskSystemAreTwoConsoles() {
+        #expect(PlatformKey.canonical("Famicom") == "Famicom")
+        #expect(PlatformKey.canonical("Family Computer") == "Famicom")
+        #expect(PlatformKey.canonical("Family Computer Disk System") == "Famicom Disk System")
+        #expect(PlatformKey.canonical("Famicom Disk System") == "Famicom Disk System")
+        #expect(PlatformKey.canonical("Famicom") != PlatformKey.canonical("Famicom Disk System"))
+        // Which is what the art said all along.
+        #expect(PlatformIcon.assetName("Famicom") == "platform-famicom")
+        #expect(PlatformIcon.assetName("Famicom Disk System") == "platform-famicom-disk")
+        #expect(PlatformEra.releaseYear("Famicom") == 1983)
+        #expect(PlatformEra.releaseYear("Famicom Disk System") == 1986)
+        // And two names in one list are two entries in the picker.
+        #expect(PlatformCatalog.all.contains("Famicom"))
+        #expect(PlatformCatalog.all.contains("Famicom Disk System"))
+    }
+
+    /// **No two catalogue entries may read the same.** The Famicom bug was a
+    /// duplicate display name, and it was invisible until Tim saw two
+    /// identical chips — so the list checks itself now.
+    @Test func noTwoCatalogueEntriesShareADisplayName() {
+        var seen: [String: String] = [:]
+        for entry in PlatformCatalog.all {
+            let shown = PlatformShort.name(entry)
+            if let first = seen[shown] {
+                Issue.record(Comment(rawValue: "\"\(shown)\" is both \(first) and \(entry)"))
+            }
+            seen[shown] = entry
+        }
+    }
+
     /// **"switch" contains "itch".** The storefront mark is matched exactly
     /// for that reason: a substring test would hand every Switch game a shop
     /// awning the moment anything above it in the waterfall moved.
