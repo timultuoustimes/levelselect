@@ -648,14 +648,24 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet().lsSheet() }
         .sheet(isPresented: $arrangingHome) { ArrangeHomeSheet().lsSheet() }
-        .sheet(isPresented: $addingConsole) { AddConsoleSheet().lsSheet() }
-        .sheet(item: $editingConsole) { ConsoleEditor(console: $0).lsSheet() }
+        // The launcher widget's picker is built from the snapshot, so a
+        // console added here is not openable from the Home Screen until the
+        // snapshot is rewritten. Backgrounding the app used to be the only
+        // thing that did that, which meant adding a console and going
+        // straight to the widget showed the old list.
+        .sheet(isPresented: $addingConsole,
+               onDismiss: { WidgetBridge.refresh() }) { AddConsoleSheet().lsSheet() }
+        .sheet(item: $editingConsole,
+               onDismiss: { WidgetBridge.refresh() }) { ConsoleEditor(console: $0).lsSheet() }
         .confirmationDialog("Delete this console?",
                             isPresented: Binding(get: { deletingConsole != nil },
                                                  set: { if !$0 { deletingConsole = nil } }),
                             titleVisibility: .visible) {
             Button("Delete Console", role: .destructive) {
-                if let console = deletingConsole { Repository(context).softDelete(console) }
+                if let console = deletingConsole {
+                    Repository(context).softDelete(console)
+                    WidgetBridge.refresh()
+                }
                 deletingConsole = nil
             }
             Button("Cancel", role: .cancel) { deletingConsole = nil }

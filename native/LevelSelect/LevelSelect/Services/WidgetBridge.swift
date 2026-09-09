@@ -45,7 +45,7 @@ enum WidgetBridge {
 
     private static func build(context: ModelContext) -> BuildResult? {
         let descriptor = FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil })
-        guard let games = try? context.fetch(descriptor), !games.isEmpty else { return nil }
+        let games = (try? context.fetch(descriptor)) ?? []
 
         var covers: [CoverJob] = []
 
@@ -73,15 +73,19 @@ enum WidgetBridge {
             return name
         }
 
-        // Continue Playing: playing/paused (most recent activity) else most recent.
+        // Continue Playing: playing/paused (most recent activity) else most
+        // recent. **Optional now.** A library with consoles and no games gets
+        // a snapshot with no headline game rather than no snapshot — see
+        // `WidgetSnapshot.loadWithGame`, which is how the widgets that lead
+        // with a game keep the empty state they had before.
         let active = games
             .filter { $0.status == .playing || $0.status == .paused }
             .max { activityKey($0) < activityKey($1) }
-        guard let game = active ?? mostRecentlyPlayed(games) else { return nil }
+        let game = active ?? mostRecentlyPlayed(games)
 
-        let pt = game.activePlaythrough
+        let pt = game?.activePlaythrough
         let session = pt?.activeSession
-        let (objectives, done, total) = trackerItems(game: game, pt: pt)
+        let (objectives, done, total) = game.map { trackerItems(game: $0, pt: pt) } ?? ([], 0, 0)
         let nextIncomplete = objectives.first { !$0.done }
 
         // Shelf: playing games most active first, then paused, then queued —
@@ -151,6 +155,16 @@ enum WidgetBridge {
                     platform: PlatformShort.name(g.primaryOwnedPlatform ?? "Other"))
             }
         let libraryPlatforms = Array(Set(shufflePool.map(\.platform))).sorted()
+        // **The shelf, not the pool.** A console is a record you can own with
+        // no games on it since build 39, and Home shows those — so the
+        // launcher's picker has to see them too, or a library of consoles and
+        // no games offers nothing to open. The shuffler keeps the pool list
+        // above: a system with nothing on it has nothing to shuffle.
+        let consoleDescriptor = FetchDescriptor<Console>(
+            predicate: #Predicate { $0.deletedAt == nil })
+        let ownedConsoles = (try? context.fetch(consoleDescriptor)) ?? []
+        let systemShelves = Array(Set(libraryPlatforms
+            + ownedConsoles.map { PlatformShort.name($0.platform) })).sorted()
 
         // Daily rollup (16 weeks), the 4-week pace, finished share, and the
         // collections the launcher widget can point at.
@@ -232,10 +246,15 @@ enum WidgetBridge {
             }
         }
 
+        // **Nothing at all is still nothing.** An empty library clears the
+        // snapshot the way it always did; a library with consoles or
+        // collections and no games does not, because those are openable.
+        if games.isEmpty && ownedConsoles.isEmpty && collectionRefs.isEmpty { return nil }
+
         let snapshot = WidgetSnapshot(
-            gameID: game.id.uuidString,
-            gameName: game.name,
-            statusRaw: game.status.rawValue,
+            gameID: game?.id.uuidString ?? "",
+            gameName: game?.name ?? "",
+            statusRaw: game?.status.rawValue ?? "",
             isPlaying: session?.state == .running,
             isPaused: session?.state == .paused,
             playtimeSeconds: pt?.totalPlaytime() ?? 0,
@@ -244,7 +263,7 @@ enum WidgetBridge {
             nextObjectiveID: nextIncomplete?.id,
             completionDone: done,
             completionTotal: total,
-            coverFileName: coverName(game),
+            coverFileName: game.flatMap { coverName($0) },
             activeSessionID: session?.id.uuidString,
             generatedAt: .now,
             objectives: objectives,
@@ -254,13 +273,14 @@ enum WidgetBridge {
             runGame: runGame,
             shufflePool: shufflePool,
             libraryPlatforms: libraryPlatforms,
+            systemShelves: systemShelves,
             dailyMinutes: daily,
             weeklyAverageSeconds: weeklyAverage,
             completedCount: completedCount,
             libraryCount: games.count,
             collections: collectionRefs,
             platformIcons: platformIcons,
-            lastTicked: lastTickedName(game: game, playthrough: pt),
+            lastTicked: game.flatMap { lastTickedName(game: $0, playthrough: pt) },
             // Only a CHOSEN accent travels. nil means "no choice", which lets
             // the widgets fall back to the same default the app does rather
             // than to a copy of today's hue that would go stale the next time

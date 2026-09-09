@@ -98,11 +98,11 @@ struct ContinuePlayingProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (ContinuePlayingEntry) -> Void) {
-        completion(ContinuePlayingEntry(date: .now, snapshot: WidgetSnapshot.load()))
+        completion(ContinuePlayingEntry(date: .now, snapshot: WidgetSnapshot.loadWithGame()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ContinuePlayingEntry>) -> Void) {
-        let entry = ContinuePlayingEntry(date: .now, snapshot: WidgetSnapshot.load())
+        let entry = ContinuePlayingEntry(date: .now, snapshot: WidgetSnapshot.loadWithGame())
         // Refresh hourly as a backstop; the app pushes reloads on real changes.
         let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now.addingTimeInterval(3600)
         completion(Timeline(entries: [entry], policy: .after(next)))

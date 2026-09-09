@@ -141,8 +141,21 @@ struct WidgetSnapshot: Codable, Hashable {
     var gamesPlayedThisWeek: Int
     var runGame: WidgetRunGame?
     /// The shuffle pool and the platform list its config picker offers.
+    ///
+    /// `libraryPlatforms` is derived from the pool, so it is the systems you
+    /// have GAMES on — which is what the shuffler needs, since a system with
+    /// nothing on it has nothing to shuffle.
     var shufflePool: [WidgetPoolGame] = []
     var libraryPlatforms: [String] = []
+    /// **The systems on your shelf**, which is not the same list.
+    ///
+    /// Since build 39 a console is a record you can own without a game on it,
+    /// and Home shows those. The launcher widget's picker was still built
+    /// from `libraryPlatforms` and so offered nothing at all to a library of
+    /// four consoles and no games. Tim, 2026-09-08: *"In the Open To widget,
+    /// I can't do consoles anymore?"* This is Home's own list — games'
+    /// platforms unioned with the consoles you hold a record for.
+    var systemShelves: [String] = []
     /// Minutes played per day, oldest → newest, today last (16 weeks' worth).
     /// Feeds the heatmap widget, the streak, and the week gauge.
     var dailyMinutes: [Double] = []
@@ -187,6 +200,19 @@ struct WidgetSnapshot: Codable, Hashable {
 
     // MARK: Persistence
 
+    /// **The snapshot, but only when there is a game to show.**
+    ///
+    /// Since build 39 a library can hold consoles and collections and no
+    /// games at all, and the snapshot is written for those — the launcher
+    /// widget's picker is built from it, and a library of four consoles used
+    /// to offer nothing to open. Every widget that leads with a game asks
+    /// through here instead, so it keeps the empty state it had when a
+    /// game-free library meant no snapshot at all.
+    static func loadWithGame() -> WidgetSnapshot? {
+        guard let s = load(), !s.gameID.isEmpty else { return nil }
+        return s
+    }
+
     static func load() -> WidgetSnapshot? {
         guard let url = WidgetShared.snapshotURL,
               let data = try? Data(contentsOf: url) else { return nil }
@@ -222,6 +248,7 @@ struct WidgetSnapshot: Codable, Hashable {
         objectives: [WidgetObjective], nowPlaying: [WidgetShelfGame],
         weeklySeconds: [Double], gamesPlayedThisWeek: Int, runGame: WidgetRunGame?,
         shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = [],
+        systemShelves: [String] = [],
         dailyMinutes: [Double] = [], weeklyAverageSeconds: Double = 0,
         completedCount: Int = 0, libraryCount: Int = 0,
         collections: [WidgetCollectionRef] = [],
@@ -248,6 +275,7 @@ struct WidgetSnapshot: Codable, Hashable {
         self.generatedAt = generatedAt
         self.objectives = objectives; self.nowPlaying = nowPlaying
         self.shufflePool = shufflePool; self.libraryPlatforms = libraryPlatforms
+        self.systemShelves = systemShelves
         self.dailyMinutes = dailyMinutes; self.weeklyAverageSeconds = weeklyAverageSeconds
         self.completedCount = completedCount; self.libraryCount = libraryCount
         self.collections = collections
@@ -282,6 +310,10 @@ struct WidgetSnapshot: Codable, Hashable {
         runGame = try c.decodeIfPresent(WidgetRunGame.self, forKey: .runGame)
         shufflePool = try c.decodeIfPresent([WidgetPoolGame].self, forKey: .shufflePool) ?? []
         libraryPlatforms = try c.decodeIfPresent([String].self, forKey: .libraryPlatforms) ?? []
+        // An older snapshot has no key here, and a widget reading one must
+        // still offer the systems it can see — so it falls back to the list
+        // that used to be the only one.
+        systemShelves = try c.decodeIfPresent([String].self, forKey: .systemShelves) ?? libraryPlatforms
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
         accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
         // decodeIfPresent, like every field added after v1: an older snapshot

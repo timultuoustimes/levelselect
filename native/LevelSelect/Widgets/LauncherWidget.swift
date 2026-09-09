@@ -51,7 +51,9 @@ struct LauncherTarget: AppEntity, Identifiable {
                 subtitle: "Collection · \(collection.count) game\(collection.count == 1 ? "" : "s")",
                 symbol: "square.stack.3d.up.fill"))
         }
-        for platform in snapshot?.libraryPlatforms ?? [] {
+        // `systemShelves`, not `libraryPlatforms`: the consoles you own are
+        // openable whether or not a game sits on them. See `WidgetSnapshot`.
+        for platform in snapshot?.systemShelves ?? [] {
             targets.append(LauncherTarget(
                 id: "platform:\(platform)", name: platform,
                 subtitle: "System", symbol: "gamecontroller.fill"))

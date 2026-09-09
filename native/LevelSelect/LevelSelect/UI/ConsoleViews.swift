@@ -295,7 +295,13 @@ struct ConsoleEditor: View {
 /// against it in either theme.
 struct ConsolePlateTile: View {
     let platform: String
-    var size: CGFloat = 58
+    /// **Sized to the plate, not to a menu row.** 58pt was `PlatformIconView`'s
+    /// own default, carried over when this tile was written — and a square
+    /// that small left a wide console using barely half the plate's width,
+    /// which read as a small picture floating in a big card. Tim, 2026-09-08:
+    /// *"The consoles should be a bit bigger and sit centered in the plate
+    /// with the text being below that."*
+    var size: CGFloat = 84
     var isSelected = false
 
     private var plate: LinearGradient {
@@ -309,17 +315,17 @@ struct ConsolePlateTile: View {
         VStack(spacing: 6) {
             PlatformIconView(platform: platform, size: size)
                 .frame(maxWidth: .infinity)
-                // **The plate is one height for every console.** The art box
-                // used to be 1.34× the icon, which was air above and below a
-                // square icon, and the label took whatever lines it needed —
-                // so a two-word console stood on a shorter plate than "Neo
-                // Geo Pocket Color", and the tall MVS cabinet floated with a
-                // gap under it. Tim, 2026-09-08: *"I'd rather the console sit
-                // closer to the text so the plate can stay the same size as
-                // the others."* The two lines below are always reserved, and
-                // this box gives back what the second line costs, so the
-                // total is what a one-line plate measured before.
-                .frame(height: size * 1.08)
+                // **One height for every console, and the art centered in
+                // it.** The box used to be 1.34× the icon — air above and
+                // below — while the label took whatever lines it needed, so a
+                // two-word console stood on a shorter plate than "Neo Geo
+                // Pocket Color" and the tall MVS cabinet floated with a gap
+                // under it. Tim: *"I'd rather the console sit closer to the
+                // text so the plate can stay the same size as the others."*
+                // The two lines below are always reserved and this box is the
+                // icon's own square, so every plate measures the same and the
+                // picture sits in the middle of what is left above the name.
+                .frame(height: size)
             Text(PlatformShort.name(platform))
                 .font(.caption.weight(.medium))
                 // Two lines, reserved whether or not the name needs them.
