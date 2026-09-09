@@ -77,9 +77,11 @@ struct LSPaletteTests {
 
     @Test("Lookup is case- and hash-insensitive, and misses honestly")
     func lookup() {
-        #expect(LSPalette.pair(matching: "#f2a24b")?.name == "Torch")
+        #expect(LSPalette.pair(matching: "#f5a34d")?.name == "Torch")
         #expect(LSPalette.pair(matching: "2573DD")?.name == "Blue")
-        #expect(LSPalette.pair(matching: "#F5A34D") == nil)   // the old torch is not a pair
+        // The old drifted Torch hex from the build-37 picker; the brand
+        // torch #F5A34D IS the Torch pair since 2026-09-09.
+        #expect(LSPalette.pair(matching: "#F2A24B") == nil)   // the old torch is not a pair
         #expect(LSPalette.pair(matching: nil) == nil)
     }
 }

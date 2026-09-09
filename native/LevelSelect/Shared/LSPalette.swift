@@ -35,7 +35,7 @@ enum LSPalette {
         // weakest, blue and red, were tuned last to the same 3.6 margin.
         // Torch keeps its own step: on light the default pair paints its
         // fills in the step, so this is the brand orange itself, not an ink.
-        Pair(name: "Torch",  accent: "#F2A24B", step: "#A55410"),
+        Pair(name: "Torch",  accent: "#F5A34D", step: "#A55410"),
         Pair(name: "Purple", accent: "#976EF5", step: "#331C72"),
         Pair(name: "Yellow", accent: "#FBDB15", step: "#765302"),
         Pair(name: "Blue",   accent: "#2573DD", step: "#0C1A4E"),
