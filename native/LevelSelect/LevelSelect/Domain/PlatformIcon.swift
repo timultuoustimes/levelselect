@@ -159,6 +159,26 @@ enum PlatformIcon {
 }
 
 extension PlatformIcon {
+    /// **What to DRAW for a platform**, as opposed to what identifies it.
+    ///
+    /// `assetName` is identity: the console's release year is looked up under
+    /// its slug, `consoleKey` folds two spellings together by comparing them,
+    /// and both must give the same answer whatever shell somebody owns. So the
+    /// model someone picked is applied here and nowhere else — this is the
+    /// only function the views call, and the only one that can change under a
+    /// user's choice.
+    static func artName(_ platform: String) -> String? {
+        guard let base = assetName(platform) else { return nil }
+        let key = variantOverrides[PlatformKey.canonical(platform)]
+        return PlatformVariant.variant(for: platform, key: key)?.asset ?? base
+    }
+
+    /// Written once by `ThemePalette.refresh(from:)` on the main actor, read
+    /// from the same places every other theme value is — the same shape as
+    /// `PlatformShort.displayOverrides`, and for the same reason: the drawing
+    /// layer cannot reach the store, and the store already fetches this row.
+    nonisolated(unsafe) static var variantOverrides: [String: String] = [:]
+
     /// **Places you buy games, which are not consoles you own.**
     ///
     /// They stay in the catalog, because "where did this game come from" is a

@@ -321,6 +321,11 @@ enum ThemePalette {
         // reach a shelf heading.
         PlatformShort.displayOverrides =
             PlatformNaming.sanitized(settings?.platformNames ?? [:])
+        // Same push, same reason: the drawing layer cannot reach the store.
+        // A key this build has no art for resolves to the default rather than
+        // to nothing, so a library synced down from a newer build draws a
+        // console rather than a blank.
+        PlatformIcon.variantOverrides = settings?.platformIconVariants ?? [:]
         appearance = LSAppearance(raw: settings?.appearanceRaw)
         backdropIntensity = settings?.backdropIntensityRaw
             .flatMap(BackdropIntensity.init(rawValue:)) ?? .standard

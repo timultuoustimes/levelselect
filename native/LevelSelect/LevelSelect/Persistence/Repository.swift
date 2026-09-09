@@ -2485,6 +2485,41 @@ struct Repository {
         return image
     }
 
+    /// **A photograph of the machine itself.**
+    ///
+    /// `GameImage.console` was deployed with Schema V6 on 2026-09-08 and left
+    /// unused on purpose: the spec put the photo out of scope for the first
+    /// pass, and an unused optional relation costs nothing where a second
+    /// promote cycle costs a seed, a diff, a deploy, a purge and a restore.
+    /// This is the feature it was deployed for.
+    ///
+    /// Same path a photo of a cartridge takes — `ImageIngest.prepare` at the
+    /// gallery role — so it downscales the same way, exports the same way, and
+    /// mirrors to the same CloudKit asset fields.
+    @discardableResult
+    func addImage(to console: Console, data: Data, caption: String? = nil) throws -> GameImage {
+        let prepared = try ImageIngest.prepare(data, role: .gallery)
+        let image = GameImage(role: .gallery, data: prepared.data)
+        context.insert(image)
+        image.console = console
+        image.caption = caption
+        image.pixelWidth = prepared.pixelWidth
+        image.pixelHeight = prepared.pixelHeight
+        image.byteCount = prepared.data.count
+        touch(console)
+        persist()
+        return image
+    }
+
+    /// Remove one photograph from a console. Hard, not tombstoned: a picture
+    /// you took and no longer want is not a record anyone restores, and the
+    /// bytes are the point of removing it.
+    func removeImage(_ image: GameImage, from console: Console) {
+        context.delete(image)
+        touch(console)
+        persist()
+    }
+
     /// Point a role at something — a local image, a remote URL, or nothing.
     func setArtwork(_ pointer: String?, role: ArtworkRole, on game: Game) {
         guard role != .gallery else { return }

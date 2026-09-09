@@ -26,9 +26,27 @@ struct PlatformIconView: View {
     let platform: String
     var size: CGFloat = 52
 
+    /// **Resolved at init, not in `body`.**
+    ///
+    /// `artName` reads `PlatformIcon.variantOverrides`, which is a plain
+    /// static — SwiftUI cannot see it change, so a view whose stored values
+    /// are unchanged is skipped and keeps drawing yesterday's machine. Picking
+    /// a different Mac moved the checkmark and left the tile behind it alone,
+    /// 2026-09-08. Holding the answer as a stored property makes the choice
+    /// part of this view's VALUE, which is what the diff actually compares.
+    private let asset: String?
+
+    init(platform: String, size: CGFloat = 52) {
+        self.platform = platform
+        self.size = size
+        // `artName`, not `assetName`: the model someone owns changes what is
+        // drawn and nothing else. See `PlatformVariant`.
+        self.asset = PlatformIcon.artName(platform)
+    }
+
     var body: some View {
         Group {
-            if let asset = PlatformIcon.assetName(platform) {
+            if let asset {
                 Image(asset)
                     .resizable()
                     .scaledToFit()

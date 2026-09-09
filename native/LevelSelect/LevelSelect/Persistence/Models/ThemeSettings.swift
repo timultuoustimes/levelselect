@@ -307,6 +307,21 @@ final class ThemeSettings {
         }
     }
 
+    /// Which model of each console to draw — canonical platform name to
+    /// variant key. Deployed with Schema V2 and first read in build 39; see
+    /// `PlatformVariant`.
+    var platformIconVariants: [String: String] {
+        get {
+            guard let data = platformIconVariantsData,
+                  let map = try? JSONDecoder().decode([String: String].self, from: data)
+            else { return [:] }
+            return map
+        }
+        set {
+            platformIconVariantsData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue)
+        }
+    }
+
     var platformNames: [String: String] {
         get {
             guard let data = platformNamesData,

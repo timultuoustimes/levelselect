@@ -426,7 +426,7 @@ struct LibraryTab: View {
                         }
                     } header: {
                         let g = groups[i]
-                        if let asset = g.platform.flatMap(PlatformIcon.assetName) {
+                        if let asset = g.platform.flatMap(PlatformIcon.artName) {
                             HStack(spacing: 6) {
                                 Image(asset).resizable().scaledToFit().frame(width: 20, height: 20)
                                 Text("\(g.title) (\(g.items.count))")
@@ -460,7 +460,7 @@ struct LibraryTab: View {
     private func sectionHeader(title: String, status: GameStatus?, platform: String? = nil,
                                count: Int, onSeeAll: (() -> Void)? = nil) -> some View {
         HStack(spacing: 8) {
-            if let asset = platform.flatMap(PlatformIcon.assetName) {
+            if let asset = platform.flatMap(PlatformIcon.artName) {
                 Image(asset).resizable().scaledToFit().frame(width: 26, height: 26)
             } else if let status {
                 // `status.color`, with no special case for `.playing`.

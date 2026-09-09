@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "compact-macintosh.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

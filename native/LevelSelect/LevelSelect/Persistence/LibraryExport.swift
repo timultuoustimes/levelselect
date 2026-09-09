@@ -400,6 +400,28 @@ enum LibraryExport {
                 c["variant"] = console.variant
                 c["notes"] = console.notes
                 if let acquired = console.acquiredAt { c["acquiredAt"] = iso(acquired) }
+                // **Photographs of the machine.** Same shape as a memory's
+                // pictures, and counted into the same totals, so the backup
+                // summary keeps meaning one thing by "images".
+                let pictures = (console.images ?? []).filter { $0.deletedAt == nil }
+                counts.images += pictures.count
+                counts.imageBytes += pictures.reduce(0) { $0 + $1.byteCount }
+                if !pictures.isEmpty {
+                    c["images"] = pictures.sorted { $0.addedAt < $1.addedAt }
+                        .map { image -> [String: Any] in
+                            var i: [String: Any] = [
+                                "id": image.id.uuidString,
+                                "role": image.roleRaw,
+                                "addedAt": iso(image.addedAt),
+                                "pixelWidth": image.pixelWidth,
+                                "pixelHeight": image.pixelHeight,
+                                "byteCount": image.byteCount,
+                            ]
+                            i["caption"] = image.caption
+                            i["data"] = image.data?.base64EncodedString()
+                            return i
+                        }
+                }
                 return c
             }
 

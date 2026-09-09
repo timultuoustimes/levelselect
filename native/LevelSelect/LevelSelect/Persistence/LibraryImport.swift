@@ -216,6 +216,9 @@ enum LibraryImport {
             let key = (c["platform"] as? String).map(PlatformKey.canonical) ?? ""
             if existing.consolePlatforms.contains(key) { onSkip("consoles") }
             else { onCreate("consoles") }
+            for i in (c["images"] as? [[String: Any]]) ?? [] {
+                visit("images", i, in: existing.images)
+            }
         }
         for m in (root["memories"] as? [[String: Any]]) ?? [] {
             visit("memories", m, in: existing.memories)
@@ -537,6 +540,19 @@ enum LibraryImport {
             context.insert(made)
             consolesByPlatform[key] = made
             outcome.created["consoles", default: 0] += 1
+
+            for iDict in (cDict["images"] as? [[String: Any]]) ?? [] {
+                guard let iID = uuid(iDict["id"]) else { continue }
+                if existing.images.contains(iID) {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                guard let image = makeImage(iDict, id: iID) else {
+                    outcome.skipped["images", default: 0] += 1; continue
+                }
+                context.insert(image)
+                image.console = made
+                outcome.created["images", default: 0] += 1
+            }
         }
 
         applyProfile(root["profile"] as? [String: Any], context: context, outcome: &outcome)

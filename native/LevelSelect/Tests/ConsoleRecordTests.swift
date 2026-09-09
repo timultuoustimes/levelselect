@@ -298,4 +298,100 @@ struct ConsoleRecordTests {
         repo.backfillConsoles(in: [])
         #expect(repo.liveConsoles().count == 1)
     }
+
+    // MARK: Which one to draw
+
+    @Test("Choosing a model changes the picture and nothing else")
+    func variantChangesArtNotIdentity() {
+        defer { PlatformIcon.variantOverrides = [:] }
+        PlatformIcon.variantOverrides = [:]
+        #expect(PlatformIcon.artName("Saturn") == "platform-saturn")
+
+        PlatformIcon.variantOverrides = ["Saturn": "jp"]
+        #expect(PlatformIcon.artName("Saturn") == "variant-saturn-jp")
+        #expect(PlatformIcon.artName("Sega Saturn") == "variant-saturn-jp",
+                "every spelling folds to the same choice")
+
+        // **Identity, year and maker must not move.** `assetName` is the key a
+        // console is filed under; if the shell someone owns changed it, two
+        // libraries would disagree about what a Saturn is.
+        #expect(PlatformIcon.assetName("Saturn") == "platform-saturn")
+        #expect(PlatformIcon.consoleKey("Sega Saturn") == PlatformIcon.consoleKey("Saturn"))
+        #expect(PlatformEra.releaseYear("Saturn") == 1995)
+        #expect(PlatformMaker.of("Saturn") == "Sega")
+    }
+
+    @Test("A stored key this build has no art for draws the default rather than nothing")
+    func unknownVariantFallsBack() {
+        defer { PlatformIcon.variantOverrides = [:] }
+        PlatformIcon.variantOverrides = ["Saturn": "a-model-from-a-newer-build"]
+        #expect(PlatformIcon.artName("Saturn") == "platform-saturn")
+        // And a console with no variants at all is untouched by any of it.
+        PlatformIcon.variantOverrides = ["Genesis": "whatever"]
+        #expect(PlatformIcon.artName("Genesis") == "platform-genesis")
+        #expect(PlatformVariant.variants(for: "Genesis").isEmpty)
+    }
+
+    @Test("Every variant names art that exists, and the first is the shipped one")
+    func theVariantCatalogueIsHonest() {
+        for (platform, list) in PlatformVariant.catalog {
+            #expect(list.count > 1,
+                    Comment(rawValue: "\(platform) offers a choice of one"))
+            #expect(list.first?.asset == nil,
+                    Comment(rawValue: "\(platform)'s default must defer to assetName"))
+            #expect(PlatformIcon.assetName(platform) != nil,
+                    Comment(rawValue: "\(platform) has no base art"))
+            var keys = Set<String>()
+            for variant in list {
+                #expect(keys.insert(variant.key).inserted,
+                        Comment(rawValue: "\(platform) repeats the key \(variant.key)"))
+            }
+            // Variant art lives OUTSIDE the platform- namespace, so the
+            // art-to-years and art-to-makers invariants never see it.
+            for variant in list.dropFirst() {
+                #expect(variant.asset?.hasPrefix("variant-") == true,
+                        Comment(rawValue: "\(variant.key) is not in the variant namespace"))
+            }
+        }
+    }
+
+    // MARK: The photograph
+
+    @Test("A console keeps photographs, and they survive a backup")
+    func consolePhotosRoundTrip() throws {
+        let repo = store()
+        let console = repo.addConsole(platform: "Sega Dreamcast", ownership: [.physical])
+        let png = try #require(Self.onePixelPNG)
+        try repo.addImage(to: console, data: png, caption: "on the shelf")
+
+        let saved = repo.liveConsoles().first { $0.platform == "Dreamcast" }
+        #expect((saved?.images ?? []).count == 1)
+        #expect((saved?.images ?? []).first?.caption == "on the shelf")
+
+        let data = try LibraryExport.makeJSON(context: repo.context)
+        let into = store()
+        let outcome = try LibraryImport.apply(data: data, context: into.context)
+        #expect(outcome.created["consoles"] == 1)
+        #expect(outcome.created["images"] == 1)
+
+        let restored = into.liveConsoles().first { $0.platform == "Dreamcast" }
+        #expect((restored?.images ?? []).count == 1)
+        #expect((restored?.images ?? []).first?.caption == "on the shelf")
+    }
+
+    @Test("Removing a photograph removes it — the bytes are the point")
+    func removingAPhotoIsNotATombstone() throws {
+        let repo = store()
+        let console = repo.addConsole(platform: "Genesis")
+        let png = try #require(Self.onePixelPNG)
+        let image = try repo.addImage(to: console, data: png)
+        #expect((console.images ?? []).count == 1)
+        repo.removeImage(image, from: console)
+        #expect((console.images ?? []).filter { $0.deletedAt == nil }.isEmpty)
+    }
+
+    /// The smallest thing `ImageIngest` will accept, so these tests exercise
+    /// the real ingest path rather than a stub.
+    static let onePixelPNG: Data? = Data(base64Encoded:
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
 }

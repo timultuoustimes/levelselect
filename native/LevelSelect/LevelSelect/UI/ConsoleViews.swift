@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 /// The console itself, at the top of its own page.
 ///
@@ -47,10 +48,29 @@ struct ConsoleCard: View {
         }
     }
 
+    /// **Your photograph wins over the render.** The render is a stand-in for
+    /// a machine the app has never seen; once you have shown it the actual
+    /// one, drawing the stand-in beside it would be strange. Newest first here
+    /// rather than oldest, because the most recent picture is the shelf as it
+    /// looks now.
+    private func photo(_ console: Console) -> GameImage? {
+        (console.images ?? [])
+            .filter { $0.deletedAt == nil && $0.data != nil }
+            .max { $0.addedAt < $1.addedAt }
+    }
+
     private func summary(_ console: Console) -> some View {
         HStack(spacing: 12) {
-            PlatformIconView(platform: platform, size: 40)
-                .frame(width: 54, height: 54)
+            if let data = photo(console)?.data {
+                LocalArtworkThumb(data: data, contentMode: .fill)
+                    .frame(width: 54, height: 54)
+                    .clipShape(.rect(cornerRadius: 12))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(LSTheme.hairline))
+            } else {
+                PlatformIconView(platform: platform, size: 40)
+                    .frame(width: 54, height: 54)
+            }
             VStack(alignment: .leading, spacing: 3) {
                 Text(PlatformShort.name(platform))
                     .font(.subheadline.weight(.semibold))
@@ -173,6 +193,10 @@ struct ConsoleEditor: View {
     @State private var acquired = Date.now
     @State private var confirmingDelete = false
     @State private var loaded = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var importing = false
+    @State private var importError: String?
+    @State private var removingPhoto: GameImage?
 
     private var repo: Repository { Repository(context) }
 
@@ -212,6 +236,86 @@ struct ConsoleEditor: View {
                         Text("Free text on purpose — hardware variants go deep, and this is the part worth writing down.")
                     }
 
+                    // **The shell the app draws.** Separate from the free text
+                    // above, which is anything you want to record; this is the
+                    // short list the app has a picture for. It appears only for
+                    // consoles that HAVE more than one, so most machines show
+                    // no choice at all rather than a control with one option.
+                    if variants.count > 1 {
+                        Section {
+                            ForEach(variants) { option in
+                                Button { choose(option) } label: {
+                                    HStack(spacing: 12) {
+                                        VariantThumb(asset: option.asset
+                                                     ?? PlatformIcon.assetName(console.platform))
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(option.label).foregroundStyle(.primary)
+                                            Text(option.detail)
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 0)
+                                        if option.key == chosenVariantKey {
+                                            Image(systemName: "checkmark")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(LSTheme.accent)
+                                        }
+                                    }
+                                    .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            Text("Which one to draw")
+                        } footer: {
+                            Text("Changes the picture everywhere this console appears.")
+                        }
+                    }
+
+                    Section {
+                        if !photos.isEmpty {
+                            ScrollView(.horizontal) {
+                                HStack(spacing: 8) {
+                                    ForEach(photos) { photo in
+                                        // `data` is optional on GameImage —
+                                        // external storage means the bytes can
+                                        // still be arriving from CloudKit.
+                                        LocalArtworkThumb(data: photo.data ?? Data(),
+                                                          contentMode: .fill)
+                                            .frame(width: 96, height: 96)
+                                            .clipShape(.rect(cornerRadius: 12))
+                                            .contextMenu {
+                                                Button(role: .destructive) {
+                                                    removingPhoto = photo
+                                                } label: {
+                                                    Label("Remove Photo", systemImage: "trash")
+                                                }
+                                            }
+                                    }
+                                }
+                                .padding(.vertical, 2)
+                            }
+                            .scrollIndicators(.hidden)
+                        }
+                        PhotosPicker(selection: $photoItem, matching: .images,
+                                     photoLibrary: .shared()) {
+                            if importing {
+                                HStack(spacing: 6) { ProgressView(); Text("Adding…") }
+                            } else {
+                                Label(photos.isEmpty ? "Add a photo" : "Add another",
+                                      systemImage: "photo.badge.plus")
+                            }
+                        }
+                        .disabled(importing)
+                        if let importError {
+                            Text(importError).font(.caption).foregroundStyle(.red)
+                        }
+                    } header: {
+                        Text("Photos")
+                    } footer: {
+                        // The reason the feature exists, said once where it lands.
+                        Text("The machine as it actually sits in your room. Downscaled and kept in your own iCloud, like every other picture you add.")
+                    }
+
                     Section {
                         Toggle("Say when you got it", isOn: $knowsAcquired.animation())
                             .tint(LSTheme.accent)
@@ -246,6 +350,21 @@ struct ConsoleEditor: View {
             .scrollContentBackground(.hidden)
             .background(LSTheme.liveSheetGround)
 
+            .task(id: photoItem) { await ingestPickedPhoto() }
+            .confirmationDialog("Remove this photo?",
+                                isPresented: Binding(get: { removingPhoto != nil },
+                                                     set: { if !$0 { removingPhoto = nil } }),
+                                titleVisibility: .visible) {
+                Button("Remove Photo", role: .destructive) {
+                    if let photo = removingPhoto {
+                        Repository(context).removeImage(photo, from: console)
+                    }
+                    removingPhoto = nil
+                }
+                Button("Cancel", role: .cancel) { removingPhoto = nil }
+            } message: {
+                Text("It is deleted rather than kept in Recently Deleted — the bytes are the point of removing it.")
+            }
             .navigationTitle(PlatformShort.name(console.platform))
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -281,6 +400,98 @@ struct ConsoleEditor: View {
                            variant: variant,
                            acquiredAt: .some(knowsAcquired ? acquired : nil),
                            notes: notes)
+    }
+
+    // MARK: Which one to draw
+
+    private var variants: [PlatformVariant.Variant] {
+        PlatformVariant.variants(for: console.platform)
+    }
+
+    /// The key currently in force, resolved rather than read raw — a stored
+    /// key this build has no art for reads as the default, which is what the
+    /// picker should show a checkmark against.
+    private var chosenVariantKey: String? {
+        let stored = ThemePalette.fetchOrCreate(in: context)
+            .platformIconVariants[PlatformKey.canonical(console.platform)]
+        return PlatformVariant.variant(for: console.platform, key: stored)?.key
+    }
+
+    /// Written to the settings row, not to the console — the choice is "which
+    /// Saturn does this library draw", and a library holds one console per
+    /// platform, so the two are the same statement said in the cheaper place.
+    /// It also means the picture is right on a game's chip and in the Library's
+    /// filter, where there is no console record in scope at all.
+    private func choose(_ option: PlatformVariant.Variant) {
+        let settings = ThemePalette.fetchOrCreate(in: context)
+        var map = settings.platformIconVariants
+        let key = PlatformKey.canonical(console.platform)
+        // The default is stored as an ABSENCE. Writing "na" would pin the
+        // library to today's default, so re-commissioning the main render
+        // later would leave this console pointing at the old one.
+        if option.key == variants.first?.key { map.removeValue(forKey: key) }
+        else { map[key] = option.key }
+        settings.platformIconVariants = map
+        settings.updatedAt = .now
+        // The same three steps a rename takes, and for the same reason:
+        // setting the static alone changes no view, because nothing observes
+        // it. The commit is what redraws the tiles already on screen, and
+        // `refresh` is what pushes the new map into the drawing layer.
+        PersistenceMonitor.shared.commit(context)
+        ThemePalette.refresh(from: settings)
+        // Widgets read a snapshot, not the store.
+        WidgetBridge.refresh()
+    }
+
+    // MARK: Photos
+
+    /// Newest last, the order they were added — a shelf of pictures reads as a
+    /// sequence, not a feed.
+    private var photos: [GameImage] {
+        (console.images ?? [])
+            .filter { $0.deletedAt == nil }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    private func ingestPickedPhoto() async {
+        guard let photoItem else { return }
+        importing = true
+        importError = nil
+        defer { importing = false; self.photoItem = nil }
+        do {
+            guard let raw = try await photoItem.loadTransferable(type: Data.self) else {
+                importError = "That photo couldn't be read."
+                return
+            }
+            try repo.addImage(to: console, data: raw)
+        } catch ImageIngest.Failure.unreadable {
+            importError = "That file isn't an image this device can read."
+        } catch {
+            importError = "Couldn't add that picture."
+        }
+    }
+}
+
+/// The small render beside a model in the picker. Its own view because the
+/// picker draws a SPECIFIC asset rather than "whatever this platform draws" —
+/// which is the one place `PlatformIconView` cannot help, since choosing is
+/// exactly the act of disagreeing with it.
+private struct VariantThumb: View {
+    let asset: String?
+
+    var body: some View {
+        Group {
+            if let asset {
+                Image(asset).resizable().scaledToFit()
+                    .shadow(color: .black.opacity(0.5), radius: 2.4, y: 1.9)
+            } else {
+                Image(systemName: "gamecontroller.fill")
+                    .resizable().scaledToFit()
+                    .foregroundStyle(LSTheme.accent)
+                    .padding(7)
+            }
+        }
+        .frame(width: 42, height: 42)
     }
 }
 
