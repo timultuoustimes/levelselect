@@ -2,18 +2,54 @@ import Testing
 import SwiftUI
 @testable import LevelSelect
 
-/// Tim's seven pairs: real hexes, black ink readable on every accent, and a
-/// lookup that survives the ways a hex gets written.
+/// Tim's seven pairs plus Mono: real hexes, black ink readable on every
+/// accent, and a lookup that survives the ways a hex gets written.
 struct LSPaletteTests {
 
-    @Test("Seven pairs, every hex parses, no two accents alike")
+    @Test("Eight pairs, every hex parses, no two accents alike")
     func pairsAreWellFormed() {
-        #expect(LSPalette.pairs.count == 7)
+        #expect(LSPalette.pairs.count == 8)
         for p in LSPalette.pairs {
             #expect(Color(hex: p.accent) != nil, Comment(rawValue: "\(p.name) accent"))
             #expect(Color(hex: p.step) != nil, Comment(rawValue: "\(p.name) step"))
         }
-        #expect(Set(LSPalette.pairs.map(\.accent)).count == 7)
+        #expect(Set(LSPalette.pairs.map(\.accent)).count == 8)
+    }
+
+    /// **The high-contrast pair, and the reason it needed a branch.**
+    ///
+    /// Mono is the seven's shape with the hue taken out: a light-grey accent
+    /// that is the ink on dark, a charcoal step that is the ink on light. The
+    /// ground is the part that could not be derived — the shared bases lean
+    /// blue on dark and lavender on light, which is right under a hue and
+    /// wrong under a grey.
+    @Test("Mono's ground is actually neutral, and it out-contrasts all seven")
+    func monoIsTheHighContrastPair() throws {
+        let mono = try #require(LSPalette.pairs.first { $0.name == LSPalette.neutralPairName })
+
+        // Neutral means the three channels are equal — not merely close.
+        for dark in [true, false] {
+            for bottom in [true, false] {
+                let g = try #require(LSPalette.ground(tint: mono.accentColor,
+                                                      dark: dark, bottom: bottom).lsRGB)
+                #expect(abs(g.r - g.g) < 0.002 && abs(g.g - g.b) < 0.002,
+                        Comment(rawValue: "dark:\(dark) bottom:\(bottom) → \(g)"))
+            }
+        }
+
+        // A colored pair through the same call is NOT neutral, which is what
+        // makes the branch worth having rather than a no-op.
+        let purple = try #require(LSPalette.pairs.first { $0.name == "Purple" })
+        let pg = try #require(LSPalette.ground(tint: purple.accentColor, dark: true).lsRGB)
+        #expect(abs(pg.b - pg.r) > 0.05, "the seven keep their cast")
+
+        // Both directions clear AAA, which none of the seven do.
+        let onDark = LSContrast.ratio(mono.accentColor,
+                                      LSPalette.ground(tint: mono.accentColor, dark: true))
+        let onLight = LSContrast.ratio(mono.stepColor,
+                                       LSPalette.ground(tint: mono.accentColor, dark: false))
+        #expect(onDark >= 7.0, Comment(rawValue: "light grey on charcoal: \(onDark)"))
+        #expect(onLight >= 7.0, Comment(rawValue: "charcoal on light grey: \(onLight)"))
     }
 
     @Test("Black knockout ink clears 4.5:1 on every accent — the fill rule")
