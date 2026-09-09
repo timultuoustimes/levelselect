@@ -10,7 +10,18 @@ import Foundation
 /// broke on the reference.
 enum PlatformIcon {
     static func assetName(_ platform: String) -> String? {
-        let p = platform.lowercased()
+        // **Fold first, then match.** The waterfall used to test the string it
+        // was handed, so a name the app already knows how to fold could still
+        // fall through to nothing: "Atari VCS" folds to Atari 2600, "Super
+        // NES" to SNES and "PC (Linux)" to PC, and all three drew the generic
+        // controller beside consoles they ARE. Found 2026-09-09 auditing what
+        // the app cannot draw.
+        //
+        // Every spelling below is still tested because `canonical` passes
+        // unknown names through untouched — this only means a fold added
+        // later is drawn without anyone having to remember to add its raw
+        // spelling here too, which is exactly how those three were missed.
+        let p = PlatformKey.canonical(platform).lowercased()
         if p.contains("switch 2")                              { return "platform-switch2" }
         if p.contains("switch")                                { return "platform-switch" }
         // **Japan's machines are their own machines**, and they have to be

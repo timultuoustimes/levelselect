@@ -14,6 +14,51 @@ import Foundation
 ///
 /// Pure, so the folding can be tested without a store or a running app.
 enum PlatformKey {
+    /// **Every spelling this fold recognizes**, for the test that holds the
+    /// fold and the art together. Derived by hand from the cases below, which
+    /// is the one weakness — a case added without its spellings here is a
+    /// spelling the invariant never checks.
+    static let everySpelling: [String] = [
+        "PC (Microsoft Windows)", "Linux", "PC (Linux)", "Windows",
+        "Nintendo Switch", "Nintendo Switch 2",
+        "PlayStation 5", "PlayStation 4", "PlayStation 3", "PlayStation 2",
+        "PlayStation", "PlayStation Portable",
+        "PlayStation Vita", "PlayStation Vita (PS Vita)",
+        "Xbox Series X|S", "Xbox Series X/S", "Xbox Series X", "Xbox Series",
+        "Xbox One", "Xbox 360",
+        "Nintendo 3DS", "New Nintendo 3DS", "Nintendo DS", "Nintendo DSi",
+        "Wii U", "Nintendo Wii", "Wii",
+        "Super Nintendo Entertainment System", "SNES", "Super NES",
+        "Nintendo Entertainment System", "NES",
+        "Family Computer", "Famicom",
+        "Family Computer Disk System", "Famicom Disk System",
+        "Family Computer Disk System (FDS)", "Super Famicom",
+        "Nintendo 64", "Nintendo GameCube", "GameCube",
+        "Game Boy Advance", "Game Boy Color",
+        "Sega Mega Drive/Genesis", "Sega Genesis", "Genesis", "Mega Drive",
+        "Sega Master System/Mark III", "Sega Master System",
+        "Sega Dreamcast", "Dreamcast", "Sega Saturn",
+        "Sega Game Gear", "Game Gear",
+        "Sega Mega-CD", "Sega CD", "Mega-CD", "Sega 32X",
+        "TurboGrafx-16/PC Engine", "TurboGrafx-16",
+        "Recalbox", "Raspberry Pi", "RetroPie", "Batocera",
+        "Atari 2600", "Atari VCS", "Atari 2600+", "Atari 5200",
+        "Atari 7800", "Atari 7800 ProSystem",
+        "Lynx", "Atari Lynx", "Jaguar", "Atari Jaguar", "Atari Jaguar CD",
+        "Amiga CD32", "CD32", "Commodore C64/128/MAX", "Commodore 64",
+        "C64", "C64/128", "Commodore Amiga", "Amiga", "Amiga 500",
+        "Neo Geo AES", "Neo Geo", "NeoGeo", "SNK Neo Geo AES",
+        "Neo Geo MVS", "SNK Neo Geo MVS", "Neo Geo Pocket Color",
+        "Mattel Intellivision", "Intellivision",
+        "ColecoVision", "Coleco Vision", "Vectrex", "GCE Vectrex",
+        "Sinclair ZX Spectrum", "ZX Spectrum", "ZX Spectrum 48K",
+        "MSX", "MSX2", "MSX2+", "MSX Turbo R",
+        "3DO Interactive Multiplayer", "3DO", "Panasonic 3DO",
+        "WonderSwan Color", "Bandai WonderSwan Color",
+        "WonderSwan", "Bandai WonderSwan",
+        "Arcade", "Arcade Cabinet",
+    ]
+
     /// The app's own short name for a platform, before the user has a say.
     /// `PlatformShort.name(_:)` applies their renames on top of this.
     static func canonical(_ p: String) -> String {
