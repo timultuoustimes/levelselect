@@ -59,6 +59,12 @@ struct ConsoleCard: View {
             .max { $0.addedAt < $1.addedAt }
     }
 
+    /// Read once per body rather than per row — the settings fetch is cheap
+    /// but it is not free, and a lineage of four would do it four times.
+    private var variantMap: [String: String] {
+        ThemePalette.fetchOrCreate(in: context).platformIconVariants
+    }
+
     private func summary(_ console: Console) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             // **Half the width to the machine.** Tim's markup on the mockup,
@@ -118,6 +124,33 @@ struct ConsoleCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            // **The machines you have had, oldest first.** One is just the
+            // icon again, so the row appears at two — a lineage needs a line.
+            let lineage = PlatformVariant.owned(for: platform, in: variantMap)
+            if lineage.count > 1 {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Machines you have had")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                    HStack(alignment: .top, spacing: 10) {
+                        ForEach(lineage) { option in
+                            VStack(spacing: 3) {
+                                VariantThumb(asset: option.asset
+                                             ?? PlatformIcon.assetName(platform))
+                                Text(option.label)
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
+                            }
+                            .frame(maxWidth: 62)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .padding(.top, 2)
             }
         }
         .padding(12)
@@ -289,7 +322,7 @@ struct ConsoleEditor: View {
         NavigationStack {
             Form {
                 // The app's own card fill, so the rows keep the theme at any
-                // detent — see `SettingsPage` for why the system's grey drains.
+                // detent — see `SettingsPage` for why the system's gray drains.
                 Group {
                     Section {
                         HStack(spacing: 12) {
@@ -353,6 +386,45 @@ struct ConsoleEditor: View {
                             Text("Which one to draw")
                         } footer: {
                             Text("Changes the picture everywhere this console appears.")
+                        }
+
+                        // **Thirty years of one platform is several machines.**
+                        // Tim, 2026-09-09: *"if someone's gonna be gaming for
+                        // 30 years maybe they owned a Mac from the 80s the 90s
+                        // 2000s and now and they would want to have those all
+                        // represented on the console page."* The tile has one
+                        // icon slot and always will; the page has room for the
+                        // lineage. Two questions, so two lists, rather than one
+                        // control quietly answering both.
+                        Section {
+                            ForEach(variants) { option in
+                                Button { toggleHad(option) } label: {
+                                    HStack(spacing: 12) {
+                                        VariantThumb(asset: option.asset
+                                                     ?? PlatformIcon.assetName(console.platform))
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(option.label).foregroundStyle(.primary)
+                                            Text(option.detail)
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer(minLength: 0)
+                                        Image(systemName: hadKeys.contains(option.key)
+                                              || option.key == chosenVariantKey
+                                              ? "checkmark.circle.fill" : "circle")
+                                            .font(.title3)
+                                            .foregroundStyle(hadKeys.contains(option.key)
+                                                             || option.key == chosenVariantKey
+                                                             ? LSTheme.accent : .secondary)
+                                    }
+                                    .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(option.key == chosenVariantKey)
+                            }
+                        } header: {
+                            Text("Machines you have had")
+                        } footer: {
+                            Text("Shown as a row on this console's page. The one you draw is always included.")
                         }
                     }
 
@@ -528,6 +600,25 @@ struct ConsoleEditor: View {
         WidgetBridge.refresh()
     }
 
+    /// What is ticked, not counting the drawn one — that is added at read
+    /// time so unticking it is impossible rather than merely discouraged.
+    private var hadKeys: Set<String> {
+        PlatformVariant.ownedKeys(for: console.platform,
+                                  in: ThemePalette.fetchOrCreate(in: context).platformIconVariants)
+    }
+
+    private func toggleHad(_ option: PlatformVariant.Variant) {
+        let settings = ThemePalette.fetchOrCreate(in: context)
+        var map = settings.platformIconVariants
+        var keys = PlatformVariant.ownedKeys(for: console.platform, in: map)
+        if keys.contains(option.key) { keys.remove(option.key) } else { keys.insert(option.key) }
+        PlatformVariant.setOwned(keys, for: console.platform, in: &map)
+        settings.platformIconVariants = map
+        settings.updatedAt = .now
+        PersistenceMonitor.shared.commit(context)
+        ThemePalette.refresh(from: settings)
+    }
+
     // MARK: Photos
 
     /// Newest last, the order they were added — a shelf of pictures reads as a
@@ -561,7 +652,7 @@ struct ConsoleEditor: View {
 /// picker draws a SPECIFIC asset rather than "whatever this platform draws" —
 /// which is the one place `PlatformIconView` cannot help, since choosing is
 /// exactly the act of disagreeing with it.
-private struct VariantThumb: View {
+struct VariantThumb: View {
     let asset: String?
 
     var body: some View {

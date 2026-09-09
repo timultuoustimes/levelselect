@@ -61,7 +61,7 @@ enum LSPalette {
     /// always been.
     static var defaultGround: Pair { pairs[1] }
 
-    /// The ground a pair makes: the pair's accent laid over the base grey
+    /// The ground a pair makes: the pair's accent laid over the base gray
     /// (light) or base charcoal (dark) with the *overlay* blend at full
     /// strength — Tim's own construction in the palette sheet: *"it's 100%
     /// overlay on top of the base light grey and base charcoal."* The bases

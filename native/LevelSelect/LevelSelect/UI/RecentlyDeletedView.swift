@@ -304,7 +304,7 @@ struct RecentlyDeletedView: View {
             }
             // The row tints its Restore button with the accent, and the swipe
             // action inherited it — so the app's only hard delete arrived in
-            // the same colour as the button that puts things back. Fable saw
+            // the same color as the button that puts things back. Fable saw
             // it as "tinted in the accent blue rather than red".
             .tint(.red)
         }

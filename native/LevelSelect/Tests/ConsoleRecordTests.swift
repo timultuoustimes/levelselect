@@ -355,6 +355,42 @@ struct ConsoleRecordTests {
         }
     }
 
+    @Test("The lineage rides in the variant map without changing its shape")
+    func lineageStoresBesideTheIconChoice() {
+        var map: [String: String] = [:]
+
+        // Nothing ticked: the drawn one still stands alone, because it is on
+        // the shelf and the page must not contradict the tile.
+        #expect(PlatformVariant.owned(for: "Mac", in: map).map(\.key) == ["mini"])
+
+        PlatformVariant.setOwned(["compact", "imac-g3"], for: "Mac", in: &map)
+        // **Oldest first** — a lineage reads forward in time — and the drawn
+        // machine is folded in whether or not it was ticked.
+        #expect(PlatformVariant.owned(for: "Mac", in: map).map(\.key)
+                == ["compact", "imac-g3", "mini"])
+
+        // The icon choice is untouched by any of it, and still a single key.
+        map["Mac"] = "imac-g3"
+        #expect(PlatformIcon.artName("Mac") == "platform-mac",
+                "artName reads the override cache, not this map")
+        #expect(map["Mac"] == "imac-g3")
+
+        // **The shape an older build decodes is unchanged.** Every value is a
+        // String, and the lineage hides under a key no platform can be called.
+        #expect(map.keys.contains { $0.hasPrefix("#") })
+        #expect(PlatformKey.canonical("#had:Mac") == "#had:Mac",
+                "the marker must never collide with a real platform name")
+        for (_, value) in map { #expect(!value.isEmpty) }
+
+        // Unticking everything removes the entry rather than leaving a blank.
+        PlatformVariant.setOwned([], for: "Mac", in: &map)
+        #expect(!map.keys.contains { $0.hasPrefix("#had:") })
+        #expect(map["Mac"] == "imac-g3", "and takes nothing else with it")
+
+        // A console with one machine has no lineage to show.
+        #expect(PlatformVariant.owned(for: "Genesis", in: map).isEmpty)
+    }
+
     // MARK: The photograph
 
     @Test("A console keeps photographs, and they survive a backup")

@@ -185,10 +185,10 @@ struct SettingsView: View {
             // gradient and the sheet was flat gray.
             //
             // **On iOS too, since build 39.** The macOS guard meant the root
-            // sheet was system grey on the phone while every page pushed
-            // inside it painted the ground — so Settings changed colour as you
+            // sheet was system gray on the phone while every page pushed
+            // inside it painted the ground — so Settings changed color as you
             // went one level in. `sheetGround` is the shallow ramp that keeps
-            // its colour at any detent; see it for why the full-height sheet
+            // its color at any detent; see it for why the full-height sheet
             // used to drain.
             .scrollContentBackground(.hidden)
             .background(LSTheme.liveSheetGround)

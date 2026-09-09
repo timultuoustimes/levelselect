@@ -2918,7 +2918,7 @@ struct Repository {
             // "__ls_schema_seed__", a junk handle and a 161-byte purple
             // square, then deleted the row that held the real ones.
             //
-            // The rule is different here because the consequence is: a colour
+            // The rule is different here because the consequence is: a color
             // reverting is a tap to fix and you notice immediately, while a
             // name and an avatar can be wrong for weeks and are unrecoverable
             // once the other row is gone. It also made the damage permanent —

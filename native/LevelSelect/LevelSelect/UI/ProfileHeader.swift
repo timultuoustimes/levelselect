@@ -788,7 +788,7 @@ struct ProfileEditor: View {
         useHandleAsName = profile.useHandleAsName
         // **Nil means Default, and nothing may argue with it.**
         //
-        // This fell back to the device-local key this colour used to live in,
+        // This fell back to the device-local key this color used to live in,
         // which reads sensibly and is wrong: choosing Default stores nil, so
         // the next time the editor opened it found the OLD device value and
         // showed Accent selected again. Tim: *"When you choose default for

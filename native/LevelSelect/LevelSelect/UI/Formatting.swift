@@ -292,7 +292,7 @@ struct CoverThumb: View {
     /// one you actually picked. But this view only ever knew how to load a
     /// URL, so nil meant the placeholder: the game page showed your picture
     /// (it goes through `ArtworkView`) while Home, Library, the shelves, the
-    /// running-timer strip and Continue Playing all showed a grey controller.
+    /// running-timer strip and Continue Playing all showed a gray controller.
     ///
     /// That is the shape behind Fable 2.7 and 2.17, both filed as
     /// "placeholder instead of the game's cover, cause unknown". Their stated

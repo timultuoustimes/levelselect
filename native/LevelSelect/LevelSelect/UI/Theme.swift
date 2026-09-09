@@ -321,7 +321,7 @@ extension View {
 
 /// The scrim, weighed per appearance. In dark mode a 0.5 shadow under the
 /// glyph vanishes into the art; in light mode the same shadow sat under the
-/// glass ring as a grey smear — Tim, 09-08: *"shadow under the ellipses menu
+/// glass ring as a gray smear — Tim, 09-08: *"shadow under the ellipses menu
 /// is currently very weird looking on light mode."* Light gets a quarter
 /// of it, which still separates the ring from bright art.
 private struct LSToolbarScrim: ViewModifier {

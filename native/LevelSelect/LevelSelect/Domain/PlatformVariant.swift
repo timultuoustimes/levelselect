@@ -46,13 +46,13 @@ enum PlatformVariant {
     /// console's main render never leaves a stale duplicate here.
     static let catalog: [String: [Variant]] = [
         // The only pair with both renders drawn as of 2026-09-08. The Japanese
-        // Saturn is grey and launched a season earlier; the machine that
+        // Saturn is gray and launched a season earlier; the machine that
         // reached the US was black. Both were "Model 1".
         "Saturn": [
             Variant(key: "na", label: "North America",
                     detail: "Black, 1995", asset: nil),
             Variant(key: "jp", label: "Japan",
-                    detail: "Grey, 1994", asset: "variant-saturn-jp"),
+                    detail: "Gray, 1994", asset: "variant-saturn-jp"),
         ],
         // **"Mac" is forty years of very different objects.** The app draws
         // the machine you would buy today; the other three were already drawn
@@ -84,6 +84,52 @@ enum PlatformVariant {
     /// at all, so a console with nothing to choose shows no choice.
     static func variants(for platform: String) -> [Variant] {
         catalog[PlatformKey.canonical(platform)] ?? []
+    }
+
+    // MARK: The machines you have had
+
+    /// **Where the lineage hides in a map of single choices.**
+    ///
+    /// `platformIconVariantsData` is one variant key per platform, and it is
+    /// deployed — changing its SHAPE would mean an older build failing to
+    /// decode it. So the lineage rides in the same map under a key no platform
+    /// can ever be called: a leading `#`. An older build sees an entry for a
+    /// platform named "#had:Mac", finds no console by that name, and ignores
+    /// it. No promote, no migration, nothing to break.
+    private static func lineageKey(_ platform: String) -> String {
+        "#had:" + PlatformKey.canonical(platform)
+    }
+
+    /// The machines someone says they have had, oldest first — the order the
+    /// catalog lists them in, which is newest-to-oldest reversed, because a
+    /// lineage reads forward in time.
+    ///
+    /// The drawn one is always included whether or not it was ticked: it is on
+    /// the shelf, so claiming otherwise on the page below would contradict the
+    /// tile above.
+    static func owned(for platform: String, in map: [String: String]) -> [Variant] {
+        let list = variants(for: platform)
+        guard !list.isEmpty else { return [] }
+        var ticked = Set((map[lineageKey(platform)] ?? "")
+            .split(separator: ",").map(String.init))
+        if let drawn = variant(for: platform, key: map[PlatformKey.canonical(platform)]) {
+            ticked.insert(drawn.key)
+        }
+        return list.reversed().filter { ticked.contains($0.key) }
+    }
+
+    /// Write the ticked set. Stored in catalog order rather than tap order, so
+    /// the row reads the same however someone got there.
+    static func setOwned(_ keys: Set<String>, for platform: String,
+                         in map: inout [String: String]) {
+        let ordered = variants(for: platform).map(\.key).filter { keys.contains($0) }
+        if ordered.isEmpty { map.removeValue(forKey: lineageKey(platform)) }
+        else { map[lineageKey(platform)] = ordered.joined(separator: ",") }
+    }
+
+    /// Just the keys, for a picker that needs to know what is ticked.
+    static func ownedKeys(for platform: String, in map: [String: String]) -> Set<String> {
+        Set((map[lineageKey(platform)] ?? "").split(separator: ",").map(String.init))
     }
 
     /// The variant a stored key names, or the default when it names nothing —

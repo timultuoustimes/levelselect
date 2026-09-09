@@ -34,12 +34,12 @@ struct SettingsPage<Content: View>: View {
                     .listRowBackground(LSTheme.cardFill)
             }
             content
-                // **The rows carry the theme, not the system's grey.**
+                // **The rows carry the theme, not the system's gray.**
                 //
                 // A grouped row's fill is the system's, and inside a sheet it
                 // is translucent at the medium detent and opaque at full
                 // height — so the cards were tinted by the ground behind them
-                // and then, as the sheet grew, went flat grey. Tim, with both
+                // and then, as the sheet grew, went flat gray. Tim, with both
                 // detents side by side: *"this menu looses its colors on the
                 // cards too."* The app's own card fill sits on the app's own
                 // ground and reads the same at any height. A row that sets its
@@ -60,7 +60,7 @@ struct SettingsPage<Content: View>: View {
         // sheet always did; the pages only did on the Mac, so on iOS 27 a
         // page at the glass detent let Home's covers through and set its
         // descriptions on whatever art was behind — Tim's screenshot of
-        // Statuses, 2026-09-08: grey words over Balatro. The glass stays at
+        // Statuses, 2026-09-08: gray words over Balatro. The glass stays at
         // the edges; the words get the same bed the root has.
         .scrollContentBackground(.hidden)
         .background(LSTheme.liveSheetGround)

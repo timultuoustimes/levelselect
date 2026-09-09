@@ -28,7 +28,7 @@ enum PlatformIcon {
         // tested before the Western names that contain them. "Super Famicom"
         // used to resolve to the SNES's art — a fair stand-in while there was
         // no Super Famicom render, and wrong now that there is: the SFC is
-        // rounded and grey where the SNES is boxy and angular. "Famicom Disk
+        // rounded and gray where the SNES is boxy and angular. "Famicom Disk
         // System" contains "famicom", and "Nintendo 64DD" contains
         // "nintendo 64", so both go above what they would otherwise match.
         if p.contains("famicom disk") || p.contains("family computer disk")

@@ -35,7 +35,7 @@ struct ColorTarget: Identifiable {
 /// and the seven pairs in a row. So that is the whole editor. A pair is an
 /// authored accent with its own step; choosing one for the accent writes it
 /// to both appearances, choosing one for the background makes the ground its
-/// overlay on the base grey and charcoal (`LSPalette.ground`).
+/// overlay on the base gray and charcoal (`LSPalette.ground`).
 ///
 /// Everything here is a draft until Done. Cancel puts back what the sheet
 /// changed, and only that.
@@ -188,7 +188,7 @@ struct ColorEditor: View {
         if !isThemeEditor { return "One color for this status, everywhere it appears." }
         return role == .accent
             ? "The accent is the same color on both grounds. On light it writes in its darker step; on dark it writes as itself."
-            : "The ground is the color laid over the app's grey and charcoal, so nothing on it can become unreadable."
+            : "The ground is the color laid over the app's gray and charcoal, so nothing on it can become unreadable."
     }
 
     // MARK: The seven

@@ -75,7 +75,7 @@ enum LSTheme {
         // Build 37 took hue and saturation from the tint and fixed brightness
         // per appearance. Build 38 replaced the picker with seven pairs, and
         // Tim built the grounds for them himself: the pair's accent as a 100%
-        // overlay on a base grey and a base charcoal — see
+        // overlay on a base gray and a base charcoal — see
         // `LSPalette.ground(tint:dark:bottom:)`. Same safety property as
         // before (an overlay cannot take the base past legibility) and the
         // grounds now match his sheet exactly.
@@ -99,17 +99,17 @@ enum LSTheme {
 
     /// **The ground for a sheet, which is a different shape of room.**
     ///
-    /// `ground` runs from the theme's colour at the top to nearly black at the
+    /// `ground` runs from the theme's color at the top to nearly black at the
     /// bottom, which is right for a full screen: it is a lit room with a floor.
     /// A sheet is the same gradient over a much shorter frame, so at the medium
-    /// detent you see only its coloured top — and dragging it open replaces
-    /// that with the dark end, so the colour appears to drain out of the sheet
+    /// detent you see only its colored top — and dragging it open replaces
+    /// that with the dark end, so the color appears to drain out of the sheet
     /// as it grows. Tim, 2026-09-08, with the Statuses page at both detents:
     /// *"Can a fully open menu continue to have the colored plates behind them
     /// like they do before it's open all the way?"*
     ///
     /// So a sheet gets the top of the range and only a hint of fall — enough
-    /// to have depth, not enough to lose the colour at any height.
+    /// to have depth, not enough to lose the color at any height.
     static func sheetGround(lightTint: Color?, darkTint: Color?,
                             scheme: ColorScheme? = nil) -> LinearGradient {
         let lightHue = lightTint?.lsHueSaturation
