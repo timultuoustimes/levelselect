@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "amiga-cd32-1993.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

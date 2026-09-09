@@ -23,8 +23,11 @@ struct PlatformEraTests {
                      .replacingOccurrences(of: ".imageset", with: "") })
 
         #expect(!slugs.isEmpty, "found no platform art to check against")
-        let missingYear = slugs.subtracting(PlatformEra.years.keys)
-        let missingArt = Set(PlatformEra.years.keys).subtracting(slugs)
+        // The storefront mark is a logo, not a machine — it has no release
+        // year because nothing was released. See `PlatformIcon.storefronts`.
+        let slugsExceptMarks = slugs.subtracting(["itch"])
+        let missingYear = slugsExceptMarks.subtracting(PlatformEra.years.keys)
+        let missingArt = Set(PlatformEra.years.keys).subtracting(slugsExceptMarks)
         #expect(missingYear.isEmpty, Comment(rawValue: "art with no release year: \(missingYear.sorted())"))
         #expect(missingArt.isEmpty, Comment(rawValue: "release year with no art: \(missingArt.sorted())"))
     }
@@ -106,7 +109,7 @@ struct PlatformEraTests {
     /// place the app is claiming to show your actual hardware.
     @Test func everythingTheCatalogueOffersHasArt() {
         let noArt = PlatformCatalog.all.filter { PlatformIcon.assetName($0) == nil }
-        #expect(noArt == ["itch.io"], Comment(rawValue: "catalogue entries with no icon: \(noArt)"))
+        #expect(noArt.isEmpty, Comment(rawValue: "catalogue entries with no icon: \(noArt)"))
     }
 
     /// The Xbox One drew the 2001 Xbox for want of a render of its own, and
@@ -134,6 +137,10 @@ struct PlatformEraTests {
     @Test func everythingTheCatalogueOffersHasAMaker() {
         let noMaker = PlatformCatalog.all.filter { PlatformMaker.of($0) == nil }
         #expect(noMaker == ["itch.io"], Comment(rawValue: "catalogue entries with no maker: \(noMaker)"))
+        // And having no maker is exactly why it must not reach the grid on a
+        // "does it have a picture" test — it has one now.
+        #expect(PlatformIcon.isStorefront("itch.io"))
+        #expect(PlatformIcon.assetName("itch.io") == "platform-itch")
     }
 
     /// Art and makers cover the same set, the way art and years do.
@@ -146,7 +153,7 @@ struct PlatformEraTests {
             .filter { $0.hasPrefix("platform-") && $0.hasSuffix(".imageset") }
             .map { $0.replacingOccurrences(of: "platform-", with: "")
                      .replacingOccurrences(of: ".imageset", with: "") })
-        let missing = slugs.subtracting(PlatformMaker.makers.keys)
+        let missing = slugs.subtracting(PlatformMaker.makers.keys).subtracting(["itch"])
         #expect(missing.isEmpty, Comment(rawValue: "art with no maker: \(missing.sorted())"))
     }
 
@@ -196,12 +203,85 @@ struct PlatformEraTests {
     }
 
     /// A storefront is not hardware. itch.io stays in the catalogue, because
-    /// its games routinely have no IGDB entry and must be nameable — but it
-    /// has no console art, which is exactly what keeps it out of a picker of
-    /// consoles you own.
+    /// its games routinely have no IGDB entry and must be nameable — and it
+    /// now has a mark of its own, which is precisely why the picker no longer
+    /// decides this by asking whether a platform can be drawn.
     @Test func aStorefrontIsNotAConsole() {
         #expect(PlatformCatalog.all.contains("itch.io"))
-        #expect(PlatformIcon.assetName("itch.io") == nil)
+        #expect(PlatformIcon.isStorefront("itch.io"))
+        #expect(PlatformIcon.assetName("itch.io") == "platform-itch")
+        // No maker and no release year: nobody manufactured it and nothing
+        // came out. Those are the same reason it is not a console.
         #expect(PlatformMaker.of("itch.io") == nil)
+        #expect(PlatformEra.releaseYear("itch.io") == nil)
+        // Real hardware is never mistaken for a shop.
+        for console in ["Switch", "PC", "Atari 2600", "Amiga CD32"] {
+            #expect(!PlatformIcon.isStorefront(console), Comment(rawValue: console))
+        }
+    }
+
+    /// **The two families Codex drew on 09-08.** Each is checked the way the
+    /// waterfall can actually fail: a name that contains another name.
+    @Test func atariAndCommodoreResolveToTheirOwnArt() {
+        #expect(PlatformIcon.assetName("Atari 2600") == "platform-atari2600")
+        #expect(PlatformIcon.assetName("Atari 5200") == "platform-atari5200")
+        #expect(PlatformIcon.assetName("Atari 7800") == "platform-atari7800")
+        #expect(PlatformIcon.assetName("Atari Lynx") == "platform-lynx")
+        #expect(PlatformIcon.assetName("Atari Jaguar") == "platform-jaguar")
+        // "Amiga CD32" contains "Amiga", so it must be tested first — the
+        // Famicom Disk System's rule, applied to Commodore.
+        #expect(PlatformIcon.assetName("Amiga CD32") == "platform-cd32")
+        #expect(PlatformIcon.assetName("Amiga") == "platform-amiga")
+        // IGDB's own spelling of the 8-bit machine.
+        #expect(PlatformIcon.assetName("Commodore C64/128/MAX") == "platform-c64")
+
+        // And the folds land on the names the picker shows.
+        #expect(PlatformKey.canonical("Atari VCS") == "Atari 2600")
+        #expect(PlatformKey.canonical("Lynx") == "Atari Lynx")
+        #expect(PlatformKey.canonical("Atari Jaguar CD") == "Atari Jaguar")
+        #expect(PlatformKey.canonical("Commodore C64/128/MAX") == "Commodore 64")
+        #expect(PlatformKey.canonical("Commodore Amiga") == "Amiga")
+
+        // Inside each heading the picker sorts oldest first.
+        for maker in ["Atari", "Commodore"] {
+            let shown = PlatformCatalog.all
+                .filter { PlatformMaker.of($0) == maker }
+                .sorted { (PlatformEra.releaseYear($0) ?? .max) < (PlatformEra.releaseYear($1) ?? .max) }
+            #expect(shown == shown.sorted {
+                (PlatformEra.releaseYear($0) ?? .max) < (PlatformEra.releaseYear($1) ?? .max) })
+            #expect(shown.count > 2, Comment(rawValue: maker))
+        }
+        #expect(PlatformEra.releaseYear("Atari 2600") == 1977)
+        #expect(PlatformEra.releaseYear("Amiga CD32") == 1993)
+    }
+
+    /// SNK, where every name contains the one below it.
+    @Test func theNeoGeosResolveToTheirOwnArt() {
+        #expect(PlatformIcon.assetName("Neo Geo Pocket Color") == "platform-ngpc")
+        #expect(PlatformIcon.assetName("Neo Geo MVS") == "platform-neogeo-mvs")
+        #expect(PlatformIcon.assetName("Neo Geo AES") == "platform-neogeo-aes")
+        // The mono Pocket shares the Color's body, so it shares the picture
+        // rather than falling through to the home console.
+        #expect(PlatformIcon.assetName("Neo Geo Pocket") == "platform-ngpc")
+        // A bare "Neo Geo" is the console someone owns.
+        #expect(PlatformKey.canonical("Neo Geo") == "Neo Geo AES")
+        #expect(PlatformEra.releaseYear("Neo Geo AES") == 1990)
+        #expect(PlatformEra.releaseYear("Neo Geo Pocket Color") == 1999)
+        for snk in ["Neo Geo AES", "Neo Geo MVS", "Neo Geo Pocket Color"] {
+            #expect(PlatformMaker.of(snk) == "SNK", Comment(rawValue: snk))
+        }
+    }
+
+    /// **"switch" contains "itch".** The storefront mark is matched exactly
+    /// for that reason: a substring test would hand every Switch game a shop
+    /// awning the moment anything above it in the waterfall moved.
+    @Test func theStorefrontMarkNeverCatchesTheSwitch() {
+        #expect(PlatformIcon.assetName("Switch") == "platform-switch")
+        #expect(PlatformIcon.assetName("Switch 2") == "platform-switch2")
+        #expect(PlatformIcon.assetName("Nintendo Switch") == "platform-switch")
+        #expect(!PlatformIcon.isStorefront("Switch"))
+        // A logo is drawn differently from a photograph of a machine.
+        #expect(PlatformIcon.isFlatMark("platform-itch"))
+        #expect(!PlatformIcon.isFlatMark("platform-switch"))
     }
 }

@@ -314,6 +314,12 @@ struct ConsolePlateTile: View {
                 .font(.caption.weight(.medium))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
+                // Take the second line rather than an ellipsis. Inside a
+                // Button in a grid cell the text is offered a one-line height
+                // and truncates to fit it, `lineLimit(2)` notwithstanding —
+                // "Neo Geo Pocket Color" arrived on 09-08 and read "Neo Geo
+                // Pocket…", which is a different handheld.
+                .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.primary)
         }
         .padding(.vertical, 10)
@@ -387,7 +393,12 @@ struct AddConsoleSheet: View {
             // this sheet is a shelf of hardware you own, and you do not own an
             // itch.io. Tim: *"Not sure what to do with itch either. It's not a
             // device."*
-            .filter { PlatformIcon.assetName($0) != nil }
+            //
+            // Asked directly, rather than through "has no art". Those gave the
+            // same answer only while itch.io happened to be undrawable, and
+            // the moment it got a logo the accident would have put it back in
+            // the grid. A console with no art yet is still a console.
+            .filter { !PlatformIcon.isStorefront($0) }
             .filter { !have.contains(PlatformKey.canonical($0)) }
             .filter { seen.insert(PlatformKey.canonical($0)).inserted }
             .filter { search.isEmpty || PlatformShort.name($0).localizedCaseInsensitiveContains(search) }

@@ -72,6 +72,26 @@ enum PlatformKey {
         // Raspberry Pi to make it fit more people."* Old libraries fold into
         // the new name rather than splitting, which is what this line is for.
         case "Recalbox", "Raspberry Pi", "RetroPie", "Batocera": "Raspberry Pi"
+        // Atari. IGDB spells them out in full; people say the number.
+        case "Atari 2600", "Atari VCS", "Atari 2600+": "Atari 2600"
+        case "Atari 5200": "Atari 5200"
+        case "Atari 7800", "Atari 7800 ProSystem": "Atari 7800"
+        case "Lynx", "Atari Lynx": "Atari Lynx"
+        case "Jaguar", "Atari Jaguar", "Atari Jaguar CD": "Atari Jaguar"
+        // Commodore. IGDB's name for the 8-bit machine is a slash-separated
+        // list of three models; the C64 is the one anyone means. The CD32 is
+        // folded before the bare Amiga, the same way the Famicom Disk System
+        // is folded before the Famicom.
+        case "Amiga CD32", "CD32": "Amiga CD32"
+        case "Commodore C64/128/MAX", "Commodore 64", "C64", "C64/128": "Commodore 64"
+        case "Commodore Amiga", "Amiga", "Amiga 500": "Amiga"
+        // SNK. IGDB writes the home console "Neo Geo AES"; people say "Neo
+        // Geo" and mean that one, so the bare name folds into it. The mono
+        // Pocket keeps its own name — it shares the Color's picture, not its
+        // identity.
+        case "Neo Geo AES", "Neo Geo", "NeoGeo", "SNK Neo Geo AES": "Neo Geo AES"
+        case "Neo Geo MVS", "SNK Neo Geo MVS": "Neo Geo MVS"
+        case "Neo Geo Pocket Color": "Neo Geo Pocket Color"
         case "Other", "": "Other"
         default: p
         }

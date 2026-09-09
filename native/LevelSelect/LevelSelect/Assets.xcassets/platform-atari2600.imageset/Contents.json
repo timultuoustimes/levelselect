@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "atari-2600-heavy-sixer-1977.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

@@ -46,6 +46,31 @@ enum PlatformIcon {
         // rather than a substring, so this sits here for clarity rather than
         // out of necessity.
         if p.contains("turbografx") || p.contains("pc engine") { return "platform-turbografx16" }
+        // Atari. The numbered three are unambiguous; Lynx and Jaguar are
+        // matched bare because IGDB says "Atari Lynx" and people say "Lynx",
+        // and nothing else in the set contains either word. "Atari Jaguar CD"
+        // lands on the Jaguar, which is the console it plugs into.
+        if p.contains("2600")                                  { return "platform-atari2600" }
+        if p.contains("5200")                                  { return "platform-atari5200" }
+        if p.contains("7800")                                  { return "platform-atari7800" }
+        if p.contains("lynx")                                  { return "platform-lynx" }
+        if p.contains("jaguar")                                { return "platform-jaguar" }
+        // Commodore. The CD32 has to be tested before the bare Amiga it
+        // contains, the same rule the Famicom Disk System follows. IGDB
+        // spells the 8-bit machine "Commodore C64/128/MAX", which carries
+        // "c64" inside it.
+        if p.contains("cd32")                                  { return "platform-cd32" }
+        if p.contains("amiga")                                 { return "platform-amiga" }
+        if p.contains("c64") || p.contains("commodore 64")     { return "platform-c64" }
+        // SNK. The handheld goes first — "Neo Geo Pocket Color" contains
+        // "neo geo", and so does the mono Pocket, which shares the body and
+        // therefore the picture. The cabinet is next, and the bare test that
+        // catches everything else lands on the AES, which is what "a Neo Geo"
+        // means when someone says they own one.
+        if p.contains("neo geo pocket") || p.contains("neogeo pocket")
+                                                               { return "platform-ngpc" }
+        if p.contains("mvs")                                   { return "platform-neogeo-mvs" }
+        if p.contains("neo geo") || p.contains("neogeo")       { return "platform-neogeo-aes" }
         // Order matters: more specific strings first, since these are
         // substring matches ("xbox series" before "xbox", "ps5" before "ps").
         // This block used to violate its own rule — bare "xbox" sat above
@@ -101,11 +126,48 @@ enum PlatformIcon {
         if p.contains("ipad")                                  { return "platform-ipad" }
         if p == "android"                                      { return "platform-android" }
         if p == "mac" || p.contains("macintosh") || p.contains("macos") { return "platform-mac" }
+        // itch.io is a STOREFRONT, and the only mark in this set that is a
+        // logo rather than a photograph of a machine. It draws as a template
+        // (see `PlatformIcon.isFlatMark`) because a flat black glyph would
+        // vanish into a dark plate, and it is kept out of the console picker
+        // by `storefronts` below rather than by having no art — the picker's
+        // question is "is this hardware", which is not the same question as
+        // "can we draw it".
+        // Matched EXACTLY, not as a substring: "switch" contains "itch". The
+        // Switch tests sit at the top of this waterfall so it cannot bite
+        // today, but a reorder would silently give every Switch game a
+        // storefront logo, and that is too quiet a way to break.
+        if p == "itch.io" || p == "itch"                       { return "platform-itch" }
         return nil
     }
 }
 
 extension PlatformIcon {
+    /// **Marks, not machines.** Every other icon is a lit render of hardware,
+    /// so `PlatformIconView` gives it one contact shadow and draws it in its
+    /// own colors. A flat single-color logo needs neither: a shadow under a
+    /// silhouette reads as a smudge, and black-on-dark-plate reads as a hole.
+    /// These draw as template images in the foreground color instead.
+    static func isFlatMark(_ asset: String) -> Bool { asset == "platform-itch" }
+
+    /// **Places you buy games, which are not consoles you own.**
+    ///
+    /// They stay in the catalog, because "where did this game come from" is a
+    /// real thing to record about a game. They stay out of the console picker,
+    /// because a console record holds ownership, an acquisition date, notes
+    /// and a photograph of the machine — none of which a storefront has.
+    ///
+    /// This is the rule the picker filters on. It filtered on "has no art"
+    /// before, which gave the same answer for the wrong reason and quietly
+    /// changed its mind the moment itch.io got a logo. Tim, 2026-09-08:
+    /// *"do we put the itch.io icon there then?"* — the icon, yes; the tile in
+    /// the hardware grid, no.
+    static let storefronts: Set<String> = ["itch.io", "itch"]
+
+    static func isStorefront(_ platform: String) -> Bool {
+        storefronts.contains(platform.lowercased())
+    }
+
     /// Two spellings of one console collapsed to a single key, so "Switch" and
     /// "Nintendo Switch" are not treated as two systems.
     ///
@@ -222,6 +284,16 @@ enum PlatformMaker {
         "genesis": "Sega", "32x": "Sega", "dreamcast": "Sega", "saturn": "Sega",
         "mastersystem": "Sega", "gamegear": "Sega",
         "turbografx16": "NEC",
+        "atari2600": "Atari", "atari5200": "Atari", "atari7800": "Atari",
+        "lynx": "Atari", "jaguar": "Atari",
+        // **Commodore, not Computers.** The kind-over-company rule above
+        // exists because "Apple" and "Google" headed a console picker on the
+        // strength of a phone each. Commodore is the opposite case: it made a
+        // real console in the CD32, the C64 and Amiga are what its name means
+        // to anyone who came here for them, and filing two of the three under
+        // "Computers" would split the family across the sheet.
+        "c64": "Commodore", "amiga": "Commodore", "cd32": "Commodore",
+        "neogeo-aes": "SNK", "neogeo-mvs": "SNK", "ngpc": "SNK",
         "steamdeck": "Valve", "steammachine": "Valve",
         // **Where the maker is not the point, the kind is.** By company alone
         // this list opened with Apple and Google — two names that make phones
@@ -273,6 +345,20 @@ enum PlatformEra {
         // Saturn is its 1995 US release rather than 1994.
         "genesis": 1989, "32x": 1994, "dreamcast": 1999, "saturn": 1995,
         "mastersystem": 1986, "gamegear": 1991,
+        // Atari, by NA release. The 7800 was built in 1984 and shelved when
+        // the company was sold mid-launch; 1986 is when it actually reached
+        // shops, which is the date the rest of this table means.
+        "atari2600": 1977, "atari5200": 1982, "atari7800": 1986,
+        "lynx": 1989, "jaguar": 1993,
+        // Commodore. `amiga` is 1987 rather than the Amiga 1000's 1985,
+        // because the art is an A500 and this table is keyed by the art. The
+        // CD32 is its 1993 European launch — it never had a US one, blocked
+        // by an injunction before the machines could ship.
+        "c64": 1982, "amiga": 1987, "cd32": 1993,
+        // SNK. The AES and the MVS cabinet are the same 1990 hardware sold to
+        // two different buyers — you, and an arcade — so they share a year and
+        // the picker keeps them in catalogue order.
+        "neogeo-aes": 1990, "neogeo-mvs": 1990, "ngpc": 1999,
         // NEC, by the American name and date: the PC Engine was 1987 in
         // Japan, the TurboGrafx-16 was 1989 here.
         "turbografx16": 1989,

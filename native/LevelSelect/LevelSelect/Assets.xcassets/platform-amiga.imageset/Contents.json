@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "amiga-500-1987.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

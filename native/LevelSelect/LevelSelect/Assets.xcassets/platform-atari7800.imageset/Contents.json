@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "atari-7800-prosystem-1986.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

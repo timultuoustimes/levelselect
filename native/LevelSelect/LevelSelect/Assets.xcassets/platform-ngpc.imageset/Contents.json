@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "neo-geo-pocket-color-1999.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
