@@ -60,44 +60,65 @@ struct ConsoleCard: View {
     }
 
     private func summary(_ console: Console) -> some View {
-        HStack(spacing: 12) {
-            if let data = photo(console)?.data {
-                LocalArtworkThumb(data: data, contentMode: .fill)
-                    .frame(width: 54, height: 54)
-                    .clipShape(.rect(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(LSTheme.hairline))
+        VStack(alignment: .leading, spacing: 10) {
+            // **Half the width to the machine.** Tim's markup on the mockup,
+            // 2026-09-08: *"Expand the console image to half width."* The
+            // plate held the icon at 40pt beside a stack of text, which made
+            // the console a bullet point on a page about itself. At this size
+            // it is the subject and the facts read beside it — and when there
+            // is a photograph, the photograph takes the plate outright,
+            // because the render was only ever standing in for the machine.
+            // **A brand-new console has almost nothing to say.** No model, no
+            // date, maybe no games — and half a card of empty rows beside a
+            // picture reads as something failing to load. Under two facts the
+            // machine takes the whole width and the one fact sits under it;
+            // filling the record in is what splits the card.
+            let rows = facts(console)
+            if rows.count < 2 {
+                machine(console)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 132)
+                factRows(rows)
             } else {
-                PlatformIconView(platform: platform, size: 40)
-                    .frame(width: 54, height: 54)
-            }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(PlatformShort.name(platform))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
-                if console.ownership.isEmpty && detail(console) == nil {
-                    Text("Tap to say how you have it.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    if !console.ownership.isEmpty {
-                        Text(console.ownership.compactMap { Ownership(rawValue: $0)?.label }
-                            .joined(separator: " · "))
-                            .font(.caption)
-                            .foregroundStyle(LSTheme.accent)
-                    }
-                    if let detail = detail(console) {
-                        Text(detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+                HStack(alignment: .center, spacing: 14) {
+                    machine(console)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 132)
+                    factRows(rows)
+                        .frame(maxWidth: .infinity)
                 }
             }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+
+            if !console.ownership.isEmpty {
+                // Read-only here. The chips that SET ownership live in the
+                // editor this card opens; two sets of chips that look alike
+                // and behave differently would be the worse problem.
+                FlowLayout(spacing: 6) {
+                    ForEach(console.ownership.compactMap { Ownership(rawValue: $0) }, id: \.self) { own in
+                        HStack(spacing: 4) {
+                            Image(systemName: own.systemImage)
+                            Text(own.label)
+                        }
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(LSTheme.accent)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(LSTheme.accent.opacity(0.16), in: .capsule)
+                    }
+                }
+            } else {
+                Text("Tap to say how you have it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let detail = detail(console) {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(12)
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
@@ -108,15 +129,79 @@ struct ConsoleCard: View {
         .accessibilityHint("Edit this console")
     }
 
-    /// Variant, when you got it, and your note — whichever of them exist.
-    private func detail(_ console: Console) -> String? {
-        var parts: [String] = []
-        if let v = console.variant, !v.isEmpty { parts.append(v) }
-        if let date = console.acquiredAt {
-            parts.append("since \(date.formatted(.dateTime.year()))")
+    /// The labelled rows, beside the machine or under it.
+    private func factRows(_ rows: [(key: String, value: String)]) -> some View {
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, fact in
+                if index > 0 { Divider().overlay(LSTheme.hairline) }
+                HStack(spacing: 8) {
+                    Text(fact.key)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 0)
+                    Text(fact.value)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
+                .padding(.vertical, 7)
+            }
         }
-        if let n = console.notes, !n.isEmpty { parts.append(n) }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// The photograph if there is one, the render if there is not.
+    @ViewBuilder
+    private func machine(_ console: Console) -> some View {
+        if let data = photo(console)?.data {
+            LocalArtworkThumb(data: data, contentMode: .fill)
+                .clipShape(.rect(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(LSTheme.hairline))
+        } else {
+            PlatformIconView(platform: platform, size: 108)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    // The same lit plate the picker's tiles use, so the
+                    // machine sits on the surface it does everywhere else.
+                    LinearGradient(colors: [
+                        .lsDynamic(light: .black.opacity(0.04), dark: .white.opacity(0.17)),
+                        .lsDynamic(light: .black.opacity(0.09), dark: .white.opacity(0.08)),
+                    ], startPoint: .top, endPoint: .bottom),
+                    in: .rect(cornerRadius: 12))
+        }
+    }
+
+    /// **Only the facts this console actually has.** An empty "Since" row is
+    /// a question the page is asking you rather than an answer it is giving,
+    /// and four rows of dashes beside a picture reads as a broken record.
+    private func facts(_ console: Console) -> [(key: String, value: String)] {
+        var out: [(String, String)] = []
+        if let variant = console.variant, !variant.isEmpty {
+            out.append(("Model", variant))
+        }
+        if let acquired = console.acquiredAt {
+            out.append(("Since", acquired.formatted(.dateTime.year())))
+        }
+        let mine = games.filter {
+            $0.deletedAt == nil && $0.status != .wishlist
+                && PlatformRoute.matches($0, platform: platform, ownership: nil)
+        }
+        out.append(("Games", "\(mine.count)"))
+        let played = mine.reduce(0.0) { $0 + $1.lifetimePlaytime() }
+        if played > 0 { out.append(("Played", Format.hours(played))) }
+        return out
+    }
+
+    /// **Your note, and only your note.**
+    ///
+    /// This used to read "Model 1 · since 1994 · my brother's", because the
+    /// card had one line for everything the record held. `facts` now says the
+    /// model and the year in labelled rows beside the machine, so repeating
+    /// them here printed "Model 1" twice on the same card.
+    private func detail(_ console: Console) -> String? {
+        guard let notes = console.notes, !notes.isEmpty else { return nil }
+        return notes
     }
 
     /// The question, where the console is — not as an alert while you were
