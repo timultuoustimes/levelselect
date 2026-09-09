@@ -270,8 +270,17 @@ enum ThemePalette {
         // A pair is recognized by its stored hex, on either appearance —
         // choosing one writes the same accent to both. The linked hue model
         // (build 37) is no longer read: the palette IS the linking.
+        // **Nothing stored means the default pair, not two loose constants.**
+        // A hex that matches no pair still falls through to the correction
+        // below — that is a custom color and it has to be checked. But an
+        // ABSENCE is not a custom color, it is the first swatch, and reading
+        // it as one is what made "Use the default" produce a brown light
+        // accent and a re-derived dark one. See `LSPalette.defaultAccent`.
+        let nothingChosen = settings?.accentHex(dark: false) == nil
+            && settings?.accentHex(dark: true) == nil
         let pair = LSPalette.pair(matching: settings?.accentHex(dark: false))
             ?? LSPalette.pair(matching: settings?.accentHex(dark: true))
+            ?? (nothingChosen ? LSPalette.defaultAccent : nil)
         activePair = pair
         groundPair = LSPalette.pair(matching: settings?.backgroundHex(dark: false))
             ?? LSPalette.pair(matching: settings?.backgroundHex(dark: true))

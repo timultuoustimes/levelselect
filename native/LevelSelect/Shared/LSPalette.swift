@@ -93,6 +93,24 @@ enum LSPalette {
     /// always been.
     static var defaultGround: Pair { pairs[1] }
 
+    /// **The accent a library has before anyone chooses one.**
+    ///
+    /// The first swatch, which is what "the first swatch is the default" has
+    /// always meant and what the picker has never actually done: "Use the
+    /// default" cleared the stored hexes and the app then fell back to two
+    /// loose constants from build 37 rather than to this pair. Those constants
+    /// had drifted — `LSTheme.torchInk` is #996630 where Torch's authored step
+    /// is #A55410 — so "default" gave a brown that is not in the palette, and
+    /// with no pair matched the accent went through the legacy contrast
+    /// correction and came back re-derived against whatever ground was stored.
+    /// Tim, 2026-09-09, on King Kai: *"I just hit 'use the default' in the
+    /// color picker and it just did this."*
+    ///
+    /// Reading the default through the palette makes "no choice" and "tapped
+    /// the first circle" the same state, which is the only way the sentence
+    /// can be true.
+    static var defaultAccent: Pair { pairs[0] }
+
     /// The ground a pair makes: the pair's accent laid over the base gray
     /// (light) or base charcoal (dark) with the *overlay* blend at full
     /// strength — Tim's own construction in the palette sheet: *"it's 100%

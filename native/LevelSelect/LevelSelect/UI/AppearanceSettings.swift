@@ -487,7 +487,8 @@ struct AppearanceSettingsSection: View {
         Binding(
             get: {
                 settings?.accentHex(dark: dark).flatMap { Color(hex: $0) }
-                    ?? (dark ? LSTheme.torch : LSTheme.torchInk)
+                    ?? (dark ? LSPalette.defaultAccent.accentColor
+                             : LSPalette.defaultAccent.stepColor)
             },
             set: { color in
                 let s = ensureSettings()
@@ -526,7 +527,10 @@ struct AppearanceSettingsSection: View {
             return ColorTarget(
                 id: "accent-\(word.lowercased())",
                 label: dark ? "☾ Accent" : "☀ Accent",
-                defaultColor: dark ? LSTheme.torch : LSTheme.torchInk,
+                // The palette's first pair, so the sheet's "default" and the
+                // app's default are one value rather than two that drifted.
+                defaultColor: dark ? LSPalette.defaultAccent.accentColor
+                                   : LSPalette.defaultAccent.stepColor,
                 isCustomised: (dark ? settings?.accentHexDark : settings?.accentHexLight) != nil,
                 binding: accentBinding(dark: dark),
                 onReset: {

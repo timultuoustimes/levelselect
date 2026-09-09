@@ -16,6 +16,26 @@ struct LSPaletteTests {
         #expect(Set(LSPalette.pairs.map(\.accent)).count == 8)
     }
 
+    /// **"Use the default" must land on the first swatch.**
+    ///
+    /// It did not: clearing the stored hexes left no pair matched, so the app
+    /// fell back to two build-37 constants and ran them through the legacy
+    /// contrast correction. `LSTheme.torchInk` had drifted to #996630 where
+    /// Torch's authored step is #A55410, so the light accent came back a brown
+    /// that is not in the palette, and the dark one came back re-derived
+    /// against whatever ground was stored. Tim hit it on King Kai, 09-09.
+    @Test("The default accent is the first swatch, and its colors are the pair's")
+    func theDefaultIsTheFirstSwatch() {
+        #expect(LSPalette.defaultAccent.name == LSPalette.pairs[0].name)
+        #expect(LSPalette.defaultAccent.name == "Torch")
+        // The two values the editor and the app both read for "no choice".
+        #expect(LSPalette.defaultAccent.accent == "#F5A34D")
+        #expect(LSPalette.defaultAccent.step == "#A55410")
+        // And it is a real pair, so it resolves back to itself — which is what
+        // makes "no choice" and "tapped the first circle" the same state.
+        #expect(LSPalette.pair(matching: LSPalette.defaultAccent.accent)?.name == "Torch")
+    }
+
     /// **The high-contrast pair, and the reason it needed a branch.**
     ///
     /// Mono is the seven's shape with the hue taken out: a light-grey accent
