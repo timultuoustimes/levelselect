@@ -1,7 +1,12 @@
 {
   "images" : [
-    { "filename" : "compact-macintosh.png", "idiom" : "universal" }
+    {
+      "filename" : "mac-mini-2024-m4.png",
+      "idiom" : "universal"
+    }
   ],
-  "info" : { "author" : "xcode", "version" : 1 },
-  "properties" : { "preserves-vector-representation" : false }
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
 }

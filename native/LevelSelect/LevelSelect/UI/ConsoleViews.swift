@@ -309,16 +309,27 @@ struct ConsolePlateTile: View {
         VStack(spacing: 6) {
             PlatformIconView(platform: platform, size: size)
                 .frame(maxWidth: .infinity)
-                .frame(height: size * 1.34)
+                // **The plate is one height for every console.** The art box
+                // used to be 1.34× the icon, which was air above and below a
+                // square icon, and the label took whatever lines it needed —
+                // so a two-word console stood on a shorter plate than "Neo
+                // Geo Pocket Color", and the tall MVS cabinet floated with a
+                // gap under it. Tim, 2026-09-08: *"I'd rather the console sit
+                // closer to the text so the plate can stay the same size as
+                // the others."* The two lines below are always reserved, and
+                // this box gives back what the second line costs, so the
+                // total is what a one-line plate measured before.
+                .frame(height: size * 1.08)
             Text(PlatformShort.name(platform))
                 .font(.caption.weight(.medium))
-                .lineLimit(2)
+                // Two lines, reserved whether or not the name needs them.
+                // Also the fix for a name that truncated instead of wrapping:
+                // inside a Button in a grid cell the label is offered a
+                // one-line height and cuts itself to fit, which turned "Neo
+                // Geo Pocket Color" into "Neo Geo Pocket…" — a different
+                // handheld.
+                .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.center)
-                // Take the second line rather than an ellipsis. Inside a
-                // Button in a grid cell the text is offered a one-line height
-                // and truncates to fit it, `lineLimit(2)` notwithstanding —
-                // "Neo Geo Pocket Color" arrived on 09-08 and read "Neo Geo
-                // Pocket…", which is a different handheld.
                 .fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(.primary)
         }
