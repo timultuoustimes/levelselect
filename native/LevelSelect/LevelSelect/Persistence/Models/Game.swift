@@ -231,6 +231,26 @@ final class Game {
         return platforms.first.map { [$0] } ?? []
     }
 
+    /// **What may carry a "MINE" badge**, which is not the same question.
+    ///
+    /// `ownedPlatformNames` answers "which console is this game's" — the
+    /// pre-V3 fallback included, because position zero IS what the app meant
+    /// by yours then. That is right for choosing an icon and right for the
+    /// chip the editor lights up.
+    ///
+    /// It is wrong on a WISHLIST game: nobody owns a game they have not got,
+    /// and Onimusha read "Nintendo Switch 2 · MINE" on a game nobody had
+    /// claimed. The game page fixed that by badging only DECLARED ownership,
+    /// which fixed Onimusha and broke every library game whose ownership was
+    /// never declared — the page said nothing while the editor said MINE, and
+    /// the two disagreed on screen. Tim, 2026-09-08: *"it doesn't say which
+    /// console is 'mine' unless I hit edit."*
+    ///
+    /// One rule, in one place, and the status is what it turns on.
+    var badgeableOwnedPlatforms: [String] {
+        status == .wishlist ? [] : ownedPlatformNames
+    }
+
     /// One platform, for the places that can only show one — a row's subtitle,
     /// a badge. The first you own, which for pre-V3 data is position zero.
     var primaryOwnedPlatform: String? { ownedPlatformNames.first }

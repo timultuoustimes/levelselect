@@ -1885,7 +1885,8 @@ struct GameDetailView: View {
                            owned: Binding(
                             get: { game.ownedPlatformNames },
                             set: { game.ownedPlatforms = $0 }),
-                           listIsAuthoritative: game.igdbID != nil && game.platforms.count > 1)
+                           listIsAuthoritative: game.igdbID != nil && game.platforms.count > 1,
+                           isWishlist: game.status == .wishlist)
             EditableChips(title: "Genres", values: $game.genres, tint: LSTheme.accent)
             EditableChips(title: "Themes", values: $game.themes, tint: LSTheme.accent)
             EditableChips(title: "Game Modes", values: $game.gameModes, tint: .teal)
@@ -2007,11 +2008,14 @@ struct GameDetailView: View {
     /// there's a Switch port. But the one you own is the one that's *yours*,
     /// and an undifferentiated row of three said nothing about which.
     private var platformsGroup: some View {
-        // Ownership you actually declared. `ownedPlatformNames` falls back to
-        // the first platform IGDB lists when you own none — fine for choosing
-        // an icon, and a lie on a badge that says MINE. Onimusha showed
-        // "Nintendo Switch 2 · MINE" for a wishlist game nobody had claimed.
-        let mine = Set(game.ownedPlatforms ?? [])
+        // **The same rule the editor uses.** This was `ownedPlatforms` alone
+        // — strictly declared ownership — which fixed Onimusha's phantom badge
+        // on a wishlist game and, in doing so, silenced the page for every
+        // library game whose ownership had never been spelled out. The editor
+        // went on saying MINE, so the two views disagreed about the same game.
+        // `badgeableOwnedPlatforms` is that rule in one place: the fallback,
+        // except on a wishlist.
+        let mine = Set(game.badgeableOwnedPlatforms)
         return VStack(alignment: .leading, spacing: 6) {
             Text("Platforms").font(.caption).foregroundStyle(.secondary)
             FlowLayout(spacing: 6) {
@@ -2020,7 +2024,7 @@ struct GameDetailView: View {
                     if mine.contains(platform) {
                         HStack(spacing: 5) {
                             PlatformIconView(platform: platform, size: 14)
-                            Text(platform)
+                            Text(PlatformShort.name(platform))
                             Text("MINE")
                                 .font(.system(size: 9, weight: .heavy))
                                 .foregroundStyle(LSTheme.accent)
@@ -2034,7 +2038,21 @@ struct GameDetailView: View {
                         // a second saturated color beside it read as a second
                         // kind of selected, and stayed blue whatever the app's
                         // accent was. Codex K5, the editor's other half.
-                        Chip(text: platform, tint: .secondary)
+                        //
+                        // The icon and the short name are the editor's too.
+                        // This row read "PC (Microsoft Windows)" beside an
+                        // editor that said "PC", and only the owned chip
+                        // carried a picture — which made the one with an icon
+                        // look like the only one the app recognized.
+                        HStack(spacing: 5) {
+                            PlatformIconView(platform: platform, size: 14)
+                            Text(PlatformShort.name(platform))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(LSTheme.cardFill, in: .capsule)
+                        .overlay(Capsule().strokeBorder(LSTheme.hairline))
                     }
                 }
             }

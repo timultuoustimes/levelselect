@@ -53,6 +53,10 @@ struct PlatformEditor: View {
     /// consoles the game exists on. A hand-added game has no such list, so
     /// there the catalog IS the answer and stays where it was.
     var listIsAuthoritative = false
+    /// **A wishlist game claims nothing.** Passed in rather than read from a
+    /// game, because this editor edits two bindings and has never held one.
+    /// See `Game.badgeableOwnedPlatforms` for why the status decides.
+    var isWishlist = false
 
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
     private var allGames: [Game]
@@ -69,6 +73,12 @@ struct PlatformEditor: View {
     /// "never recorded", and position zero is what the app meant then.
     private var ownedNames: [String] {
         owned.isEmpty ? platforms.first.map { [$0] } ?? [] : owned
+    }
+
+    /// What the chips LIGHT UP, which the game page now matches — see
+    /// `Game.badgeableOwnedPlatforms`. A wishlist game claims nothing.
+    private var litNames: [String] {
+        isWishlist ? [] : ownedNames
     }
 
     var body: some View {
@@ -140,7 +150,7 @@ struct PlatformEditor: View {
     /// the first, and owning a game on both was unrepresentable. Now it is a
     /// set, and the chips are checkboxes.
     private func chip(_ platform: String) -> some View {
-        let isMine = ownedNames.contains(platform)
+        let isMine = litNames.contains(platform)
         return Button {
             toggleMine(platform)
         } label: {

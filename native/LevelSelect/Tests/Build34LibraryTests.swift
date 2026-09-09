@@ -213,6 +213,41 @@ struct Build34LibraryTests {
         #expect(!PlatformShort.ownedMatches(game.ownedPlatformNames, short: "PC"))
     }
 
+    /// **The page and the editor must agree about "mine".**
+    ///
+    /// They did not: the page badged only DECLARED ownership and the editor
+    /// lit position zero, so a library game nobody had spelled out said MINE
+    /// in one place and nothing in the other. Tim saw it on Ball x Pit, 09-08.
+    @Test func whatMayCarryTheMineBadge() {
+        let context = makeContext()
+        let repo = Repository(context)
+
+        // Never declared, and in the library: position zero is what the app
+        // has always meant by yours, so it is badgeable.
+        let playing = repo.addGame(name: "Ball x Pit", status: .playing)
+        playing.platforms = ["Switch 2", "iOS", "PC (Microsoft Windows)"]
+        #expect(playing.ownedPlatforms == nil)
+        #expect(playing.badgeableOwnedPlatforms == ["Switch 2"])
+
+        // Declared beats the fallback, and holds more than one.
+        playing.ownedPlatforms = ["Switch 2", "PC (Microsoft Windows)"]
+        #expect(playing.badgeableOwnedPlatforms == ["Switch 2", "PC (Microsoft Windows)"])
+
+        // **Nobody owns a game they have not got.** Onimusha read
+        // "Nintendo Switch 2 · MINE" for exactly this reason.
+        let wanted = repo.addGame(name: "Onimusha: Way of the Sword", status: .wishlist)
+        wanted.platforms = ["Nintendo Switch 2", "PlayStation 5"]
+        #expect(wanted.badgeableOwnedPlatforms.isEmpty)
+        // Even when something WAS declared — a wishlist game with an owned
+        // platform is a contradiction the badge should not repeat.
+        wanted.ownedPlatforms = ["PlayStation 5"]
+        #expect(wanted.badgeableOwnedPlatforms.isEmpty)
+
+        // And a game with nothing at all badges nothing.
+        let bare = repo.addGame(name: "Nothing Recorded")
+        #expect(bare.badgeableOwnedPlatforms.isEmpty)
+    }
+
     /// A game with no platforms at all is nobody's system.
     @Test func aGameWithNoPlatformsMatchesNoSystem() {
         let context = makeContext()
