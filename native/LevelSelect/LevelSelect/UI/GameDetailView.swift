@@ -1296,7 +1296,7 @@ struct GameDetailView: View {
 
             heroTitle
 
-            OwnershipControl(ownership: $game.ownership, centered: true)
+            OwnershipControl(ownership: $game.ownership)
 
             if showGameStats {
                 GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
@@ -1399,7 +1399,7 @@ struct GameDetailView: View {
             heroFacts(alignment: .center)
                 .frame(maxWidth: .infinity)
 
-            OwnershipControl(ownership: $game.ownership, centered: true)
+            OwnershipControl(ownership: $game.ownership)
 
             if showGameStats {
                 GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))

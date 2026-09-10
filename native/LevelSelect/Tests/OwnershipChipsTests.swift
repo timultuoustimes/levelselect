@@ -8,17 +8,18 @@ import SwiftData
 @MainActor
 struct OwnershipChipsTests {
 
-    @Test func nothingStoredMeansTheDefaultFive() {
+    @Test func nothingStoredMeansEverythingButShared() {
         #expect(ThemePalette.chips(from: nil) == Ownership.shownByDefault)
-        #expect(!Ownership.shownByDefault.contains(.rented))
+        #expect(Ownership.shownByDefault.contains(.rented))
     }
 
-    /// Rented is real, and off until asked for: most libraries will never
-    /// record a weekend rental, and the ones that do are cataloguing a
-    /// childhood rather than a subscription.
-    @Test func rentedIsAvailableButNotADefault() {
+    /// Rented is real and now on by default — most libraries will never record
+    /// a weekend rental, and the ones that do are cataloguing a childhood,
+    /// which is a thing this app is for rather than a thing to hide.
+    @Test func rentedIsAvailableAndShown() {
         #expect(Ownership.allCases.contains(.rented))
         #expect(Ownership.rented.label == "Rented")
+        #expect(Ownership.shownByDefault.contains(.rented))
     }
 
     @Test func aStoredSetIsHonoured() {
@@ -199,13 +200,17 @@ struct Build37BorrowedAndSharedTests {
         #expect(Ownership.arcade.rawValue == "arcade")
     }
 
-    /// Both are opt-in, so a row nobody configures stays five chips and still
-    /// splits evenly.
-    @Test func noneOfThemIsOnByDefault() {
-        #expect(!Ownership.shownByDefault.contains(.borrowed))
+    /// **Shared is the only one off**, and it is off for a reason the others
+    /// do not share: it describes somebody ELSE's copy rather than your
+    /// relationship to it. Borrowed and Arcade are things that happened to
+    /// you, so they show. Tim, 2026-09-09 — and he declined a "More…" chip
+    /// permanently, which is why hiding four real answers behind Settings
+    /// stopped being the trade.
+    @Test func sharedIsTheOnlyOneOffByDefault() {
+        #expect(Ownership.shownByDefault.contains(.borrowed))
+        #expect(Ownership.shownByDefault.contains(.arcade))
         #expect(!Ownership.shownByDefault.contains(.shared))
-        #expect(!Ownership.shownByDefault.contains(.arcade))
-        #expect(Ownership.shownByDefault.count == 5)
+        #expect(Ownership.shownByDefault.count == Ownership.allCases.count - 1)
     }
 
     /// An arcade game is one you can beat without ever logging a second of
@@ -232,13 +237,13 @@ struct Build37BorrowedAndSharedTests {
                                        .subscription, .rented, .borrowed, .shared, .arcade])
     }
 
-    /// And the five-chip default lands the whole ownership group on row one.
-    @Test func theDefaultRowSplitsOnTheGroupBoundary() {
+    /// The default row keeps the declaration order, so the four ownership
+    /// kinds still lead and the access ones follow — the row grew, the
+    /// grouping did not move.
+    @Test func theDefaultRowKeepsTheGrouping() {
         let shown = Ownership.shownByDefault
-        #expect(shown.count == 5)
-        // `balanced` splits at (count + 1) / 2 — three and two.
-        #expect(Array(shown.prefix(3)) == [.physical, .digital, .emulated])
-        #expect(Array(shown.dropFirst(3)) == [.previouslyOwned, .subscription])
+        #expect(Array(shown.prefix(4)) == [.physical, .digital, .emulated, .previouslyOwned])
+        #expect(shown == Ownership.allCases.filter { $0 != .shared })
     }
 
     @Test func eachHasItsOwnLabelAndIcon() {

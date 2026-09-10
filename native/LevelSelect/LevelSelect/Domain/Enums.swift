@@ -268,17 +268,24 @@ enum Ownership: String, Codable, CaseIterable, Sendable {
         }
     }
 
-    /// Shown unless someone turns them off. Rented, Borrowed, Shared and
-    /// Arcade are the exceptions — each is a real thing that happened to a lot
-    /// of libraries and a thing most libraries will never record, so they are
-    /// opt-in rather than four more chips everyone has to look past.
+    /// **Everything except Shared.**
     ///
-    /// This is what keeps the row from growing as the vocabulary does: nine
-    /// available, five on by default, and the default row still splits 3 + 2.
+    /// It was five of nine, on the reasoning that Rented, Borrowed, Shared and
+    /// Arcade are things most libraries never record — which is true, and was
+    /// the wrong trade. Fable proposed going further, default-off with a
+    /// "More…" chip to reach the rest; Tim declined that permanently and
+    /// designed the way in instead: the row shows what you keep, and a
+    /// long-press reveals the rest for the one game in front of you. With a
+    /// door that good, hiding four real answers behind Settings costs more
+    /// than a longer row does.
+    ///
+    /// Shared stays off because it is the one that describes somebody ELSE's
+    /// copy rather than your relationship to it. Tim, 2026-09-09.
+    ///
     /// In the grouped order, like `allCases` — this list is returned verbatim
     /// when nothing is stored, so its order IS the default row.
     static let shownByDefault: [Ownership] =
-        [.physical, .digital, .emulated, .previouslyOwned, .subscription]
+        Ownership.allCases.filter { $0 != .shared }
 
     var systemImage: String {
         switch self {

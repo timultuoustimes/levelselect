@@ -330,19 +330,65 @@ struct PlatformGamesView: View {
                     // on it — the Dreamcast in the display case — and telling
                     // that person their filters are wrong would be the app
                     // being confidently incorrect about their own shelf.
-                    ContentUnavailableView {
-                        Label(onPlatform.isEmpty ? "No games yet" : "Nothing here",
-                              systemImage: "gamecontroller")
-                    } description: {
-                        Text(onPlatform.isEmpty
-                             ? "You own this console. Games you add on it show up here."
-                             : "No games on this console match those filters.")
+                    if onPlatform.isEmpty {
+                        emptyConsole
+                    } else {
+                        ContentUnavailableView {
+                            Label("Nothing here", systemImage: "gamecontroller")
+                        } description: {
+                            Text("No games on this console match those filters.")
+                        }
                     }
                 } else {
                     ContentUnavailableView.search(text: searchText)
                 }
             }
         }
+    }
+
+    /// **A shelf with nothing on it yet, drawn as a shelf.**
+    ///
+    /// It was a sentence in the middle of a blank page. Three empty covers say
+    /// the same thing in the page's own language and, more usefully, say what
+    /// the page is FOR — this is where games on this console will stand.
+    ///
+    /// The words underneath are about time, not about being empty: a console
+    /// you own with nothing on it yet and a console you had twenty years ago
+    /// are both real, and neither is a mistake to be corrected.
+    private var emptyConsole: some View {
+        VStack(spacing: 18) {
+            HStack(spacing: 12) {
+                ForEach(0..<3, id: \.self) { i in
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(LSTheme.accent.opacity(0.28),
+                                      style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+                        .frame(width: 64, height: 96)
+                        // Slightly fainter to the right, so it reads as a
+                        // shelf continuing rather than three of a set.
+                        .opacity(1 - Double(i) * 0.22)
+                }
+            }
+            VStack(spacing: 6) {
+                Text("Nothing on it yet")
+                    .font(.headline)
+                Text(emptyConsoleBlurb)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: 300)
+        }
+        .padding(24)
+    }
+
+    /// Arcade is not a machine in a cupboard, so the sentence about adding
+    /// games to a console you own does not describe it. Tim, 2026-09-09:
+    /// *"Games you played in an arcade, or on a cabinet you own."*
+    private var emptyConsoleBlurb: String {
+        PlatformKey.canonical(platform) == "Arcade"
+            ? "Games you played in an arcade, or on a cabinet you own."
+            : "Games you add on this console show up here — the ones you play now, and the ones you played back then."
     }
 
     /// Shelves collapse to the grouped grid here rather than growing rows of

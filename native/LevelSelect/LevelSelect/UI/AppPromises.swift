@@ -39,8 +39,13 @@ enum AppPromise: CaseIterable {
 
     var body: String {
         switch self {
+        // **Not "actually playing".** The word does two jobs and only one of
+        // them was wanted: it means "in progress right now", and it also
+        // quietly says the other games do not count. A library is a backlog,
+        // a wishlist and a history as much as it is tonight's game, and the
+        // first promise the app makes should not narrow it. Tim, 2026-09-09.
         case .shelf:
-            "Add the games you're actually playing."
+            "Add the games you're playing, the ones you mean to, and the ones you already have."
         case .sessions:
             "Start from the app, a widget, your watch, or the Lock Screen."
         // Real lists first, generation last — pasting beats generating, and
