@@ -344,9 +344,18 @@ struct ContinueHeroCard: View {
                     }
                 }
                 .frame(width: 56, height: 56)
-            }
-            .buttonStyle(LSPlayButtonStyle(feedback: .play))
-            .accessibilityLabel("Play")
+                // **The decoration lives on the LABEL, not after the style.**
+                //
+                // A `ButtonStyle` transforms `configuration.label` and
+                // nothing else, so with the fill, the border and the step
+                // applied AFTER `.buttonStyle`, the press moved the glyph
+                // and the word and left the button sitting still behind
+                // them. Tim, 2026-09-10: *"on home in the hero, only the
+                // text moves like it's being pressed. it should match how
+                // the play button works on the game page."* Inside the
+                // label, the whole control presses — which is what
+                // `LSPrimaryButtonStyle` does on the game page by drawing
+                // its own background within `makeBody`.
             // FILLED, and in the accent rather than green.
             //
             // Two reasons. It is the most important control on Home and it was
@@ -391,8 +400,11 @@ struct ContinueHeroCard: View {
                     // The glow above stays: it does the lifting, this does the
                     // shape.
                     .shadow(color: LSTheme.accentStep, radius: 0, y: 3)
+                }
+                .foregroundStyle(LSTheme.onAccent)
             }
-            .foregroundStyle(LSTheme.onAccent)
+            .buttonStyle(LSPlayButtonStyle(feedback: .play))
+            .accessibilityLabel("Play")
         }
     }
 }

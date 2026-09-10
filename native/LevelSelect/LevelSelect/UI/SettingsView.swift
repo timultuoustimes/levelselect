@@ -197,9 +197,12 @@ struct SettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
+                // The Mac draws its own — see `macChrome` below.
+                #if !os(macOS)
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
+                #endif
             }
             // The bump lives on the PRESENTER's `onDismiss` now, not here.
             //
@@ -222,13 +225,42 @@ struct SettingsView: View {
         // Form keeps its own so a page that scrolls still has a bed under the
         // rows.
         //
-        // **It fixes the ROOT sheet's bars, not a pushed page's.** A pushed
-        // page draws its own material over this, and
-        // `.toolbarBackground(.hidden, for: .windowToolbar)` does not reach it
-        // — tried, changed nothing, removed rather than left as a line that
-        // looks like it does something. Still open.
+        // It is not, on its own, enough for the BARS — see `macChrome`.
         #if os(macOS)
         .background(LSTheme.liveSheetGround)
+        // **The Mac's title and Done bars are ours too.**
+        //
+        // Painting inside the sheet cannot reach them: they are translucent
+        // material that samples the WINDOW behind the sheet, not the sheet.
+        // Measured on Tim's own window with the sheet open — the title bar
+        // came back (40,41,40) and the Done bar (40,44,33), a grey and an
+        // olive taken from whatever art happened to be underneath, while the
+        // rows between them were (45,35,69). Tim, 2026-09-10: *"this main
+        // setting sheet still has grey header and footer."* A screenshot at
+        // a third scale looked purple to me twice; the pixels did not.
+        //
+        // The pushed pages already draw their own header for the same reason.
+        // This is the root sheet catching up, which also makes the two agree.
+        .toolbar(.hidden, for: .windowToolbar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack(spacing: 0) {
+                Text("Settings").font(.headline)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(LSTheme.liveSheetGround)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(LSTheme.liveSheetGround)
+        }
         // A sheet with no size on macOS gets whatever the system guesses,
         // which was too short for a screen with eight sections — the last of
         // them could not be scrolled to at all. Sized to fit the longest
