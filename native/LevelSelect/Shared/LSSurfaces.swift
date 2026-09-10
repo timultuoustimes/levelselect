@@ -112,8 +112,6 @@ enum LSTheme {
     /// to have depth, not enough to lose the color at any height.
     static func sheetGround(lightTint: Color?, darkTint: Color?,
                             scheme: ColorScheme? = nil) -> LinearGradient {
-        let lightHue = lightTint?.lsHueSaturation
-        let darkHue = darkTint?.lsHueSaturation
         func pick(_ light: Color, _ dark: Color) -> Color {
             switch scheme {
             case .light: light
@@ -121,16 +119,29 @@ enum LSTheme {
             default:     .lsDynamic(light: light, dark: dark)
             }
         }
+        // **The same ramp the PAGES stand on, kept near its top.**
+        //
+        // This was still build 37's model — hue and saturation through
+        // `shade`, with its own hand-picked fallbacks — while `ground` was
+        // rebuilt on `LSPalette.ground`'s overlay in build 38. Two models
+        // cannot agree: with nothing chosen, a page resolved to #2E214F and a
+        // sheet on top of it to #1A122E, so every sheet in the app was a
+        // different colour from the screen it covered. Tim, 2026-09-10, on
+        // the Mac: *"mac settings sheets and game page color issues."*
+        //
+        // A sheet's height changes, so it takes the top of the ramp and only
+        // a third of the way down — running the full gradient inside a short
+        // sheet is what once made one go nearly black at the bottom.
+        func stop(_ tint: Color?, dark: Bool, _ depth: Double) -> Color {
+            LSPalette.ground(tint: tint, dark: dark)
+                .mix(with: LSPalette.ground(tint: tint, dark: dark, bottom: true), by: depth)
+        }
         return LinearGradient(
             colors: [
-                pick(shade(lightHue, brightness: 0.97, saturation: 0.06,
-                           fallback: Color(red: 0.97, green: 0.96, blue: 1.00)),
-                     shade(darkHue, brightness: 0.16, saturation: 0.55,
-                           fallback: Color(red: 0.10, green: 0.07, blue: 0.18))),
-                pick(shade(lightHue, brightness: 0.94, saturation: 0.08,
-                           fallback: Color(red: 0.93, green: 0.92, blue: 0.97)),
-                     shade(darkHue, brightness: 0.135, saturation: 0.58,
-                           fallback: Color(red: 0.085, green: 0.06, blue: 0.15))),
+                pick(stop(lightTint, dark: false, 0),
+                     stop(darkTint, dark: true, 0)),
+                pick(stop(lightTint, dark: false, 0.34),
+                     stop(darkTint, dark: true, 0.34)),
             ],
             startPoint: .top, endPoint: .bottom
         )

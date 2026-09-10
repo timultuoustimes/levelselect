@@ -212,11 +212,27 @@ struct SettingsView: View {
             // reached by a different route. See RootView's `.sheet(onDismiss:)`.
             .sheet(isPresented: $editingProfile) { ProfileEditor().lsSheet() }
         }
+        // **The bar belongs to the STACK, so the ground has to go here too.**
+        //
+        // The Form's background stops where the Form does, and on the Mac a
+        // pushed page's title bar is chrome outside it — so every settings
+        // page had a strip of system material above its own ground. Tim,
+        // 2026-09-10, of the Import & Export page: *"header is also grey
+        // here."* Painting the stack puts the same ramp behind the bar; the
+        // Form keeps its own so a page that scrolls still has a bed under the
+        // rows.
+        //
+        // **It fixes the ROOT sheet's bars, not a pushed page's.** A pushed
+        // page draws its own material over this, and
+        // `.toolbarBackground(.hidden, for: .windowToolbar)` does not reach it
+        // — tried, changed nothing, removed rather than left as a line that
+        // looks like it does something. Still open.
+        #if os(macOS)
+        .background(LSTheme.liveSheetGround)
         // A sheet with no size on macOS gets whatever the system guesses,
         // which was too short for a screen with eight sections — the last of
         // them could not be scrolled to at all. Sized to fit the longest
         // section, and resizable past it.
-        #if os(macOS)
         .frame(minWidth: 540, idealWidth: 620, minHeight: 560, idealHeight: 780)
         #endif
     }

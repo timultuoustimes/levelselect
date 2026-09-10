@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UniformTypeIdentifiers
 
 /// Settings → Your Data: export everything, and scoped resets.
 ///
@@ -272,17 +273,65 @@ private struct ShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 #else
+/// **A save panel, not a share menu.**
+///
+/// `ShareLink` on the Mac opens the system share menu — AirDrop, Mail,
+/// Messages, Notes, Copy — and macOS's share menu has no save-to-disk action
+/// at all. So a button labelled "Save…" could do everything except save. Tim,
+/// 2026-09-10: *"exporting on mac opens a share sheet when I hit save, and
+/// doesn't let me save to files."*
+///
+/// iOS keeps the share sheet, where "Save to Files" is one of the choices and
+/// AirDropping the export to another device is a real thing people do.
 private struct ShareSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
+    @State private var saving = false
+    @State private var saveError: String?
+
     var body: some View {
         VStack(spacing: 16) {
             Text("Export ready").font(.headline)
             Text(url.lastPathComponent).font(.caption).foregroundStyle(.secondary)
-            ShareLink(item: url) { Label("Save…", systemImage: "square.and.arrow.up") }
+            Button { saving = true } label: {
+                Label("Save…", systemImage: "square.and.arrow.down")
+            }
+            if let saveError {
+                Text(saveError).font(.caption).foregroundStyle(LSTheme.working)
+            }
             Button("Done") { dismiss() }
         }
         .padding(28)
+        // The document references the file on disk rather than reading it
+        // into memory — an export carries every picture you have added, so it
+        // is not always small.
+        .fileExporter(isPresented: $saving,
+                      document: ExportedFile(url: url),
+                      contentType: .json,
+                      defaultFilename: url.deletingPathExtension().lastPathComponent) { result in
+            switch result {
+            case .success: dismiss()
+            case .failure(let error): saveError = error.localizedDescription
+            }
+        }
+    }
+}
+
+/// The export as something `fileExporter` can write, without copying its
+/// bytes through memory first.
+private struct ExportedFile: FileDocument {
+    static let readableContentTypes: [UTType] = [.json]
+    let url: URL
+
+    init(url: URL) { self.url = url }
+
+    /// Never read back — this document only ever travels outward.
+    init(configuration: ReadConfiguration) throws {
+        throw CocoaError(.fileReadUnsupportedScheme)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        try FileWrapper(url: url)
     }
 }
 #endif
