@@ -26,6 +26,9 @@ struct SettingsPage<Content: View>: View {
     var icon: String?
     var blurb: String?
     @ViewBuilder var content: Content
+    #if os(macOS)
+    @Environment(\.dismiss) private var dismiss
+    #endif
 
     var body: some View {
         Form {
@@ -67,8 +70,51 @@ struct SettingsPage<Content: View>: View {
         .navigationTitle(title)
         #if !os(macOS)
         .navigationBarTitleDisplayMode(.inline)
+        #else
+        // **The Mac draws its own header, because the system one cannot be
+        // made to fit a sheet.**
+        //
+        // Three complaints, one cause. A pushed page's title bar is chrome
+        // outside the Form, so it kept the system material while the rows
+        // below wore the app's ground — painting the NavigationStack fixed
+        // the root sheet's bars and never reached this one. And the system
+        // back button sits at the very leading edge: measured at x=318 where
+        // the sheet's content starts at 327, so its left third was under the
+        // sheet's rounded corner on every settings page. Tim, 2026-09-10:
+        // *"the back button being clipped ... it's like that across all the
+        // settings on mac."*
+        //
+        // A header of our own is painted by us, inset by us, and reads the
+        // same on every page. `dismiss()` in a pushed view pops the stack,
+        // which is exactly what the button it replaces did.
+        .toolbar(.hidden, for: .windowToolbar)
+        .safeAreaInset(edge: .top, spacing: 0) { macHeader }
         #endif
     }
+
+    #if os(macOS)
+    private var macHeader: some View {
+        HStack(spacing: 10) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .font(.callout.weight(.bold))
+                    .foregroundStyle(LSTheme.onAccent)
+                    .frame(width: 26, height: 26)
+                    .background(LSTheme.accentFill, in: .circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Back")
+            Text(title)
+                .font(.headline)
+            Spacer(minLength: 0)
+        }
+        // 18 clears the sheet's corner radius, which is what the system
+        // button did not.
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(LSTheme.liveSheetGround)
+    }
+    #endif
 }
 
 /// The card at the top of a destination: what this page is, in one sentence.
