@@ -1,5 +1,11 @@
 import Testing
 import SwiftUI
+#if canImport(AppKit)
+import AppKit
+#endif
+#if canImport(UIKit)
+import UIKit
+#endif
 @testable import LevelSelect
 
 /// Tim's seven pairs plus Mono: real hexes, black ink readable on every
@@ -271,5 +277,78 @@ struct PerAppearancePairTests {
         ThemePalette.refresh(from: settings(light: yellow.step, dark: yellow.accent))
         #expect(ThemePalette.activePair?.name == "Yellow")
         #expect(ThemePalette.activePairDark?.name == "Yellow")
+    }
+}
+
+/// **Every surface takes the tint of the appearance it is drawn in.**
+///
+/// The ground learned this in build 37 and the hero did not: `hero(tintedBy:)`
+/// shaded BOTH branches of every dynamic color from one tint, and its caller
+/// handed it `ThemePalette.backgroundOverride` — which is the DARK value, by
+/// design. So a green dark ground turned the Continue Playing card green on a
+/// light page. Tim, 2026-09-09: *"the home hero on light mode's background
+/// changes to whatever I pick as the dark background color but shows as
+/// light."*
+///
+/// `hero` now demands both tints, so that call cannot be written any more.
+/// What is left to guard is the ingredient: `backgroundOverride` is a
+/// compatibility accessor for ONE thing — the legacy `backgroundHex` key in
+/// the widget snapshot — and any drawing code that reaches for it is
+/// reintroducing the bug. Read off the source, because the mistake is a value
+/// arriving somewhere it should not; a `LinearGradient` will not tell you what
+/// it was built from, and a test that tried to reflect on one asserted
+/// nothing at all.
+@MainActor
+struct HeroTintTests {
+
+    @Test("Nothing that draws reaches for the dark-only background override")
+    func onlyTheLegacyWidgetKeyUsesTheDarkOnlyOverride() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        // Where a per-appearance mistake would actually be visible. The
+        // legitimate use lives in Services/WidgetBridge.swift, which is not
+        // scanned.
+        let dirs = ["LevelSelect/UI", "Shared"]
+
+        var offenders: [String] = []
+        for dir in dirs {
+            let base = root.appendingPathComponent(dir)
+            let names = try FileManager.default
+                .contentsOfDirectory(atPath: base.path).filter { $0.hasSuffix(".swift") }
+            #expect(!names.isEmpty, Comment(rawValue: "no sources found in \(dir)"))
+            for name in names {
+                let text = try String(contentsOf: base.appendingPathComponent(name),
+                                      encoding: .utf8)
+                for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false)
+                    .enumerated() {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    guard !trimmed.hasPrefix("//"), !trimmed.hasPrefix("///") else { continue }
+                    guard line.contains("ThemePalette.backgroundOverride"),
+                          !line.contains("ThemePalette.backgroundOverrideLight"),
+                          !line.contains("ThemePalette.backgroundOverrideDark"),
+                          // The accessor's own declaration.
+                          !line.contains("static var backgroundOverride")
+                    else { continue }
+                    offenders.append("\(dir)/\(name):\(i + 1)")
+                }
+            }
+        }
+        #expect(offenders.isEmpty,
+                Comment(rawValue: "read backgroundOverrideLight / -Dark instead: "
+                        + offenders.joined(separator: ", ")))
+    }
+
+    /// The hero takes two tints and no longer offers a one-tint shortcut, so
+    /// the original call is not expressible. Pinned as source too, because
+    /// "someone re-adds the convenience overload" is exactly how it comes back.
+    @Test("The hero exposes no single-tint entry point")
+    func theHeroCannotBeGivenOneTint() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Shared/LSSurfaces.swift")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        #expect(text.contains("static func hero(lightTint: Color?, darkTint: Color?)"))
+        #expect(!text.contains("static func hero(tintedBy:"))
+        #expect(!text.contains("func hero(tintedBy tint:"))
     }
 }

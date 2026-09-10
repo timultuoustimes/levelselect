@@ -212,7 +212,8 @@ struct ContinueHeroCard: View {
         .padding(14)
         // Follows the chosen background — it is the ground's hue lifted off
         // it, not a fixed purple panel sitting on someone else's color.
-        .background(LSTheme.hero(tintedBy: ThemePalette.backgroundOverride),
+        .background(LSTheme.hero(lightTint: ThemePalette.backgroundOverrideLight,
+                                 darkTint: ThemePalette.backgroundOverrideDark),
                     in: .rect(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)

@@ -265,9 +265,6 @@ enum LSTheme {
         return nil
     }
 
-    /// Hero card gradient (Continue Playing).
-    static var heroGradient: LinearGradient { hero(tintedBy: nil) }
-
     /// The hero, wearing the same color the ground does.
     ///
     /// It is the ground's own hue lifted off it — brighter than the ground in
@@ -275,17 +272,31 @@ enum LSTheme {
     /// opposite directions depending on which way the ground goes. Leaving it
     /// fixed while the ground moved made the most prominent card on Home the
     /// one thing that ignored your color.
-    static func hero(tintedBy tint: Color?) -> LinearGradient {
-        let hue = tint?.lsHueSaturation
+    /// **A tint per appearance, for the same reason the ground has one.**
+    ///
+    /// This took ONE tint and shaded both branches of every `.lsDynamic` from
+    /// it, and its only caller handed it `ThemePalette.backgroundOverride` —
+    /// which is the DARK tint, by design, for "the single-tint paths that
+    /// cannot express two". So the hero on a light page was shaded from the
+    /// hue you picked for dark: choose a green dark ground and the Continue
+    /// Playing card went green while the rest of the page stayed lavender.
+    /// Tim, 2026-09-09: *"the home hero on light mode's background changes to
+    /// whatever I pick as the dark background color but shows as light."*
+    ///
+    /// Each branch now shades from its own appearance's hue, so the card is
+    /// the ground it is lifted off rather than the other one's.
+    static func hero(lightTint: Color?, darkTint: Color?) -> LinearGradient {
+        let lightHue = lightTint?.lsHueSaturation
+        let darkHue = darkTint?.lsHueSaturation
         return LinearGradient(
             colors: [
-                .lsDynamic(light: shade(hue, brightness: 0.93, saturation: 0.20,
+                .lsDynamic(light: shade(lightHue, brightness: 0.93, saturation: 0.20,
                                         fallback: purple.opacity(0.20)),
-                           dark:  shade(hue, brightness: 0.24, saturation: 0.55,
+                           dark:  shade(darkHue, brightness: 0.24, saturation: 0.55,
                                         fallback: purpleDeep.opacity(0.85))),
-                .lsDynamic(light: shade(hue, brightness: 0.89, saturation: 0.26,
+                .lsDynamic(light: shade(lightHue, brightness: 0.89, saturation: 0.26,
                                         fallback: purple.opacity(0.08)),
-                           dark:  shade(hue, brightness: 0.15, saturation: 0.60,
+                           dark:  shade(darkHue, brightness: 0.15, saturation: 0.60,
                                         fallback: Color(red: 0.12, green: 0.08, blue: 0.22))),
             ],
             startPoint: .topLeading, endPoint: .bottomTrailing
