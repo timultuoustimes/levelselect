@@ -99,7 +99,8 @@ struct RunningTimersStrip: View {
                     Image(systemName: session.state == .running ? "pause.fill" : "play.fill")
                         .frame(width: 30, height: 30)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LSPlayButtonStyle(
+                    feedback: session.state == .running ? .housekeeping : .play))
                 .background(LSTheme.accent.opacity(0.15), in: .rect(cornerRadius: 8))
                 .foregroundStyle(LSTheme.accent)
                 // The square is chrome with a fixed frame; an unbounded glyph
@@ -114,7 +115,7 @@ struct RunningTimersStrip: View {
                     Image(systemName: "stop.fill")
                         .frame(width: 30, height: 30)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(LSPlayButtonStyle(feedback: .housekeeping))
                 .background(.red.opacity(0.14), in: .rect(cornerRadius: 8))
                 .foregroundStyle(.red.opacity(0.9))
                 .dynamicTypeSize(...DynamicTypeSize.xxxLarge)

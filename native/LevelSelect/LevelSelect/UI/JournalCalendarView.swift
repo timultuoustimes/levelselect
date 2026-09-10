@@ -232,7 +232,9 @@ private struct YearStrip: View {
             .padding(.vertical, 6)
             .background {
                 if isSelected {
-                    Capsule().fill(LSTheme.accent)
+                    // The fill, paired with the ink meant for it — see the
+                    // note on the empty library's Add Game button.
+                    Capsule().fill(LSTheme.accentFill)
                 } else if has {
                     Capsule().fill(LSTheme.cardFill)
                 }

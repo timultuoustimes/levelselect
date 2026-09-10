@@ -10,6 +10,10 @@ struct SessionControlsView: View {
     @State private var showingLog = false
     @State private var showingCarriedOver = false
     @State private var editing: Session?
+    /// These controls keep their system button styles — `.bordered` and
+    /// `LSPrimaryButtonStyle` both draw a press already — so the haptic rides
+    /// on a pulse rather than on a style. See `LSPlayPulse`.
+    @State private var pulse = LSPlayPulse()
 
     /// Store-driven, not relationship-driven. The two-device test caught the
     /// difference: a session imported from another device is INSERTED and
@@ -77,11 +81,17 @@ struct SessionControlsView: View {
             } else {
                 header
 
-                if let active = playthrough?.activeSession {
-                    activeSessionControls(active)
-                } else {
-                    idleControls
+                Group {
+                    if let active = playthrough?.activeSession {
+                        activeSessionControls(active)
+                    } else {
+                        idleControls
+                    }
                 }
+                // On the group rather than on each button: stopping a session
+                // REPLACES the controls, so a feedback modifier attached to
+                // the Stop button is gone before the pulse can be heard.
+                .lsPlayFeedback(pulse)
 
                 if !sessions.isEmpty {
                     recentSessions
@@ -92,6 +102,7 @@ struct SessionControlsView: View {
             LogSessionSheet { duration, date, notes in
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.logManualSession(on: pt, duration: duration, date: date, notes: notes)
+                pulse.fire(.logged)
             }
             .lsSheet()
         }
@@ -180,16 +191,20 @@ struct SessionControlsView: View {
             HStack {
                 if active.state == .running {
                     Button {
+                        pulse.fire(.housekeeping)
                         repo.pauseSession(active)
                     } label: { Label("Pause", systemImage: "pause.fill") }
                     .buttonStyle(.bordered)
                 } else {
+                    // Resuming IS starting to play, so it thumps like Play.
                     Button {
+                        pulse.fire(.play)
                         repo.resumeSession(active)
                     } label: { Label("Resume", systemImage: "play.fill") }
                     .buttonStyle(.borderedProminent)
                 }
                 Button(role: .destructive) {
+                    pulse.fire(.housekeeping)
                     repo.stopSession(active)
                 } label: { Label("Stop", systemImage: "stop.fill") }
                 .buttonStyle(.bordered)
@@ -202,6 +217,7 @@ struct SessionControlsView: View {
     private var idleControls: some View {
         HStack {
             Button {
+                pulse.fire(.play)
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.startSession(on: pt)
             } label: {

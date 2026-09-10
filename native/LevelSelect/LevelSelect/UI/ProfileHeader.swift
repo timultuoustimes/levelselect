@@ -526,7 +526,9 @@ struct ProfileEditor: View {
                     .font(.caption.weight(.bold))
                     .foregroundStyle(LSTheme.onAccent)
                     .frame(width: 28, height: 28)
-                    .background(LSTheme.accent, in: .circle)
+                    // The fill, paired with the ink meant for it — see the
+                    // note on the empty library's Add Game button.
+                    .background(LSTheme.accentFill, in: .circle)
             }
             .contentShape(.rect)
         }

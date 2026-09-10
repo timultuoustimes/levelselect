@@ -6,6 +6,9 @@ struct GameDetailView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var confirmingDelete = false
+    /// The stage's own Start button keeps a system style, so its haptic
+    /// rides on this. See `LSPlayPulse`.
+    @State private var pulse = LSPlayPulse()
     @State private var fixingMatch = false
     /// Which artwork role the picker is open for, if any.
     @State private var pickingArtwork: ArtworkRole?
@@ -1011,7 +1014,8 @@ struct GameDetailView: View {
                     .padding(6)
                     .background(LSTheme.cardFill, in: .circle)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LSPlayButtonStyle(
+                feedback: active.state == .running ? .housekeeping : .play))
             .lsTapTarget()
             .accessibilityLabel(active.state == .running ? "Pause session" : "Resume session")
             Button {
@@ -1022,19 +1026,23 @@ struct GameDetailView: View {
                     .padding(6)
                     .background(LSTheme.cardFill, in: .circle)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LSPlayButtonStyle(feedback: .housekeeping))
             .lsTapTarget()
             .accessibilityLabel("Stop session")
         } else {
             Button {
+                pulse.fire(.play)
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.startSession(on: pt)
             } label: {
                 Label("Start", systemImage: "play.fill")
                     .font(.caption.weight(.semibold))
             }
+            // `.bordered` already draws its own press; all it lacked was
+            // something to say to the hand. See `LSPlayPulse`.
             .buttonStyle(.bordered)
             .tint(LSTheme.accent)
+            .lsPlayFeedback(pulse)
         }
     }
 

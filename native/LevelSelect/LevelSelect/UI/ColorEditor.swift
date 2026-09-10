@@ -56,6 +56,9 @@ struct ColorEditor: View {
     /// so without this mirror a tap changed the app behind the sheet and
     /// left the preview and the checkmark where they were.
     @State private var picked: [String: Color] = [:]
+    /// Which targets already held a stored color when the sheet opened, so
+    /// Cancel can tell "put the old color back" from "put it back to nothing".
+    @State private var wasCustom: Set<String> = []
     @State private var loaded = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var deviceScheme
@@ -83,6 +86,41 @@ struct ColorEditor: View {
     }
 
     private func value(of t: ColorTarget) -> Color { picked[t.id] ?? t.binding.wrappedValue }
+
+    // MARK: Putting it back
+
+    /// **Everything the default button restores: the whole look, not a half.**
+    ///
+    /// Accent and ground are one decision — the sheet says so by editing them
+    /// side by side — and a button that put back only the segment you happened
+    /// to be on left the app in a state that was neither yours nor the app's.
+    /// Tim, 2026-09-09: *"I think the default button should maybe be to use
+    /// the default pair, and it just resets the accent and ground colors to
+    /// what the colors are when it's an empty library."*
+    private var resetable: [ColorTarget] {
+        isThemeEditor ? targets : Array(targets.prefix(1))
+    }
+
+    /// Whether a target already sits on the value an empty library gives it.
+    ///
+    /// Asked of the sheet's own mirror rather than of `isCustomised`, which is
+    /// read off a `@Query` when the row is PUSHED and does not move again —
+    /// so after a reset the flag still said "custom", the button stayed, and
+    /// the circles still ticked the color that had just been thrown away.
+    /// A target with no default has nothing to put back, so it counts as
+    /// already there.
+    private func isDefault(_ t: ColorTarget) -> Bool {
+        guard let target = t.defaultColor?.hexString() else { return true }
+        return value(of: t).hexString() == target
+    }
+
+    private var canReset: Bool { resetable.contains { !isDefault($0) } }
+
+    /// Named for what it actually does. In the theme editor that is both
+    /// colors at once; a status or a name has only itself.
+    private var resetLabel: String {
+        isThemeEditor ? "Use the default colors" : "Use the default"
+    }
 
     /// The color the circles mark as chosen.
     private var current: Color? { editing.first.map(value(of:)) }
@@ -133,11 +171,21 @@ struct ColorEditor: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if let first = editing.first, first.isCustomised, first.defaultColor != nil {
+                if canReset {
                     Button {
-                        for t in editing { picked[t.id] = nil; t.onReset() }
+                        for t in resetable {
+                            // The mirror is SET to the default rather than
+                            // cleared. Clearing it hands the circles back to
+                            // the bindings, and those read a `@Query` this
+                            // sheet stopped seeing republish the moment it was
+                            // pushed — so the reset changed the app behind the
+                            // sheet while the sheet went on showing the old
+                            // color, which reads as nothing having happened.
+                            picked[t.id] = t.defaultColor
+                            t.onReset()
+                        }
                     } label: {
-                        Label("Use the default", systemImage: "arrow.uturn.backward")
+                        Label(resetLabel, systemImage: "arrow.uturn.backward")
                             .font(.subheadline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
@@ -156,16 +204,25 @@ struct ColorEditor: View {
         #endif
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                // Puts the LIVE theme back — the preview writes through so a
-                // color shows on the real app behind the sheet. Only what
-                // changed: writing an untouched target back stored its built-in
-                // value as a custom one.
+                // Puts the LIVE theme back — the preview writes through, so a
+                // color shows on the real app behind the sheet and has to be
+                // undone. **Only what this sheet touched**, and `picked` is
+                // what knows that: comparing the binding against the original
+                // asks a `@Query` that stopped republishing when the row was
+                // pushed, and got the same answer either way.
+                //
+                // A target that held nothing when the sheet opened goes back
+                // to nothing rather than being written with the value the
+                // binding hands back for "unset" — that value is now a real
+                // palette hex, and storing it would leave an untouched library
+                // reading as Custom for a color it never chose.
                 Button("Cancel") {
-                    for t in targets {
-                        guard let was = originals[t.id],
-                              was.hexString() != t.binding.wrappedValue.hexString()
-                        else { continue }
-                        t.binding.wrappedValue = was
+                    for t in targets where picked[t.id] != nil {
+                        if wasCustom.contains(t.id), let was = originals[t.id] {
+                            t.binding.wrappedValue = was
+                        } else {
+                            t.onReset()
+                        }
                     }
                     dismiss()
                 }
@@ -177,7 +234,10 @@ struct ColorEditor: View {
         .onAppear {
             guard !loaded else { return }
             loaded = true
-            for t in targets { originals[t.id] = t.binding.wrappedValue }
+            for t in targets {
+                originals[t.id] = t.binding.wrappedValue
+                if t.isCustomised { wasCustom.insert(t.id) }
+            }
         }
     }
 

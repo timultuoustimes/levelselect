@@ -252,7 +252,9 @@ struct LivePulse: View {
 
     var body: some View {
         Circle()
-            .fill(LSTheme.accent)
+            // A glow is a fill, so it wears the accent as picked rather than
+            // the ink the light ground darkens it to.
+            .fill(LSTheme.accentFill)
             .frame(width: 130, height: 130)
             .blur(radius: 42)
             .opacity(on ? 0.34 : 0.14)
@@ -264,6 +266,84 @@ struct LivePulse: View {
                 // reads as an intentional ambient glow, not a stuttering clock.
                 withAnimation(.easeInOut(duration: 3.3).repeatForever(autoreverses: true)) { on = true }
             }
+    }
+}
+
+// MARK: - Play controls
+
+/// **The weight a play control presses with.**
+///
+/// Tim, 2026-09-09: *"can there be a big haptic and pressing animation when
+/// you press play, and a bit less when you hit pause and stop. I can't tell
+/// when I'm hitting them."* — and there was nothing to tell him. Every one of
+/// these controls is a `.plain` button with a background painted behind it,
+/// so pressing one dimmed it a little and that was all; Start Session had the
+/// app's own press-onto-its-step and still said nothing to the hand.
+///
+/// Two weights, because they are two kinds of act. Sitting down to play is
+/// the event the app exists for and gets the heavy thump; pausing and
+/// stopping are housekeeping and get a light one, so a thumb can tell them
+/// apart without looking. Logging a session by hand is neither — nothing
+/// starts, a record is filed — so it gets the success notification.
+enum LSPlayFeedback: Equatable {
+    case play, housekeeping, logged
+
+    var sensory: SensoryFeedback {
+        switch self {
+        case .play:         .impact(weight: .heavy, intensity: 1)
+        case .housekeeping: .impact(weight: .light, intensity: 0.7)
+        case .logged:       .success
+        }
+    }
+}
+
+/// A press you can feel and see, over whatever the control already wears.
+///
+/// Every play control in the app is a `.plain` button with its own
+/// `.background` — a filled square on the hero, a tinted rounded rect in the
+/// timers strip, a circle on the stage — so a style that DREW something would
+/// have to re-create four looks that are already right. This one draws
+/// nothing and only moves, and it fires on touch-DOWN rather than on the
+/// action, because that is the moment the finger is asking whether it landed.
+struct LSPlayButtonStyle: ButtonStyle {
+    var feedback: LSPlayFeedback = .play
+
+    /// Play dips further than the housekeeping — the same "bigger for play"
+    /// the haptic says, in the other sense.
+    private var dip: CGFloat { feedback == .play ? 0.88 : 0.93 }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? dip : 1)
+            .opacity(configuration.isPressed ? 0.85 : 1)
+            .animation(.spring(response: 0.22, dampingFraction: 0.55),
+                       value: configuration.isPressed)
+            .sensoryFeedback(trigger: configuration.isPressed) { _, down in
+                down ? feedback.sensory : nil
+            }
+    }
+}
+
+/// A play control's press, as something `.sensoryFeedback` can watch.
+///
+/// The controls that keep a SYSTEM button style — `.bordered` already draws a
+/// press, it just never said anything — cannot take `LSPlayButtonStyle`, and
+/// a haptic needs a value that changes to fire on. So the tap bumps this and
+/// names its weight in the same move.
+struct LSPlayPulse: Equatable {
+    private(set) var count = 0
+    private(set) var feedback: LSPlayFeedback = .play
+
+    mutating func fire(_ feedback: LSPlayFeedback) {
+        self.feedback = feedback
+        count += 1
+    }
+}
+
+extension View {
+    /// Plays whatever the pulse last named, every time it is bumped.
+    func lsPlayFeedback(_ pulse: LSPlayPulse) -> some View {
+        sensoryFeedback(trigger: pulse) { _, now in now.feedback.sensory }
     }
 }
 

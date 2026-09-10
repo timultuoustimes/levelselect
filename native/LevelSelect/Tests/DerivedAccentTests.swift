@@ -23,6 +23,49 @@ struct DerivedAccentTests {
         return (hs?.hue ?? 0, hs?.saturation ?? 0)
     }
 
+    /// **Fills wear `accentFill`; ink wears `accent`. Never the other way.**
+    ///
+    /// `accent` is the accent CORRECTED for the ground it is read on — which
+    /// on light is the pair's own step. `onAccent` is the ink chosen for a
+    /// filled control, which for a pair is also that step. So a view that
+    /// fills with `accent` and letters with `onAccent` paints brown on brown
+    /// and loses its label entirely. It cost the Add Game button on a fresh
+    /// install its word, which is the first control anybody ever sees; the
+    /// profile's pencil badge and the Journal's selected day had it too.
+    ///
+    /// Read off the source rather than asserted about the palette, because
+    /// the mistake is a PAIRING at a call site and no value is wrong on its
+    /// own. If this fails, the fix is `accentFill` at the named line.
+    @Test func nothingFillsWithTheInkAndLettersWithTheFill() throws {
+        let ui = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LevelSelect/UI")
+        let files = try FileManager.default
+            .contentsOfDirectory(atPath: ui.path).filter { $0.hasSuffix(".swift") }
+        #expect(!files.isEmpty, "found no UI sources to check")
+
+        var offenders: [String] = []
+        for name in files {
+            let text = try String(contentsOf: ui.appendingPathComponent(name),
+                                  encoding: .utf8)
+            for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false)
+                .enumerated() where !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") {
+                // `LSTheme.accent` exactly — not `accentFill`, `accentStep`
+                // or `accentIsCustom`, all of which start with it.
+                guard line.contains("LSTheme.accent"),
+                      !line.contains("LSTheme.accentFill"),
+                      !line.contains("LSTheme.accentStep") else { continue }
+                let fills = line.contains(".background(LSTheme.accent,")
+                    || line.contains(".fill(LSTheme.accent)")
+                guard fills else { continue }
+                offenders.append("\(name):\(i + 1)")
+            }
+        }
+        #expect(offenders.isEmpty,
+                Comment(rawValue: "fill with LSTheme.accentFill instead: "
+                        + offenders.joined(separator: ", ")))
+    }
+
     /// The rule has to land on the values we already ship, or it is a fit
     /// rather than a rule. Both defaults were arrived at by hand, before the
     /// derivation existed.

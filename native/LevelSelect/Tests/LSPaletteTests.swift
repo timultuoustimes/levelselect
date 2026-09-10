@@ -36,6 +36,43 @@ struct LSPaletteTests {
         #expect(LSPalette.pair(matching: LSPalette.defaultAccent.accent)?.name == "Torch")
     }
 
+    /// **The whole default look is two pairs, and the picker can say so.**
+    ///
+    /// The first fix pointed the ACCENT at `defaultAccent` and stopped there.
+    /// The ground kept a loose `LSTheme.purpleDeep`, which is not the purple
+    /// `LSPalette.ground(tint: nil,)` actually lays down — so the Background
+    /// half of the editor offered a default it could not produce, ticked no
+    /// circle for it, and "Use the default" looked like it had done nothing.
+    /// Tim, on King Kai: *"I hit use default for accent and background, but it
+    /// didn't work at all."*
+    ///
+    /// Both halves of the default must be PAIR hexes, because a pair hex is
+    /// the only thing the circles can tick and the only thing `ThemePalette`
+    /// resolves without going through the legacy correction.
+    @Test("An untouched library's colors are both palette pairs")
+    func theEmptyLibraryIsTwoPairs() throws {
+        // The accent, on both grounds — the pair's accent hex is what a tap
+        // stores, and the step is derived from it rather than stored.
+        #expect(LSPalette.pair(matching: LSPalette.defaultAccent.accent)?.name == "Torch")
+        // The ground the app draws when nothing is stored, and the tint the
+        // editor now hands back for "unset", have to be the same color.
+        #expect(LSPalette.defaultGround.name == "Purple")
+        #expect(LSPalette.pair(matching: LSPalette.defaultGround.accent)?.name == "Purple")
+        for dark in [true, false] {
+            for bottom in [true, false] {
+                let unset = try #require(
+                    LSPalette.ground(tint: nil, dark: dark, bottom: bottom).lsRGB)
+                let asPair = try #require(
+                    LSPalette.ground(tint: LSPalette.defaultGround.accentColor,
+                                     dark: dark, bottom: bottom).lsRGB)
+                #expect(abs(unset.r - asPair.r) < 0.001
+                        && abs(unset.g - asPair.g) < 0.001
+                        && abs(unset.b - asPair.b) < 0.001,
+                        Comment(rawValue: "dark \(dark) bottom \(bottom)"))
+            }
+        }
+    }
+
     /// **The high-contrast pair, and the reason it needed a branch.**
     ///
     /// Mono is the seven's shape with the hue taken out: a light-grey accent

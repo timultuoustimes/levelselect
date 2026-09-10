@@ -980,8 +980,14 @@ struct HomeTab: View {
                         .padding(.vertical, 11)
                 }
                 .buttonStyle(.plain)
+                // **`accentFill`, not `accent`.** `accent` is the INK — on the
+                // light ground it is the pair's step — and `onAccent` is the
+                // ink chosen for the FILL, which for a pair is that same step.
+                // Filling with one and lettering with the other put brown on
+                // brown: the first button of a fresh install, with no readable
+                // word on it. Same pairing as `LSPrimaryButtonStyle`.
                 .foregroundStyle(LSTheme.onAccent)
-                .background(LSTheme.accent, in: .capsule)
+                .background(LSTheme.accentFill, in: .capsule)
                 // A spreadsheet is how most people arrive with a backlog. This
                 // opened the whole Settings form and left them to find the
                 // importer — a dead end at the exact moment someone is deciding

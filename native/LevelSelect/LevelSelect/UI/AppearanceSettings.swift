@@ -486,9 +486,18 @@ struct AppearanceSettingsSection: View {
     private func accentBinding(dark: Bool) -> Binding<Color> {
         Binding(
             get: {
+                // **The pair's accent, on both grounds — never its step.**
+                //
+                // Choosing a circle writes `accentColor` to light AND dark;
+                // the step is derived from it at render time, by the palette's
+                // own rule. Handing the step back here for light meant the
+                // unset value was a hex no circle carries, so after "Use the
+                // default" the sheet showed a brown swatch with no checkmark
+                // and drew its preview brown-on-brown. Tim, on King Kai: *"I
+                // hit use default for accent and background, but it didn't
+                // work at all."*
                 settings?.accentHex(dark: dark).flatMap { Color(hex: $0) }
-                    ?? (dark ? LSPalette.defaultAccent.accentColor
-                             : LSPalette.defaultAccent.stepColor)
+                    ?? LSPalette.defaultAccent.accentColor
             },
             set: { color in
                 let s = ensureSettings()
@@ -502,12 +511,16 @@ struct AppearanceSettingsSection: View {
     private func backgroundBinding(dark: Bool) -> Binding<Color> {
         Binding(
             get: {
-                // Unset means the built-in ground for THIS appearance, not a
-                // fixed purple — the preview renders the accent on whatever
-                // this returns, so a light accent was being shown against a
-                // dark purple and the contrast it implied was fiction.
+                // **Unset means the pair the built-in ground is made of.**
+                //
+                // `LSPalette.ground(tint: nil,)` lays Purple over the base
+                // gray and charcoal, so an untouched library HAS a ground pair
+                // — it just never said so. Returning the resolved ground
+                // instead was a color no circle carries, which left the
+                // Background half with nothing ticked and no way to tell a
+                // default ground from a chosen one.
                 settings?.backgroundHex(dark: dark).flatMap { Color(hex: $0) }
-                    ?? ThemePalette.groundBase(dark: dark)
+                    ?? LSPalette.defaultGround.accentColor
             },
             set: { color in
                 let s = ensureSettings()
@@ -529,8 +542,7 @@ struct AppearanceSettingsSection: View {
                 label: dark ? "☾ Accent" : "☀ Accent",
                 // The palette's first pair, so the sheet's "default" and the
                 // app's default are one value rather than two that drifted.
-                defaultColor: dark ? LSPalette.defaultAccent.accentColor
-                                   : LSPalette.defaultAccent.stepColor,
+                defaultColor: LSPalette.defaultAccent.accentColor,
                 isCustomised: (dark ? settings?.accentHexDark : settings?.accentHexLight) != nil,
                 binding: accentBinding(dark: dark),
                 onReset: {
@@ -547,7 +559,10 @@ struct AppearanceSettingsSection: View {
             return ColorTarget(
                 id: "background-\(word.lowercased())",
                 label: dark ? "☾ Ground" : "☀ Ground",
-                defaultColor: LSTheme.purpleDeep,
+                // The pair `LSPalette.ground` already falls back to, rather
+                // than `LSTheme.purpleDeep` — which is a different purple, so
+                // the button promised a color the reset could not produce.
+                defaultColor: LSPalette.defaultGround.accentColor,
                 isCustomised: (dark ? settings?.backgroundHexDark : settings?.backgroundHexLight) != nil,
                 binding: backgroundBinding(dark: dark),
                 onReset: {

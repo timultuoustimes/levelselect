@@ -305,7 +305,8 @@ struct ContinueHeroCard: View {
                         .lsTapTargetInline(5)
                 }
                 .accessibilityLabel("Stop session")
-                .buttonStyle(.plain)
+                // The lighter of the two presses — see `LSPlayFeedback`.
+                .buttonStyle(LSPlayButtonStyle(feedback: .housekeeping))
                 .background(.red.opacity(0.14), in: .rect(cornerRadius: 10))
                 .foregroundStyle(.red.opacity(0.9))
                 .accessibilityLabel("Stop session")
@@ -323,7 +324,10 @@ struct ContinueHeroCard: View {
                     }
                     .frame(width: 56, height: 56)
                 }
-                .buttonStyle(.plain)
+                // Resume is starting to play again, so it presses like
+                // Play; pausing is housekeeping.
+                .buttonStyle(LSPlayButtonStyle(
+                    feedback: active.state == .running ? .housekeeping : .play))
                 .accessibilityLabel(active.state == .running ? "Pause" : "Resume")
                 .background(LSTheme.accent.opacity(0.16), in: .rect(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12)
@@ -340,7 +344,7 @@ struct ContinueHeroCard: View {
                 }
                 .frame(width: 56, height: 56)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(LSPlayButtonStyle(feedback: .play))
             .accessibilityLabel("Play")
             // FILLED, and in the accent rather than green.
             //
