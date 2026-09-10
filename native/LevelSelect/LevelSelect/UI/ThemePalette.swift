@@ -44,6 +44,15 @@ enum ThemePalette {
     /// deployed fields since build 37 and were only ever written as one
     /// choice twice over.
     private(set) static var activePairDark: LSPalette.Pair?
+    /// **The accent's two halves, unresolved.**
+    ///
+    /// `accent` is a dynamic color, and asking it for a hex resolves it
+    /// against whatever trait collection happens to be current — which is
+    /// fine on screen and wrong at a process boundary. The widget snapshot is
+    /// JSON: it has to carry both and let the widget pick. Same reason
+    /// `backgroundOverrideLight` and `-Dark` are kept apart.
+    private(set) static var accentLight: Color = LSTheme.torchInk
+    private(set) static var accentDark: Color = LSTheme.torch
     /// Whether the accent is one of the palette's pairs in either appearance.
     /// `accentStep` and `onAccent` are already resolved per appearance, so a
     /// caller that only needs to know "is this ours" asks this rather than
@@ -68,8 +77,14 @@ enum ThemePalette {
     /// The chosen ground tint per appearance (nil = the built-in ground).
     private(set) static var backgroundOverrideLight: Color?
     private(set) static var backgroundOverrideDark: Color?
-    /// The dark value, for the single-tint paths that cannot express two —
-    /// the widget snapshot and the hero gradient.
+    /// The dark value, for the one path left that cannot express two: the
+    /// LEGACY `backgroundHex` key in the widget snapshot, kept so a widget
+    /// binary from before build 38 still themes.
+    ///
+    /// It used to feed the hero card as well, which is how a green DARK
+    /// ground turned the Continue Playing card green on a LIGHT page — see
+    /// `LSTheme.hero(lightTint:darkTint:)`. Anything that draws per
+    /// appearance reads `backgroundOverrideLight` and `-Dark` directly.
     static var backgroundOverride: Color? { backgroundOverrideDark }
     /// How hard the game-page backdrop reads.
     private(set) static var backdropIntensity: BackdropIntensity = .standard
@@ -324,6 +339,8 @@ enum ThemePalette {
             ?? LSTheme.legible(lightCustom ?? LSTheme.torchInk, on: groundBase(dark: false))
         let darkAccent = darkPair?.accentColor
             ?? LSTheme.legible(darkCustom ?? LSTheme.torch, on: groundBase(dark: true))
+        accentLight = lightAccent
+        accentDark = darkAccent
         accent = .lsDynamic(light: lightAccent, dark: darkAccent)
         // No `legible()` here, and torch on BOTH grounds by default — the
         // hard step is the legibility mechanism. See `displayAccent`.

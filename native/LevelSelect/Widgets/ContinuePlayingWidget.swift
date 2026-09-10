@@ -43,7 +43,23 @@ enum LSWidget {
                   .attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
         else { return torch }
         if let cached = cachedAccent, cached.stamp == stamp { return cached.color }
-        let color = WidgetSnapshot.load()?.accentHex.flatMap { Color(hex: $0) } ?? torch
+        // **Dynamic, not a frozen side.** The snapshot carries both halves
+        // (build 38, when light and dark became separate pairs); resolving
+        // here would pick whichever appearance the timeline happened to be
+        // built in and pin a pink accent to a light Home Screen. Every call
+        // site reads this static rather than an environment value, so the
+        // color itself has to be the thing that knows.
+        //
+        // The fallback is the app's own default PAIR rather than a lone
+        // torch: on light the app writes in the pair's darker step, and a
+        // widget beside it wearing bright orange was a mismatch nobody chose.
+        // See `ThemePalette.refresh` — this is the same rule, one process over.
+        let snapshot = WidgetSnapshot.load()
+        let color = Color.lsDynamic(
+            light: snapshot?.accentHexLight.flatMap { Color(hex: $0) }
+                ?? LSPalette.defaultAccent.stepColor,
+            dark: snapshot?.accentHexDark.flatMap { Color(hex: $0) }
+                ?? LSPalette.defaultAccent.accentColor)
         cachedAccent = (stamp, color)
         return color
     }

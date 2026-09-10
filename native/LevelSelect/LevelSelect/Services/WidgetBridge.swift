@@ -285,9 +285,20 @@ enum WidgetBridge {
             // the widgets fall back to the same default the app does rather
             // than to a copy of today's hue that would go stale the next time
             // the default changes.
+            // **Both halves, never the resolved one.** `ThemePalette.accent`
+            // is dynamic, so `hexString()` answers for whichever appearance
+            // the app is in as this runs — which froze one side of a pair
+            // onto the Home Screen. The legacy single key is still written so
+            // a widget binary from before build 38 keeps working.
             accentHex: ThemePalette.accentIsCustom ? ThemePalette.accent.hexString() : nil,
+            accentHexLight: ThemePalette.accentIsCustom
+                ? ThemePalette.accentLight.hexString() : nil,
+            accentHexDark: ThemePalette.accentIsCustom
+                ? ThemePalette.accentDark.hexString() : nil,
             appearanceRaw: ThemePalette.appearance.rawValue,
             backgroundHex: ThemePalette.backgroundOverride?.hexString(),
+            backgroundHexLight: ThemePalette.backgroundOverrideLight?.hexString(),
+            backgroundHexDark: ThemePalette.backgroundOverrideDark?.hexString(),
             // Same rule as the accent: only CHOSEN colors travel. A status
             // the user never touched sends nothing, so the widgets keep the
             // color they already drew instead of inheriting a copy of today's

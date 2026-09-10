@@ -63,8 +63,14 @@ extension LSWidget {
         // LSTheme.ground(tintedBy:scheme:) — a container background cannot
         // see the environment override, so relying on it left the ground
         // resolving against the phone while the text followed the app.
-        LSTheme.ground(tintedBy: WidgetSnapshot.load()?.backgroundHex.flatMap { Color(hex: $0) },
-                       scheme: appearance.colorScheme)
+        // A tint per appearance, through the overload the app already uses.
+        // The single-tint call sent the DARK choice to both sides, so a light
+        // Home Screen has been drawing the dark ground since build 37.
+        let snapshot = WidgetSnapshot.load()
+        return LSTheme.ground(
+            lightTint: snapshot?.backgroundHexLight.flatMap { Color(hex: $0) },
+            darkTint: snapshot?.backgroundHexDark.flatMap { Color(hex: $0) },
+            scheme: appearance.colorScheme)
     }
 }
 

@@ -164,6 +164,20 @@ struct WidgetSnapshot: Codable, Hashable {
     /// app's own store — so the accent travels here with everything else the
     /// app already tells them.
     var accentHex: String? = nil
+    /// **The accent's two halves, because a widget cannot resolve a dynamic
+    /// color the app froze.**
+    ///
+    /// `accentHex` was written by asking `ThemePalette.accent` for a hex,
+    /// which resolves against whatever trait collection the app happened to
+    /// be in when the snapshot was written. Once light and dark could hold
+    /// different pairs (build 38), a Torch-light / Pink-dark library could put
+    /// a pink widget on a light Home Screen. These carry both and let the
+    /// widget pick, the way `LSWidget.accent` now does.
+    ///
+    /// Nil still means "no choice" — the widget falls back to the same
+    /// default pair the app does, rather than to a copy of today's color.
+    var accentHexLight: String? = nil
+    var accentHexDark: String? = nil
     /// Light / dark / system, and a chosen background, traveling the same
     /// road as the accent and for the same reason: a widget cannot read
     /// ThemeSettings.
@@ -174,6 +188,12 @@ struct WidgetSnapshot: Codable, Hashable {
     /// app pinned to dark would sit beside light widgets on the same screen.
     var appearanceRaw: String? = nil
     var backgroundHex: String? = nil
+    /// The ground's tint per appearance, for the same reason as the accent —
+    /// and this one was single-valued from the start: `backgroundOverride`
+    /// hands back the DARK tint only, so a light Home Screen has been drawing
+    /// the dark choice's ground since build 37.
+    var backgroundHexLight: String? = nil
+    var backgroundHexDark: String? = nil
     /// Status colors the user has actually changed, `GameStatus.rawValue` →
     /// "#RRGGBB". Absent keys mean "never touched it", NOT "use this default":
     /// the widgets keep their own built-in colors for those, so nobody's Home
@@ -255,15 +275,23 @@ struct WidgetSnapshot: Codable, Hashable {
         platformIcons: [String: String] = [:],
         lastTicked: String? = nil,
         accentHex: String? = nil,
+        accentHexLight: String? = nil,
+        accentHexDark: String? = nil,
         appearanceRaw: String? = nil,
         backgroundHex: String? = nil,
+        backgroundHexLight: String? = nil,
+        backgroundHexDark: String? = nil,
         statusColors: [String: String] = [:],
         upcoming: [WidgetUpcomingGame] = []
     ) {
         self.accentHex = accentHex
+        self.accentHexLight = accentHexLight
+        self.accentHexDark = accentHexDark
         self.statusColors = statusColors
         self.appearanceRaw = appearanceRaw
         self.backgroundHex = backgroundHex
+        self.backgroundHexLight = backgroundHexLight
+        self.backgroundHexDark = backgroundHexDark
         self.upcoming = upcoming
         self.lastTicked = lastTicked
         self.gameID = gameID; self.gameName = gameName; self.statusRaw = statusRaw
@@ -316,10 +344,20 @@ struct WidgetSnapshot: Codable, Hashable {
         systemShelves = try c.decodeIfPresent([String].self, forKey: .systemShelves) ?? libraryPlatforms
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
         accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
+        // A snapshot written before build 38 carries only the single hex, and
+        // that hex IS what both appearances were showing — so falling back to
+        // it reproduces the old behavior exactly rather than dropping the
+        // user's accent until the app next writes.
+        accentHexLight = try c.decodeIfPresent(String.self, forKey: .accentHexLight) ?? accentHex
+        accentHexDark = try c.decodeIfPresent(String.self, forKey: .accentHexDark) ?? accentHex
         // decodeIfPresent, like every field added after v1: an older snapshot
         // on disk simply has no key, and must still decode.
         appearanceRaw = try c.decodeIfPresent(String.self, forKey: .appearanceRaw)
         backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex)
+        backgroundHexLight = try c.decodeIfPresent(String.self, forKey: .backgroundHexLight)
+            ?? backgroundHex
+        backgroundHexDark = try c.decodeIfPresent(String.self, forKey: .backgroundHexDark)
+            ?? backgroundHex
         statusColors = try c.decodeIfPresent([String: String].self, forKey: .statusColors) ?? [:]
         upcoming = try c.decodeIfPresent([WidgetUpcomingGame].self, forKey: .upcoming) ?? []
         weeklyAverageSeconds = try c.decodeIfPresent(Double.self, forKey: .weeklyAverageSeconds) ?? 0

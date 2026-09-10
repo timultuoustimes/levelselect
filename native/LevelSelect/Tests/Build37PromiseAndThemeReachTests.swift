@@ -275,3 +275,103 @@ private extension JSONDecoder {
         let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d
     }
 }
+
+/// **The accent and the ground reach the Home Screen per appearance.**
+///
+/// The snapshot is JSON across a process boundary, so a dynamic color cannot
+/// travel — `accentHex` was written by resolving `ThemePalette.accent` against
+/// whatever appearance the app was in as the timeline was built. That was
+/// harmless while both sides were the same pair and became a real mismatch in
+/// build 38, when Tim asked for a pair per appearance: a Torch-light /
+/// Pink-dark library could get a pink widget on a light Home Screen. The ground
+/// had the same shape from the start — `backgroundOverride` hands back the dark
+/// tint only.
+@MainActor
+struct WidgetPerAppearanceThemeTests {
+
+    private func snapshot(_ apply: (inout WidgetSnapshot) -> Void = { _ in }) -> WidgetSnapshot {
+        var s = WidgetSnapshot(
+            gameID: "g1", gameName: "Hades", statusRaw: "playing",
+            isPlaying: true, isPaused: false, playtimeSeconds: 60,
+            lastPlayedAt: nil, nextObjective: nil, nextObjectiveID: nil,
+            completionDone: 0, completionTotal: 0, coverFileName: nil,
+            activeSessionID: nil, generatedAt: .init(timeIntervalSince1970: 0),
+            objectives: [], nowPlaying: [], weeklySeconds: [],
+            gamesPlayedThisWeek: 0, runGame: nil)
+        apply(&s)
+        return s
+    }
+
+    private func roundTrip(_ s: WidgetSnapshot) throws -> WidgetSnapshot {
+        let data = try JSONEncoder.iso8601.encode(s)
+        return try JSONDecoder.iso8601.decode(WidgetSnapshot.self, from: data)
+    }
+
+    @Test("Both halves of the accent and the ground survive the crossing")
+    func bothHalvesTravel() throws {
+        let sent = snapshot {
+            $0.accentHexLight = "#A55410"
+            $0.accentHexDark = "#FF74D9"
+            $0.backgroundHexLight = "#976EF5"
+            $0.backgroundHexDark = "#E8E8EA"
+        }
+        let got = try roundTrip(sent)
+        #expect(got.accentHexLight == "#A55410")
+        #expect(got.accentHexDark == "#FF74D9")
+        #expect(got.backgroundHexLight == "#976EF5")
+        #expect(got.backgroundHexDark == "#E8E8EA")
+    }
+
+    /// **An older file on disk still themes.** A widget can read a snapshot
+    /// written by the previous build — the app rewrites on its own schedule,
+    /// not on install — and that file has only the single keys. Falling back
+    /// to them reproduces exactly what those widgets were already drawing
+    /// rather than dropping the accent until the next write.
+    @Test("A pre-build-38 snapshot decodes its single hex into both halves")
+    func anOlderSnapshotStillCarriesItsChoice() throws {
+        let sent = snapshot {
+            $0.accentHex = "#2573DD"
+            $0.backgroundHex = "#44CC77"
+        }
+        // Strip the new keys the way a file written by the old build would.
+        var json = try JSONSerialization.jsonObject(
+            with: try JSONEncoder.iso8601.encode(sent)) as! [String: Any]
+        for key in ["accentHexLight", "accentHexDark",
+                    "backgroundHexLight", "backgroundHexDark"] {
+            json.removeValue(forKey: key)
+        }
+        let data = try JSONSerialization.data(withJSONObject: json)
+        let got = try JSONDecoder.iso8601.decode(WidgetSnapshot.self, from: data)
+
+        #expect(got.accentHexLight == "#2573DD")
+        #expect(got.accentHexDark == "#2573DD")
+        #expect(got.backgroundHexLight == "#44CC77")
+        #expect(got.backgroundHexDark == "#44CC77")
+    }
+
+    /// Nothing chosen sends nothing, so the widget falls back to the same
+    /// default pair the app resolves rather than to a frozen copy of it.
+    @Test("An untouched theme sends no accent at all")
+    func nothingChosenTravelsAsNil() throws {
+        let got = try roundTrip(snapshot())
+        #expect(got.accentHexLight == nil)
+        #expect(got.accentHexDark == nil)
+        #expect(got.backgroundHexLight == nil)
+        #expect(got.backgroundHexDark == nil)
+    }
+
+    /// The two statics the bridge reads, which exist precisely because
+    /// `ThemePalette.accent` cannot be asked for a hex without resolving it.
+    @Test("The palette exposes the accent's halves unresolved")
+    func thePaletteHandsBackBothHalves() throws {
+        let pink = try #require(LSPalette.pairs.first { $0.name == "Pink" })
+        let blue = try #require(LSPalette.pairs.first { $0.name == "Blue" })
+        let settings = ThemeSettings()
+        settings.accentHexLight = blue.accent
+        settings.accentHexDark = pink.accent
+        ThemePalette.refresh(from: settings)
+
+        #expect(ThemePalette.accentLight.hexString() == blue.step)
+        #expect(ThemePalette.accentDark.hexString() == pink.accent)
+    }
+}
