@@ -307,19 +307,38 @@ enum LSPlayFeedback: Equatable {
 /// action, because that is the moment the finger is asking whether it landed.
 struct LSPlayButtonStyle: ButtonStyle {
     var feedback: LSPlayFeedback = .play
+    /// How the control moves under a finger.
+    ///
+    /// **`key` is `LSPrimaryButtonStyle`'s motion, exactly**: down 2pt over
+    /// 0.08s while the hard step beneath shrinks, so the cap sinks into its
+    /// own shadow like a keyboard key. It is for the controls that HAVE a
+    /// step to sink into — the hero's Play, which sits on one.
+    ///
+    /// `lift` is the scale dip, for the small round pause and stop controls.
+    /// They carry no step, and 2pt of travel on a 30pt circle with nothing
+    /// under it reads as a glitch rather than a press.
+    var press: Press = .lift
+
+    enum Press { case lift, key }
 
     /// Play dips further than the housekeeping — the same "bigger for play"
     /// the haptic says, in the other sense.
     private var dip: CGFloat { feedback == .play ? 0.88 : 0.93 }
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? dip : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.55),
+        let down = configuration.isPressed
+        return configuration.label
+            // The decoration draws the step, so it is the only thing that can
+            // collapse it. See `EnvironmentValues.lsKeyPressed`.
+            .environment(\.lsKeyPressed, press == .key && down)
+            .scaleEffect(press == .lift && down ? dip : 1)
+            .opacity(press == .lift && down ? 0.85 : 1)
+            .offset(y: press == .key && down ? 2 : 0)
+            .animation(press == .key ? .easeOut(duration: 0.08)
+                                     : .spring(response: 0.22, dampingFraction: 0.55),
                        value: configuration.isPressed)
-            .sensoryFeedback(trigger: configuration.isPressed) { _, down in
-                down ? feedback.sensory : nil
+            .sensoryFeedback(trigger: configuration.isPressed) { _, isDown in
+                isDown ? feedback.sensory : nil
             }
     }
 }

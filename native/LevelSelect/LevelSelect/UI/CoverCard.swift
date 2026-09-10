@@ -346,66 +346,72 @@ struct ContinueHeroCard: View {
                 .frame(width: 56, height: 56)
                 // **The decoration lives on the LABEL, not after the style.**
                 //
-                // A `ButtonStyle` transforms `configuration.label` and
-                // nothing else, so with the fill, the border and the step
-                // applied AFTER `.buttonStyle`, the press moved the glyph
-                // and the word and left the button sitting still behind
-                // them. Tim, 2026-09-10: *"on home in the hero, only the
-                // text moves like it's being pressed. it should match how
-                // the play button works on the game page."* Inside the
-                // label, the whole control presses — which is what
-                // `LSPrimaryButtonStyle` does on the game page by drawing
-                // its own background within `makeBody`.
-            // FILLED, and in the accent rather than green.
-            //
-            // Two reasons. It is the most important control on Home and it was
-            // the lightest thing in the card — a hairline outline beside a big
-            // filled panel, which is what a *secondary* action looks like.
-            //
-            // And green meant two opposite things: this button ("start"), and
-            // the running-timer readout above ("already going"). Green is now
-            // reserved for running, so anywhere in the app it says one thing —
-            // a timer is live.
-            // A gradient, a lit top edge and a colored shadow — a flat
-            // rectangle of accent read as a disabled block rather than the
-            // most pressable thing on the page. The depth is what says
-            // "button"; the fill is what says "primary".
-            .background {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(LinearGradient(
-                        colors: [LSTheme.accentFill, LSTheme.accentFill.opacity(0.78)],
-                        startPoint: .top, endPoint: .bottom))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(LinearGradient(
-                                colors: [.white.opacity(0.45), .white.opacity(0.06)],
-                                startPoint: .top, endPoint: .bottom), lineWidth: 1)
-                    }
-                    // Quiet. The glow is here to lift the button off the
-                    // card, not to announce itself — and it vanishes the
-                    // moment a timer starts and Pause takes over, so a loud
-                    // one reads as something breaking rather than a state
-                    // change.
-                    .shadow(color: LSTheme.accent.opacity(0.22), radius: 6, y: 3)
-                    // A HARD step, where the blur used to be.
-                    //
-                    // Same reasoning as the wordmark and the username, applied
-                    // to an object rather than type: this app's visual
-                    // language is pixel art, and a gaussian blur is the one
-                    // thing pixel art never has. A solid offset in a darkened
-                    // accent reads as the button standing on its own shadow —
-                    // which is also more legible on a light ground, where a
-                    // soft black blur turns into gray haze.
-                    //
-                    // The glow above stays: it does the lifting, this does the
-                    // shape.
-                    .shadow(color: LSTheme.accentStep, radius: 0, y: 3)
-                }
+                // A `ButtonStyle` transforms `configuration.label` and nothing
+                // else, so with the fill, the border and the step applied
+                // AFTER `.buttonStyle`, the press moved the glyph and the word
+                // and left the button sitting still behind them. Tim,
+                // 2026-09-10: *"on home in the hero, only the text moves like
+                // it's being pressed."*
+                //
+                // FILLED, and in the accent rather than green. It is the most
+                // important control on Home and it was the lightest thing in
+                // the card — a hairline outline beside a big filled panel,
+                // which is what a *secondary* action looks like. And green
+                // meant two opposite things: this button ("start") and the
+                // running-timer readout above ("already going"). Green is
+                // reserved for running now, so anywhere in the app it says one
+                // thing — a timer is live.
+                .background { HeroPlayCap() }
                 .foregroundStyle(LSTheme.onAccent)
             }
-            .buttonStyle(LSPlayButtonStyle(feedback: .play))
+            // `key`, so it presses exactly the way Start Session does on the
+            // game page rather than merely scaling. Tim: *"literally the same
+            // is a more consistent feel."*
+            .buttonStyle(LSPlayButtonStyle(feedback: .play, press: .key))
             .accessibilityLabel("Play")
         }
+    }
+}
+
+/// **The hero Play button's keycap.**
+///
+/// A gradient, a lit top edge and two shadows — a flat rectangle of accent
+/// read as a disabled block rather than the most pressable thing on the page.
+/// The depth is what says "button"; the fill is what says "primary".
+///
+/// It is a view rather than an inline `.background { }` so it can read
+/// `lsKeyPressed` and collapse its step as the cap goes down — the half of
+/// `LSPrimaryButtonStyle`'s mechanical press that a ButtonStyle cannot do on
+/// its own, because the shadow belongs to the decoration.
+private struct HeroPlayCap: View {
+    @Environment(\.lsKeyPressed) private var pressed
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14)
+            .fill(LinearGradient(
+                colors: [LSTheme.accentFill, LSTheme.accentFill.opacity(0.78)],
+                startPoint: .top, endPoint: .bottom))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(LinearGradient(
+                        colors: [.white.opacity(0.45), .white.opacity(0.06)],
+                        startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
+            // Quiet. The glow lifts the button off the card rather than
+            // announcing itself — and it vanishes the moment a timer starts
+            // and Pause takes over, so a loud one reads as something breaking
+            // rather than a state change.
+            .shadow(color: LSTheme.accent.opacity(0.22), radius: 6, y: 3)
+            // A HARD step, where the blur used to be: this app's visual
+            // language is pixel art, and a gaussian blur is the one thing
+            // pixel art never has. A solid offset in a darkened accent reads
+            // as the button standing on its own shadow — and stays legible on
+            // a light ground, where a soft black blur turns into gray haze.
+            //
+            // 3 → 1 under a finger, the same numbers `LSPrimaryButtonStyle`
+            // uses, so the cap sinks INTO the step instead of carrying it
+            // down.
+            .shadow(color: LSTheme.accentStep, radius: 0, y: pressed ? 1 : 3)
     }
 }
 

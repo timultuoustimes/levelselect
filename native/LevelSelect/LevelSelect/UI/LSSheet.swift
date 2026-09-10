@@ -94,3 +94,26 @@ extension View {
             .contentShape(.rect)
     }
 }
+
+/// **Whether the keycap around this label is pressed.**
+///
+/// `LSPrimaryButtonStyle` gets the mechanical feel by owning both halves of
+/// it: the button drops 2pt and, at the same moment, the hard step under it
+/// shrinks from 3 to 1, so the cap visibly sinks INTO its own shadow. A style
+/// that only moves the label cannot do the second half, because the shadow is
+/// drawn by the label's own decoration.
+///
+/// So the style publishes the press and the decoration reads it. Tim,
+/// 2026-09-10: *"I like how it works on the game page better, since it
+/// visually works more like pressing a real physical mechanical key. I think
+/// literally the same is a more consistent feel."*
+private struct LSKeyPressedKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var lsKeyPressed: Bool {
+        get { self[LSKeyPressedKey.self] }
+        set { self[LSKeyPressedKey.self] = newValue }
+    }
+}
