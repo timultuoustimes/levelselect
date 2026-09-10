@@ -71,6 +71,7 @@ struct TrackerItemEditView: View {
                     Text("Your note is yours — regenerating this tracker won't touch it. The item's own description can be replaced.")
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Edit Item")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

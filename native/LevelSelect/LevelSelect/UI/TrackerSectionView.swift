@@ -1505,6 +1505,7 @@ struct ApplicabilitySheet: View {
                     }
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Applies To")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

@@ -327,6 +327,7 @@ struct MemorySheet: View {
                     }
                 }
             }
+            .lsFormStyle()
             .navigationTitle(existing == nil ? "New memory" : "Memory")
             // Tim, 09-08: *"I can't find a way to delete a memory."* It goes
             // to Recently Deleted with its pictures, the same as everything.

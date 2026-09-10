@@ -132,7 +132,7 @@ struct AppearanceSettingsSection: View {
             // inside a binding setter, and trimmed whitespace mid-word so a
             // space could never be typed. Same rule the game page follows for
             // its notes and review fields.
-            DisclosureGroup("Rating labels", isExpanded: $starNamesExpanded) {
+            DisclosureGroup(isExpanded: $starNamesExpanded) {
                 ForEach(1...5, id: \.self) { star in
                     HStack {
                         Text("\(star)★")
@@ -146,6 +146,8 @@ struct AppearanceSettingsSection: View {
                             .onSubmit { commitStarNames() }
                     }
                 }
+            } label: {
+                Text("Rating labels").lsDisclosureLabel()
             }
             .onChange(of: starNamesExpanded) { _, open in
                 if open { loadStarDrafts() } else { commitStarNames() }
@@ -158,7 +160,7 @@ struct AppearanceSettingsSection: View {
             // ordinary ones. Folded away, they're still one tap from where
             // they apply, and invisible on a library nobody has themed.
             if colorsAreCustomised || backgroundIsCustomised || settings?.starNamesData != nil {
-                DisclosureGroup("Reset") {
+                DisclosureGroup {
                     // Still here, and still useful — one tap to undo a whole
                     // theme. Each color now also resets on its own from
                     // inside its own editor, which is where you are when you
@@ -194,6 +196,8 @@ struct AppearanceSettingsSection: View {
                             save(s)
                         }
                     }
+                } label: {
+                    Text("Reset").lsDisclosureLabel()
                 }
             }
 
@@ -249,7 +253,7 @@ struct AppearanceSettingsSection: View {
             // The app says what each status means; this is where you disagree.
             // One person's "Abandoned" is another's "played it to bits", and
             // that is not settled by choosing a better default word.
-            DisclosureGroup("Status names", isExpanded: $statusNamesExpanded) {
+            DisclosureGroup(isExpanded: $statusNamesExpanded) {
                 ForEach(GameStatus.displayOrder, id: \.self) { status in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack {
@@ -280,6 +284,8 @@ struct AppearanceSettingsSection: View {
                     }
                     .padding(.vertical, 2)
                 }
+            } label: {
+                Text("Status names").lsDisclosureLabel()
             }
             .onChange(of: statusNamesExpanded) { _, open in
                 if open { loadStatusDrafts() } else { commitStatusNames() }

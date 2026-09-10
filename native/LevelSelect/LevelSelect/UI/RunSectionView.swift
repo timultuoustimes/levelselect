@@ -335,6 +335,7 @@ struct RunFieldsSheet: View {
                 RunFieldsForm(template: template, categories: categories,
                               progressed: progressed, phase: .start, values: $values)
             }
+            .lsFormStyle()
             .navigationTitle(title)
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -491,6 +492,7 @@ struct EndRunSheet: View {
                         .lineLimit(2...)
                 }
             }
+            .lsFormStyle()
             .navigationTitle("End Run")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -549,6 +551,7 @@ struct LogRunSheet: View {
                     TextField("Optional", text: $notes, axis: .vertical)
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Log Run")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

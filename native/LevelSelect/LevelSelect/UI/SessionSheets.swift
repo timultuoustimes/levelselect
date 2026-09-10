@@ -76,6 +76,7 @@ struct EndSessionSheet: View {
                     Text("Optional, and it lands in your Journal with the session.")
                 }
             }
+            .lsFormStyle()
             .navigationTitle("End Session")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -165,6 +166,7 @@ struct EditSessionSheet: View {
                     }
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Edit Session")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

@@ -261,6 +261,7 @@ struct AddGameSheet: View {
                 Button("Back to search") { manualMode = false }
             }
         }
+        .lsFormStyle()
         .onAppear {
             manualName = searchText
             manualPlatform = lastPlatform
@@ -529,6 +530,7 @@ private struct ConfirmAddView: View {
                 Button("Back to search", action: onBack)
             }
         }
+        .lsFormStyle()
         // The app's own ground, with the rows as glass on top of it. A system
         // grouped Form reads as Settings, and this is the screen where you
         // look at a game — Tim: "It's also a boring default gray, like the

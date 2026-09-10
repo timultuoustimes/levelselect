@@ -254,6 +254,7 @@ struct MarkCompletionSheet: View {
                     Text("\"Played with\" is just written down — the app has no accounts and doesn't share anything. It's there so a co-op finish remembers who was on the couch.")
                 }
             }
+            .lsFormStyle()
             .navigationTitle(editing == nil ? "Mark as Beaten" : "Edit")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)

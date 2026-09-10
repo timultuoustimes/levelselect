@@ -330,6 +330,7 @@ struct LogSessionSheet: View {
                     TextField("Optional", text: $notes, axis: .vertical)
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Log Session")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
@@ -379,6 +380,7 @@ struct CarriedOverSheet: View {
                     Text("The number your console or storefront already knows — Steam's hours, a Switch profile's. It adds to this game's total and stays out of your session history, because it never happened on any one day. Set it to zero to remove it.")
                 }
             }
+            .lsFormStyle()
             .navigationTitle("Starting total")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
