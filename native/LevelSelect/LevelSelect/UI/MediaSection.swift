@@ -169,11 +169,16 @@ struct ScreenshotStrip: View {
         .sheet(item: $viewing) { item in
             // One viewer for the app: the add screen needed the same thing,
             // and two of these drift until one loses the pinch gesture.
-            RemoteImageViewer(url: URL(string:
-                "https://images.igdb.com/igdb/image/upload/t_1080p/\(item.imageID).jpg"))
+            //
+            // The whole strip travels, opened at the one that was tapped, so
+            // the next screenshot is a swipe rather than a close and a
+            // reopen.
+            RemoteImageViewer(urls: imageIDs.compactMap(Self.fullSize),
+                              start: Self.fullSize(item.imageID))
         }
         .sheet(item: $viewingLocal) { image in
-            LocalImageViewer(image: image)
+            LocalImageViewer(images: game.liveImages.filter { $0.role != .map && $0.data != nil },
+                             start: image)
         }
     }
 
@@ -193,6 +198,12 @@ struct ScreenshotStrip: View {
         } catch {
             importError = "Couldn't add that image."
         }
+    }
+
+    /// The size the viewer opens at, as one expression rather than a URL
+    /// string built at three call sites.
+    private static func fullSize(_ imageID: String) -> URL? {
+        URL(string: "https://images.igdb.com/igdb/image/upload/t_1080p/\(imageID).jpg")
     }
 
     private func shot(_ id: String, size: String) -> some View {
@@ -234,20 +245,47 @@ struct ScreenshotStrip: View {
 /// Not private: the journal shows the same pictures and needs the same
 /// viewer. Two of these would drift until one lost the caption field.
 struct LocalImageViewer: View {
-    @Bindable var image: GameImage
+    let images: [GameImage]
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
+    @State private var current: UUID?
     @State private var caption = ""
+
+    /// One picture. Kept because a few callers genuinely have one.
+    init(image: GameImage) {
+        images = [image]
+        _current = State(initialValue: image.id)
+    }
+
+    /// The whole set, opened at the one that was tapped — see
+    /// `RemoteImageViewer` for why.
+    init(images: [GameImage], start: GameImage) {
+        self.images = images
+        _current = State(initialValue: images.contains(where: { $0.id == start.id })
+                         ? start.id : images.first?.id)
+    }
+
+    private var shown: GameImage? {
+        images.first { $0.id == current } ?? images.first
+    }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let data = image.data {
-                    LocalArtworkThumb(data: data, contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if images.isEmpty {
+                    ContentUnavailableView("No picture", systemImage: "photo")
                 } else {
-                    ContentUnavailableView("Still syncing", systemImage: "icloud.and.arrow.down",
-                                           description: Text("This picture hasn't finished downloading to this device."))
+                    #if os(iOS)
+                    TabView(selection: $current) {
+                        ForEach(images) { image in
+                            page(image).tag(Optional(image.id))
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: images.count > 1 ? .automatic : .never))
+                    .indexViewStyle(.page(backgroundDisplayMode: .interactive))
+                    #else
+                    if let shown { page(shown) }
+                    #endif
                 }
                 // Reads as a caption rather than an anonymous input: a
                 // pencil to say it is editable, and no border, because a
@@ -265,21 +303,71 @@ struct LocalImageViewer: View {
             }
             .background(.black)
             .toolbar {
+                #if os(macOS)
+                if images.count > 1 {
+                    ToolbarItemGroup(placement: .navigation) {
+                        Button { step(-1) } label: { Image(systemName: "chevron.left") }
+                            .disabled(index == 0)
+                            .accessibilityLabel("Previous picture")
+                        Button { step(1) } label: { Image(systemName: "chevron.right") }
+                            .disabled(index == images.count - 1)
+                            .accessibilityLabel("Next picture")
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
-                        let trimmed = caption.trimmingCharacters(in: .whitespaces)
-                        if trimmed != (image.caption ?? "") {
-                            image.caption = trimmed.isEmpty ? nil : trimmed
-                            image.updatedAt = .now
-                            image.revision += 1
-                            PersistenceMonitor.shared.commit(context)
-                        }
+                        commit(to: shown)
                         dismiss()
                     }
                 }
             }
-            .onAppear { caption = image.caption ?? "" }
+            .onAppear { caption = shown?.caption ?? "" }
+            // **Swiping away from a picture has to file its caption.**
+            //
+            // The field is one piece of state shared by every page, so
+            // without this the words typed on picture one would follow you to
+            // picture two and then be saved onto it by Done. `oldValue` is
+            // the picture being left, which is the only thing that knows
+            // where those words belong.
+            .onChange(of: current) { oldValue, newValue in
+                commit(to: images.first { $0.id == oldValue })
+                caption = images.first { $0.id == newValue }?.caption ?? ""
+            }
         }
+    }
+
+    private var index: Int {
+        images.firstIndex { $0.id == current } ?? 0
+    }
+
+    private func step(_ by: Int) {
+        let next = index + by
+        guard images.indices.contains(next) else { return }
+        current = images[next].id
+    }
+
+    @ViewBuilder
+    private func page(_ image: GameImage) -> some View {
+        if let data = image.data {
+            LocalArtworkThumb(data: data, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ContentUnavailableView("Still syncing", systemImage: "icloud.and.arrow.down",
+                                   description: Text("This picture hasn't finished downloading to this device."))
+        }
+    }
+
+    /// Only on a real change, so paging through pictures you did not edit
+    /// does not stamp sync metadata on every one of them.
+    private func commit(to image: GameImage?) {
+        guard let image else { return }
+        let trimmed = caption.trimmingCharacters(in: .whitespaces)
+        guard trimmed != (image.caption ?? "") else { return }
+        image.caption = trimmed.isEmpty ? nil : trimmed
+        image.updatedAt = .now
+        image.revision += 1
+        PersistenceMonitor.shared.commit(context)
     }
 }
 

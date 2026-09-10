@@ -541,7 +541,14 @@ private struct ConfirmAddView: View {
         // and gray on screen. The material is the background now.
         .scrollContentBackground(.hidden)
         .listRowBackground(AddSheetCard())
-                .sheet(item: $zoomed) { RemoteImageViewer(url: $0.url) }
+                // The strip, opened at the tap — the cover elsewhere on this
+                // screen still opens alone, which the one-URL initializer is
+                // for.
+                .sheet(item: $zoomed) { target in
+                    RemoteImageViewer(urls: preview.screenshotIDs.compactMap {
+                        URL(string: "https://images.igdb.com/igdb/image/upload/t_1080p/\($0).jpg")
+                    }, start: target.url)
+                }
         // The same modifier the game page uses, so a link opens the same way
         // from both — Tim: "Igdb and Deku both open a little differently than
         // they open straight from the game's page." That one is Safari's own

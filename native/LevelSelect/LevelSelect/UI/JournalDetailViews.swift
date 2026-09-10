@@ -340,6 +340,8 @@ struct MemoryView: View {
             Button { editing = true } label: { Label("Edit", systemImage: "square.and.pencil") }
         }
         .sheet(isPresented: $editing) { MemorySheet(existing: memory).lsSheet() }
-        .sheet(item: $viewingImage) { LocalImageViewer(image: $0) }
+        .sheet(item: $viewingImage) { image in
+            LocalImageViewer(images: images.filter { $0.data != nil }, start: image)
+        }
     }
 }

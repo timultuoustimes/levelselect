@@ -58,15 +58,60 @@ struct TrailerPlayer {
     }
 }
 
+extension TrailerPlayer {
+    /// **Point the live player at a different trailer.**
+    ///
+    /// The update pass was empty, and SwiftUI keeps ONE representable and one
+    /// web view for a given position in the tree — so tapping a second
+    /// trailer while the first was playing changed `youtubeID` and nothing
+    /// else. The only way to watch the other one was to close the player
+    /// first. Tim, 2026-09-10: *"I can't tap the other trailer to open it
+    /// without first tapping the X on the open video to close it out. I
+    /// should be able to just tap the next video and have it replace the
+    /// video that's already open."*
+    ///
+    /// Exactly the bug `YouTubePlayerView.refresh` carries a note about, in
+    /// the other player — the saved-videos dock hit it first and this one was
+    /// written afterwards without the fix.
+    ///
+    /// Guarded on the id, because the update pass runs for any reason at all
+    /// and reloading unconditionally would restart the trailer every time the
+    /// page around it re-rendered.
+    fileprivate func refresh(_ webView: WKWebView, _ coordinator: Coordinator) {
+        guard coordinator.loadedID != youtubeID else { return }
+        coordinator.loadedID = youtubeID
+        webView.loadHTMLString(Self.html(for: youtubeID),
+                               baseURL: URL(string: "https://www.youtube-nocookie.com"))
+    }
+
+    /// Holds the id the web view is actually showing. `makeCoordinator` runs
+    /// once per player, which is what makes it the right place to remember.
+    final class Coordinator {
+        var loadedID: String?
+    }
+}
+
 #if os(iOS)
 extension TrailerPlayer: UIViewRepresentable {
-    func makeUIView(context: Context) -> WKWebView { makeWebView() }
-    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeUIView(context: Context) -> WKWebView {
+        context.coordinator.loadedID = youtubeID
+        return makeWebView()
+    }
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        refresh(webView, context.coordinator)
+    }
 }
 #else
 extension TrailerPlayer: NSViewRepresentable {
-    func makeNSView(context: Context) -> WKWebView { makeWebView() }
-    func updateNSView(_ webView: WKWebView, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeNSView(context: Context) -> WKWebView {
+        context.coordinator.loadedID = youtubeID
+        return makeWebView()
+    }
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        refresh(webView, context.coordinator)
+    }
 }
 #endif
 #endif
