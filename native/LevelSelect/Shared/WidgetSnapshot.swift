@@ -348,14 +348,38 @@ struct WidgetSnapshot: Codable, Hashable {
         // that hex IS what both appearances were showing — so falling back to
         // it reproduces the old behavior exactly rather than dropping the
         // user's accent until the app next writes.
+        //
+        // Safe in a way the GROUND's fallback below was not: the bridge writes
+        // both accent halves together or neither (they are gated on the same
+        // `accentIsCustom`), so a missing key here always means an old file,
+        // never "this appearance has no choice". A nil optional is omitted
+        // rather than encoded as null, so those two cases are otherwise
+        // indistinguishable — see the note on the ground.
         accentHexLight = try c.decodeIfPresent(String.self, forKey: .accentHexLight) ?? accentHex
         accentHexDark = try c.decodeIfPresent(String.self, forKey: .accentHexDark) ?? accentHex
         // decodeIfPresent, like every field added after v1: an older snapshot
         // on disk simply has no key, and must still decode.
         appearanceRaw = try c.decodeIfPresent(String.self, forKey: .appearanceRaw)
         backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex)
+        // **The legacy ground hex was the DARK tint, and only that.**
+        //
+        // `ThemePalette.backgroundOverride` hands back `backgroundOverrideDark`
+        // — that is the whole reason a light Home Screen was drawing the dark
+        // choice's ground. So it can stand in for dark, and must NEVER stand
+        // in for light.
+        //
+        // Falling back on both is what broke Tim's widget the first time:
+        // Swift's synthesized encoder OMITS a nil optional rather than writing
+        // null, so `backgroundHexLight` is missing from a NEW snapshot whenever
+        // no light ground has been chosen — indistinguishable from an old
+        // snapshot that never had the key. `decodeIfPresent ?? backgroundHex`
+        // then handed the light side the dark tint again, and the fix looked
+        // like it had done nothing. Tim: *"the widget isn't changing from the
+        // dark mode background selection when I go back to light mode."*
+        //
+        // No fallback here means an unchosen light ground is the DEFAULT
+        // ground, which is what the app itself draws.
         backgroundHexLight = try c.decodeIfPresent(String.self, forKey: .backgroundHexLight)
-            ?? backgroundHex
         backgroundHexDark = try c.decodeIfPresent(String.self, forKey: .backgroundHexDark)
             ?? backgroundHex
         statusColors = try c.decodeIfPresent([String: String].self, forKey: .statusColors) ?? [:]

@@ -327,26 +327,22 @@ struct WidgetPerAppearanceThemeTests {
     /// not on install — and that file has only the single keys. Falling back
     /// to them reproduces exactly what those widgets were already drawing
     /// rather than dropping the accent until the next write.
-    @Test("A pre-build-38 snapshot decodes its single hex into both halves")
-    func anOlderSnapshotStillCarriesItsChoice() throws {
-        let sent = snapshot {
-            $0.accentHex = "#2573DD"
-            $0.backgroundHex = "#44CC77"
-        }
+    @Test("A pre-build-38 accent decodes its single hex into both halves")
+    func anOlderSnapshotStillCarriesItsAccent() throws {
+        let sent = snapshot { $0.accentHex = "#2573DD" }
         // Strip the new keys the way a file written by the old build would.
         var json = try JSONSerialization.jsonObject(
             with: try JSONEncoder.iso8601.encode(sent)) as! [String: Any]
-        for key in ["accentHexLight", "accentHexDark",
-                    "backgroundHexLight", "backgroundHexDark"] {
-            json.removeValue(forKey: key)
-        }
+        for key in ["accentHexLight", "accentHexDark"] { json.removeValue(forKey: key) }
         let data = try JSONSerialization.data(withJSONObject: json)
         let got = try JSONDecoder.iso8601.decode(WidgetSnapshot.self, from: data)
 
+        // Both, because the legacy accent WAS being drawn on both grounds —
+        // and safely, because the bridge writes the two halves together or
+        // not at all. The ground is the opposite case and has its own test:
+        // its legacy key described dark only.
         #expect(got.accentHexLight == "#2573DD")
         #expect(got.accentHexDark == "#2573DD")
-        #expect(got.backgroundHexLight == "#44CC77")
-        #expect(got.backgroundHexDark == "#44CC77")
     }
 
     /// Nothing chosen sends nothing, so the widget falls back to the same
@@ -358,6 +354,64 @@ struct WidgetPerAppearanceThemeTests {
         #expect(got.accentHexDark == nil)
         #expect(got.backgroundHexLight == nil)
         #expect(got.backgroundHexDark == nil)
+    }
+
+    /// **A nil optional is OMITTED, not encoded as null.**
+    ///
+    /// Everything below depends on this, and it is why "no light ground
+    /// chosen" and "a file written before the key existed" look identical on
+    /// disk. Pinned rather than assumed: the first version of the fallback
+    /// assumed the opposite and shipped the bug.
+    @Test("An unchosen half leaves no key behind")
+    func nilOptionalsAreOmittedFromTheJSON() throws {
+        let sent = snapshot { $0.backgroundHexDark = "#44CC77" }
+        let json = try JSONSerialization.jsonObject(
+            with: try JSONEncoder.iso8601.encode(sent)) as! [String: Any]
+        #expect(json["backgroundHexDark"] as? String == "#44CC77")
+        #expect(json["backgroundHexLight"] == nil, "a nil half wrote a key")
+        #expect(json.index(forKey: "backgroundHexLight") == nil,
+                "the key is present, so absence cannot mean 'old file'")
+    }
+
+    /// **Tim's report.** A dark ground chosen, light left alone: the light
+    /// side must come back nil, not wearing the dark choice.
+    ///
+    /// `decodeIfPresent(...) ?? backgroundHex` handed it the dark tint,
+    /// because the legacy key IS the dark tint and the light key is missing
+    /// whenever nothing was chosen for it. The widget went on drawing the
+    /// dark ground in light mode and the fix looked inert. Tim, 2026-09-09:
+    /// *"the widget isn't changing from the dark mode background selection
+    /// when I go back to light mode. Even after force closing the app and
+    /// reopening it."*
+    @Test("A dark-only ground does not leak onto the light side")
+    func aDarkGroundStaysOutOfTheLightHalf() throws {
+        let sent = snapshot {
+            // Exactly what the bridge writes: the legacy key mirrors dark,
+            // because `backgroundOverride` IS `backgroundOverrideDark`.
+            $0.backgroundHex = "#44CC77"
+            $0.backgroundHexDark = "#44CC77"
+        }
+        let got = try roundTrip(sent)
+        #expect(got.backgroundHexDark == "#44CC77")
+        #expect(got.backgroundHexLight == nil,
+                "the light ground inherited the dark choice")
+    }
+
+    /// The dark fallback still earns its place: a pre-build-38 file carried
+    /// the dark tint under the single key, so dark keeps it — and light,
+    /// which that file never described, falls to the default rather than to
+    /// somebody else's hue.
+    @Test("A pre-build-38 ground applies to dark only")
+    func anOlderGroundIsADarkGroundOnly() throws {
+        var json = try JSONSerialization.jsonObject(
+            with: try JSONEncoder.iso8601.encode(
+                snapshot { $0.backgroundHex = "#2573DD" })) as! [String: Any]
+        for key in ["backgroundHexLight", "backgroundHexDark"] { json.removeValue(forKey: key) }
+        let got = try JSONDecoder.iso8601.decode(
+            WidgetSnapshot.self, from: try JSONSerialization.data(withJSONObject: json))
+
+        #expect(got.backgroundHexDark == "#2573DD")
+        #expect(got.backgroundHexLight == nil)
     }
 
     /// The two statics the bridge reads, which exist precisely because
