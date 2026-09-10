@@ -195,6 +195,23 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
+            #else
+            // **Inside the stack, on the root Form — where the pushed pages do
+            // it.** Applied from outside the NavigationStack this reached
+            // nothing: toolbar modifiers act on the content a stack shows, not
+            // on the stack, so the root kept a grey (39,40,39) system bar while
+            // every pushed page measured purple top to bottom. Same header,
+            // same place, so the root and the pages now agree.
+            .toolbar(.hidden, for: .windowToolbar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack(spacing: 0) {
+                    Text("Settings").font(.headline)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(LSTheme.liveSheetGround)
+            }
             #endif
             .toolbar {
                 // The Mac draws its own — see `macChrome` below.
@@ -241,16 +258,6 @@ struct SettingsView: View {
         //
         // The pushed pages already draw their own header for the same reason.
         // This is the root sheet catching up, which also makes the two agree.
-        .toolbar(.hidden, for: .windowToolbar)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            HStack(spacing: 0) {
-                Text("Settings").font(.headline)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(LSTheme.liveSheetGround)
-        }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             HStack(spacing: 0) {
                 Spacer(minLength: 0)
