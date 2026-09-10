@@ -49,7 +49,19 @@ struct ColorEditor: View {
         var label: String { self == .accent ? "Accent" : "Background" }
     }
 
+    /// **Which appearance a tap on a circle writes to.** Nil is both, which
+    /// is what it has always done and what almost everyone wants.
+    ///
+    /// Tim, 2026-09-09: *"can we make it so that I can pick one set of colors
+    /// for light mode and another set for dark mode."* The preview already
+    /// showed the two grounds side by side and already labelled them with a
+    /// sun and a moon, so it becomes the control rather than the sheet
+    /// growing a second segmented picker — which is exactly the build-37
+    /// linked-mode toggle he had cut.
+    enum Half { case light, dark }
+
     @State private var role: Role = .accent
+    @State private var half: Half?
     @State private var originals: [String: Color] = [:]
     /// What this sheet has chosen so far, by target. The bindings write
     /// through to the model, but a write there is not a state change HERE —
@@ -80,9 +92,14 @@ struct ColorEditor: View {
         targets.filter { $0.id.hasPrefix(role == .accent ? "accent-" : "background-") }
     }
 
-    /// The targets a tap on a circle writes to.
+    /// The targets a tap on a circle writes to: the current role's, narrowed
+    /// to one appearance when a half is selected.
     private var editing: [ColorTarget] {
-        isThemeEditor ? targets(for: role) : Array(targets.prefix(1))
+        guard isThemeEditor else { return Array(targets.prefix(1)) }
+        let both = targets(for: role)
+        guard let half else { return both }
+        let suffix = half == .dark ? "-dark" : "-light"
+        return both.filter { $0.id.hasSuffix(suffix) }
     }
 
     private func value(of t: ColorTarget) -> Color { picked[t.id] ?? t.binding.wrappedValue }
@@ -124,7 +141,17 @@ struct ColorEditor: View {
 
     /// The color the circles mark as chosen.
     private var current: Color? { editing.first.map(value(of:)) }
-    private var chosen: LSPalette.Pair? { LSPalette.pair(matching: current?.hexString()) }
+
+    /// **Every pair a tap would replace** — one when the two appearances
+    /// agree or a half is selected, two when they have been set apart.
+    ///
+    /// A single `chosen` had to pick a side, and picking light while dark
+    /// held something else drew a checkmark on a color half the app is not
+    /// wearing. Two ticks is the honest answer to "what is set", and it is
+    /// also the only thing that tells you the appearances have diverged.
+    private var chosenIDs: Set<String> {
+        Set(editing.compactMap { LSPalette.pair(matching: value(of: $0).hexString())?.id })
+    }
 
     /// A stored value per appearance, read live so the preview follows every tap.
     private func stored(_ role: Role, dark: Bool) -> Color? {
@@ -246,17 +273,23 @@ struct ColorEditor: View {
             return "How \"\(name)\" reads at the top of Home, on both grounds. The darker shade is its step."
         }
         if !isThemeEditor { return "One color for this status, everywhere it appears." }
-        return role == .accent
-            ? "The accent is the same color on both grounds. On light it writes in its darker step; on dark it writes as itself."
-            : "The ground is the color laid over the app's gray and charcoal, so nothing on it can become unreadable."
+        switch half {
+        case .light: return "Setting the light \(role == .accent ? "accent" : "ground"). Tap Light again to set both at once."
+        case .dark:  return "Setting the dark \(role == .accent ? "accent" : "ground"). Tap Dark again to set both at once."
+        case nil:
+            return role == .accent
+                ? "On light the accent writes in its darker step; on dark it writes as itself. Tap Light or Dark above to give each its own."
+                : "The ground is the color laid over the app's gray and charcoal, so nothing on it can become unreadable. Tap Light or Dark above to give each its own."
+        }
     }
 
     // MARK: The seven
 
     private var circles: some View {
         HStack(spacing: 10) {
+            let ticked = chosenIDs
             ForEach(LSPalette.pairs) { pair in
-                let picked = chosen?.id == pair.id
+                let picked = ticked.contains(pair.id)
                 Button {
                     choose(pair)
                 } label: {
@@ -308,24 +341,63 @@ struct ColorEditor: View {
     /// reads the halves regardless.
     private var preview: some View {
         HStack(spacing: 0) {
-            previewHalf(dark: false)
-            previewHalf(dark: true)
+            previewSide(.light)
+            previewSide(.dark)
         }
         .dynamicTypeSize(...DynamicTypeSize.large)
         .clipShape(.rect(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14)
             .strokeBorder(LSTheme.hairline, lineWidth: 1))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(previewDescription)
     }
 
-    /// What the preview shows, for anyone who cannot see it.
-    private var previewDescription: String {
-        let name = chosen?.name ?? "A custom color"
-        if isThemeEditor, role == .background {
-            return "Preview: \(name) as the ground, light and dark."
+    /// One half: the specimen, and — in the theme editor — the control that
+    /// aims the circles at this appearance.
+    ///
+    /// Outside the theme editor a status or a name has one color for both
+    /// grounds, so there is nothing to aim and the halves stay inert.
+    @ViewBuilder
+    private func previewSide(_ which: Half) -> some View {
+        let isDark = which == .dark
+        let selected = half == which
+        if isThemeEditor {
+            Button {
+                // Tapping the selected half releases it, so "both" is always
+                // one tap away from wherever you are.
+                half = selected ? nil : which
+            } label: {
+                previewHalf(dark: isDark)
+                    .overlay {
+                        if selected {
+                            Rectangle().strokeBorder(
+                                isDark ? Color.white.opacity(0.8) : Color.black.opacity(0.5),
+                                lineWidth: 3)
+                        }
+                    }
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(previewDescription(dark: isDark))
+            .accessibilityHint(selected
+                ? "Selected. Activate to set both appearances at once."
+                : "Activate to set only this appearance.")
+            .accessibilityAddTraits(selected ? .isSelected : [])
+        } else {
+            previewHalf(dark: isDark)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(previewDescription(dark: isDark))
         }
-        return "Preview: \(name) as a button and a tinted pill, on the light ground and the dark one."
+    }
+
+    /// What one half shows, for anyone who cannot see it.
+    private func previewDescription(dark: Bool) -> String {
+        let word = dark ? "dark" : "light"
+        let shown = targets.first { $0.id == "\(role.rawValue)-\(word)" }.map(value(of:))
+            ?? current
+        let name = LSPalette.pair(matching: shown?.hexString())?.name ?? "A custom color"
+        if isThemeEditor, role == .background {
+            return "\(name) as the \(word) ground."
+        }
+        return "\(name) as a button and a tinted pill, on the \(word) ground."
     }
 
     private func previewHalf(dark: Bool) -> some View {

@@ -69,11 +69,25 @@ enum LSPalette {
     /// `Pair` so the seven authored pairs are untouched by it.
     static let neutralPairName = "Mono"
 
-    /// The pair an accent hex belongs to, if it is one of the seven.
+    /// The pair a stored hex belongs to, if it is one of the eight.
+    ///
+    /// **Its step counts too.** A pair is stored by its ACCENT — that is what
+    /// tapping a circle writes — but the light accent's binding used to hand
+    /// back the pair's step for "nothing stored", and a Cancel could commit
+    /// that. Such a library holds a hex that is unmistakably a pair's and
+    /// matched nothing, so it went through the legacy contrast correction and
+    /// the circle it came from showed no checkmark. Recognizing the step
+    /// resolves it to the pair it is half of, which changes no color (the
+    /// step IS the light ink) and makes the picker agree with the app.
+    ///
+    /// Safe because no pair's step is any pair's accent — pinned by
+    /// `noStepIsAnyPairsAccent`, since the two passes would otherwise be able
+    /// to disagree about the same hex.
     static func pair(matching hex: String?) -> Pair? {
         guard let hex else { return nil }
         let key = normalized(hex)
         return pairs.first { normalized($0.accent) == key }
+            ?? pairs.first { normalized($0.step) == key }
     }
 
     static func normalized(_ hex: String) -> String {

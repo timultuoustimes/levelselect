@@ -35,9 +35,20 @@ enum ThemePalette {
     /// True once the user has picked their own accent. The wordmark keeps its
     /// brand torch-orange until then, so the default look is unchanged.
     private(set) static var accentIsCustom = false
-    /// The palette pair the accent belongs to, when it is one of the seven —
-    /// see `LSPalette`. Nil for the default and for a custom color.
+    /// The palette pair the LIGHT accent belongs to, when it is one of the
+    /// eight — see `LSPalette`. Nil only for a custom color; an absence is
+    /// the default pair.
     private(set) static var activePair: LSPalette.Pair?
+    /// The same for dark. **The two are chosen independently**, which is the
+    /// whole of the per-appearance feature: the hexes have been separate
+    /// deployed fields since build 37 and were only ever written as one
+    /// choice twice over.
+    private(set) static var activePairDark: LSPalette.Pair?
+    /// Whether the accent is one of the palette's pairs in either appearance.
+    /// `accentStep` and `onAccent` are already resolved per appearance, so a
+    /// caller that only needs to know "is this ours" asks this rather than
+    /// picking one side.
+    static var accentIsAPair: Bool { activePair != nil || activePairDark != nil }
     /// The pair the ground is tinted with, when it is one of the seven.
     private(set) static var groundPair: LSPalette.Pair?
     /// The hard step under pixel type in the accent, and the accent's ink on
@@ -276,12 +287,32 @@ enum ThemePalette {
         // ABSENCE is not a custom color, it is the first swatch, and reading
         // it as one is what made "Use the default" produce a brown light
         // accent and a re-derived dark one. See `LSPalette.defaultAccent`.
-        let nothingChosen = settings?.accentHex(dark: false) == nil
-            && settings?.accentHex(dark: true) == nil
-        let pair = LSPalette.pair(matching: settings?.accentHex(dark: false))
-            ?? LSPalette.pair(matching: settings?.accentHex(dark: true))
-            ?? (nothingChosen ? LSPalette.defaultAccent : nil)
-        activePair = pair
+        // **One pair per appearance, resolved independently.**
+        //
+        // Tim, 2026-09-09: *"can we make it so that I can pick one set of
+        // colors for light mode and another set for dark mode, and then they
+        // auto switch between them when the system switches?"* The storage was
+        // already there — `accentHexLight` and `accentHexDark` have been
+        // separate since build 37 — and every value below is already
+        // `.lsDynamic`. All that was missing was reading the two hexes as two
+        // choices instead of falling from one to the other.
+        //
+        // Absence is still the first swatch, but PER APPEARANCE: a library
+        // that has only ever set a dark accent keeps the default on light
+        // rather than inheriting the dark one, which is what the old
+        // `?? pair(matching: dark)` fallthrough did.
+        func accentPair(_ dark: Bool) -> LSPalette.Pair? {
+            guard let hex = settings?.accentHex(dark: dark) else {
+                return LSPalette.defaultAccent
+            }
+            // Nil here means a genuine custom color, which still goes through
+            // the legibility correction below.
+            return LSPalette.pair(matching: hex)
+        }
+        let lightPair = accentPair(false)
+        let darkPair = accentPair(true)
+        activePair = lightPair
+        activePairDark = darkPair
         groundPair = LSPalette.pair(matching: settings?.backgroundHex(dark: false))
             ?? LSPalette.pair(matching: settings?.backgroundHex(dark: true))
         // **A pair's ink is its step on light and its accent on dark** — the
@@ -289,9 +320,9 @@ enum ThemePalette {
         // corrected only if it fails: a color picked through the build 37
         // picker already clears the floor; this catches the ones stored
         // before it existed, which were never checked against anything.
-        let lightAccent = pair?.stepColor
+        let lightAccent = lightPair?.stepColor
             ?? LSTheme.legible(lightCustom ?? LSTheme.torchInk, on: groundBase(dark: false))
-        let darkAccent = pair?.accentColor
+        let darkAccent = darkPair?.accentColor
             ?? LSTheme.legible(darkCustom ?? LSTheme.torch, on: groundBase(dark: true))
         accent = .lsDynamic(light: lightAccent, dark: darkAccent)
         // No `legible()` here, and torch on BOTH grounds by default — the
@@ -299,8 +330,13 @@ enum ThemePalette {
         displayAccent = .lsDynamic(light: lightCustom ?? LSTheme.torch,
                                    dark: darkCustom ?? LSTheme.torch)
         accentIsCustom = lightCustom != nil || darkCustom != nil
-        accentStep = pair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
-            ?? (accentIsCustom ? LSTheme.hardStep(under: displayAccent) : LSTheme.torchShadow)
+        // Each appearance takes its own pair's step, and only an appearance
+        // holding a genuine custom color derives one.
+        accentStep = .lsDynamic(
+            light: lightPair?.stepColor
+                ?? lightCustom.map { LSTheme.hardStep(under: $0) } ?? LSTheme.torchShadow,
+            dark: darkPair?.stepColor
+                ?? darkCustom.map { LSTheme.hardStep(under: $0) } ?? LSTheme.torchShadow)
         // A knockout, not simply a contrasting ink — see `knockout(on:)`.
         //
         // Computed per appearance against that appearance's ACTUAL ground,
@@ -309,10 +345,11 @@ enum ThemePalette {
         // trait is current when it is read.
         // A pair's fill carries its own step as ink, on both grounds — Tim's
         // Play button. Anything else keeps the knockout.
-        onAccent = pair.map { .lsDynamic(light: $0.stepColor, dark: $0.stepColor) }
-            ?? .lsDynamic(
-                light: knockoutPreview(on: lightAccent, ground: groundBase(dark: false)),
-                dark: knockoutPreview(on: darkAccent, ground: groundBase(dark: true)))
+        onAccent = .lsDynamic(
+            light: lightPair?.stepColor
+                ?? knockoutPreview(on: lightAccent, ground: groundBase(dark: false)),
+            dark: darkPair?.stepColor
+                ?? knockoutPreview(on: darkAccent, ground: groundBase(dark: true)))
         pageBackground = settings.flatMap { ThemePageBackground(rawValue: $0.pageBackgroundRaw) } ?? .cover
         defaultTrackerDisplay = settings.flatMap { TrackerDisplay(rawValue: $0.defaultTrackerDisplayRaw) } ?? .compact
         var overrides: [GameStatus: Color] = [:]

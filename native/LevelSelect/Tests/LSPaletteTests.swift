@@ -73,6 +73,26 @@ struct LSPaletteTests {
         }
     }
 
+    /// **No pair's step is any pair's accent.**
+    ///
+    /// `pair(matching:)` looks at the accents first and the steps second, so
+    /// that a hex written by the build that stored the light INK still
+    /// resolves to the pair it came from. The two passes can only stay
+    /// consistent while the two sets are disjoint — one overlap and the same
+    /// hex would mean two different pairs depending on which loop saw it.
+    @Test("No step collides with an accent, so the lookup cannot be ambiguous")
+    func noStepIsAnyPairsAccent() {
+        let accents = Set(LSPalette.pairs.map { LSPalette.normalized($0.accent) })
+        let steps = Set(LSPalette.pairs.map { LSPalette.normalized($0.step) })
+        #expect(accents.isDisjoint(with: steps))
+        #expect(steps.count == LSPalette.pairs.count)
+        // And the fallback actually resolves, since that is the point.
+        for p in LSPalette.pairs {
+            #expect(LSPalette.pair(matching: p.step)?.name == p.name,
+                    Comment(rawValue: "\(p.name) step"))
+        }
+    }
+
     /// **The high-contrast pair, and the reason it needed a branch.**
     ///
     /// Mono is the seven's shape with the hue taken out: a light-grey accent
@@ -176,5 +196,80 @@ struct LSPaletteTests {
         // torch #F5A34D IS the Torch pair since 2026-09-09.
         #expect(LSPalette.pair(matching: "#F2A24B") == nil)   // the old torch is not a pair
         #expect(LSPalette.pair(matching: nil) == nil)
+    }
+}
+
+/// **A pair for light and a different one for dark.**
+///
+/// The two hexes have been separate deployed fields since build 37, and every
+/// resolved value in `ThemePalette` was already `.lsDynamic`; all that was
+/// missing was reading them as two choices rather than one written twice.
+/// Tim, 2026-09-09: *"can we make it so that I can pick one set of colors for
+/// light mode and another set for dark mode, and then they auto switch
+/// between them when the system switches?"*
+@MainActor
+struct PerAppearancePairTests {
+
+    private func settings(light: String? = nil, dark: String? = nil) -> ThemeSettings {
+        let s = ThemeSettings()
+        s.accentHexLight = light
+        s.accentHexDark = dark
+        return s
+    }
+
+    @Test("Light and dark resolve to their own pairs")
+    func eachAppearanceKeepsItsOwnPair() throws {
+        let blue = try #require(LSPalette.pairs.first { $0.name == "Blue" })
+        let pink = try #require(LSPalette.pairs.first { $0.name == "Pink" })
+        ThemePalette.refresh(from: settings(light: blue.accent, dark: pink.accent))
+
+        #expect(ThemePalette.activePair?.name == "Blue")
+        #expect(ThemePalette.activePairDark?.name == "Pink")
+        #expect(ThemePalette.accentIsAPair)
+    }
+
+    /// **The fallthrough this replaces.** `pair(matching: light) ?? pair(matching:
+    /// dark)` meant a library that had only ever set a dark accent wore that
+    /// choice on BOTH grounds — so the light default was unreachable without
+    /// setting light explicitly to the thing it already should have been.
+    @Test("An unset appearance keeps the default rather than inheriting the other")
+    func oneSideSetLeavesTheOtherOnTheDefault() throws {
+        let green = try #require(LSPalette.pairs.first { $0.name == "Green" })
+        ThemePalette.refresh(from: settings(dark: green.accent))
+
+        #expect(ThemePalette.activePairDark?.name == "Green")
+        #expect(ThemePalette.activePair?.name == LSPalette.defaultAccent.name)
+    }
+
+    /// Nothing stored anywhere is the first swatch on both, which is what the
+    /// empty library wears and what "Use the default colors" restores.
+    @Test("Nothing stored is the default pair on both grounds")
+    func nothingStoredIsTheDefaultOnBoth() {
+        ThemePalette.refresh(from: settings())
+        #expect(ThemePalette.activePair?.name == "Torch")
+        #expect(ThemePalette.activePairDark?.name == "Torch")
+    }
+
+    /// A hex that belongs to no pair is still a custom color, per appearance,
+    /// and still goes through the legibility correction rather than being
+    /// quietly rounded to a swatch.
+    @Test("A custom hex on one side does not make the other side custom")
+    func aCustomColorStaysOnItsOwnSide() throws {
+        let red = try #require(LSPalette.pairs.first { $0.name == "Red" })
+        ThemePalette.refresh(from: settings(light: "#123456", dark: red.accent))
+
+        #expect(ThemePalette.activePair == nil)
+        #expect(ThemePalette.activePairDark?.name == "Red")
+        #expect(ThemePalette.accentIsAPair)
+    }
+
+    /// The step a build-38 Cancel could have committed to the light hex still
+    /// names its pair — see `LSPalette.pair(matching:)`.
+    @Test("A stored step resolves to the pair it is half of")
+    func aStoredStepIsNotACustomColor() throws {
+        let yellow = try #require(LSPalette.pairs.first { $0.name == "Yellow" })
+        ThemePalette.refresh(from: settings(light: yellow.step, dark: yellow.accent))
+        #expect(ThemePalette.activePair?.name == "Yellow")
+        #expect(ThemePalette.activePairDark?.name == "Yellow")
     }
 }

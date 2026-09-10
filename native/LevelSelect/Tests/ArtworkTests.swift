@@ -411,16 +411,26 @@ struct AccentContrastTests {
     /// all. What the original test was really protecting is the only thing
     /// that matters: whatever goes inside the button must be legible against
     /// it. 4.5:1 is the WCAG AA floor for text.
+    /// **Set per appearance, because that is now what a choice IS.**
+    ///
+    /// The legacy single `accentHex` is deliberately read as the DARK value
+    /// only (`ThemeSettings.accentHex(dark:)`) — the app was dark-only when it
+    /// was written — so with pairs resolved per appearance, a settings record
+    /// carrying just that field leaves LIGHT on the default pair. This test is
+    /// about a custom color's lettering, so it has to actually put a custom
+    /// color on the appearance it is measuring.
     @Test func lightAccentsStayLegible() {
         let settings = ThemeSettings()
-        settings.accentHex = "#F5E663"          // pale yellow
+        settings.accentHexLight = "#F5E663"     // pale yellow
+        settings.accentHexDark = "#F5E663"
         ThemePalette.refresh(from: settings)
         #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
 
     @Test func darkAccentsStayLegible() {
         let settings = ThemeSettings()
-        settings.accentHex = "#3B1D6E"          // deep indigo
+        settings.accentHexLight = "#3B1D6E"     // deep indigo
+        settings.accentHexDark = "#3B1D6E"
         ThemePalette.refresh(from: settings)
         #expect(ThemePalette.contrast(ThemePalette.onAccent, LSTheme.accent) >= 4.5)
     }
