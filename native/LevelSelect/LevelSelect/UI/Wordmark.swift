@@ -86,7 +86,7 @@ struct Wordmark: View {
         Wordmark(size: 30)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(LSTheme.background)
+    .background(LSTheme.liveGround)
 }
 
 

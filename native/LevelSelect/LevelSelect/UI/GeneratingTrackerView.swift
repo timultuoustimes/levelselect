@@ -175,5 +175,5 @@ struct GeneratingTrackerView: View {
     }
     .padding()
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(LSTheme.background)
+    .background(LSTheme.liveGround)
 }

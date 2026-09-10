@@ -1088,7 +1088,13 @@ struct GameDetailView: View {
     /// every game gets its own atmosphere.
     private var ambientBackdrop: some View {
         ZStack(alignment: .top) {
-            LSTheme.background
+            // **The chosen ground, not the built-in one.** `LSTheme.background`
+            // is `ground(tintedBy: nil)` — the default purple — so a page
+            // standing on it ignores the ground you picked. Tim, 2026-09-09,
+            // with Home and a game page side by side: *"that game page is
+            // after choosing the red background color, so that means it's not
+            // carrying to every page."*
+            LSTheme.liveGround
 
             switch ThemePalette.pageBackground {
             case .plain:

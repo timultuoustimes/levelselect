@@ -101,8 +101,9 @@ struct ReleaseCalendarView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         // Opaque and full-bleed, so rows disappear UNDER the header rather
-        // than showing through a band that ends before the screen does.
-        .background(LSTheme.background)
+        // than showing through a band that ends before the screen does. The
+        // chosen ground, so the band matches the page it caps.
+        .background(LSTheme.liveGround)
     }
 
     private func row(_ game: Game) -> some View {

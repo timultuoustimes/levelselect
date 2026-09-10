@@ -352,3 +352,56 @@ struct HeroTintTests {
         #expect(!text.contains("func hero(tintedBy tint:"))
     }
 }
+
+/// **A chosen ground reaches every page, or it reaches none of them.**
+///
+/// `LSTheme.background` is `ground(tintedBy: nil)` — the built-in purple. It
+/// exists for the WIDGET target, which cannot read `ThemeSettings`. A page in
+/// the app that stands on it silently ignores the ground you picked, and the
+/// app then disagrees with itself one screen at a time: Home in your color,
+/// the game page in the default. Tim, 2026-09-09, with the two side by side:
+/// *"that game page is after choosing the red background color, so that means
+/// it's not carrying to every page."*
+///
+/// `LSTheme.liveGround`'s own doc comment had said this since build 38 — *"a
+/// page in the app should stand on THIS, or a chosen ground stops at Home"* —
+/// which is exactly why it is a test now instead of a sentence.
+@MainActor
+struct GroundReachTests {
+
+    @Test("No app surface stands on the untinted default ground")
+    func everyPageStandsOnTheChosenGround() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        // Shared and Widgets are exempt on purpose: `background` is what the
+        // widget target uses, and it is declared in Shared.
+        let dirs = ["LevelSelect/UI", "LevelSelect/App"]
+
+        var offenders: [String] = []
+        for dir in dirs {
+            let base = root.appendingPathComponent(dir)
+            let names = try FileManager.default
+                .contentsOfDirectory(atPath: base.path).filter { $0.hasSuffix(".swift") }
+            #expect(!names.isEmpty, Comment(rawValue: "no sources found in \(dir)"))
+            for name in names {
+                let text = try String(contentsOf: base.appendingPathComponent(name),
+                                      encoding: .utf8)
+                for (i, line) in text.split(separator: "\n", omittingEmptySubsequences: false)
+                    .enumerated() {
+                    let trimmed = line.trimmingCharacters(in: .whitespaces)
+                    guard !trimmed.hasPrefix("//") else { continue }
+                    // `LSTheme.background` exactly — `backgroundOverrideLight`
+                    // and friends live on ThemePalette and are the right way
+                    // to read a chosen tint.
+                    guard let r = line.range(of: "LSTheme.background") else { continue }
+                    let after = line[r.upperBound...].first
+                    guard after == nil || !(after!.isLetter || after! == "_") else { continue }
+                    offenders.append("\(dir)/\(name):\(i + 1)")
+                }
+            }
+        }
+        #expect(offenders.isEmpty,
+                Comment(rawValue: "use LSTheme.liveGround (a page) or liveSheetGround "
+                        + "(a sheet or popover): " + offenders.joined(separator: ", ")))
+    }
+}

@@ -23,7 +23,7 @@ struct LevelSelectApp: App {
                 // lives inside the NavigationStack and never reached the
                 // window itself.
                 #if os(macOS)
-                .containerBackground(LSTheme.background, for: .window)
+                .containerBackground(LSTheme.liveGround, for: .window)
                 #endif
                 // Forces a clean rebuild on a library switch. Without it,
                 // @Query results from the previous container can linger.

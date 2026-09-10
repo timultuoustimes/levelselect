@@ -1599,7 +1599,9 @@ private struct HintPeekCard: View {
         }
         .padding(16)
         .frame(maxWidth: 340, alignment: .leading)
-        .background(LSTheme.background)
+        // A panel of varying height, so the sheet ramp — and the CHOSEN one,
+        // or a hint pops up in last month's color.
+        .background(LSTheme.liveSheetGround)
     }
 }
 
