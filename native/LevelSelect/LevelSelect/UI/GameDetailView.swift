@@ -20,6 +20,9 @@ struct GameDetailView: View {
     @State private var fetchedLogo: URL?
     /// Library-wide reading preference, device-local like the Stats cards.
     @State private var showingPageSettings = false
+    #if os(macOS)
+    @Environment(\.openWindow) private var openWindow
+    #endif
     @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
     @AppStorage("gameSectionOrder") private var sectionOrderRaw = ""
     @AppStorage("gameHiddenSections") private var hiddenSectionsRaw = ""
@@ -316,7 +319,11 @@ struct GameDetailView: View {
                     // — the sheet's own title carries the scope. Tim: *"Game
                     // page settings seems like the better choice right now."*
                     Button {
+                        #if os(macOS)
+                        openWindow(id: GamePageSettingsWindow.id)
+                        #else
                         showingPageSettings = true
+                        #endif
                     } label: {
                         Label("Game page settings…", systemImage: "slider.horizontal.3")
                     }

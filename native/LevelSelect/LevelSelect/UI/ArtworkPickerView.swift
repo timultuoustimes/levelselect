@@ -71,11 +71,14 @@ struct ArtworkPickerView: View {
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            #if !os(macOS)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+            #endif
+            .lsMacSheetChrome("Choose \(role.label)") { dismiss() }
             .task { await loadIGDB() }
             .task(id: photoItem) { await ingestPickedPhoto() }
         }

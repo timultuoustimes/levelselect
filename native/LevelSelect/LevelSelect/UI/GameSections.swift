@@ -292,22 +292,28 @@ struct GameArrangeSheet: View {
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
+            #if !os(macOS)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     // Not Cancel — it applies immediately, like everything
                     // else in this sheet.
-                    Button("Reset Layout") {
-                        orderRaw = ""
-                        hiddenRaw = ""
-                        showGameStats = true
-                    }
+                    Button("Reset Layout") { resetLayout() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+            #endif
+            .lsMacSheetChrome("All Game Pages",
+                              leading: ("Reset Layout", { resetLayout() })) { dismiss() }
         }
         .lsSheet()
+    }
+
+    private func resetLayout() {
+        orderRaw = ""
+        hiddenRaw = ""
+        showGameStats = true
     }
 
     private func visibilityBinding(_ section: GamePageSection) -> Binding<Bool> {

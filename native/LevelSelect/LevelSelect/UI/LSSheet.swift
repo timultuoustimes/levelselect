@@ -117,3 +117,55 @@ extension EnvironmentValues {
         set { self[LSKeyPressedKey.self] = newValue }
     }
 }
+
+extension View {
+    /// **A Mac sheet in the app's own colors: our header, our Done bar, our
+    /// ground.**
+    ///
+    /// On the Mac a sheet's title bar and its toolbar footer are system
+    /// material that samples the window BEHIND the sheet, so no background
+    /// inside the sheet reaches them — Settings learned that by measuring
+    /// (see `SettingsView`), and the game page's sheets were still white.
+    /// Tim, 2026-09-11: *"mac has no color backgrounds in any of the game page
+    /// settings sheets."* Applied to the ROOT view inside the sheet's
+    /// `NavigationStack`, where toolbar modifiers take effect; the sheet's own
+    /// `.toolbar` buttons are iOS-only wherever this is used.
+    ///
+    /// `leading` is for a sheet with a second action (Sections' Reset Layout).
+    /// A no-op off the Mac.
+    @ViewBuilder
+    func lsMacSheetChrome(_ title: String,
+                          leading: (label: String, action: () -> Void)? = nil,
+                          done: @escaping () -> Void) -> some View {
+        #if os(macOS)
+        self
+            .scrollContentBackground(.hidden)
+            .background(LSTheme.liveSheetGround)
+            .toolbar(.hidden, for: .windowToolbar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HStack(spacing: 0) {
+                    Text(title).font(.headline)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(LSTheme.liveSheetGround)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 10) {
+                    if let leading {
+                        Button(leading.label, action: leading.action)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Done", action: done)
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(LSTheme.liveSheetGround)
+            }
+        #else
+        self
+        #endif
+    }
+}

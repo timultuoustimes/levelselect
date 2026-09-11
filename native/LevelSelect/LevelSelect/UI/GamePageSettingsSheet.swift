@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// **The game-page settings, reachable from a game page.**
 ///
@@ -24,19 +25,58 @@ struct GamePageSettingsSheet: View {
             }
             #if os(macOS)
             .formStyle(.grouped)
+            // In its own window on the Mac, painted by the window's container
+            // background — see `GamePageSettingsWindow`.
+            .scrollContentBackground(.hidden)
             #endif
             .navigationTitle("All Game Pages")
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
-            #endif
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
             }
+            #endif
         }
         #if os(macOS)
-        .frame(minWidth: 460, minHeight: 520)
+        .frame(minWidth: 420, minHeight: 520)
         #endif
     }
 }
+
+#if os(macOS)
+/// **All Game Pages, as a window you can move out of the way.**
+///
+/// Tim, 2026-09-11: *"are we able to make the settings sheets movable on mac?
+/// i'm trying to change the game page layouts, but it is stuck covering the
+/// game page and I can't see the header layout."* A Mac sheet is fixed to its
+/// window. This is a real window instead: it floats above the app so it stays
+/// in reach, it can be dragged anywhere, and every change lands on the game
+/// page behind it as it is made. iPhone and iPad keep the sheet.
+///
+/// An inspector was the other candidate and is wrong here: the pages this
+/// pushes (Ownership & access) hide the window toolbar to draw their own
+/// header, and inside an inspector that would take the MAIN window's toolbar,
+/// nav pill and all, with it.
+struct GamePageSettingsWindow: Scene {
+    static let id = "game-page-settings"
+    let container: ModelContainer
+
+    var body: some Scene {
+        Window("All Game Pages", id: Self.id) {
+            GamePageSettingsSheet()
+                // A new window starts with none of the main one's
+                // environment: the accent comes from `RootView`'s `.tint`.
+                .tint(LSTheme.accent)
+                .preferredColorScheme(ThemePalette.appearance.colorScheme)
+                .containerBackground(LSTheme.liveSheetGround, for: .window)
+                .toolbarBackground(.hidden, for: .windowToolbar)
+        }
+        .modelContainer(container)
+        .windowLevel(.floating)
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 460, height: 640)
+    }
+}
+#endif

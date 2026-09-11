@@ -49,5 +49,8 @@ struct LevelSelectApp: App {
         }
         .modelContainer(library.container)
         .commands { LevelSelectCommands() }
+        #if os(macOS)
+        GamePageSettingsWindow(container: library.container)
+        #endif
     }
 }
