@@ -290,17 +290,7 @@ struct GameDetailView: View {
                         Label("Playthrough", systemImage: "person.crop.square.on.square.angled")
                     }
                     Menu {
-                        ForEach(ArtworkRole.assignable) { role in
-                            Button {
-                                pickingArtwork = role
-                            } label: {
-                                Label(game.pointer(for: role) == nil
-                                      ? "Choose \(role.label)…"
-                                      : "Change \(role.label)…",
-                                      systemImage: game.pointer(for: role) == nil
-                                      ? "photo.on.rectangle.angled" : "checkmark")
-                            }
-                        }
+                        artworkMenuItems
                     } label: {
                         Label("Artwork", systemImage: "photo.on.rectangle.angled")
                     }
@@ -892,10 +882,12 @@ struct GameDetailView: View {
     /// it and the two panels beside it come and go around it without taking
     /// its identity with them.
     ///
-    /// `stage` means nothing in the narrow layout, so `pane` pins it to 1
-    /// there: the page is the full width and nothing is beside it.
+    /// `stage` means nothing in the narrow layout, so it is read as 1 there:
+    /// the page is the full width and nothing is beside it. The fractions,
+    /// including the three-column stage above 1,400pt, are
+    /// `StageLayout.columns`.
     private func pageLayout(stageMode: Bool, width: CGFloat, topInset: CGFloat) -> some View {
-        let pane = stageMode ? stage : 1
+        let cols = StageLayout.columns(width: width, stage: stageMode ? stage : 1)
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 if !stageMode, let video = pagePlaying {
@@ -903,18 +895,17 @@ struct GameDetailView: View {
                 }
                 standardScroll(stageMode: stageMode, topInset: topInset)
             }
-            .frame(width: pane == 1 ? width : width * 0.58)
-            .offset(x: pane == 3 ? -width * 0.58 : 0)
+            .frame(width: cols.pageWidth)
+            .offset(x: cols.pageX)
 
             if stageMode {
                 trackerPanel
-                    .frame(width: stage == 3 ? width * 0.46 : width * 0.42)
-                    .offset(x: stage == 1 ? width
-                            : (stage == 2 ? width * 0.58 : 0))
+                    .frame(width: cols.trackerWidth)
+                    .offset(x: cols.trackerX)
 
                 videoPanel
-                    .frame(width: width * 0.54)
-                    .offset(x: stage == 3 ? width * 0.46 : width * 1.02)
+                    .frame(width: cols.videoWidth)
+                    .offset(x: cols.videoX)
             }
         }
         // The ZStack must span the FULL stage, not shrink to its widest child
@@ -1307,7 +1298,7 @@ struct GameDetailView: View {
 
             heroTitle
 
-            OwnershipControl(ownership: $game.ownership)
+            OwnershipControl(ownership: $game.ownership, centered: true)
 
             if showGameStats {
                 GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
@@ -1338,6 +1329,8 @@ struct GameDetailView: View {
                         ArtworkView(headerLogo, contentMode: .fit)
                             .frame(maxWidth: .infinity, maxHeight: 54, alignment: .leading)
                             .accessibilityLabel(game.name)
+                            .lsSpinInPlace()
+                            .contextMenu { artworkMenuItems }
                     } else {
                         Text(game.name)
                             .font(.title2.bold())
@@ -1401,6 +1394,8 @@ struct GameDetailView: View {
                 ArtworkView(headerLogo, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 78)
                     .accessibilityLabel(game.name)
+                    .lsSpinInPlace()
+                    .contextMenu { artworkMenuItems }
             } else {
                 Text(game.name)
                     .font(.title.bold())
@@ -1410,7 +1405,7 @@ struct GameDetailView: View {
             heroFacts(alignment: .center)
                 .frame(maxWidth: .infinity)
 
-            OwnershipControl(ownership: $game.ownership)
+            OwnershipControl(ownership: $game.ownership, centered: true)
 
             if showGameStats {
                 GameStatsRow(game: game, showsRuns: repo.runTrackingEnabled(for: game))
@@ -1619,6 +1614,8 @@ struct GameDetailView: View {
                 ArtworkView(artwork, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: Self.titleBand)
                     .accessibilityLabel(game.name)
+                    .lsSpinInPlace()
+                    .contextMenu { artworkMenuItems }
                 if logoIsBorrowed {
                     Text(game.name)
                         .font(.headline)
@@ -1670,6 +1667,26 @@ struct GameDetailView: View {
         }
     }
 
+    /// **All three pictures, wherever you ask.** The ⋯ menu's Artwork list,
+    /// and the context menu on the hero's cover and logo — a right-click on
+    /// the Mac, a press-and-hold on a phone or iPad. Tim, 09-11: *"right click
+    /// on the artwork or logo should pop up a menu for changing artwork, but
+    /// any of the three, not just the one."*
+    @ViewBuilder
+    private var artworkMenuItems: some View {
+        ForEach(ArtworkRole.assignable) { role in
+            Button {
+                pickingArtwork = role
+            } label: {
+                Label(game.pointer(for: role) == nil
+                      ? "Choose \(role.label)…"
+                      : "Change \(role.label)…",
+                      systemImage: game.pointer(for: role) == nil
+                      ? "photo.on.rectangle.angled" : "checkmark")
+            }
+        }
+    }
+
     private func coverThumb(width: CGFloat) -> some View {
         CoverThumb(urlString: game.displayCoverURLString,
                            artwork: game.resolvedArtwork(.cover), name: game.name, status: game.status)
@@ -1678,7 +1695,9 @@ struct GameDetailView: View {
             .clipShape(.rect(cornerRadius: 10))
             .shadow(color: .black.opacity(0.55), radius: 12, y: 6)
             .contentShape(.rect)
+            .lsSpinInPlace()
             .onTapGesture { showingCover = true }
+            .contextMenu { artworkMenuItems }
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel("Enlarge cover")
     }

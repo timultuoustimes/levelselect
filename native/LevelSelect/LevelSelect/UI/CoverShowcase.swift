@@ -111,3 +111,56 @@ struct CoverShowcase: View {
         }
     }
 }
+
+/// **The showcase's spin, in place.**
+///
+/// Tim, 2026-09-11: *"can we let them spin the art or logo in place on the mac
+/// without opening them up bigger? … having it only hidden through a tap to
+/// make it bigger feels like a bummer."* Same tilt and the same springy
+/// release as `CoverShowcase`, on the hero's cover and logo where they sit.
+///
+/// On the Mac a drag has nothing else to do, so it tilts both ways. On a phone
+/// or iPad the art sits in the page's scroll, so only a SIDEWAYS drag spins
+/// and a vertical one stays the scroll's — the gesture runs alongside the
+/// scroll rather than taking it over. A tap still opens the showcase: the
+/// drag needs a few points of travel before it begins.
+struct SpinInPlace: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var drag: CGSize = .zero
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(.degrees(Double(drag.width) / 5),
+                              axis: (x: 0, y: 1, z: 0), perspective: 0.55)
+            .rotation3DEffect(.degrees(Double(-drag.height) / 5),
+                              axis: (x: 1, y: 0, z: 0), perspective: 0.55)
+            #if os(macOS)
+            .gesture(spin)
+            #else
+            .simultaneousGesture(spin)
+            #endif
+    }
+
+    private var spin: some Gesture {
+        DragGesture(minimumDistance: 6)
+            .onChanged { value in
+                let t = value.translation
+                #if os(macOS)
+                drag = t
+                #else
+                drag = CGSize(width: abs(t.width) > abs(t.height) ? t.width : 0, height: 0)
+                #endif
+            }
+            .onEnded { _ in
+                withAnimation(.spring(response: 0.75,
+                                      dampingFraction: reduceMotion ? 0.9 : 0.32)) {
+                    drag = .zero
+                }
+            }
+    }
+}
+
+extension View {
+    /// Drag to spin, springing back on release. See `SpinInPlace`.
+    func lsSpinInPlace() -> some View { modifier(SpinInPlace()) }
+}

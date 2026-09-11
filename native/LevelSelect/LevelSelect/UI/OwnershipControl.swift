@@ -9,6 +9,12 @@ struct OwnershipControl: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.modelContext) private var context
+    /// Centered under the game page's centered headers (showcase and
+    /// cover-led), left-aligned everywhere else — in the Add Game form these
+    /// are one field among many, and a centered row of chips in a column of
+    /// left-aligned labels reads as a mistake. Removed on 09-10 on a note that
+    /// meant the SETTINGS row; Tim, 09-11: *"the chips here need centered."*
+    var centered = false
 
     /// **The chips you keep hidden, shown for this one game.**
     ///
@@ -23,16 +29,19 @@ struct OwnershipControl: View {
             // Outside `ViewThatFits`, deliberately. Inside, a
             // `maxWidth: .infinity` frame would make every candidate row
             // "fit" and the measurement below would always pick the first.
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
             // The row itself, not the chips: a long press that started on a
             // chip must still reach here, and a chip's own tap must still win.
             .contentShape(.rect)
-            .onLongPressGesture(minimumDuration: 0.45) {
-                withAnimation(reduceMotion ? .none
-                              : .spring(response: 0.3, dampingFraction: 0.72)) {
-                    revealing.toggle()
-                }
-            }
+            #if os(macOS)
+            // **A right-click, not a held click, on the Mac.** Press-and-hold
+            // is natural with a finger and odd with a mouse (Tim, 09-11), and
+            // the Mac already reaches every "there is more here" through the
+            // context menu. The chips carry the same item in theirs.
+            .contextMenu { revealButton }
+            #else
+            .onLongPressGesture(minimumDuration: 0.45) { toggleReveal() }
+            #endif
             .accessibilityAction(named: revealing ? "Hide the rest" : "Show every kind") {
                 revealing.toggle()
             }
@@ -104,6 +113,24 @@ struct OwnershipControl: View {
         let chosen = ThemePalette.ownershipChips
         return Ownership.allCases.filter {
             chosen.contains($0) || ownership.contains($0.rawValue)
+        }
+    }
+
+    private func toggleReveal() {
+        withAnimation(reduceMotion ? .none
+                      : .spring(response: 0.3, dampingFraction: 0.72)) {
+            revealing.toggle()
+        }
+    }
+
+    /// Named for what it does — every kind appears, for this game — rather
+    /// than "Rearrange": nothing moves, the hidden ones join the end.
+    private var revealButton: some View {
+        Button {
+            toggleReveal()
+        } label: {
+            Label(revealing ? "Hide the rest" : "Show every kind",
+                  systemImage: revealing ? "eye.slash" : "eye")
         }
     }
 
@@ -194,6 +221,7 @@ struct OwnershipControl: View {
             }
         }
         .contextMenu {
+            revealButton
             if isKept(kind) {
                 Button(role: .destructive) {
                     hideEverywhere(kind)

@@ -222,6 +222,23 @@ struct TrackerPageView: View {
                         AppNavigator.shared.trackerStageRequest = game.id
                         dismiss()
                     }
+                    // **Closing the video in a wide window hands over too.**
+                    //
+                    // Widening while a video plays keeps this page, because
+                    // leaving would restart the video. But once it is closed
+                    // the reason to stay is gone, and a wide window with the
+                    // tracker alone on its own page is the state the watcher
+                    // above exists to prevent. Tim, 09-11, on opening the
+                    // video here and then widening: *"I'm not sure what the
+                    // right behavior should be there."*
+                    .onChange(of: playing == nil) { _, closed in
+                        guard closed,
+                              StageLayout.fits(geo.size),
+                              game.resolvedTrackerDisplay == .compact
+                        else { return }
+                        AppNavigator.shared.trackerStageRequest = game.id
+                        dismiss()
+                    }
             }
         }
         // A game whose timer has never run has no playthrough yet, and the

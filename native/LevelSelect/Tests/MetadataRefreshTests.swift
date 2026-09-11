@@ -1102,6 +1102,26 @@ struct StageLayoutTests {
     /// scroll lives in one place in one tree, so SwiftUI keeps it (and its
     /// offset) when only its width changes. A second call site is how the bug
     /// comes back, so that is what this counts.
+    @Test("A wide stage keeps the page as the first of three columns; a narrower one slides it aside")
+    func threeColumnsAtWidth() {
+        // Wide: every pane on screen, side by side, filling the width.
+        let wide = StageLayout.columns(width: 1600, stage: 3)
+        #expect(wide.pageX == 0)
+        #expect(wide.pageX + wide.pageWidth <= wide.trackerX + 0.5)
+        #expect(wide.trackerX + wide.trackerWidth <= wide.videoX + 0.5)
+        #expect(abs(wide.videoX + wide.videoWidth - 1600) < 0.5)
+        // A 13" iPad in landscape is under the line: the page slides off as it
+        // always has, and the two panels fill the screen.
+        let ipad = StageLayout.columns(width: 1376, stage: 3)
+        #expect(ipad.pageX + ipad.pageWidth <= 0.5)
+        #expect(ipad.trackerX == 0)
+        // Stages 1 and 2 are the same either side of it.
+        for w: CGFloat in [1376, 1600] {
+            #expect(StageLayout.columns(width: w, stage: 2).pageWidth == w * 0.58)
+            #expect(StageLayout.columns(width: w, stage: 1).trackerX == w)
+        }
+    }
+
     @Test("The game page's scroll is built in exactly one place, so resizing keeps your place")
     func theGamePageScrollSurvivesTheStage() throws {
         let file = URL(fileURLWithPath: #filePath)
