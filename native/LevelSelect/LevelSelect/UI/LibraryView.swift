@@ -490,93 +490,11 @@ struct LibraryTab: View {
     }
 
     private func selectionMark(_ game: Game) -> some View {
-        let on = selected.contains(game.id)
-        return Image(systemName: on ? "checkmark.circle.fill" : "circle")
-            .font(.title3)
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(on ? AnyShapeStyle(LSTheme.onAccent) : AnyShapeStyle(.white),
-                             on ? AnyShapeStyle(LSTheme.accentFill) : AnyShapeStyle(.black.opacity(0.35)))
-            .accessibilityLabel(on ? "Selected" : "Not selected")
-    }
-
-    private var selectedGames: [Game] { games.filter { selected.contains($0.id) } }
-    private var allVisibleSelected: Bool {
-        !visible.isEmpty && visible.allSatisfy { selected.contains($0.id) }
+        GameSelectionMark(on: selected.contains(game.id))
     }
 
     private var selectionBar: some View {
-        HStack(spacing: 14) {
-            Button("Done") { endSelecting() }
-                .keyboardShortcut(.cancelAction)
-            Text(selected.isEmpty ? "Choose games" : "\(selected.count) selected")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-            Spacer(minLength: 0)
-            Button(allVisibleSelected ? "Select None" : "Select All") {
-                if allVisibleSelected { selected.subtract(visible.map(\.id)) }
-                else { selected.formUnion(visible.map(\.id)) }
-            }
-            Menu {
-                consoleChoices
-            } label: {
-                Label("Set Console", systemImage: "gamecontroller")
-            }
-            .disabled(selected.isEmpty)
-            Menu {
-                ForEach(GameStatus.displayOrder, id: \.self) { status in
-                    Button { setStatus(status) } label: {
-                        Label(status.label, systemImage: status.systemImage)
-                    }
-                }
-            } label: {
-                Label("Set Status", systemImage: "flag")
-            }
-            .disabled(selected.isEmpty)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 10)
-        .background(.bar)
-    }
-
-    /// Your consoles first — the likely answer — then everything else.
-    @ViewBuilder
-    private var consoleChoices: some View {
-        let mine = Repository(context).liveConsoles().map(\.platform).sorted()
-        Section("Your consoles") {
-            ForEach(mine, id: \.self) { platform in
-                Button(platform) { setConsole(platform) }
-            }
-        }
-        Menu("Other systems") {
-            ForEach(PlatformCatalog.all.filter { !mine.contains($0) }, id: \.self) { platform in
-                Button(platform) { setConsole(platform) }
-            }
-        }
-    }
-
-    /// **The console you own them on, replaced — not added to.** A game that
-    /// came in as PC and is really yours on Mac is owned on Mac now; PC stays
-    /// in its availability list, because the game still exists there.
-    private func setConsole(_ platform: String) {
-        let repo = Repository(context)
-        let games = selectedGames
-        let key = PlatformKey.canonical(platform)
-        repo.editAll(games) { game in
-            game.ownedPlatforms = [platform]
-            if !game.platforms.contains(where: { PlatformKey.canonical($0) == key }) {
-                game.platforms.insert(platform, at: 0)
-            }
-        }
-        // The first game on a platform makes its console, as it would one
-        // game at a time.
-        for game in games { _ = repo.noteConsoles(for: game) }
-        endSelecting()
-    }
-
-    private func setStatus(_ status: GameStatus) {
-        Repository(context).editAll(selectedGames) { $0.status = status }
-        endSelecting()
+        GameSelectionBar(selected: $selected, all: games, visible: visible) { endSelecting() }
     }
 
     private func endSelecting() {
@@ -1186,6 +1104,123 @@ enum GridSize: String, CaseIterable {
 }
 
 // MARK: - Grid cell
+
+/// The mark on a game while choosing several.
+struct GameSelectionMark: View {
+    let on: Bool
+    /// A white rim and a shadow, because the mark sits on cover art of any
+    /// color: the first version was an orange tick on an orange disc, and on
+    /// Disco Elysium's orange cover it vanished.
+    var body: some View {
+        ZStack {
+            Circle().fill(on ? AnyShapeStyle(LSTheme.accentFill) : AnyShapeStyle(.black.opacity(0.4)))
+            Circle().strokeBorder(.white, lineWidth: 2)
+            if on {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .heavy))
+                    .foregroundStyle(LSTheme.onAccent)
+            }
+        }
+        .frame(width: 24, height: 24)
+        .shadow(color: .black.opacity(0.45), radius: 2, y: 1)
+        .accessibilityLabel(on ? "Selected" : "Not selected")
+    }
+}
+
+/// **Choosing several games at once, and what to do with them.**
+///
+/// Tim, 2026-09-11, after a CSV import brought his Mac games in as PC: *"I
+/// can't bulk select to choose a new console"*, and then *"can I do that just
+/// within a console page too?"* One bar for both, so the two never drift.
+struct GameSelectionBar: View {
+    @Binding var selected: Set<UUID>
+    /// Everything the selection can refer to.
+    let all: [Game]
+    /// What is on screen, for Select All.
+    let visible: [Game]
+    let done: () -> Void
+    @Environment(\.modelContext) private var context
+
+    private var selectedGames: [Game] { all.filter { selected.contains($0.id) } }
+    private var allVisibleSelected: Bool {
+        !visible.isEmpty && visible.allSatisfy { selected.contains($0.id) }
+    }
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Button("Done", action: done)
+                .keyboardShortcut(.cancelAction)
+            Text(selected.isEmpty ? "Choose games" : "\(selected.count) selected")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Spacer(minLength: 0)
+            Button(allVisibleSelected ? "Select None" : "Select All") {
+                if allVisibleSelected { selected.subtract(visible.map(\.id)) }
+                else { selected.formUnion(visible.map(\.id)) }
+            }
+            Menu {
+                consoleChoices
+            } label: {
+                Label("Set Console", systemImage: "gamecontroller")
+            }
+            .disabled(selected.isEmpty)
+            Menu {
+                ForEach(GameStatus.displayOrder, id: \.self) { status in
+                    Button { setStatus(status) } label: {
+                        Label(status.label, systemImage: status.systemImage)
+                    }
+                }
+            } label: {
+                Label("Set Status", systemImage: "flag")
+            }
+            .disabled(selected.isEmpty)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    /// Your consoles first — the likely answer — then everything else.
+    @ViewBuilder
+    private var consoleChoices: some View {
+        let mine = Repository(context).liveConsoles().map(\.platform).sorted()
+        Section("Your consoles") {
+            ForEach(mine, id: \.self) { platform in
+                Button(platform) { setConsole(platform) }
+            }
+        }
+        Menu("Other systems") {
+            ForEach(PlatformCatalog.all.filter { !mine.contains($0) }, id: \.self) { platform in
+                Button(platform) { setConsole(platform) }
+            }
+        }
+    }
+
+    /// **The console you own them on, replaced — not added to.** A game that
+    /// came in as PC and is really yours on Mac is owned on Mac now; PC stays
+    /// in its availability list, because the game still exists there.
+    private func setConsole(_ platform: String) {
+        let repo = Repository(context)
+        let games = selectedGames
+        let key = PlatformKey.canonical(platform)
+        repo.editAll(games) { game in
+            game.ownedPlatforms = [platform]
+            if !game.platforms.contains(where: { PlatformKey.canonical($0) == key }) {
+                game.platforms.insert(platform, at: 0)
+            }
+        }
+        // The first game on a platform makes its console, as it would one
+        // game at a time.
+        for game in games { _ = repo.noteConsoles(for: game) }
+        done()
+    }
+
+    private func setStatus(_ status: GameStatus) {
+        Repository(context).editAll(selectedGames) { $0.status = status }
+        done()
+    }
+}
 
 struct LibraryGridCell: View {
     let game: Game

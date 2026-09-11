@@ -162,6 +162,9 @@ struct PlatformGamesView: View {
     @State private var statusFilter: GameStatus?
     @State private var ownershipFilter: OwnershipFilter?
     @State private var tagFilter: String?
+    /// Choosing several of this console's games — see `GameSelectionBar`.
+    @State private var selecting = false
+    @State private var selected: Set<UUID> = []
 
     @AppStorage("librarySort") private var sortRaw = LibrarySort.name.rawValue
     @AppStorage("libraryViewMode") private var viewModeRaw = LibraryViewMode.grid.rawValue
@@ -224,6 +227,13 @@ struct PlatformGamesView: View {
             filterBar
             content
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting {
+                GameSelectionBar(selected: $selected, all: allGames, visible: visible) {
+                    withAnimation(.snappy) { selecting = false; selected = [] }
+                }
+            }
+        }
         .lsBackground()
         .navigationTitle(PlatformShort.name(platform))
         #if !os(macOS)
@@ -246,6 +256,12 @@ struct PlatformGamesView: View {
             }
             ToolbarItem {
                 Menu {
+                    Button {
+                        withAnimation(.snappy) { selecting = true }
+                    } label: {
+                        Label("Select Games…", systemImage: "checkmark.circle")
+                    }
+                    Divider()
                     Picker("Status", selection: $statusFilter) {
                         Label("All (\(onPlatform.count))", systemImage: "circle.grid.2x2")
                             .tag(GameStatus?.none)
@@ -427,11 +443,21 @@ struct PlatformGamesView: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: gridSize.minWidth), spacing: 12)],
                   spacing: 16) {
             ForEach(items) { game in
-                NavigationLink(value: game) {
-                    LibraryGridCell(game: game, size: gridSize)
+                if selecting {
+                    Button { toggle(game) } label: {
+                        LibraryGridCell(game: game, size: gridSize)
+                            .overlay(alignment: .topTrailing) {
+                                GameSelectionMark(on: selected.contains(game.id)).padding(6)
+                            }
+                    }
+                    .buttonStyle(PressableCardStyle())
+                } else {
+                    NavigationLink(value: game) {
+                        LibraryGridCell(game: game, size: gridSize)
+                    }
+                    .buttonStyle(PressableCardStyle())
+                    .gameContextMenu(game)
                 }
-                .buttonStyle(PressableCardStyle())
-                .gameContextMenu(game)
             }
         }
     }
@@ -439,13 +465,29 @@ struct PlatformGamesView: View {
     private var list: some View {
         List {
             ForEach(sort.apply(to: visible)) { game in
-                NavigationLink(value: game) { GameRow(game: game) }
+                if selecting {
+                    Button { toggle(game) } label: {
+                        HStack(spacing: 12) {
+                            GameSelectionMark(on: selected.contains(game.id))
+                            GameRow(game: game)
+                        }
+                        .contentShape(.rect)
+                    }
+                    .buttonStyle(.plain)
                     .listRowBackground(Color.clear)
-                    .gameContextMenu(game)
+                } else {
+                    NavigationLink(value: game) { GameRow(game: game) }
+                        .listRowBackground(Color.clear)
+                        .gameContextMenu(game)
+                }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    private func toggle(_ game: Game) {
+        if selected.contains(game.id) { selected.remove(game.id) } else { selected.insert(game.id) }
     }
 }
 
