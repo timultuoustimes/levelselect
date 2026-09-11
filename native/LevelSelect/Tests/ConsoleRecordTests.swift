@@ -391,6 +391,31 @@ struct ConsoleRecordTests {
         #expect(PlatformVariant.owned(for: "Genesis", in: map).isEmpty)
     }
 
+    @Test("A lineage reads forward in time whichever end the default is")
+    func lineageIsOldestFirstEvenWhenTheDefaultIsOldest() {
+        // The GBA, SNES and NES default to their ORIGINAL machine, so their
+        // catalogs run oldest-first — the opposite of the Mac's. Reversing
+        // the catalog read the GBA as SP, then the one it replaced.
+        var map: [String: String] = [:]
+        PlatformVariant.setOwned(["agb", "sp"], for: "GBA", in: &map)
+        #expect(PlatformVariant.owned(for: "GBA", in: map).map(\.key) == ["agb", "sp"])
+        PlatformVariant.setOwned(["original", "jr"],
+                                 for: "Super Nintendo Entertainment System", in: &map)
+        #expect(PlatformVariant.owned(for: "SNES", in: map).map(\.key) == ["original", "jr"])
+        PlatformVariant.setOwned(["top-loader"], for: "NES", in: &map)
+        #expect(PlatformVariant.owned(for: "NES", in: map).map(\.key)
+                == ["front-loader", "top-loader"])
+
+        // And every dated catalog, fully ticked, comes out in year order.
+        for (platform, list) in PlatformVariant.catalog {
+            var all: [String: String] = [:]
+            PlatformVariant.setOwned(Set(list.map(\.key)), for: platform, in: &all)
+            let years = PlatformVariant.owned(for: platform, in: all).compactMap(\.year)
+            #expect(years == years.sorted(),
+                    Comment(rawValue: "\(platform) reads \(years)"))
+        }
+    }
+
     // MARK: The photograph
 
     @Test("A console keeps photographs, and they survive a backup")

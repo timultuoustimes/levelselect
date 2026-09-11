@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "nes-101-top-loader.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

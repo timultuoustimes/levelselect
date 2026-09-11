@@ -33,6 +33,12 @@ enum PlatformVariant {
         let detail: String
         /// The imageset, or nil for the variant the app already ships.
         let asset: String?
+        /// When this shell came out, which is the order a lineage reads in.
+        /// The catalog can't carry that order itself: its first entry has to
+        /// be the machine the app draws, and that is sometimes the newest (a
+        /// Mac mini) and sometimes the oldest (a front-loading NES). Nil for a
+        /// choice that isn't a point in time, like which phone you hold.
+        var year: Int? = nil
 
         var id: String { key }
     }
@@ -50,9 +56,9 @@ enum PlatformVariant {
         // reached the US was black. Both were "Model 1".
         "Saturn": [
             Variant(key: "na", label: "North America",
-                    detail: "Black, 1995", asset: nil),
+                    detail: "Black, 1995", asset: nil, year: 1995),
             Variant(key: "jp", label: "Japan",
-                    detail: "Gray, 1994", asset: "variant-saturn-jp"),
+                    detail: "Gray, 1994", asset: "variant-saturn-jp", year: 1994),
         ],
         // **"Mac" is forty years of very different objects.** The app draws
         // the machine you would buy today; the other three were already drawn
@@ -61,17 +67,17 @@ enum PlatformVariant {
         // can't remember which)."* The older one is a compact Macintosh.
         "Mac": [
             Variant(key: "mini", label: "Mac mini",
-                    detail: "Silver, 2024", asset: nil),
+                    detail: "Silver, 2024", asset: nil, year: 2024),
             Variant(key: "imac", label: "iMac",
-                    detail: "M-series, 2021", asset: "variant-mac-imac"),
+                    detail: "M-series, 2021", asset: "variant-mac-imac", year: 2021),
             Variant(key: "imac-g3", label: "iMac G3",
-                    detail: "Bondi Blue, 1998", asset: "variant-mac-imac-g3"),
+                    detail: "Bondi Blue, 1998", asset: "variant-mac-imac-g3", year: 1998),
             Variant(key: "powerbook", label: "PowerBook 540c",
-                    detail: "Dark grey, 1994", asset: "variant-mac-powerbook"),
+                    detail: "Dark grey, 1994", asset: "variant-mac-powerbook", year: 1994),
             Variant(key: "lc", label: "Macintosh LC III",
-                    detail: "Pizza box, 1993", asset: "variant-mac-lc"),
+                    detail: "Pizza box, 1993", asset: "variant-mac-lc", year: 1993),
             Variant(key: "compact", label: "Macintosh",
-                    detail: "Compact, 1984", asset: "variant-mac-compact"),
+                    detail: "Compact, 1984", asset: "variant-mac-compact", year: 1984),
         ],
         // **A PC is one machine continuously rebuilt for forty years**, which
         // is why the modern RGB tower alone was wrong for anyone whose PC
@@ -80,15 +86,15 @@ enum PlatformVariant {
         // era, and these are shells.
         "PC": [
             Variant(key: "modern", label: "Gaming tower",
-                    detail: "RGB, today", asset: nil),
+                    detail: "RGB, today", asset: nil, year: 2024),
             Variant(key: "laptop", label: "Gaming laptop",
-                    detail: "2020", asset: "variant-pc-laptop"),
+                    detail: "2020", asset: "variant-pc-laptop", year: 2020),
             Variant(key: "black", label: "Black tower",
-                    detail: "2007, before RGB", asset: "variant-pc-black"),
+                    detail: "2007, before RGB", asset: "variant-pc-black", year: 2007),
             Variant(key: "beige", label: "Beige desktop",
-                    detail: "1999", asset: "variant-pc-beige"),
+                    detail: "1999", asset: "variant-pc-beige", year: 1999),
             Variant(key: "486", label: "486 tower",
-                    detail: "1993", asset: "variant-pc-486"),
+                    detail: "1993", asset: "variant-pc-486", year: 1993),
         ],
         // **The SP was the default until 2026-09-09**, which meant the app
         // drew a 2003 clamshell for a console people picture as the 2001
@@ -96,9 +102,9 @@ enum PlatformVariant {
         // render as the variant it always should have been.
         "GBA": [
             Variant(key: "agb", label: "Game Boy Advance",
-                    detail: "Indigo, 2001", asset: nil),
+                    detail: "Indigo, 2001", asset: nil, year: 2001),
             Variant(key: "sp", label: "Game Boy Advance SP",
-                    detail: "Silver clamshell, 2003", asset: "variant-gba-sp"),
+                    detail: "Silver clamshell, 2003", asset: "variant-gba-sp", year: 2003),
         ],
         // Nintendo sold the Color in a shelf of colors, and the grape one the
         // app draws is only the one that got commissioned first.
@@ -107,6 +113,22 @@ enum PlatformVariant {
                     detail: "Purple, 1998", asset: nil),
             Variant(key: "dandelion", label: "Dandelion",
                     detail: "Yellow, 1998", asset: "variant-gbc-yellow"),
+        ],
+        // **Nintendo's cost-reduced redesigns**, both drawn 2026-09-10 and both
+        // the machine a lot of people actually had: the top-loader was the NES
+        // still on shelves in 1993, and the Jr. was the SNES Nintendo sold
+        // through the N64's first years. The originals stay the default.
+        "SNES": [
+            Variant(key: "original", label: "Super NES",
+                    detail: "Original, 1991", asset: nil, year: 1991),
+            Variant(key: "jr", label: "SNES Jr.",
+                    detail: "SNS-101, 1997", asset: "variant-snes-jr", year: 1997),
+        ],
+        "NES": [
+            Variant(key: "front-loader", label: "NES",
+                    detail: "Front-loader, 1985", asset: nil, year: 1985),
+            Variant(key: "top-loader", label: "NES-101",
+                    detail: "Top-loader, 1993", asset: "variant-nes-101", year: 1993),
         ],
         // A phone is a phone, and which one is entirely a matter of whose you
         // hold. The app draws a Galaxy because something had to be drawn.
@@ -139,9 +161,9 @@ enum PlatformVariant {
         "#had:" + PlatformKey.canonical(platform)
     }
 
-    /// The machines someone says they have had, oldest first — the order the
-    /// catalog lists them in, which is newest-to-oldest reversed, because a
-    /// lineage reads forward in time.
+    /// The machines someone says they have had, oldest first, because a
+    /// lineage reads forward in time. Ordered by `year`, not by catalog
+    /// position: reversing the catalog read the GBA as SP-then-original.
     ///
     /// The drawn one is always included whether or not it was ticked: it is on
     /// the shelf, so claiming otherwise on the page below would contradict the
@@ -154,7 +176,15 @@ enum PlatformVariant {
         if let drawn = variant(for: platform, key: map[PlatformKey.canonical(platform)]) {
             ticked.insert(drawn.key)
         }
-        return list.reversed().filter { ticked.contains($0.key) }
+        return list.enumerated()
+            .filter { ticked.contains($0.element.key) }
+            .sorted { a, b in
+                switch (a.element.year, b.element.year) {
+                case let (x?, y?) where x != y: return x < y
+                default: return a.offset > b.offset
+                }
+            }
+            .map(\.element)
     }
 
     /// Write the ticked set. Stored in catalog order rather than tap order, so
