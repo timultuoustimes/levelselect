@@ -445,10 +445,8 @@ struct PlatformGamesView: View {
             ForEach(items) { game in
                 if selecting {
                     Button { toggle(game) } label: {
-                        LibraryGridCell(game: game, size: gridSize)
-                            .overlay(alignment: .topTrailing) {
-                                GameSelectionMark(on: selected.contains(game.id)).padding(6)
-                            }
+                        LibraryGridCell(game: game, size: gridSize,
+                                        selection: selected.contains(game.id))
                     }
                     .buttonStyle(PressableCardStyle())
                 } else {
@@ -474,7 +472,7 @@ struct PlatformGamesView: View {
                         .contentShape(.rect)
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(Color.clear)
+                    .listRowBackground(GameSelectionRowBackground(on: selected.contains(game.id)))
                 } else {
                     NavigationLink(value: game) { GameRow(game: game) }
                         .listRowBackground(Color.clear)

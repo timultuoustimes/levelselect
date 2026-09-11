@@ -414,10 +414,8 @@ struct LibraryTab: View {
             ForEach(items) { game in
                 if selecting {
                     Button { toggleSelection(game) } label: {
-                        LibraryGridCell(game: game, size: gridSize)
-                            .overlay(alignment: .topTrailing) {
-                                selectionMark(game).padding(6)
-                            }
+                        LibraryGridCell(game: game, size: gridSize,
+                                        selection: selected.contains(game.id))
                     }
                     .buttonStyle(PressableCardStyle())
                 } else {
@@ -475,7 +473,7 @@ struct LibraryTab: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .listRowBackground(Color.clear)
+            .listRowBackground(GameSelectionRowBackground(on: selected.contains(game.id)))
         } else {
             NavigationLink(value: game) { GameRow(game: game) }
                 .listRowBackground(Color.clear)
@@ -1105,6 +1103,24 @@ enum GridSize: String, CaseIterable {
 
 // MARK: - Grid cell
 
+/// A chosen list row: the accent tint and outline a chosen cover gets.
+struct GameSelectionRowBackground: View {
+    let on: Bool
+    var body: some View {
+        if on {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(LSTheme.accentFill.opacity(0.14))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(LSTheme.accentFill, lineWidth: 2)
+                }
+                .padding(.vertical, 2)
+        } else {
+            Color.clear
+        }
+    }
+}
+
 /// The mark on a game while choosing several.
 struct GameSelectionMark: View {
     let on: Bool
@@ -1234,6 +1250,11 @@ struct LibraryGridCell: View {
     /// count did before 08-31.
     var subtitle: String? = nil
     var subtitleTint: Color = .secondary
+    /// Nil outside a selection; otherwise whether this game is chosen, drawn
+    /// as a check AND an accent outline on the cover. Tim, 09-11: *"a check
+    /// and an outline in the accent color too, not just a check alone"* — a
+    /// check alone is a small mark to find in a grid of covers.
+    var selection: Bool? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -1242,6 +1263,12 @@ struct LibraryGridCell: View {
                 .aspectRatio(3 / 4, contentMode: .fit)
                 .frame(maxWidth: .infinity)
                 .clipShape(.rect(cornerRadius: 10))
+                .overlay {
+                    if selection == true {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(LSTheme.accentFill, lineWidth: 3)
+                    }
+                }
                 .overlay(alignment: .topLeading) {
                     if size != .small {
                         HStack(spacing: 4) {
@@ -1258,7 +1285,9 @@ struct LibraryGridCell: View {
                     }
                 }
                 .overlay(alignment: .topTrailing) {
-                    if game.pinned {
+                    if let selection {
+                        GameSelectionMark(on: selection).padding(6)
+                    } else if game.pinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 8))
                             .padding(4)
