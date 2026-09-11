@@ -84,6 +84,18 @@ final class SyncStatusMonitor {
     private(set) var exportFailure: DirectionFailure?
     /// Count of in-flight import/export/setup events.
     private var eventsInFlight = 0
+    /// Imports alone, so a bulk write can wait for one to finish.
+    private(set) var importsInFlight = 0
+
+    /// **iCloud is writing into the store right now.**
+    ///
+    /// A CSV import saved 140 times while shenron's fresh store was still
+    /// pulling the whole library down, and a live `@Query` trapped handling
+    /// one of those saves (Tim, 2026-09-11; the backtrace ends in
+    /// `_SwiftData_SwiftUI` answering `ModelContext.save`'s notification). It
+    /// is also the moment an import would duplicate games iCloud is about to
+    /// restore. Bulk writes wait on this.
+    var isImporting: Bool { importsInFlight > 0 }
 
     /// CloudKit is rate-limiting this device (CKError.requestRateLimited).
     /// Two-device testing hit this for real: to the user it read as "sync
@@ -215,9 +227,11 @@ final class SyncStatusMonitor {
     ) {
         if !finished {
             eventsInFlight += 1
+            if direction == .importData { importsInFlight += 1 }
             return
         }
         eventsInFlight = max(0, eventsInFlight - 1)
+        if direction == .importData { importsInFlight = max(0, importsInFlight - 1) }
         if succeeded {
             let completedAt = endDate ?? .now
             lastSyncedAt = completedAt

@@ -25,6 +25,10 @@ enum CSVImport {
         var rating: Int?
         var notes: String?
         var hoursPlayed: Double?
+        /// The IGDB id, when the export carries one (Gamery does, on every
+        /// row). A title is a guess at a game; an id IS the game, so a row
+        /// with one is matched by it and never flagged.
+        var igdbID: Int? = nil
         /// Original line number, for error messages that a human can act on.
         var line: Int
     }
@@ -41,10 +45,13 @@ enum CSVImport {
     /// HowLongToBeat exports, LevelSelect's own export, and plain spreadsheets.
     private static let aliases: [String: [String]] = [
         "name":     ["name", "title", "game", "game name", "game title"],
-        "platform": ["platform", "console", "system", "device", "platforms"],
+        "igdb":     ["igdb id", "igdb", "igdb_id", "igdbid"],
+        "platform": ["platform", "console", "system", "device", "platforms",
+                     "library platforms"],
         "status":   ["status", "state", "list", "shelf", "category", "progress"],
         "rating":   ["rating", "score", "stars", "my rating", "user rating"],
-        "notes":    ["notes", "note", "review", "comment", "comments", "my review"],
+        "notes":    ["notes", "note", "review", "comment", "comments", "my review",
+                     "user review"],
         "hours":    ["hours", "hours played", "playtime", "time played",
                      "play time", "hours_played", "total hours"],
     ]
@@ -101,8 +108,12 @@ enum CSVImport {
             return ParseResult(rows: [], recognizedColumns: [], ignoredColumns: [], skippedLines: [])
         }
 
+        // A scale in the header is a note to the reader, not part of the
+        // name: Gamery writes "User Rating (1-5)", which matched nothing and
+        // was ignored while "user rating" sat in the aliases.
         let normalized = header.map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            $0.replacingOccurrences(of: #"\s*\([^)]*\)"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         }
         var indexFor: [String: Int] = [:]
         var recognized: [String] = []
@@ -135,6 +146,7 @@ enum CSVImport {
                 rating: value("rating").flatMap(rating(from:)),
                 notes: value("notes"),
                 hoursPlayed: value("hours").flatMap(hours(from:)),
+                igdbID: value("igdb").flatMap { Int($0) }.flatMap { $0 > 0 ? $0 : nil },
                 line: line
             ))
         }
@@ -164,6 +176,41 @@ enum CSVImport {
         case "wishlist", "wish list", "wanted":             .wishlist
         default:                                            .backlog
         }
+    }
+
+    /// **Add the reviewed rows to the library, in ONE save.**
+    ///
+    /// Out of the view so it can be tested, and batched: `addGame` saves as it
+    /// goes, which for a 140-row file was 140 saves on the main thread, each
+    /// queuing its own iCloud export. The rows are inserted, then committed
+    /// together.
+    @MainActor @discardableResult
+    static func apply(_ picks: [(row: Row, match: IGDBGame?)], context: ModelContext) -> Int {
+        let repo = Repository(context)
+        var count = 0
+        for (row, match) in picks {
+            let game: Game
+            if let match {
+                game = repo.addGame(from: match, platform: row.platform,
+                                    status: row.status ?? .backlog, saving: false)
+            } else {
+                game = repo.addGame(name: row.name, status: row.status ?? .backlog, saving: false)
+                if let platform = row.platform { game.platforms = [platform] }
+            }
+            game.rating = row.rating
+            if let notes = row.notes { game.notes = notes }
+            // Hours become one manual session, so the number shows up in
+            // stats without inventing a fake play history.
+            if let hours = row.hoursPlayed, hours > 0 {
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.logManualSession(on: pt, duration: hours * 3600,
+                                      notes: "Imported from CSV")
+            }
+            count += 1
+        }
+        BuiltinTrackers.installMissing(context: context)
+        PersistenceMonitor.shared.commit(context)
+        return count
     }
 
     /// Accepts 1–5, 1–10, and percentages, normalizing to the app's 1–5.

@@ -1322,3 +1322,48 @@ struct KnownCompanionTests {
         #expect(repo.knownCompanions().isEmpty)
     }
 }
+
+
+@Suite("CSV import reads what Gamery writes")
+@MainActor
+struct CSVImportGameryTests {
+    /// Gamery's header row, with three made-up games.
+    private let csv = """
+    IGDB ID,Name,Summary,User Rating (1-5),User Review,Custom Game (1=yes),First Release Date,Library Platforms,Status
+    1001,Test Game One,"A summary, with a comma",4,Loved it,0,1992-11-01 00:00:00 +0000,Sega Mega Drive/Genesis,Completed
+    1002,Test Game Two,,,,0,,Nintendo Switch,Backlog
+    ,No Id Game,,,,1,,,Playing
+    """
+
+    @Test("The IGDB id, a rating with its scale in the header, platforms and reviews are all read")
+    func readsGameryColumns() {
+        let parsed = CSVImport.parse(csv)
+        #expect(parsed.rows.count == 3)
+        #expect(parsed.rows.map(\.igdbID) == [1001, 1002, nil])
+        #expect(parsed.rows[0].rating == 4, "\"User Rating (1-5)\" is the rating column")
+        #expect(parsed.rows[0].platform == "Sega Mega Drive/Genesis")
+        #expect(parsed.rows[0].notes == "Loved it")
+        #expect(parsed.rows[0].status == .completed)
+        #expect(parsed.recognizedColumns.contains("IGDB ID"))
+        #expect(!parsed.ignoredColumns.contains("User Rating (1-5)"))
+    }
+
+    @Test("Applying the rows adds every game in one pass")
+    func appliesInOnePass() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let parsed = CSVImport.parse(csv)
+        let picks: [(row: CSVImport.Row, match: IGDBGame?)] = parsed.rows.map { row in
+            (row, row.igdbID.map {
+                IGDBGame(id: $0, name: row.name, slug: nil, coverImageID: nil, franchise: nil,
+                         releaseYear: nil, summary: nil, gameType: 0, platforms: [], genres: [],
+                         themes: [], gameModes: [], playerPerspectives: [], developers: [],
+                         publishers: [])
+            })
+        }
+        #expect(CSVImport.apply(picks, context: context) == 3)
+        let games = (try? context.fetch(FetchDescriptor<Game>())) ?? []
+        #expect(games.count == 3)
+        #expect(Set(games.compactMap(\.igdbID)) == [1001, 1002])
+        #expect(context.hasChanges == false, "one save at the end, not none")
+    }
+}

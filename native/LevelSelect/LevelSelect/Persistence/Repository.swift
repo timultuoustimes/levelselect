@@ -67,17 +67,18 @@ struct Repository {
     // MARK: Games
 
     @discardableResult
-    func addGame(name: String, status: GameStatus = .backlog) -> Game {
+    func addGame(name: String, status: GameStatus = .backlog, saving: Bool = true) -> Game {
         let game = Game(name: name, status: status)
         context.insert(game)
-        persist()
+        if saving { persist() }
         return game
     }
 
     /// Add a game from an IGDB search result with full metadata. The chosen
     /// platform is placed first in `platforms`; the rest are preserved.
     @discardableResult
-    func addGame(from igdb: IGDBGame, platform: String?, status: GameStatus) -> Game {
+    func addGame(from igdb: IGDBGame, platform: String?, status: GameStatus,
+                 saving: Bool = true) -> Game {
         let game = Game(name: igdb.name, status: status)
         game.igdbID = igdb.id
         game.igdbSlug = igdb.slug
@@ -113,7 +114,8 @@ struct Repository {
             game.platforms = igdb.platforms
         }
         context.insert(game)
-        persist()
+        // A batch (the CSV import) inserts everything and saves once.
+        if saving { persist() }
         return game
     }
 

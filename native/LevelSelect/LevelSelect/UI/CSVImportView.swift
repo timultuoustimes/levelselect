@@ -26,6 +26,7 @@ struct CSVImportView: View {
     @State private var importError: String?
     @State private var importedCount: Int?
     @State private var showingPicker = false
+    @State private var sync = SyncStatusMonitor.shared
 
     private enum Stage { case pick, review, done }
 
@@ -62,7 +63,7 @@ struct CSVImportView: View {
                 if stage == .review {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Import \(includedCount)") { runImport() }
-                            .disabled(includedCount == 0 || matching)
+                            .disabled(includedCount == 0 || matching || sync.isImporting)
                     }
                 }
             }
@@ -165,6 +166,15 @@ struct CSVImportView: View {
                 }
             }
 
+            if sync.isImporting {
+                Section {
+                    Label("Waiting for iCloud to finish bringing your library in. Importing now could add games it's about to restore a second time.",
+                          systemImage: "icloud.and.arrow.down")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             if uncertainCount > 0 {
                 Section {
                     Label("\(uncertainCount) title(s) didn't match exactly — check these before importing.",
@@ -257,50 +267,43 @@ struct CSVImportView: View {
 
     /// Resolve every row against IGDB, marking anything that isn't an exact
     /// title match so the user can look before it's saved.
+    ///
+    /// **A row that carries an IGDB id is matched by it**, fifty to a request,
+    /// and is never flagged: the id is the game. Tim's Gamery export has one
+    /// on every row and the importer ignored the column, so 65 of 140 came
+    /// back "didn't match exactly" and had to be checked by hand.
     private func matchAll() async {
         matching = true
         matchProgress = 0
+        let ids = candidates.compactMap(\.row.igdbID)
+        var byID: [Int: IGDBGame] = [:]
+        for start in stride(from: 0, to: ids.count, by: 50) {
+            let chunk = Array(ids[start..<min(start + 50, ids.count)])
+            for game in (try? await IGDBService.lookup(ids: chunk)) ?? [] {
+                byID[game.id] = game
+            }
+        }
         for index in candidates.indices {
-            let name = candidates[index].row.name
-            let hits = (try? await IGDBService.search(name: name)) ?? []
-            let exact = hits.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            candidates[index].match = exact ?? hits.first
-            candidates[index].alternatives = Array(hits.prefix(5))
-            candidates[index].uncertain = (exact == nil)
+            if let id = candidates[index].row.igdbID, let game = byID[id] {
+                candidates[index].match = game
+                candidates[index].uncertain = false
+            } else {
+                let name = candidates[index].row.name
+                let hits = (try? await IGDBService.search(name: name)) ?? []
+                let exact = hits.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+                candidates[index].match = exact ?? hits.first
+                candidates[index].alternatives = Array(hits.prefix(5))
+                candidates[index].uncertain = (exact == nil)
+            }
             matchProgress = Double(index + 1) / Double(candidates.count)
         }
         matching = false
     }
 
     private func runImport() {
-        let repo = Repository(context)
-        var count = 0
-        for candidate in candidates where candidate.include {
-            let row = candidate.row
-            let game: Game
-            if let match = candidate.match {
-                game = repo.addGame(from: match,
-                                    platform: row.platform,
-                                    status: row.status ?? .backlog)
-            } else {
-                game = repo.addGame(name: row.name, status: row.status ?? .backlog)
-                if let platform = row.platform { game.platforms = [platform] }
-            }
-            game.rating = row.rating
-            if let notes = row.notes { game.notes = notes }
-
-            // Hours from the CSV become one manual session, so the number
-            // shows up in stats without inventing a fake play history.
-            if let hours = row.hoursPlayed, hours > 0 {
-                let pt = repo.ensureDefaultPlaythrough(for: game)
-                repo.logManualSession(on: pt, duration: hours * 3600,
-                                      notes: "Imported from CSV")
-            }
-            count += 1
-        }
-        BuiltinTrackers.installMissing(context: context)
-        PersistenceMonitor.shared.commit(context)
-        importedCount = count
+        importedCount = CSVImport.apply(
+            candidates.filter(\.include).map { ($0.row, $0.match) },
+            context: context)
         stage = .done
     }
 }
