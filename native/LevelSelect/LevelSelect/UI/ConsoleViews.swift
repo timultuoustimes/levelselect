@@ -425,7 +425,16 @@ struct ConsoleEditor: View {
                         // lineage. Two questions, so two lists, rather than one
                         // control quietly answering both.
                         Section {
-                            ForEach(variants) { option in
+                            // **Its own row identities.** Both lists show the
+                            // same machines, and `ForEach(variants)` keyed
+                            // each row by the variant's key in BOTH — so the
+                            // Mac's grouped Form saw every id twice and put one
+                            // row on the wrong side of the card's edge: this
+                            // list's footer drew inside its card and the list
+                            // above lost its last machine below its own (Tim,
+                            // 09-11: the 486 tower and Genesis Model 1 "without
+                            // a lighter background"). iOS never showed it.
+                            ForEach(variants, id: \.lineageRowID) { option in
                                 Button { toggleHad(option) } label: {
                                     HStack(spacing: 12) {
                                         VariantThumb(asset: option.asset

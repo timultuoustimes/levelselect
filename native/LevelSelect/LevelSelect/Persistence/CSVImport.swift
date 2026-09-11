@@ -20,7 +20,12 @@ enum CSVImport {
     struct Row: Identifiable {
         let id = UUID()
         var name: String
+        /// The first of `platforms` — the one a single-platform caller uses.
         var platform: String?
+        /// **Every platform the cell names.** Gamery writes a game owned on two
+        /// systems as one cell, `Xbox,Mac`, and reading that as one name made
+        /// a console called "Xbox,Mac" (Tim, 2026-09-11).
+        var platforms: [String] = []
         var status: GameStatus?
         var rating: Int?
         var notes: String?
@@ -139,9 +144,11 @@ enum CSVImport {
                 return trimmed.isEmpty ? nil : trimmed
             }
             guard let name = value("name") else { skipped.append(line); continue }
+            let platforms = CSVImport.splitPlatforms(value("platform"))
             rows.append(Row(
                 name: name,
-                platform: value("platform"),
+                platform: platforms.first,
+                platforms: platforms,
                 status: value("status").flatMap(status(from:)),
                 rating: value("rating").flatMap(rating(from:)),
                 notes: value("notes"),
@@ -178,6 +185,15 @@ enum CSVImport {
         }
     }
 
+    /// A platform cell split into its systems: `"Xbox,Mac"` is two.
+    static func splitPlatforms(_ raw: String?) -> [String] {
+        guard let raw else { return [] }
+        var seen = Set<String>()
+        return raw.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+    }
+
     /// **Add the reviewed rows to the library, in ONE save.**
     ///
     /// Out of the view so it can be tested, and batched: `addGame` saves as it
@@ -195,7 +211,13 @@ enum CSVImport {
                                     status: row.status ?? .backlog, saving: false)
             } else {
                 game = repo.addGame(name: row.name, status: row.status ?? .backlog, saving: false)
-                if let platform = row.platform { game.platforms = [platform] }
+                if !row.platforms.isEmpty { game.platforms = row.platforms }
+            }
+            // Owned on every system the row names, each first in the
+            // availability list, in the row's order.
+            if row.platforms.count > 1 {
+                game.ownedPlatforms = row.platforms
+                game.platforms = row.platforms + game.platforms.filter { !row.platforms.contains($0) }
             }
             game.rating = row.rating
             if let notes = row.notes { game.notes = notes }

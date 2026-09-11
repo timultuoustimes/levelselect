@@ -36,6 +36,12 @@ struct LibraryTab: View {
     @State private var newCollection = false
     @State private var savingSmart = false
     @State private var newCollectionName = ""
+    /// **Choosing several games at once.** Tim, 2026-09-11, after a CSV import
+    /// brought his Mac games in as PC: *"I can't bulk select to choose a new
+    /// console."* Entered from the Filter & Sort menu, so the toolbar keeps
+    /// its two buttons.
+    @State private var selecting = false
+    @State private var selected: Set<UUID> = []
     @AppStorage("libraryHideBundled") private var hideBundled = false
 
     // A–Z.
@@ -193,8 +199,14 @@ struct LibraryTab: View {
             switch viewMode {
             case .grid: gridView
             case .list: listView
-            case .shelves: shelvesView
+            // A shelf shows a dozen of each and scrolls sideways; choosing
+            // across it would hide most of what you might pick. The grid
+            // shows every one.
+            case .shelves: if selecting { gridView } else { shelvesView }
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if selecting { selectionBar }
         }
         .overlay {
             if visible.isEmpty {
@@ -400,11 +412,21 @@ struct LibraryTab: View {
             spacing: 16
         ) {
             ForEach(items) { game in
-                NavigationLink(value: game) {
-                    LibraryGridCell(game: game, size: gridSize)
+                if selecting {
+                    Button { toggleSelection(game) } label: {
+                        LibraryGridCell(game: game, size: gridSize)
+                            .overlay(alignment: .topTrailing) {
+                                selectionMark(game).padding(6)
+                            }
+                    }
+                    .buttonStyle(PressableCardStyle())
+                } else {
+                    NavigationLink(value: game) {
+                        LibraryGridCell(game: game, size: gridSize)
+                    }
+                    .buttonStyle(PressableCardStyle())
+                    .gameContextMenu(game)
                 }
-                .buttonStyle(PressableCardStyle())
-                .gameContextMenu(game)
             }
         }
     }
@@ -419,11 +441,7 @@ struct LibraryTab: View {
             if let groups = sectionGroups {
                 ForEach(groups.indices, id: \.self) { i in
                     Section {
-                        ForEach(groups[i].items) { game in
-                            NavigationLink(value: game) { GameRow(game: game) }
-                                .listRowBackground(Color.clear)
-                                .gameContextMenu(game)
-                        }
+                        ForEach(groups[i].items) { game in listRow(game) }
                     } header: {
                         let g = groups[i]
                         if let asset = g.platform.flatMap(PlatformIcon.artName) {
@@ -439,15 +457,133 @@ struct LibraryTab: View {
                     }
                 }
             } else {
-                ForEach(sorted) { game in
-                    NavigationLink(value: game) { GameRow(game: game) }
-                        .listRowBackground(Color.clear)
-                        .gameContextMenu(game)
-                }
+                ForEach(sorted) { game in listRow(game) }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private func listRow(_ game: Game) -> some View {
+        if selecting {
+            Button { toggleSelection(game) } label: {
+                HStack(spacing: 12) {
+                    selectionMark(game)
+                    GameRow(game: game)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(Color.clear)
+        } else {
+            NavigationLink(value: game) { GameRow(game: game) }
+                .listRowBackground(Color.clear)
+                .gameContextMenu(game)
+        }
+    }
+
+    // MARK: Selecting
+
+    private func toggleSelection(_ game: Game) {
+        if selected.contains(game.id) { selected.remove(game.id) } else { selected.insert(game.id) }
+    }
+
+    private func selectionMark(_ game: Game) -> some View {
+        let on = selected.contains(game.id)
+        return Image(systemName: on ? "checkmark.circle.fill" : "circle")
+            .font(.title3)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(on ? AnyShapeStyle(LSTheme.onAccent) : AnyShapeStyle(.white),
+                             on ? AnyShapeStyle(LSTheme.accentFill) : AnyShapeStyle(.black.opacity(0.35)))
+            .accessibilityLabel(on ? "Selected" : "Not selected")
+    }
+
+    private var selectedGames: [Game] { games.filter { selected.contains($0.id) } }
+    private var allVisibleSelected: Bool {
+        !visible.isEmpty && visible.allSatisfy { selected.contains($0.id) }
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 14) {
+            Button("Done") { endSelecting() }
+                .keyboardShortcut(.cancelAction)
+            Text(selected.isEmpty ? "Choose games" : "\(selected.count) selected")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Spacer(minLength: 0)
+            Button(allVisibleSelected ? "Select None" : "Select All") {
+                if allVisibleSelected { selected.subtract(visible.map(\.id)) }
+                else { selected.formUnion(visible.map(\.id)) }
+            }
+            Menu {
+                consoleChoices
+            } label: {
+                Label("Set Console", systemImage: "gamecontroller")
+            }
+            .disabled(selected.isEmpty)
+            Menu {
+                ForEach(GameStatus.displayOrder, id: \.self) { status in
+                    Button { setStatus(status) } label: {
+                        Label(status.label, systemImage: status.systemImage)
+                    }
+                }
+            } label: {
+                Label("Set Status", systemImage: "flag")
+            }
+            .disabled(selected.isEmpty)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(.bar)
+    }
+
+    /// Your consoles first — the likely answer — then everything else.
+    @ViewBuilder
+    private var consoleChoices: some View {
+        let mine = Repository(context).liveConsoles().map(\.platform).sorted()
+        Section("Your consoles") {
+            ForEach(mine, id: \.self) { platform in
+                Button(platform) { setConsole(platform) }
+            }
+        }
+        Menu("Other systems") {
+            ForEach(PlatformCatalog.all.filter { !mine.contains($0) }, id: \.self) { platform in
+                Button(platform) { setConsole(platform) }
+            }
+        }
+    }
+
+    /// **The console you own them on, replaced — not added to.** A game that
+    /// came in as PC and is really yours on Mac is owned on Mac now; PC stays
+    /// in its availability list, because the game still exists there.
+    private func setConsole(_ platform: String) {
+        let repo = Repository(context)
+        let games = selectedGames
+        let key = PlatformKey.canonical(platform)
+        repo.editAll(games) { game in
+            game.ownedPlatforms = [platform]
+            if !game.platforms.contains(where: { PlatformKey.canonical($0) == key }) {
+                game.platforms.insert(platform, at: 0)
+            }
+        }
+        // The first game on a platform makes its console, as it would one
+        // game at a time.
+        for game in games { _ = repo.noteConsoles(for: game) }
+        endSelecting()
+    }
+
+    private func setStatus(_ status: GameStatus) {
+        Repository(context).editAll(selectedGames) { $0.status = status }
+        endSelecting()
+    }
+
+    private func endSelecting() {
+        withAnimation(.snappy) {
+            selecting = false
+            selected = []
+        }
     }
 
     /// One header for grid, list and shelves.
@@ -592,6 +728,12 @@ struct LibraryTab: View {
         // on — the one piece of state a collapsed menu has to keep showing.
         ToolbarItem {
             Menu {
+                Button {
+                    withAnimation(.snappy) { selecting = true }
+                } label: {
+                    Label("Select Games…", systemImage: "checkmark.circle")
+                }
+                Divider()
                 Picker("Status", selection: $statusFilter) {
                     // Counts exclude the wishlist, like the shelves do. "All"
                     // that quietly included six games you don't own would not

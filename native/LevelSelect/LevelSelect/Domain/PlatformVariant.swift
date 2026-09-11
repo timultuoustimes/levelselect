@@ -41,6 +41,9 @@ enum PlatformVariant {
         var year: Int? = nil
 
         var id: String { key }
+        /// For a second list of the same machines in the same Form, whose rows
+        /// must not share identities with the first. See `ConsoleEditor`.
+        var lineageRowID: String { "had:" + key }
     }
 
     /// Keyed by the CANONICAL platform name, so every spelling of a console

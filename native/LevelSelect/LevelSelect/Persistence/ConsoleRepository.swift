@@ -253,6 +253,7 @@ extension Repository {
     /// are left alone. Safe to run on every launch, and it is.
     @discardableResult
     func backfillConsoles(in games: [Game]) -> Int {
+        splitJoinedPlatforms(in: games)
         refoldStoredPlatforms()
         let dismissed = dismissedConsoles()
         var known = Set(liveConsoles().map(\.platform))
@@ -303,6 +304,39 @@ extension Repository {
     /// the newer is deleted outright rather than tombstoned — it is a rename
     /// collision, not something anyone chose to throw away, and leaving it in
     /// Recently Deleted would offer to restore a duplicate.
+    /// **Undo a CSV import's joined platform names.**
+    ///
+    /// The 09-11 import read Gamery's `Xbox,Mac` as ONE platform and stored it
+    /// on the game and as a console of its own. Split back into the systems
+    /// the cell named — the game owned on each — and the joined console goes,
+    /// deleted outright rather than tombstoned: nobody chose it, and the
+    /// backfill below creates the real ones from the games. One that has had
+    /// a photograph added is renamed to its first system instead, keeping it.
+    /// Idempotent: nothing is written once no name holds a comma.
+    private func splitJoinedPlatforms(in games: [Game]) {
+        var changed = false
+        func split(_ list: [String]) -> [String] {
+            var seen = Set<String>()
+            return list.flatMap { CSVImport.splitPlatforms($0) }.filter { seen.insert($0).inserted }
+        }
+        for game in games where game.platforms.contains(where: { $0.contains(",") })
+            || (game.ownedPlatforms ?? []).contains(where: { $0.contains(",") }) {
+            game.platforms = split(game.platforms)
+            if let owned = game.ownedPlatforms { game.ownedPlatforms = split(owned) }
+            changed = true
+        }
+        for console in liveConsoles() + trashedConsoles() where console.platform.contains(",") {
+            if (console.images ?? []).isEmpty {
+                context.delete(console)
+            } else if let first = CSVImport.splitPlatforms(console.platform).first {
+                console.platform = PlatformKey.canonical(first)
+                touch(console)
+            }
+            changed = true
+        }
+        if changed { persist() }
+    }
+
     private func refoldStoredPlatforms() {
         var changed = false
         var byName: [String: Console] = [:]

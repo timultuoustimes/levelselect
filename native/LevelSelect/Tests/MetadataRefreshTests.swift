@@ -1348,6 +1348,38 @@ struct CSVImportGameryTests {
         #expect(!parsed.ignoredColumns.contains("User Rating (1-5)"))
     }
 
+    @Test("A cell naming two systems is two platforms, and the game is owned on both")
+    func splitsJoinedPlatforms() {
+        let parsed = CSVImport.parse("Name,Library Platforms\nGTA,\"Xbox,Mac\"\n")
+        #expect(parsed.rows.first?.platforms == ["Xbox", "Mac"])
+        #expect(parsed.rows.first?.platform == "Xbox")
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let row = parsed.rows[0]
+        let match = IGDBGame(id: 7, name: "GTA", slug: nil, coverImageID: nil, franchise: nil,
+                             releaseYear: nil, summary: nil, gameType: 0, platforms: ["PC (Microsoft Windows)"],
+                             genres: [], themes: [], gameModes: [], playerPerspectives: [],
+                             developers: [], publishers: [])
+        CSVImport.apply([(row, match)], context: context)
+        let game = (try? context.fetch(FetchDescriptor<Game>()))?.first
+        #expect(game?.ownedPlatforms == ["Xbox", "Mac"])
+        #expect(Array(game?.platforms.prefix(2) ?? []) == ["Xbox", "Mac"])
+    }
+
+    @Test("Launch repairs a joined platform the 09-11 import stored")
+    func repairsJoinedPlatforms() {
+        let repo = Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+        let game = repo.addGame(name: "GTA", status: .completed)
+        game.platforms = ["Xbox,Mac"]
+        game.ownedPlatforms = ["Xbox,Mac"]
+        repo.context.insert(Console(platform: "Xbox,Mac", ownership: []))
+        repo.backfillConsoles(in: [game])
+        #expect(game.ownedPlatforms == ["Xbox", "Mac"])
+        let names = Set(repo.liveConsoles().map(\.platform))
+        #expect(!names.contains { $0.contains(",") })
+        #expect(names.contains(PlatformKey.canonical("Xbox")))
+        #expect(names.contains(PlatformKey.canonical("Mac")))
+    }
+
     @Test("Applying the rows adds every game in one pass")
     func appliesInOnePass() {
         let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))

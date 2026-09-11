@@ -44,6 +44,18 @@ struct Repository {
         persist()
     }
 
+    /// The same invariant for a batch: every model stamped, then ONE save.
+    /// A bulk edit through `edit` saved once per game, which is the pattern
+    /// that tripped a live `@Query` during a 140-row import on 09-11.
+    func editAll<T: Syncable>(_ models: [T], _ mutate: (T) -> Void) {
+        guard !models.isEmpty else { return }
+        for model in models {
+            mutate(model)
+            touch(model)
+        }
+        persist()
+    }
+
     /// Stamp-and-commit for the screen that edits through SwiftUI bindings
     /// (Game Detail's rating, ownership, notes, metadata and review editors).
     ///
