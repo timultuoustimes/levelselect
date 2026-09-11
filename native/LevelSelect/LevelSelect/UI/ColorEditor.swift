@@ -175,6 +175,19 @@ struct ColorEditor: View {
         return current ?? LSTheme.torch
     }
 
+    /// Puts back only what this sheet touched — see the note on the Cancel
+    /// button for why `picked` is the thing that knows.
+    private func cancel() {
+        for t in targets where picked[t.id] != nil {
+            if wasCustom.contains(t.id), let was = originals[t.id] {
+                t.binding.wrappedValue = was
+            } else {
+                t.onReset()
+            }
+        }
+        dismiss()
+    }
+
     // MARK: Body
 
     var body: some View {
@@ -229,6 +242,24 @@ struct ColorEditor: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         #endif
+        #if os(macOS)
+        // **The Mac's Cancel and Done sit on the sheet's ground.** As toolbar
+        // items the system drew them in a white footer under the editor,
+        // below Settings' own purple bar. Escape is Cancel here rather than
+        // "close all of Settings", and Return is Done.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+                Button("Cancel") { cancel() }
+                    .keyboardShortcut(.cancelAction)
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(LSTheme.liveSheetGround)
+        }
+        #else
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 // Puts the LIVE theme back — the preview writes through, so a
@@ -243,21 +274,13 @@ struct ColorEditor: View {
                 // binding hands back for "unset" — that value is now a real
                 // palette hex, and storing it would leave an untouched library
                 // reading as Custom for a color it never chose.
-                Button("Cancel") {
-                    for t in targets where picked[t.id] != nil {
-                        if wasCustom.contains(t.id), let was = originals[t.id] {
-                            t.binding.wrappedValue = was
-                        } else {
-                            t.onReset()
-                        }
-                    }
-                    dismiss()
-                }
+                Button("Cancel") { cancel() }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Done") { dismiss() }
             }
         }
+        #endif
         .onAppear {
             guard !loaded else { return }
             loaded = true

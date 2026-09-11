@@ -212,6 +212,22 @@ struct SettingsView: View {
                 .padding(.vertical, 12)
                 .background(LSTheme.liveSheetGround)
             }
+            // **Done is the root page's, like the header above it.** It used
+            // to hang off the whole stack, so every pushed page carried a
+            // Done that closed ALL of Settings — on the color editor it sat
+            // right above the editor's own Cancel and Done, and Tim, 09-11:
+            // *"the done that just closed the color selector threw me off."*
+            // A pushed page has its back button; the root has this.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(LSTheme.liveSheetGround)
+            }
             #endif
             .toolbar {
                 // The Mac draws its own — see `macChrome` below.
@@ -254,20 +270,8 @@ struct SettingsView: View {
         // olive taken from whatever art happened to be underneath, while the
         // rows between them were (45,35,69). Tim, 2026-09-10: *"this main
         // setting sheet still has grey header and footer."* A screenshot at
-        // a third scale looked purple to me twice; the pixels did not.
-        //
-        // The pushed pages already draw their own header for the same reason.
-        // This is the root sheet catching up, which also makes the two agree.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(LSTheme.liveSheetGround)
-        }
+        // a third scale looked purple to me twice; the pixels did not. Both
+        // bars now live on the root Form, inside the stack, above.
         // A sheet with no size on macOS gets whatever the system guesses,
         // which was too short for a screen with eight sections — the last of
         // them could not be scrolled to at all. Sized to fit the longest

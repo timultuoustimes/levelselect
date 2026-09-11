@@ -207,6 +207,15 @@ struct RootView: View {
     /// Live Activities read the post-reconcile set, and the widget snapshot is
     /// written last from that same repaired context.
     private func repairSyncedData() {
+        // **The live theme re-reads its record after every import.**
+        //
+        // It otherwise refreshes only when `updatedAt` moves, and an import
+        // can change the colors without moving it: Core Data merges property
+        // by property, so a newer local `updatedAt` survives while the synced
+        // hexes land. Seen on shenron 2026-09-11: the record said light was
+        // unset, the app went on wearing the yellow pair's step on light, and
+        // the color editor, which reads the record, looked wrong beside it.
+        ThemePalette.refresh(from: themeSettings.first)
         let repo = Repository(context)
         repo.reconcileLibrary()
         // Recently Deleted empties itself after thirty days. Here rather than
