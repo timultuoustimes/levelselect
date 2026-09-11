@@ -124,6 +124,15 @@ enum PlatformVariant {
             Variant(key: "jr", label: "SNES Jr.",
                     detail: "SNS-101, 1997", asset: "variant-snes-jr", year: 1997),
         ],
+        // The Model 2 has been the Genesis icon since the first set shipped;
+        // the Model 1, with its big round slot and 16-BIT lettering, is the
+        // one a lot of people plugged in first. Drawn 2026-09-10.
+        "Genesis": [
+            Variant(key: "model-2", label: "Genesis Model 2",
+                    detail: "Compact, 1993", asset: nil, year: 1993),
+            Variant(key: "model-1", label: "Genesis Model 1",
+                    detail: "Original, 1989", asset: "variant-genesis-model-1", year: 1989),
+        ],
         "NES": [
             Variant(key: "front-loader", label: "NES",
                     detail: "Front-loader, 1985", asset: nil, year: 1985),

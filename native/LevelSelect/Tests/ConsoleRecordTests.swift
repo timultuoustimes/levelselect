@@ -327,9 +327,9 @@ struct ConsoleRecordTests {
         PlatformIcon.variantOverrides = ["Saturn": "a-model-from-a-newer-build"]
         #expect(PlatformIcon.artName("Saturn") == "platform-saturn")
         // And a console with no variants at all is untouched by any of it.
-        PlatformIcon.variantOverrides = ["Genesis": "whatever"]
-        #expect(PlatformIcon.artName("Genesis") == "platform-genesis")
-        #expect(PlatformVariant.variants(for: "Genesis").isEmpty)
+        PlatformIcon.variantOverrides = ["Dreamcast": "whatever"]
+        #expect(PlatformIcon.artName("Dreamcast") == "platform-dreamcast")
+        #expect(PlatformVariant.variants(for: "Dreamcast").isEmpty)
     }
 
     @Test("Every variant names art that exists, and the first is the shipped one")
@@ -388,7 +388,7 @@ struct ConsoleRecordTests {
         #expect(map["Mac"] == "imac-g3", "and takes nothing else with it")
 
         // A console with one machine has no lineage to show.
-        #expect(PlatformVariant.owned(for: "Genesis", in: map).isEmpty)
+        #expect(PlatformVariant.owned(for: "Dreamcast", in: map).isEmpty)
     }
 
     @Test("A lineage reads forward in time whichever end the default is")
