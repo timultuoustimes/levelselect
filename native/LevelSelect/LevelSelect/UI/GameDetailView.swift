@@ -74,18 +74,8 @@ struct GameDetailView: View {
     var body: some View {
         GeometryReader { geo in
             let stageMode = isStage(geo.size)
-            Group {
-                if stageMode {
-                    stageLayout(width: geo.size.width, topInset: geo.safeAreaInsets.top)
-                } else {
-                    VStack(spacing: 0) {
-                        if let video = pagePlaying {
-                            VideoPlayerDock(video: video) { pagePlaying = nil }
-                        }
-                        standardScroll(stageMode: false, topInset: geo.safeAreaInsets.top)
-                    }
-                }
-            }
+            pageLayout(stageMode: stageMode, width: geo.size.width,
+                       topInset: geo.safeAreaInsets.top)
             // ORDER IS LOAD-BEARING. `ignoresSafeArea` lives HERE, inside the
             // GeometryReader, not on it. Applied outside, it consumed the
             // safe area before `geo` measured anything, so
@@ -888,22 +878,44 @@ struct GameDetailView: View {
         }
     }
 
-    // MARK: Sliding stage (iPad landscape / macOS, compact display)
+    // MARK: The page, and the sliding stage (iPad landscape / macOS, compact display)
 
-    private func stageLayout(width: CGFloat, topInset: CGFloat) -> some View {
-        ZStack(alignment: .topLeading) {
-            standardScroll(stageMode: true, topInset: topInset)
-                .frame(width: stage == 1 ? width : width * 0.58)
-                .offset(x: stage == 3 ? -width * 0.58 : 0)
+    /// **One tree at every width, so crossing into the stage keeps your place.**
+    ///
+    /// The narrow page and the stage used to be two branches of an `if`, and
+    /// SwiftUI gives each branch its own identity: widening a window past
+    /// `StageLayout.fits` threw the page's ScrollView away and built a new
+    /// one at the top, and narrowing it did the same in reverse. Tim, on the
+    /// iOS 27 resize walk: scroll down a game page, resize, and it pops to
+    /// the top. Now the page's scroll is ALWAYS the first child here, in the
+    /// same place, and only its width and offset change; the video dock above
+    /// it and the two panels beside it come and go around it without taking
+    /// its identity with them.
+    ///
+    /// `stage` means nothing in the narrow layout, so `pane` pins it to 1
+    /// there: the page is the full width and nothing is beside it.
+    private func pageLayout(stageMode: Bool, width: CGFloat, topInset: CGFloat) -> some View {
+        let pane = stageMode ? stage : 1
+        return ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                if !stageMode, let video = pagePlaying {
+                    VideoPlayerDock(video: video) { pagePlaying = nil }
+                }
+                standardScroll(stageMode: stageMode, topInset: topInset)
+            }
+            .frame(width: pane == 1 ? width : width * 0.58)
+            .offset(x: pane == 3 ? -width * 0.58 : 0)
 
-            trackerPanel
-                .frame(width: stage == 3 ? width * 0.46 : width * 0.42)
-                .offset(x: stage == 1 ? width
-                        : (stage == 2 ? width * 0.58 : 0))
+            if stageMode {
+                trackerPanel
+                    .frame(width: stage == 3 ? width * 0.46 : width * 0.42)
+                    .offset(x: stage == 1 ? width
+                            : (stage == 2 ? width * 0.58 : 0))
 
-            videoPanel
-                .frame(width: width * 0.54)
-                .offset(x: stage == 3 ? width * 0.46 : width * 1.02)
+                videoPanel
+                    .frame(width: width * 0.54)
+                    .offset(x: stage == 3 ? width * 0.46 : width * 1.02)
+            }
         }
         // The ZStack must span the FULL stage, not shrink to its widest child
         // — otherwise offset panels land outside the clip and vanish.
@@ -917,9 +929,8 @@ struct GameDetailView: View {
         // deliberately draws ABOVE this container, pulled up by the safe-area
         // inset so it reaches under the navigation bar. A plain `.clipped()`
         // cut off exactly that overhang, so on iPad in landscape with a
-        // compact tracker — the only combination that uses this layout — the
-        // backdrop started below the bars with a band of empty page above it,
-        // while the same page in portrait was fine.
+        // compact tracker the backdrop started below the bars with a band of
+        // empty page above it, while the same page in portrait was fine.
         .mask(Rectangle().padding(.vertical, -4_000))
     }
 

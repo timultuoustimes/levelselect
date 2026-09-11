@@ -1096,6 +1096,25 @@ struct StageLayoutTests {
         #expect(!StageLayout.fits(CGSize(width: 180, height: 960)))
     }
 
+    /// Crossing the stage width used to scroll the game page back to the top,
+    /// because the narrow page and the stage were two branches of an `if` and
+    /// each built its own ScrollView. One call site is the whole fix: the
+    /// scroll lives in one place in one tree, so SwiftUI keeps it (and its
+    /// offset) when only its width changes. A second call site is how the bug
+    /// comes back, so that is what this counts.
+    @Test("The game page's scroll is built in exactly one place, so resizing keeps your place")
+    func theGamePageScrollSurvivesTheStage() throws {
+        let file = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("LevelSelect/UI/GameDetailView.swift")
+        let text = try String(contentsOf: file, encoding: .utf8)
+        let calls = text.components(separatedBy: "standardScroll(stageMode: stageMode").count - 1
+        #expect(calls == 1, "the page's ScrollView must have one call site, not \(calls)")
+        #expect(!text.contains("standardScroll(stageMode: true"))
+        #expect(!text.contains("standardScroll(stageMode: false"))
+        #expect(!text.contains("func stageLayout("))
+    }
+
     @Test("Phones in landscape split — measured in USABLE width, not device width")
     func iPhoneLandscapeSplits() {
         // The sizes a GeometryReader actually reports, with the landscape
