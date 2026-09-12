@@ -8,9 +8,15 @@
  */
 
 /** Shown on both surfaces, so the app can say when this was last honest. */
-export const reviewed = '8 September 2026';
+export const reviewed = '11 September 2026';
 
 export const shipped = [
+  { t: 'The consoles themselves', build: 38,
+    d: 'A console is something you own in its own right: how you have it, when you got it, a photograph of the actual machine — and which model the app draws, from the Funtastic N64 to a coral Switch Lite.' },
+  { t: 'A color for light and another for dark', build: 38,
+    d: 'Pick a pair for each appearance and the app changes with the system — accent, ground and widgets together.' },
+  { t: 'Choose many games at once', build: 38,
+    d: 'Select games in Library or on a console page and set the console you own them on, or their status, for all of them together.' },
   { t: 'Home is yours to arrange', build: 38,
     d: 'Your consoles in a case under your name, every shelf a choice, a collection as its own shelf — in the order you drag, following you to every device.' },
   { t: 'Maps, with pins that mean something', build: 38,
@@ -81,7 +87,6 @@ export const horizons = [
     note: 'planned',
     color: '#0A84FF',
     items: [
-      { t: 'The consoles themselves', d: "A system becomes something you own in its own right, with add-ons attached to the machine they plug into — rather than a label that only ever exists on a game." },
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
       { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
     ],
