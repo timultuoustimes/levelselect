@@ -192,6 +192,28 @@ enum PlatformVariant {
                     detail: "Limited edition", asset: "variant-n64-gold"),
         ],
 
+        // **One platform, three machines.** The app draws the 2017 hybrid with
+        // its neon Joy-Cons; the Lite is a different object entirely (no
+        // Joy-Cons, no dock) and the OLED is the one most people bought last.
+        "Switch": [
+            Variant(key: "neon", label: "Nintendo Switch",
+                    detail: "Neon Joy-Cons, 2017", asset: nil, year: 2017),
+            Variant(key: "oled-white", label: "Switch OLED",
+                    detail: "White, 2021", asset: "variant-switch-oled-white", year: 2021),
+            Variant(key: "oled-mario", label: "Switch OLED",
+                    detail: "Mario Red, 2023", asset: "variant-switch-oled-mario", year: 2023),
+            Variant(key: "lite-yellow", label: "Switch Lite",
+                    detail: "Yellow, 2019", asset: "variant-switch-lite-yellow", year: 2019),
+            Variant(key: "lite-turquoise", label: "Switch Lite",
+                    detail: "Turquoise, 2019", asset: "variant-switch-lite-turquoise", year: 2019),
+            Variant(key: "lite-gray", label: "Switch Lite",
+                    detail: "Gray, 2019", asset: "variant-switch-lite-gray", year: 2019),
+            Variant(key: "lite-coral", label: "Switch Lite",
+                    detail: "Coral, 2020", asset: "variant-switch-lite-coral", year: 2020),
+            Variant(key: "lite-blue", label: "Switch Lite",
+                    detail: "Blue, 2021", asset: "variant-switch-lite-blue", year: 2021),
+        ],
+
         "GameCube": [
             Variant(key: "indigo", label: "Indigo",
                     detail: "2001", asset: nil, year: 2001),
