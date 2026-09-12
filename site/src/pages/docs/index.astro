@@ -62,10 +62,24 @@ const sections = [
     a: 'Settings → Colors. Accent and background together, light and dark previewed at once.' },
   { id: 'itch',              q: 'Can I bring in my itch.io games?',
     a: 'Settings → itch.io → Connect. Games you bought or claimed arrive with their art.' },
+  { id: 'csv',               q: 'Can I bring a library in from another app?',
+    a: 'Settings → Your data → Import from CSV. Rows carrying an IGDB id match exactly, and nothing is added until you have looked.' },
+  { id: 'bulkedit',          q: 'These games are all on the wrong console',
+    a: 'Library or a console page → Filter → Select Games…, then set the console or the status for all of them at once.' },
   { id: 'systemnames',       q: 'It is called a Mega Drive, not a Genesis',
     a: 'Settings → System names. Your name for a console changes every shelf, chip and widget.' },
   { id: 'ownership',         q: 'I borrowed it. I rented it. I played it in an arcade.',
     a: 'Nine ways to say how you have a game, and you choose which ones your library uses.' },
+  { id: 'home',              q: 'Can I change what is on Home?',
+    a: 'Press and hold any shelf → Arrange Home. Drag the blocks, switch any off, and it follows you to your other devices.' },
+  { id: 'systems',           q: 'I am a Nintendo person',
+    a: 'Your consoles sit under your name in a case. Press and hold it to choose how many, in what order, and whether it scrolls.' },
+  { id: 'smartcollections',  q: 'A collection that fills itself',
+    a: 'Set Library\'s filters, then save them as a collection. Add a game that fits and it is in.' },
+  { id: 'consoles',          q: 'Are my consoles in here too?',
+    a: 'Each one is its own record: how you have it, when you got it, and a photograph of the machine itself.' },
+  { id: 'whichmachine',      q: 'That is not the model I had',
+    a: 'A console page asks which machine to draw — and keeps the whole lineage of the ones you have had.' },
   { id: 'paste',             q: 'I have a checklist from a wiki',
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
@@ -76,6 +90,8 @@ const sections = [
     a: 'Settings → Game pages & trackers turns off the hints a generated or imported list carries.' },
   { id: 'retroachievements', q: 'I want my retro achievements in here',
     a: 'For retro games LevelSelect installs the real authored list, not an approximation.' },
+  { id: 'maps',              q: 'Where is that thing on the map?',
+    a: 'A game page holds its maps — your own pictures of the world — and a pin on one can tick the tracker.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently. Stopping one asks what happened.' },
   { id: 'carriedover',       q: 'Steam says I have 42 hours in this',
@@ -108,8 +124,11 @@ const sections = [
  */
 const moments = [
   { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors', 'itch'] },
+  { t: 'I brought a library in',          ids: ['csv', 'bulkedit'] },
   { t: 'It should use my words',          ids: ['systemnames', 'ownership'] },
-  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements'] },
+  { t: 'Home should look like me',        ids: ['home', 'systems', 'smartcollections'] },
+  { t: 'My consoles, not just my games',  ids: ['consoles', 'whichmachine'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements', 'maps'] },
   { t: 'My playtime looks wrong',         ids: ['sessions', 'carriedover'] },
   { t: 'I am waiting for a game',         ids: ['releases'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
@@ -251,6 +270,29 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="csv" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'csv')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'csv')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Settings &rarr; Your data &rarr; Import from CSV.</strong> An export from Gamery, Backloggd, a spreadsheet or anywhere else: a title column is all that is required, and platform, status, rating, hours and notes are read when they are there. Column names can vary &mdash; Title or Game or Name, Shelf or List or Status.</p>
+    <p><strong>An id beats a title.</strong> A row carrying an <strong>IGDB id</strong> is matched by it, which is exact; without one, the title is looked up and anything that did not match exactly is flagged for you to check. Nothing is added until you have been through the list, and you can swap any match or keep the name you typed.</p>
+    <p>A cell naming two systems &mdash; <em>Xbox,Mac</em> &mdash; makes the game yours on both. If iCloud is still bringing your library down, the import waits rather than adding a second copy of everything it is about to restore.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="bulkedit" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'bulkedit')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'bulkedit')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>An import can only believe what the file said. If forty games arrived on PC that are really yours on a Mac, fix them together.</p>
+    <p><strong>Library &rarr; Filter &amp; Sort &rarr; Select Games&hellip;</strong>, or the same from a console page&rsquo;s Filter menu. Tap the ones you mean &mdash; each takes a check and an accent outline &mdash; then <strong>Set Console</strong> (your own consoles first, every other system under it) or <strong>Set Status</strong>. Setting the console changes which machine you own them on; the list of systems a game came out on is left alone.</p>
+      </div>
+    </details>
+
     <details class="qa" id="systemnames" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'systemnames')!.q}</span>
@@ -277,8 +319,69 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>A game can be several at once, which is the point: a cartridge you dumped is Physical and Emulated, and one you sold is Physical and Former.</p>
 
     <h3>Choosing which ones you use</h3>
-    <p><strong>Settings &rarr; Ownership chips.</strong> Rented, Borrowed, Shared and Arcade are off to begin with, so a library that never needs them never sees them. Turn any of the nine off &mdash; and <strong>turning one off only hides it</strong>. A game already marked with it keeps the mark and goes on showing it, so a change of vocabulary can never quietly edit your library.</p>
+    <p><strong>Settings &rarr; Ownership &amp; access.</strong> Rented, Borrowed, Shared and Arcade are off to begin with, so a library that never needs them never sees them. Turn any of the nine off &mdash; and <strong>turning one off only hides it</strong>. A game already marked with it keeps the mark and goes on showing it, so a change of vocabulary can never quietly edit your library.</p>
     <p>You can also set their order: the app&rsquo;s own, most-used-in-your-library first, or drag them where you want them.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="home" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'home')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'home')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Home used to decide what came first. It is your page, so now it asks. <strong>Press and hold any shelf &rarr; Arrange Home.</strong> Drag the blocks into the order you want, switch any of them off, and bring Backlog or Finished up from Library if you want them here.</p>
+    <p>This order <strong>follows you to your other devices</strong>. Which sections you closed on a game page stays with the device, because an iPad has more room; how Home is composed is about you, not the screen.</p>
+
+    <h3>A collection can be a shelf</h3>
+    <p><strong>Add a collection to Home</strong> from the bottom of Arrange Home, and &ldquo;Six That Made Me&rdquo; sits on your page with its covers under its name. Remove it with a swipe. Everything stays in Library whether it is on Home or not.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="systems" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'systems')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'systems')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Someone&rsquo;s consoles say more about them than their backlog does. So they sit under your name on Home in a three-wide case, six at a time, the rest behind <strong>See all</strong>.</p>
+    <p><strong>Press and hold the case &rarr; Arrange Systems.</strong> Choose how many reach Home, drag them into your order &mdash; or pick one in a tap: North American release order, most games, or A&ndash;Z &mdash; and choose a scrolling row instead of the case if you would rather, or if four systems look better in a line than in a grid. Drag after a sort and the order is yours again.</p>
+    <p>A console appears here when a game does. Add a game on the SNES and the SNES is in the case.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="smartcollections" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'smartcollections')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'smartcollections')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A collection is usually a list you picked by hand. It can also be a rule.</p>
+    <p><strong>Library &rarr; Filter &amp; Sort</strong>, set the filters &mdash; Backlog, on the SNES, physical &mdash; then <strong>Save These Filters as a Collection</strong>. Name it, choose whether it belongs on Home, and it fills itself: add a game that fits and it is in; change the game and it may leave. It opens like any other collection, and the rule is shown as chips at the top so it is never a mystery why something is there.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="consoles" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'consoles')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'consoles')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A console used to be a word on a game. It is a record of its own now, with <strong>how you have it</strong> &mdash; the same nine ways a game can be yours &mdash; <strong>when you got it</strong>, and <strong>a photograph of the actual machine</strong>, which beats the drawing everywhere it appears.</p>
+    <p>It fills itself in: add a game on the SNES and the SNES is yours. A physical game on a console you only emulate asks once and remembers the answer, so a display copy never quietly claims you own the hardware.</p>
+    <p>You can also add a console you own with nothing on it &mdash; the Dreamcast in the display case is a real thing to record. Consoles come with your export, and a deleted one waits thirty days in Recently Deleted.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="whichmachine" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'whichmachine')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'whichmachine')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>&ldquo;PC&rdquo; is forty years of very different objects, and so is Mac, and so is the Game Boy. Open a console and choose <strong>which one to draw</strong>: the charcoal N64 or a Funtastic one, the front-loading NES or the top-loader, a Switch Lite in coral, a Game Boy in Play It Loud yellow, the SP in flame. It changes the picture everywhere that console appears.</p>
+    <p>Under it, <strong>Machines you have had</strong> keeps the lineage &mdash; tick every one you owned and the console page reads forward in time, oldest first. The one you draw is always included.</p>
+    <p>There is a free-text line too, for the part no list can hold: &ldquo;Model 1, OLED, modded&rdquo;.</p>
       </div>
     </details>
 
@@ -372,6 +475,21 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
     <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. The Journal&rsquo;s charts gain a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="maps" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'maps')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'maps')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A game page has a <strong>Maps</strong> section. A map is a picture you own of the game &mdash; add one from your Photo Library, from Files, by pasting, or with <strong>Find One</strong>: give it a wiki page and it reads the map images off that page, checks each one actually exists, and keeps the site it came from with the map.</p>
+    <p>Open a map to pinch, pan, and drop pins &mdash; press and hold anywhere, or tap <strong>Place</strong> and pan the map under the ring. A pin is a collectible, a note, a warning or a secret, and the legend at the bottom is also the filter. Mark a pin <strong>explored</strong> and it dims with a check; <strong>Left</strong> and <strong>Explored</strong> split what is still out there from what is not.</p>
+
+    <h3>A pin that ticks the tracker</h3>
+    <p>Link a pin to a tracker item and they become one thing: the pin takes the item&rsquo;s name and shows its checkbox, and ticking either one ticks the other &mdash; with the same journal line. In the tracker, an item with a pin says <strong>On the map</strong>; press and hold one without a pin for <strong>Pin on Map</strong>, which opens the map with that item already chosen.</p>
+    <p>Maps sync with your library, go to Recently Deleted when you delete them (and come back with their pins), and come with an export.</p>
       </div>
     </details>
 
