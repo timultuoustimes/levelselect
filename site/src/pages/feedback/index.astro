@@ -1,0 +1,112 @@
+---
+/**
+ * The build question the app asks, answered on the web.
+ *
+ * `BetaQuestionCard` used to send people to `/invite/?tester=1`, which asks
+ * for an email address, which devices they own and how they track games —
+ * onboarding questions, aimed at someone who does not have the app yet. A
+ * tester who tapped "Answer on the web" was asked to sign up again, and the
+ * one thing being asked for never got asked. That is why three builds of
+ * questions came back empty even after the card itself was fixed.
+ *
+ * A Netlify form, same as the invite: the markup is the backend, the build bot
+ * registers it at deploy, and notifications are set per form in the Netlify UI.
+ * The hidden `form-name` must match `name`, and `netlify-honeypot` names a
+ * field a human never sees.
+ *
+ * The question is chosen by `?q=`, which the app appends. Every question is
+ * rendered and the right one revealed, because the site is static — no
+ * question id means the general one, and an unknown id means the same rather
+ * than a blank page.
+ */
+import Base from '../../layouts/Base.astro';
+
+// Mirrors `BetaQuestionCard.questions` in the app. Adding a build question
+// means adding it in both, and the ids have to match.
+const questions = [
+  {
+    id: 'before',
+    ask: 'What were you using to keep track before this?',
+    why: "A spreadsheet, another app, nothing at all — whichever it is, it's the most useful thing you can tell me, because it's what LevelSelect is being measured against.",
+  },
+  {
+    id: 'journal-36',
+    ask: 'Have you written anything down yet?',
+    why: 'The Journal tab is new — a note on a session, or a memory from years before you had the app. Whether you used it or ignored it completely, that’s the thing I most need to know about this build.',
+  },
+];
+const fallback = {
+  id: 'general',
+  ask: 'What do you make of it?',
+  why: "Anything that felt wrong, anything you went looking for and couldn't find, anything you liked enough to notice.",
+};
+const all = [...questions, fallback];
+---
+<Base
+  title="Answer the question — LevelSelect"
+  description="Answer the question LevelSelect asked you, in as few or as many words as you like."
+>
+<main class="wrap">
+  <article class="doc">
+    <h1>Thanks for answering</h1>
+
+    {all.map((q) => (
+      <div class="ask" data-q={q.id} hidden={q.id !== fallback.id}>
+        <p class="lede">{q.ask}</p>
+        <p class="why">{q.why}</p>
+      </div>
+    ))}
+
+    <form name="feedback" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/feedback/thanks/">
+      <input type="hidden" name="form-name" value="feedback" />
+      <input type="hidden" name="question" id="question" value={fallback.id} />
+      <p class="hp" aria-hidden="true">
+        <label>Leave this empty <input name="bot-field" tabindex="-1" autocomplete="off" /></label>
+      </p>
+
+      <div class="field">
+        <label class="q" for="answer">Your answer<span class="req">required</span></label>
+        <textarea id="answer" name="answer" rows="6" required
+                  placeholder="However much or little you want to say."></textarea>
+        <p class="hint">No account, nothing tracked. This form is the whole of it.</p>
+      </div>
+
+      <div class="field">
+        <label class="q" for="reply">Want a reply?<span class="opt">optional</span></label>
+        <input id="reply" name="reply" type="email" placeholder="you@example.com" autocomplete="email" />
+        <p class="hint">Only if you want one. Leave it blank and the answer is anonymous.</p>
+      </div>
+
+      <button class="btn btn-primary" type="submit">Send it</button>
+    </form>
+
+    <p class="after">Or <a href="mailto:support@levelselect.app">support@levelselect.app</a>, which reaches the same person.</p>
+  </article>
+</main>
+
+<script is:inline>
+  // Reveal the question named by ?q=, and record which one was answered.
+  (function () {
+    var id = new URLSearchParams(location.search).get('q');
+    var target = id && document.querySelector('.ask[data-q="' + CSS.escape(id) + '"]');
+    if (!target) return;
+    document.querySelectorAll('.ask').forEach(function (el) { el.hidden = true; });
+    target.hidden = false;
+    document.getElementById('question').value = id;
+  })();
+</script>
+
+<style>
+  .lede { color: var(--ink); font-size: 1.22rem; font-weight: 600; max-width: 40ch; }
+  .why { color: var(--muted); max-width: 52ch; margin-top: .4rem; }
+  .after { color: var(--muted); margin-top: 1.4rem; font-size: .95rem; }
+  form { display: flex; flex-direction: column; gap: 1.8rem; background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: clamp(1.1rem, 4vw, 1.9rem); margin-top: 1.6rem; }
+  .field { display: flex; flex-direction: column; gap: .5rem; }
+  .q { font-weight: 600; display: flex; align-items: baseline; gap: .6rem; }
+  .req, .opt { font-family: var(--pixel, monospace); font-size: .62rem; color: var(--muted); }
+  .hint { color: var(--muted); font-size: .9rem; }
+  textarea, input[type="email"] { width: 100%; background: var(--ground); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; padding: .8rem .9rem; font: inherit; }
+  form button { align-self: flex-start; }
+  .hp { position: absolute; left: -9999px; }
+</style>
+</Base>

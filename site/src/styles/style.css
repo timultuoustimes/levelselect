@@ -1,0 +1,448 @@
+/* LevelSelect — site styles.
+   Every color is lifted from the app's LSTheme, not invented:
+   purple/purpleDeep/torch and the background gradient stops. The app is
+   dark-only (.preferredColorScheme(.dark)), so the site commits to the same
+   single visual world rather than inventing a light mode the product lacks. */
+
+@font-face {
+  font-family: "Press Start 2P";
+  src: url("/assets/PressStart2P-Regular.ttf") format("truetype");
+  font-display: swap;
+}
+
+:root {
+  --ground: #0D0A17;        /* LSTheme.background, bottom stop */
+  --ground-lift: #1A122E;   /* LSTheme.background top stop — Theme.swift:18 (0.10,0.07,0.18) */
+  --surface: #171029;
+  --surface-hi: #1F1636;
+  --line: #2C2145;
+  --purple: #945CFA;        /* LSTheme.purple — Theme.swift:7 (0.58,0.36,0.98) */
+  /* The live accent. The app's default accent is PURPLE (ThemePalette.swift:9,
+     `accent = LSTheme.purple`), and torch is reserved for the wordmark
+     (Theme.swift:46). This was undefined, so every var(--accent) fell back to
+     torch and the whole site tinted orange where the app is purple. */
+  --accent: #945CFA;
+  --purple-deep: #4D298C;   /* LSTheme.purpleDeep */
+  --torch: #F5A34D;         /* LSTheme.torch */
+  --torch-deep: #8A4A12;
+  --ink: #EFEAFB;
+  --muted: #9990B8;
+  --green: #5BD98A;
+  --step: clamp(1.5rem, 4vw, 3rem);
+  --measure: 64ch;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  /* Full-bleed and viewport-anchored, like lsBackground() in the app
+     (Theme.swift:57-59) — not just behind the hero. */
+  background: linear-gradient(180deg, var(--ground-lift), var(--ground)) fixed;
+  background-color: var(--ground);
+  color: var(--ink);
+  font-family: ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img { max-width: 100%; display: block; }
+a { color: var(--purple); text-underline-offset: 3px; }
+a:hover { color: #B78DFF; }
+:focus-visible { outline: 2px solid var(--torch); outline-offset: 3px; border-radius: 6px; }
+
+.wrap { width: min(100% - 2.5rem, 1080px); margin-inline: auto; }
+.pixel { font-family: "Press Start 2P", monospace; font-weight: 400; line-height: 1.35; }
+
+/* Wordmark — the same two-shadow recipe as the app: a zero-blur offset for
+   legibility (pixel strokes are ~2px, blur destroys the corners) plus a soft
+   glow for the torch-lit feel. */
+.wordmark {
+  color: var(--torch);
+  /* em, not px — the app scales both shadows with the type size, so the
+     recipe holds at any size. Fixed pixels were far too small on the hero and
+     far too heavy in the 11px header.
+
+     0.125em, not 0.16em. Measured out of the font rather than guessed:
+     unitsPerEm is 1000, the GCD of every outline coordinate is 125, and the
+     cap height and advance width are both exactly 8 of those. So the grid is
+     8x8 and one block is font-size / 8, precisely. 0.16em is 1.28 blocks,
+     which is why the shadow read as a detached bar rather than an edge.
+
+     Rounded DOWN to a whole pixel. A zero-blur shadow offset by more than one
+     block leaves a lit sliver between the glyph and its shadow, because
+     nothing is drawn in the gap; offset by less, it tucks under and still
+     reads as a solid step. Overshooting is visible, undershooting is not. */
+  --wm-offset: 0.125em;
+  --wm-offset: round(down, 0.125em, 1px);
+  text-shadow: 0 var(--wm-offset) 0 var(--torch-deep), 0 0 0.65em rgba(245, 163, 77, 0.3);
+}
+
+/* ── header ─────────────────────────────────────────── */
+.bar {
+  position: sticky; top: 0; z-index: 20;
+  background: rgba(13, 10, 23, 0.88);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.bar .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; }
+.brand { display: flex; align-items: center; gap: .6rem; text-decoration: none; }
+/* flex: none — without it the icon shrinks horizontally in a cramped header
+   and a square image renders squished. */
+.brand img { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+/* At 11px one block is 1.375px, which floors to 1. Pinned rather than computed
+   because this is the one wordmark on the site with a fixed size, and it does
+   not need to wait on `round()` support. */
+.brand span { font-size: 11px; white-space: nowrap; --wm-offset: 1px; }
+.navlinks { display: flex; gap: 1.25rem; font-size: .9rem; }
+.navlinks a { color: var(--muted); text-decoration: none; }
+.navlinks a:hover, .navlinks a[aria-current="page"] { color: var(--ink); }
+
+/* ── hero ───────────────────────────────────────────── */
+.hero {
+  position: relative; overflow: hidden;
+  padding: clamp(3rem, 9vw, 6rem) 0 var(--step);
+  /* No gradient of its own — body now carries the full-bleed one, and
+     re-starting it here would put a seam at the bottom of the hero. */
+}
+.torchlight {
+  position: absolute; left: 50%; top: -10%; translate: -50% 0;
+  width: min(760px, 120%); aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(245,163,77,.22) 0%, transparent 62%);
+  animation: breathe 6.6s ease-in-out infinite;   /* matches LivePulse in the app */
+}
+@keyframes breathe { 0%,100% { opacity:.55; scale:1 } 50% { opacity:.85; scale:1.06 } }
+.hero .wrap { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1.25rem; }
+.door {
+  width: clamp(112px, 20vw, 164px);
+  /* The markup carries height="164". Without height:auto the CSS shrinks the
+     width on narrow screens while that attribute holds the height, stretching
+     a square icon vertically — worst on a phone, invisible on a desktop. */
+  height: auto;
+  aspect-ratio: 1; border-radius: 26px;
+  box-shadow: 0 30px 70px -20px rgba(0,0,0,.85), 0 0 60px -18px rgba(245,163,77,.55);
+}
+h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
+.tagline { font-size: clamp(1.05rem, 2.4vw, 1.35rem); max-width: 34ch; margin: 0; text-wrap: balance; }
+.sub { color: var(--muted); max-width: 52ch; margin: 0; }
+.cta { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; margin-top: .4rem; }
+.btn {
+  font: inherit; font-weight: 650; font-size: .95rem;
+  padding: .8rem 1.5rem; border-radius: 14px; text-decoration: none;
+  border: 1px solid transparent; display: inline-flex; align-items: center; gap: .5rem;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.btn-primary {
+  color: #fff;
+  background: linear-gradient(180deg, #A272FF, var(--purple));
+  box-shadow: 0 12px 26px -12px var(--purple), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.btn-primary:hover { transform: translateY(-2px); color: #fff; }
+.btn-ghost { color: var(--ink); border-color: var(--line); background: var(--surface); }
+.btn-ghost:hover { border-color: var(--purple); transform: translateY(-2px); color: var(--ink); }
+.badge { font-size: .75rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+
+/* ── card surface (beta CTA) ────────────────────────── */
+.card-hero {
+  display: flex; align-items: center; gap: 1.1rem; padding: 1.1rem;
+  border-radius: 22px; border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(77,41,140,.85), #1E1436);
+  box-shadow: 0 24px 50px -28px #000;
+}
+/* ── screenshots ────────────────────────────────────
+   The captures are already device-framed (a gold bezel, which happens to sit
+   on --torch), so the page adds depth and nothing else — no second frame, no
+   border. A drop-shadow filter rather than box-shadow, because the source is
+   a transparent PNG with rounded bezel corners and box-shadow would draw a
+   rectangle behind it. */
+.shot img {
+  width: 100%; height: auto;
+  filter: drop-shadow(0 30px 45px rgba(0, 0, 0, .55));
+}
+/* ── composed shots ─────────────────────────────────
+   Devices overlap the way Tripsy and Gamery compose theirs, instead of one
+   screenshot standing at attention. Done in CSS rather than pre-rendered
+   images so a re-shoot drops straight in and every frame keeps its own alt
+   text; percentages keep the composition at every width. */
+.composite { position: relative; margin-inline: auto; }
+.composite img { position: absolute; height: auto; }
+
+/* Hero: iPad landscape behind, iPhone tilted in front-left.
+   MATCHED TO THE SOCIAL IMAGES (2026-09-01). `make-social-images.py` describes
+   its own layout as "the website hero's arrangement, which is the one Tim
+   settled on: the iPad is the DOMINANT device and the phone is smaller,
+   hanging low-left in front of it" — but the site did the opposite. At 76%/30%
+   the phone stood 0.96 of the container's height against the iPad's 0.91, so
+   the pair read as two devices competing rather than one product seen twice.
+
+   The numbers below are the social script's, converted: iPad at 0.94 of the
+   height budget and phone at 0.84, with the phone lifted 3% off the baseline
+   and overlapping the iPad by 44% of its own width. Only the phone tilts, and
+   it leans LEFT — top toward the iPad. The iPad is straight.
+
+   Geometry, so the next person can re-derive it: H = W / 1.56. iPad aspect
+   1.305 → width = 0.94H × 1.305 = 78.6%W. Phone aspect 0.49 → width =
+   0.84H × 0.49 = 26.4%W. Insetting both by 3.3% leaves exactly the 11.6%
+   overlap the social pair has. */
+.composite--hero { max-width: 940px; aspect-ratio: 1.56; }
+.composite--hero .c-ipad {
+  right: 3.3%; top: 0; width: 78.6%;
+  filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .5));
+}
+.composite--hero .c-phone {
+  left: 3.3%; bottom: 3%; width: 26.4%; z-index: 2;
+  transform: rotate(-2.4deg);
+  filter: drop-shadow(0 34px 48px rgba(0, 0, 0, .62));
+}
+@media (max-width: 640px) {
+  /* The phone must stay readable; let the pair bleed a little wider than the
+     text column instead of shrinking with it. */
+  /* The portrait phone is the tall child: at 44% width it is ~.9× the
+     container width in height, so the ratio must drop to ~1.05 or the phone
+     pokes out the top into the hero text. */
+  /* On a phone the two can't sit side by side — there isn't the width — so
+     they separate VERTICALLY instead. The iPad goes to the very top and the
+     container gets taller, which leaves the iPad's whole upper third visible
+     across its full width above the phone. Before this it sat level with the
+     phone and lost its left 39% behind it, which on an actual iPhone meant
+     you could not tell there was an iPad there at all. */
+  /* Tightened: the phone was 42% of a container bled 8% wider than the text,
+     so on an actual iPhone it stood ~90% of the viewport tall and pushed the
+     whole page down — you had to scroll past the hero to see the hero. It now
+     sits inside the text column at 36%, and the container is shorter, which
+     takes roughly a fifth off the height of the composite.
+
+     Rotations are halved too. At -2.4deg against the iPad's +1.2 the pair read
+     as askew rather than arranged; the section composites below use a
+     symmetric ±2 and look deliberate, so this matches that logic. */
+  /* The composite was only half the problem. Above it sat ~730px of hero —
+     a 112px icon, the wordmark, two paragraphs, two stacked buttons and the
+     platform line — so the image began below the fold no matter how small it
+     got. Tightening the icon and the gap lifts it by roughly 70px, which is
+     the difference between seeing the top of the device and seeing nothing. */
+  .hero .door { width: 88px; }
+  .hero .wrap { gap: 1rem; }
+
+  /* ONE arrangement at every width (2026-09-01).
+     The overrides that used to live here — a 1.06 container with the iPad at
+     88% and the phone at 36% — put the phone at 0.78 of the height against the
+     iPad's 0.72, the same inversion just removed from the desktop rule. So a
+     phone showed the pair competing while the social card showed them
+     composed, which is what Tim was seeing.
+
+     Dropping them costs nothing the notes above were protecting. Those notes
+     are about HEIGHT: the composite stood ~90% of the viewport and pushed the
+     page down. The shared arrangement is SHORTER, not taller — a 1.56
+     container is 250px tall on a 390px column where the old 1.06 one was 368.
+
+     What it does cost is size: the phone goes from 36% of the width to 26.4%.
+     That is the honest price of one composition rather than two, and the shape
+     still reads at that size. Bleed the container wider here if it turns out
+     not to. */
+  .composite--hero { width: 100%; margin-inline: 0; }
+}
+
+.showcase { padding: var(--step) 0 calc(var(--step) * .5); }
+
+/* ── story rows (text beside one shot) ─────────────── */
+.story { display: grid; gap: var(--step); align-items: center; grid-template-columns: 1fr; }
+.story__text .lede:last-of-type { margin-bottom: 0; }
+.story .shot { display: flex; justify-content: center; gap: 1rem; }
+.story .shot img { max-width: min(280px, 60vw); }
+/* Sessions pair: Lock Screen front-left, widgets behind-right. Both stay
+   larger than the old side-by-side ever allowed, at every width. */
+/* 55%, not 62%. At 62 the two phones overlapped by a quarter of the frame,
+   which hid the back one's left 39% — and a game page's logo is centered, so
+   what got cut was exactly the thing that identifies it. Hades read as
+   "ADES". The container widens to compensate, so the phones are the same
+   size as before and simply sit further apart. */
+.composite--pair { width: 100%; max-width: 500px; aspect-ratio: .82; }
+.composite--pair .c-back {
+  right: 0; top: 0; width: 55%;
+  transform: rotate(2deg);
+  filter: drop-shadow(0 24px 36px rgba(0, 0, 0, .5));
+}
+.composite--pair .c-front {
+  left: 0; bottom: 0; width: 55%; z-index: 2;
+  transform: rotate(-2deg);
+  filter: drop-shadow(0 30px 44px rgba(0, 0, 0, .62));
+}
+
+@media (min-width: 860px) {
+  .story { grid-template-columns: 1fr 1fr; }
+  /* Source order stays text-then-image so it reads correctly without CSS and
+     to a screen reader; only the painted order flips. */
+  .story--flip .story__text { order: 2; }
+}
+
+/* ── the generation triptych ─────────────────────────
+   Three fixed columns rather than auto-fit: auto-fit fitted a fourth track at
+   this width and stretched each frame to 345px, which made the sequence
+   larger than the hero shot above it and inverted the hierarchy. The frames
+   are supporting evidence, so they stay deliberately smaller. */
+.steps { display: grid; gap: 1.4rem; grid-template-columns: 1fr; counter-reset: step; }
+.step { counter-increment: step; }
+.step .shot { display: flex; justify-content: center; }
+.step .shot img { max-width: min(220px, 58vw); }
+.step p { margin: .9rem 0 0; color: var(--muted); font-size: .92rem; text-align: center; }
+.step p b { color: var(--torch); }
+.steps__legend { display: none; }
+
+/* From 700px: an overlapping cascade — frames fan left to right, middle one
+   forward, numbered chips replace the captions, one legend line below. */
+@media (min-width: 700px) {
+  .steps { display: block; position: relative; max-width: 780px; margin-inline: auto; aspect-ratio: 1.2; }
+  .step { position: absolute; width: 36%; }
+  .step:nth-child(1) { left: 0;    top: 9%; transform: rotate(-2.5deg); }
+  .step:nth-child(2) { left: 31%;  top: 0;  z-index: 2; }
+  .step:nth-child(3) { left: 62%;  top: 9%; transform: rotate(2.5deg); }
+  .step .shot img { max-width: 100%; filter: drop-shadow(0 26px 38px rgba(0, 0, 0, .55)); }
+  .step p { display: none; }
+  .step .shot { position: relative; }
+  /* Card 2 is the one in front (z-index 2), and card 3 starts at 62% — so
+     card 3's badge, pinned 8% in from ITS left, landed at about 65% and sat
+     underneath card 2. It mirrors to its own right edge instead; raising its
+     z-index would have put the whole card in front and broken the cascade. */
+  .step:nth-child(3) .shot::after { left: auto; right: 8%; }
+  .step .shot::after {
+    content: counter(step);
+    position: absolute; top: 4%; left: 8%;
+    width: 1.9rem; height: 1.9rem; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--torch); color: #2A1804;
+    font-weight: 800; font-size: 1rem;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, .5);
+  }
+  .steps__legend {
+    display: block; text-align: center; color: var(--muted);
+    font-size: .92rem; margin: 1.4rem 0 0;
+  }
+}
+
+/* ── "yours, privately" ─────────────────────────────
+   The one section with no screenshot, so it gets a surface of its own to stop
+   it reading as a gap between two picture sections. */
+.private {
+  padding: clamp(1.4rem, 4vw, 2.2rem);
+  border-radius: 22px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+}
+.private .lede { max-width: var(--measure); }
+.nots {
+  list-style: none; margin: 1.4rem 0 0; padding: 0;
+  display: grid; gap: .55rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.nots li {
+  position: relative; padding-left: 1.6rem;
+  color: var(--ink); font-size: .95rem;
+}
+/* An em dash, not a checkmark: three of the four items are things the app
+   does NOT do, and ticking an absence reads as a feature list. */
+.nots li::before {
+  content: "—"; position: absolute; left: 0; color: var(--torch); font-weight: 700;
+}
+
+/* ── sections ───────────────────────────────────────── */
+section { padding: var(--step) 0; }
+h2 { font-size: clamp(1.3rem, 3vw, 1.75rem); margin: 0 0 .35rem; letter-spacing: -.01em; text-wrap: balance; }
+.lede { color: var(--muted); margin: 0 0 1.4rem; max-width: var(--measure); }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.tile {
+  padding: 1.2rem; border-radius: 18px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface));
+  display: flex; flex-direction: column; gap: .4rem;
+}
+.tile h3 { margin: 0; font-size: 1rem; font-weight: 650; }
+.tile p { margin: 0; color: var(--muted); font-size: .92rem; }
+
+.shelf { display: flex; gap: .9rem; overflow-x: auto; padding-bottom: .5rem; }
+.system {
+  flex: none; width: 118px; text-align: center; padding: 1rem .6rem .8rem;
+  border-radius: 18px; border: 1px solid var(--line); background: var(--surface);
+}
+.system img { width: 64px; height: 64px; margin: 0 auto .55rem; object-fit: contain; filter: drop-shadow(0 8px 14px rgba(0,0,0,.55)); }
+.system .n { font-size: .85rem; font-weight: 600; }
+.system .c { font-size: .78rem; color: var(--muted); }
+
+/* ── document pages (privacy) ───────────────────────── */
+.doc { max-width: var(--measure); padding-top: 2.5rem; }
+.doc h1 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin: 0 0 .3rem; }
+.doc h2 { margin-top: 2rem; }
+.doc p, .doc li { color: #D6CFEA; }
+.doc ul { padding-left: 1.1rem; }
+.doc li { margin: .3rem 0; }
+.stamp { color: var(--muted); font-size: .85rem; margin-bottom: 1.5rem; }
+.callout {
+  border-left: 3px solid var(--torch); background: var(--surface);
+  padding: 1rem 1.15rem; border-radius: 0 14px 14px 0; margin: 1.2rem 0;
+}
+.callout p { margin: 0; }
+.tablewrap { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; min-width: 520px; }
+th, td { text-align: left; padding: .7rem .8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--torch); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; font-weight: 650; }
+
+/* ── footer ─────────────────────────────────────────── */
+footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; margin-top: var(--step); color: var(--muted); font-size: .9rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; }
+footer a { color: var(--muted); }
+footer a:hover { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Stop movement without stripping atmosphere. A blanket !important also
+     killed the torch breath entirely; the app holds it at its bright end
+     instead of extinguishing it. */
+  *:not(.torchlight) {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .torchlight { animation: none; opacity: .34; }
+  html { scroll-behavior: auto; }
+}
+
+
+/* ── Help: what just happened ───────────────────────
+   The moments strip. A list of fourteen sections still asks you to choose
+   from fourteen; these are the states people are actually IN when they come
+   looking, each opening onto the two or three answers that apply. */
+.moments { list-style: none; padding: 0; margin: 0 0 .5rem;
+  display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+.moment { border: 1px solid rgba(255,255,255,.09); border-radius: 14px;
+  padding: .85rem .95rem; background: rgba(255,255,255,.03); }
+.moment__t { display: block; font-size: .98rem; margin-bottom: .35rem; }
+.moment__links { display: flex; flex-direction: column; gap: .15rem; }
+.moment__links a { font-size: .86rem; color: var(--muted); text-decoration: none; }
+.moment__links a:hover, .moment__links a:focus-visible { color: var(--torch); text-decoration: underline; }
+
+/* The answer, before the explanation. The page used to make you read ~240
+   words to find out whether a section was the one you wanted. */
+.doc .answer { font-size: 1.02rem; color: var(--text); margin-top: -.2rem; }
+.doc .answer + p { margin-top: .7rem; }
+
+
+/* ── Help: one question, one line, until you ask for more ──
+   Collapsed by default so the whole reference is scannable in a screen or
+   two. Expanded, following a question was a one-way trip — you landed deep in
+   the page and had to scroll back up through everything to reach a second
+   one, which is the cost that makes people give up rather than ask again. */
+.qa { border-top: 1px solid var(--line); padding: .1rem 0; scroll-margin-top: 4.5rem; }
+.qa[open] { padding-bottom: 1rem; }
+.qa__s { cursor: pointer; list-style: none; padding: .95rem 1.9rem .95rem 0;
+  position: relative; display: block; }
+.qa__s::-webkit-details-marker { display: none; }
+.qa__q { display: block; font-size: 1.06rem; font-weight: 650; color: var(--text); }
+.qa__a { display: block; font-size: .92rem; color: var(--muted); margin-top: .2rem; }
+/* The marker turns rather than swapping glyph, so the row does not reflow. */
+.qa__s::after {
+  content: ""; position: absolute; right: .35rem; top: 1.35rem;
+  width: .5rem; height: .5rem; border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted); transform: rotate(45deg);
+  transition: transform .18s ease;
+}
+.qa[open] > .qa__s::after { transform: rotate(-135deg); }
+.qa__s:hover .qa__q, .qa__s:focus-visible .qa__q { color: var(--torch); }
+.qa__body > *:first-child { margin-top: .2rem; }
+@media (prefers-reduced-motion: reduce) { .qa__s::after { transition: none; } }

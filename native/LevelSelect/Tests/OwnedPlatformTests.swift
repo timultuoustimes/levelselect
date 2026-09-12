@@ -1,0 +1,294 @@
+import Testing
+import Foundation
+import SwiftData
+@testable import LevelSelect
+
+/// The platform you picked when adding a game is the platform the app should
+/// call yours.
+///
+/// It didn't. `addGame(from:platform:)` has always recorded the choice by
+/// putting it at the front of `platforms`, but every label and every grouping
+/// re-sorted that list through `PlatformPreference.sorted` — a fixed taste
+/// ranking that places PC above Xbox 360. Add Skyrim on Xbox 360 and the game
+/// page header, the library row, and the platform grouping all said PC.
+///
+/// So the adversarial shape here is deliberate throughout: a chosen platform
+/// that the ranking sorts BELOW another platform the game also shipped on. A
+/// test using Switch (which the ranking already prefers) would pass against
+/// the broken code.
+@MainActor
+struct OwnedPlatformTests {
+
+    private func repo() -> Repository {
+        Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+    }
+
+    private func igdb(_ name: String, _ platforms: [String]) -> IGDBGame {
+        IGDBGame(id: 472, name: name, slug: nil, coverImageID: nil, franchise: nil,
+                 releaseYear: 2011, summary: nil, gameType: nil, platforms: platforms,
+                 genres: [], themes: [], gameModes: [], playerPerspectives: [],
+                 developers: [], publishers: [])
+    }
+
+    /// The reported bug, exactly: Skyrim, Xbox 360 picked, PC also available.
+    @Test func theChosenPlatformIsTheOwnedOneEvenWhenTheRankingPrefersAnother() {
+        let repo = self.repo()
+        let game = repo.addGame(
+            from: igdb("The Elder Scrolls V: Skyrim",
+                       ["Xbox 360", "PlayStation 3", "PC (Microsoft Windows)"]),
+            platform: "Xbox 360", status: .completed)
+
+        #expect(PlatformPreference.owned(game.platforms) == "Xbox 360")
+        // And the ranking really would have said otherwise — if this stops
+        // being true the test above has stopped proving anything.
+        #expect(PlatformPreference.sorted(game.platforms).first == "PC (Microsoft Windows)")
+    }
+
+    /// Every other platform survives; only the ordering carries the answer.
+    @Test func theOtherPlatformsAreKeptSoTheGameInfoStillListsThemAll() {
+        let repo = self.repo()
+        let game = repo.addGame(
+            from: igdb("Skyrim", ["Xbox 360", "PlayStation 3", "PC (Microsoft Windows)"]),
+            platform: "Xbox 360", status: .completed)
+
+        #expect(game.platforms.count == 3)
+        #expect(Set(game.platforms) == ["Xbox 360", "PlayStation 3", "PC (Microsoft Windows)"])
+        #expect(game.platforms.first == "Xbox 360")
+    }
+
+    /// IGDB's platform lists are incomplete, so the confirm screen lets you
+    /// type one. A typed platform is still your answer and must lead.
+    @Test func aTypedPlatformIGDBNeverListedStillLeads() {
+        let repo = self.repo()
+        let game = repo.addGame(from: igdb("Sonic 2", ["PC (Microsoft Windows)"]),
+                                platform: "Sega Genesis", status: .completed)
+
+        #expect(PlatformPreference.owned(game.platforms) == "Sega Genesis")
+        #expect(game.platforms.contains("PC (Microsoft Windows)"))
+    }
+
+    /// Picking one that IGDB also lists must not leave two copies of it —
+    /// a duplicate would show twice in Game Info and split the grouping.
+    @Test func choosingAListedPlatformDoesNotDuplicateIt() {
+        let repo = self.repo()
+        let game = repo.addGame(from: igdb("Skyrim", ["Xbox 360", "PlayStation 3"]),
+                                platform: "Xbox 360", status: .completed)
+
+        #expect(game.platforms.filter { $0 == "Xbox 360" }.count == 1)
+        #expect(game.platforms == ["Xbox 360", "PlayStation 3"])
+    }
+
+    /// No answer given: nothing to honor, so the list stays as IGDB sent it
+    /// and `owned` reports its head rather than inventing a preference.
+    @Test func withNoChosenPlatformTheListIsLeftAlone() {
+        let repo = self.repo()
+        let game = repo.addGame(from: igdb("Skyrim", ["Xbox 360", "PC (Microsoft Windows)"]),
+                                platform: nil, status: .backlog)
+
+        #expect(game.platforms == ["Xbox 360", "PC (Microsoft Windows)"])
+        #expect(PlatformPreference.owned(game.platforms) == "Xbox 360")
+    }
+
+    /// A game with no platforms at all groups as "Other" rather than crashing.
+    @Test func noPlatformsIsNotAnOwnedPlatform() {
+        let repo = self.repo()
+        let game = repo.addGame(from: igdb("Unlisted", []), platform: nil, status: .backlog)
+
+        #expect(PlatformPreference.owned(game.platforms) == nil)
+    }
+
+    /// Promoting a platform is how a wrong answer gets corrected — the
+    /// PlatformEditor chip tap does exactly this move, and every label follows.
+    @Test func promotingAPlatformChangesWhichOneIsYours() {
+        let repo = self.repo()
+        let game = repo.addGame(
+            from: igdb("Skyrim", ["PC (Microsoft Windows)", "Xbox 360"]),
+            platform: nil, status: .completed)
+        #expect(PlatformPreference.owned(game.platforms) == "PC (Microsoft Windows)")
+
+        repo.edit(game) { g in
+            guard let index = g.platforms.firstIndex(of: "Xbox 360") else { return }
+            g.platforms.remove(at: index)
+            g.platforms.insert("Xbox 360", at: 0)
+        }
+
+        #expect(PlatformPreference.owned(game.platforms) == "Xbox 360")
+        #expect(game.platforms.count == 2)
+    }
+
+    /// The ranking is still the right answer where no choice exists — ordering
+    /// the picker on the confirm screen, and search results for games that
+    /// aren't in the library yet. Pinned so the fix doesn't overshoot.
+    @Test func theRankingIsUnchangedForChoiceFreeContexts() {
+        #expect(PlatformPreference.sorted(["Xbox 360", "Nintendo Switch"]).first == "Nintendo Switch")
+        #expect(PlatformPreference.sorted(["Recalbox", "Sega Genesis"]).first == "Sega Genesis")
+    }
+
+    // MARK: One row per system, not one per spelling
+
+    /// The library's systems filter listed "Switch" and "Switch 2" TWICE each,
+    /// with identical labels, filtering different games — 14 and 3.
+    ///
+    /// `PlatformShort.name` collapses IGDB's "Nintendo Switch 2" and the short
+    /// "Switch 2" for DISPLAY only, so a menu built from distinct STORED values
+    /// showed both and the shortener hid the difference it was caused by. Two
+    /// controls that look like the same thing and do different things is worse
+    /// than the untidy data underneath.
+    ///
+    /// The shape is real: Tim's library began as a Gamery import and holds
+    /// Switch 35 / Nintendo Switch 2, Switch 2 14 / Nintendo Switch 2 3.
+    @Test func systemsAreListedOncePerDisplayedName() {
+        let systems = PlatformShort.systems(in: [
+            ["Switch"], ["Switch"], ["Nintendo Switch"],
+            ["Switch 2"], ["Nintendo Switch 2"],
+            ["Mac"],
+        ])
+        let names = systems.map(\.short)
+        #expect(names.filter { $0 == "Switch" }.count == 1)
+        #expect(names.filter { $0 == "Switch 2" }.count == 1)
+        #expect(Set(names) == ["Switch", "Switch 2", "Mac"])
+        // Every row still has a raw value behind it for its icon.
+        #expect(systems.allSatisfy { !$0.icon.isEmpty })
+    }
+
+    /// Picking the one row has to find every spelling behind it, or the fix
+    /// would just hide games instead of duplicating rows.
+    @Test func pickingASystemFindsEverySpellingOfIt() {
+        #expect(PlatformShort.matches(["Nintendo Switch 2"], short: "Switch 2"))
+        #expect(PlatformShort.matches(["Switch 2"], short: "Switch 2"))
+        #expect(PlatformShort.matches(["Nintendo Switch"], short: "Switch"))
+        #expect(PlatformShort.matches(["PC (Microsoft Windows)"], short: "PC"))
+        // A game on several systems still matches the one you picked.
+        #expect(PlatformShort.matches(["Recalbox", "Genesis"], short: "Genesis"))
+        // And the collapse must not over-reach: Switch 2 is not Switch.
+        #expect(!PlatformShort.matches(["Nintendo Switch 2"], short: "Switch"))
+        #expect(!PlatformShort.matches(["Mac"], short: "PC"))
+    }
+}
+
+/// The Library's system menu offers the systems you own something ON.
+///
+/// It read every game, including wishlist ones — which the Library excludes
+/// from everything else it counts. Tim caught it on a device mid-sync, where
+/// the menu said "All (0)" and then listed Switch 2 and Mac; his real library
+/// has fourteen wishlist games each carrying an `ownedPlatforms` entry for the
+/// system he plans to buy it on, so the rows were there all along.
+///
+/// The shape is adversarial on purpose: the wishlist game's system is one no
+/// owned game has, because a test where both sides share a system passes
+/// against the broken code.
+@MainActor
+struct LibrarySystemsMenuTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    @discardableResult
+    private func game(_ context: ModelContext, _ name: String,
+                      status: GameStatus, owned: [String]) -> Game {
+        let game = Game(name: name)
+        game.status = status
+        game.platforms = owned
+        game.ownedPlatforms = owned
+        context.insert(game)
+        return game
+    }
+
+    @Test func aWantedGamesSystemIsNotOfferedAsAFilter() {
+        let context = makeContext()
+        game(context, "Hades", status: .playing, owned: ["Nintendo Switch"])
+        game(context, "The Duskbloods", status: .wishlist, owned: ["Nintendo Switch 2"])
+
+        let shorts = PlatformShort.librarySystems(in: allGames(context)).map(\.short)
+        #expect(shorts == ["Switch"])
+    }
+
+    /// The empty-library case Tim actually saw. Nothing owned means no systems
+    /// — a menu of filters that all return nothing is worse than no menu.
+    @Test func aLibraryOfOnlyWantedGamesOffersNoSystems() {
+        let context = makeContext()
+        game(context, "Orbitals", status: .wishlist, owned: ["Nintendo Switch 2"])
+        game(context, "Blood Dungeon", status: .wishlist, owned: ["Mac"])
+
+        #expect(PlatformShort.librarySystems(in: allGames(context)).isEmpty)
+    }
+
+    /// A system you own something on stays, even when a wishlist game shares
+    /// it — the wishlist game is ignored, not the system.
+    @Test func aSharedSystemSurvivesOnTheOwnedGamesAccount() {
+        let context = makeContext()
+        game(context, "Metroid Prime 4", status: .backlog, owned: ["Nintendo Switch 2"])
+        game(context, "The Duskbloods", status: .wishlist, owned: ["Nintendo Switch 2"])
+
+        let shorts = PlatformShort.librarySystems(in: allGames(context)).map(\.short)
+        #expect(shorts == ["Switch 2"])
+    }
+
+    /// Every other status counts. Only wishlist is "not in this tab".
+    @Test func everyOwnedStatusContributesItsSystem() {
+        let context = makeContext()
+        game(context, "A", status: .completed, owned: ["Mac"])
+        game(context, "B", status: .abandoned, owned: ["PlayStation 5"])
+        game(context, "C", status: .shelved, owned: ["Nintendo Switch"])
+
+        let shorts = Set(PlatformShort.librarySystems(in: allGames(context)).map(\.short))
+        #expect(shorts == ["Mac", "PS5", "Switch"])
+    }
+
+    private func allGames(_ context: ModelContext) -> [Game] {
+        (try? context.fetch(FetchDescriptor<Game>())) ?? []
+    }
+}
+
+#if DEV_TOOLS
+/// "Empty demo library" removes what the SEEDER made, not everything in the
+/// demo store — a game added by hand while in demo mode has no marker and
+/// survives. That is correct and it is also surprising, which is why the
+/// result now says so.
+@MainActor
+struct DemoPurgeMessageTests {
+
+    @Test func aCleanPurgeSaysOnlyWhatItRemoved() {
+        #expect(DemoLibrarySeeder.message(removed: 14, kept: 0)
+                == "Removed 14 demo game(s) and their history.")
+    }
+
+    /// Tim's case: he emptied the demo library, Library said "All (0)", and
+    /// four hand-added wishlist games were still there. The count is the whole
+    /// difference between "the button is broken" and "oh, I added those".
+    @Test func survivorsAreNamedSoTheEmptyLibraryMakesSense() {
+        let message = DemoLibrarySeeder.message(removed: 14, kept: 4)
+        #expect(message.hasPrefix("Removed 14 demo game(s) and their history."))
+        #expect(message.contains("4 game(s) you added yourself are still here"))
+    }
+}
+#endif
+
+#if DEV_TOOLS
+/// The three games Tim shot with are seeded now, so emptying and reloading the
+/// demo library brings them back instead of losing them.
+@MainActor
+struct DemoSeedContentTests {
+
+    /// Pinned ids, read off his own demo store and confirmed by seeding with
+    /// them. A wrong id does not fail — it quietly seeds a different game and
+    /// the capture looks fine until someone reads it — so the numbers are the
+    /// thing worth checking.
+    @Test func theHandAddedScreenshotGamesAreInTheSeed() {
+        let wanted: Set<Int> = [
+            366896,   // Fire Emblem: Fortune's Weave
+            397817,   // Graveyard Keeper II
+            225582,   // Control Resonant
+        ]
+        #expect(wanted.isSubset(of: DemoLibrarySeeder.seededIGDBIDs))
+    }
+
+    /// No id twice: two seeds pointing at one game is two identical rows in
+    /// every capture.
+    @Test func noGameIsSeededTwice() {
+        let ids = DemoLibrarySeeder.seededIGDBIDs
+        #expect(ids.count == Set(ids).count)
+    }
+}
+#endif

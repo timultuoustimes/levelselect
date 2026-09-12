@@ -1,0 +1,71 @@
+import SwiftUI
+
+struct GameRow: View {
+    let game: Game
+
+    var body: some View {
+        HStack(spacing: 12) {
+            CoverThumb(urlString: game.displayCoverURLString,
+                           artwork: game.resolvedArtwork(.cover), name: game.name, status: game.status)
+                .frame(width: 44, height: 58)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(game.name)
+                    .font(.headline)
+
+                HStack(spacing: 5) {
+                    Image(systemName: game.status.systemImage)
+                        .foregroundStyle(game.status.color)
+                        .font(.caption)
+                    Text(game.status.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let platform = game.primaryOwnedPlatform {
+                        Text("·").font(.caption).foregroundStyle(.tertiary)
+                        PlatformIconView(platform: platform, size: 15)
+                        Text(PlatformShort.name(platform))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let rating = game.rating {
+                    HStack(spacing: 1) {
+                        ForEach(1...5, id: \.self) { i in
+                            Image(systemName: i <= rating ? "star.fill" : "star")
+                                .font(.system(size: 8))
+                                .foregroundStyle(.yellow)
+                        }
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            VStack(alignment: .trailing, spacing: 5) {
+                if game.pinned {
+                    Image(systemName: "pin.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                OwnershipBadges(ownership: game.ownership, size: 11)
+            }
+        }
+        .padding(.vertical, 2)
+        // One utterance, not five fragments: the status icon, star row, and
+        // pin are all decoration around facts this sentence carries.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenSummary)
+    }
+
+    private var spokenSummary: String {
+        var parts = [game.name, game.status.label]
+        if let platform = PlatformPreference.owned(game.platforms) {
+            parts.append(PlatformShort.name(platform))
+        }
+        if let rating = game.rating { parts.append("rated \(rating) of 5") }
+        if game.pinned { parts.append("pinned") }
+        return parts.joined(separator: ", ")
+    }
+}

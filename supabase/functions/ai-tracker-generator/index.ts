@@ -6,12 +6,27 @@
 //   ANTHROPIC_API_KEY — from console.anthropic.com
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { CORS_HEADERS, guard, jsonResponse } from '../_shared/guard.ts';
+import { gameIdentity, identityContext, identityQualifier } from '../_shared/igdb.ts';
+import {
+  categoryTokenBudget,
+  FULL_GENERATION_MAX_TOKENS,
+  PLAN_MAX_TOKENS,
+  quotaPlanForAI,
+} from '../_shared/ai-limits.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+// Input caps — every one of these bounds what reaches the Anthropic API.
+const MAX_GAME_NAME = 200;
+const MAX_PAYLOAD = 60_000; // pasted guide text
+const MAX_URL = 500;
+const MAX_CATEGORY_NAME = 80;
+// 'plan' asks for the SHAPE of a tracker and no items; 'category' fills exactly
+// one named category. Both exist because the only unit this function used to
+// know was "the whole tracker", which is the wrong unit twice over: you cannot
+// ask it what a tracker for a game should even contain, and filling one part of
+// a big game meant generating all of it and discarding the rest — Breath of the
+// Wild timed out doing that for a single 18-item category.
+const ALLOWED_MODES = new Set(['auto', 'paste', 'url', 'plan', 'category']);
 
 // ─── Schema definition (embedded in system prompt) ───────────────────────────
 
@@ -123,6 +138,7 @@ const TRACKER_TOOL = {
                   tags:                { type: 'array', items: { type: 'string' } },
                   maxRank:             { type: 'number' },
                   rankNames:           { type: 'array', items: { type: 'string' } },
+                  countTarget:         { type: 'number', description: 'For a set tracked as a running total rather than individual rows (e.g. 900 Korok Seeds): the target count.' },
                   metadata:            { type: 'object', additionalProperties: true },
                 },
               },
@@ -152,6 +168,67 @@ const TRACKER_TOOL = {
       estimatedHours:  { type: 'number' },
       completionNotes: { type: 'string' },
       tags:            { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
+// A plan is a list of headings and rough sizes. No items, which is the whole
+// point: it comes back in seconds instead of minutes, and the user approves the
+// shape before anyone spends two minutes filling it in.
+const PLAN_TOOL = {
+  name: 'plan_tracker_categories',
+  description: 'Propose the categories a tracker for this game should have. Names and approximate sizes only — do NOT list individual items. Call this tool exactly once.',
+  input_schema: {
+    type: 'object',
+    required: ['categories'],
+    properties: {
+      categories: {
+        type: 'array',
+        description: 'Between 2 and 10 categories, ordered by how central they are to the game.',
+        items: {
+          type: 'object',
+          required: ['name', 'plannedCount'],
+          properties: {
+            name: {
+              type: 'string',
+              description: 'What players and guides actually call this set, e.g. "Shrines", "Divine Beasts", "Korok Seeds". Plain plural noun, no game name in it.',
+            },
+            plannedCount: {
+              type: 'number',
+              description: 'Approximate number of items. Best known figure; an estimate is fine.',
+            },
+            type: { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence'] },
+            description: { type: 'string', description: 'One short line on what belongs in it.' },
+            counted: {
+              type: 'boolean',
+              description: 'True when this set is far too large to list individually (roughly 150+) and is better tracked as a running total.',
+            },
+          },
+        },
+      },
+      estimatedHours:  { type: 'number' },
+      completionNotes: { type: 'string' },
+    },
+  },
+};
+
+const CATEGORY_TOOL = {
+  name: 'generate_tracker_category',
+  description: 'Generate the items for ONE named category. Call this tool exactly once, with that category only.',
+  input_schema: {
+    type: 'object',
+    required: ['category'],
+    properties: {
+      category: {
+        type: 'object',
+        required: ['name', 'type', 'items'],
+        properties: {
+          name:        { type: 'string', description: 'Echo the requested category name back exactly.' },
+          description: { type: 'string' },
+          type:        { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence'] },
+          items:       TRACKER_TOOL.input_schema.properties.categories.items.properties.items,
+        },
+      },
     },
   },
 };
@@ -214,10 +291,12 @@ function buildUserMessage(
   igdbData: Record<string, unknown> | null,
   mode: string,
   payload: string | null,
+  qualifier = '',
+  context = '',
 ): string {
   const parts: string[] = [];
 
-  parts.push(`Generate tracker data for the game: "${gameName}"`);
+  parts.push(`Generate tracker data for the game: "${gameName}"${qualifier}${context}`);
 
   if (igdbData) {
     const meta: string[] = [];
@@ -243,6 +322,156 @@ function buildUserMessage(
   return parts.join('\n');
 }
 
+function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | null,
+                          qualifier = '', context = ''): string {
+  const parts: string[] = [
+    `What should a completion tracker for "${gameName}"${qualifier} be divided into?${context}`,
+  ];
+  if (igdbData) {
+    const meta: string[] = [];
+    if (igdbData.genres)     meta.push(`Genres: ${(igdbData.genres as string[]).join(', ')}`);
+    if (igdbData.themes)     meta.push(`Themes: ${(igdbData.themes as string[]).join(', ')}`);
+    if (igdbData.gameModes)  meta.push(`Game modes: ${(igdbData.gameModes as string[]).join(', ')}`);
+    if (igdbData.developers) meta.push(`Developer: ${(igdbData.developers as string[]).join(', ')}`);
+    if (meta.length > 0) parts.push('\nIGDB metadata:\n' + meta.join('\n'));
+  }
+  parts.push([
+    '\nName the categories only — do NOT list any individual items.',
+    'Use the names players and guides actually use for these sets, because the user will see them as headings and may ask for one to be filled in by that name.',
+    'Order them by how central they are to finishing the game.',
+    'Skip anything that is not really trackable progress (difficulty settings, general tips).',
+    'If the game genuinely has one flat list and no sub-structure, say so with a single category.',
+  ].join(' '));
+  return parts.join('\n');
+}
+
+function buildCategoryMessage(
+  gameName: string,
+  categoryName: string,
+  expectedCount: number | null,
+  igdbData: Record<string, unknown> | null,
+  payload: string | null,
+  qualifier = '',
+  counted = false,
+  context = '',
+): string {
+  const parts: string[] = [
+    `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.${context}`,
+  ];
+  // A counted set is decided at the PLAN step and the placeholder has already
+  // promised the user a counter. Asking for both "roughly 400 items" and "150+
+  // means return one countTarget item" is a contradiction, and the answer came
+  // back with an empty items array — a 95-second failure reported as though the
+  // category name were wrong.
+  if (counted) {
+    parts.push(`This set is tracked as a RUNNING TOTAL, not row by row. Return EXACTLY ONE item: name it after the set, set countTarget to the real total (the user's figure is ${expectedCount ?? 'unknown'}, use the real one if you know better), and add nothing else. Do not enumerate the entries.`);
+  } else if (expectedCount && expectedCount > 0) {
+    parts.push(`The user expects roughly ${expectedCount} items. Treat that as a hint, not a quota — if the real number differs, use the real number.`);
+  }
+  if (igdbData) {
+    const meta: string[] = [];
+    if (igdbData.genres)     meta.push(`Genres: ${(igdbData.genres as string[]).join(', ')}`);
+    if (igdbData.developers) meta.push(`Developer: ${(igdbData.developers as string[]).join(', ')}`);
+    if (meta.length > 0) parts.push('\nIGDB metadata:\n' + meta.join('\n'));
+  }
+  if (payload) {
+    parts.push(`\nUse this page as a reference source — search the web for it and take the ${categoryName} data from it: ${payload}`);
+  }
+  parts.push([
+    `\nNothing outside "${categoryName}" — no other categories, however obviously they belong in the tracker.`,
+    'Echo the category name back exactly as given, since it is how the app matches your answer to the placeholder the user made.',
+    ...(counted ? [] : [
+      'If this set runs to roughly 150 or more near-identical entries (Korok Seeds, Riddler trophies), do NOT list them individually:',
+      'return a single item named after the set with countTarget set to the total, so it tracks as a running count.',
+    ]),
+  ].join(' '));
+  // A long list has to be a terse one. 120 shrines with a description and a
+  // source apiece is 15k tokens of output, which runs past the 150s edge
+  // function ceiling and returns nothing at all — so the detail costs the user
+  // the entire category. Name and location carry the checklist; the rest is
+  // what makes it never arrive.
+  if (!counted && (expectedCount ?? 0) > 60) {
+    parts.push([
+      '\nThis is a long list, so keep every entry short: an id, a name, and a brief location.',
+      'No descriptions, no source text, no metadata, no tags — they would push this past the time limit,',
+      'and a list that never arrives is worth less than a plain one that does.',
+    ].join(' '));
+  }
+  return parts.join('\n');
+}
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'category';
+}
+
+/** One Claude call that must come back as a named tool use. */
+async function callClaude(
+  apiKey: string,
+  opts: {
+    model: string;
+    max_tokens: number;
+    tools: unknown[];
+    toolName: string;
+    userMessage: string;
+  },
+): Promise<{ input: Record<string, unknown>; usage: unknown } | { error: Response }> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      max_tokens: opts.max_tokens,
+      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+      tools: opts.tools,
+      tool_choice: { type: 'any' },
+      messages: [{ role: 'user', content: opts.userMessage }],
+    }),
+  });
+
+  if (!res.ok) {
+    // Upstream detail goes to logs only — it can echo prompt content and names
+    // the backend the app deliberately doesn't expose.
+    console.error('Claude API error:', res.status, await res.text());
+    return {
+      error: jsonResponse({ error: 'The generator is busy right now. Try again in a moment.' }, 502),
+    };
+  }
+
+  const data = await res.json();
+  const block = (data.content || []).find(
+    (b: { type: string; name?: string }) => b.type === 'tool_use' && b.name === opts.toolName,
+  );
+  if (!block) {
+    // A tool call cut off mid-write parses as no tool call at all, so a
+    // too-long category looked identical to "the model had no idea" and got
+    // told to try a better name. Different problem, different advice.
+    if (data.stop_reason === 'max_tokens') {
+      console.warn(`${opts.toolName} truncated at ${opts.max_tokens} tokens`);
+      return {
+        error: jsonResponse(
+          { error: 'That list was too long to finish in one go. Try splitting it into smaller categories.' },
+          422,
+        ),
+      };
+    }
+    const said = (data.content || [])
+      .filter((b: { type: string }) => b.type === 'text')
+      .map((b: { text: string }) => b.text).join('\n');
+    console.warn(`no ${opts.toolName} tool call; model said:`, said.slice(0, 500));
+    return {
+      error: jsonResponse(
+        { error: "Couldn't build that from the game name given. Try a more specific name." },
+        422,
+      ),
+    };
+  }
+  return { input: block.input || {}, usage: data.usage || null };
+}
+
 // ─── Main handler ────────────────────────────────────────────────────────────
 
 serve(async (req: Request) => {
@@ -252,20 +481,178 @@ serve(async (req: Request) => {
 
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: 'ANTHROPIC_API_KEY not configured. Set it via: supabase secrets set ANTHROPIC_API_KEY=sk-ant-...' }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('ANTHROPIC_API_KEY not configured');
+    return jsonResponse({ error: 'AI generation is not available right now.' }, 503);
   }
 
+  const { rejection, body } = await guard(req, {
+    fn: 'ai',
+    killSwitchEnv: 'LS_KILL_AI',
+    maxBodyBytes: MAX_PAYLOAD + 8_000,
+    quotas: [],
+    // Mode still decides the bucket, but only after the shared guard has
+    // authenticated, byte-capped, and parsed the one request body. The former
+    // clone peek trusted Content-Length as a bound, which raw clients need not.
+    resolveQuota: quotaPlanForAI,
+    onQuotaError: 'deny',
+  });
+  if (rejection) return rejection;
+
   try {
-    let { gameName, igdbData, mode, payload } = await req.json();
+    const igdbData = body?.igdbData as Record<string, unknown> | null | undefined;
+    const gameName = typeof body?.gameName === 'string' ? body.gameName.trim() : '';
+    let mode = typeof body?.mode === 'string' ? body.mode : 'auto';
+    let payload = typeof body?.payload === 'string' ? body.payload : null;
 
     if (!gameName) {
-      return new Response(
-        JSON.stringify({ error: 'gameName is required' }),
-        { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-      );
+      return jsonResponse({ error: 'gameName is required' }, 400);
+    }
+    if (gameName.length > MAX_GAME_NAME) {
+      return jsonResponse({ error: 'Game name is too long.' }, 400);
+    }
+    if (!ALLOWED_MODES.has(mode)) {
+      return jsonResponse({ error: 'Unsupported mode.' }, 400);
+    }
+    if (payload && payload.length > MAX_PAYLOAD) {
+      return jsonResponse({ error: 'Reference text is too long.' }, 413);
+    }
+    if (mode === 'url' && payload) {
+      if (payload.length > MAX_URL || !/^https:\/\/[\w.-]+\//.test(payload)) {
+        return jsonResponse({ error: 'Reference URL must be a plain https link.' }, 400);
+      }
+    }
+
+    // Which game IS this? The app has always sent `igdbID`; until now nothing
+    // read it, so every prompt identified the game by the name alone — which is
+    // how "The Messenger" reaches a different game from 2000, and how a
+    // Castlevania request lands on the wrong entry in a series of near-identical
+    // strings. One lookup turns the id into the facts a model can actually use:
+    // canonical title, year, developer. Failure is fine and silent; this
+    // improves a prompt, it does not gate one.
+    const identity = await gameIdentity(body?.igdbID);
+    const qualifier = identityQualifier(identity, gameName);
+    // What the game IS, not just which one it is. Plan mode has no web search,
+    // so without this a familiar franchise name produces the franchise's usual
+    // skeleton — Pokémon Pokopia got Gym Badges and an Elite Four it does not
+    // have. IGDB already told us it is a sandbox life sim; we just weren't
+    // asking.
+    const context = identityContext(identity);
+
+    // ── plan: the shape only, no items. One small call, no web search: this
+    // has to come back in seconds or it is no better than generating.
+    if (mode === 'plan') {
+      const planRes = await callClaude(apiKey, {
+        model: 'claude-sonnet-4-6',
+        max_tokens: PLAN_MAX_TOKENS,
+        tools: [PLAN_TOOL],
+        toolName: 'plan_tracker_categories',
+        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier, context),
+      });
+      if ('error' in planRes) return planRes.error;
+
+      const proposed = Array.isArray(planRes.input?.categories) ? planRes.input.categories : [];
+      const categories = proposed
+        .filter((c: Record<string, unknown>) => typeof c?.name === 'string' && c.name.trim())
+        .slice(0, 10)
+        .map((c: Record<string, unknown>) => ({
+          name: String(c.name).trim().slice(0, MAX_CATEGORY_NAME),
+          plannedCount: Number.isFinite(c.plannedCount) ? Math.max(0, Math.round(Number(c.plannedCount))) : null,
+          type: typeof c.type === 'string' ? c.type : 'checklist',
+          description: typeof c.description === 'string' ? c.description : undefined,
+          counted: c.counted === true,
+        }));
+
+      if (categories.length === 0) {
+        return jsonResponse(
+          { error: "Couldn't work out how to divide that game up. Try a more specific name." },
+          422,
+        );
+      }
+      return jsonResponse({
+        plan: {
+          categories,
+          estimatedHours: planRes.input?.estimatedHours || undefined,
+          completionNotes: planRes.input?.completionNotes || undefined,
+        },
+        usage: planRes.usage,
+      });
+    }
+
+    // ── category: one named category, everything else left alone. Same guide
+    // lookup as a full generation, a fraction of the output.
+    if (mode === 'category') {
+      const categoryName = typeof body?.categoryName === 'string' ? body.categoryName.trim() : '';
+      if (!categoryName) {
+        return jsonResponse({ error: 'categoryName is required for category mode.' }, 400);
+      }
+      if (categoryName.length > MAX_CATEGORY_NAME) {
+        return jsonResponse({ error: 'Category name is too long.' }, 400);
+      }
+      // Clamped, because this number buys output budget. Unbounded, a caller
+      // could ask for a category of 10,000 items and buy the token ceiling from
+      // the cheaper per-mode bucket. 400 is well past any real category;
+      // beyond that the terse-output rule applies anyway.
+      const { expectedCount, maxTokens: budget } = categoryTokenBudget(body?.expectedCount);
+      const counted = body?.counted === true;
+
+      // Size the budget to the category. A flat 8k cap silently truncated
+      // anything past roughly a hundred items — 120 Shrines with locations
+      // ran out mid-tool-call and came back as "nothing came back", which
+      // reads as the generator not knowing the game rather than as a limit.
+      // Terse entries above 60 items (see buildCategoryMessage), so the
+      // per-item allowance drops with them rather than budgeting for prose
+      // that was explicitly asked not to be written.
+      // The hard ceiling stays below the full generation's 12,000. The shared
+      // limits also cap this bucket at 150 calls/day, so its worst-case 1.5M
+      // daily output tokens stays below the full bucket's 150 × 12,000.
+      // Long lists skip the guide lookup. It costs its own round trip and then
+      // drags a whole wiki page into the input, and the combination of that
+      // and 120 entries of output does not fit inside 150 seconds — which
+      // means no category at all rather than a slightly less sourced one.
+      // Short lists keep it, where the accuracy is nearly free.
+      // A counter needs one number, not a wiki page.
+      const guideUrl = counted || (expectedCount ?? 0) > 60
+        ? null
+        : await findGuideUrl(apiKey, gameName, igdbData || null);
+      const catRes = await callClaude(apiKey, {
+        model: 'claude-sonnet-4-6',
+        max_tokens: counted ? 1_000 : budget,
+        tools: guideUrl
+          ? [CATEGORY_TOOL, { type: 'web_search_20250305', name: 'web_search', max_uses: 1 }]
+          : [CATEGORY_TOOL],
+        toolName: 'generate_tracker_category',
+        userMessage: buildCategoryMessage(
+          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted, context),
+      });
+      if ('error' in catRes) return catRes.error;
+
+      const category = catRes.input?.category as Record<string, unknown> | undefined;
+      const items = Array.isArray(category?.items) ? category.items : [];
+      if (!category || items.length === 0) {
+        return jsonResponse(
+          { error: `Nothing came back for "${categoryName}". Try again, or try a name closer to what the game calls this set.` },
+          422,
+        );
+      }
+
+      // Returned as an ordinary one-category schema so the app applies it
+      // through the same merge path as everything else. The id is a fallback:
+      // a planned category's own id is device-local, so the match lands by name.
+      const structuredData = {
+        schemaVersion: 1,
+        generatedAt: new Date().toISOString(),
+        generatedBy: 'claude-sonnet-4-6',
+        sources: [{ type: 'category', ...(guideUrl ? { url: guideUrl } : {}) }],
+        categories: [{
+          id: slugify(String(category.name || categoryName)),
+          name: String(category.name || categoryName),
+          type: typeof category.type === 'string' ? category.type : 'checklist',
+          ...(category.description ? { description: category.description } : {}),
+          items,
+        }],
+        runs: [],
+      };
+      return jsonResponse({ structuredData, usage: catRes.usage });
     }
 
     // Auto mode: two-stage — find a guide URL first (fast), then generate from it.
@@ -282,7 +669,7 @@ serve(async (req: Request) => {
       }
     }
 
-    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null);
+    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null, qualifier, context);
 
     // URL mode gets web_search so Claude can fetch the page content
     const tools: unknown[] = [TRACKER_TOOL];
@@ -304,7 +691,7 @@ serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 12000,
+        max_tokens: FULL_GENERATION_MAX_TOKENS,
         system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
         tools,
         tool_choice: { type: 'any' },
@@ -313,11 +700,12 @@ serve(async (req: Request) => {
     });
 
     if (!claudeRes.ok) {
-      const errText = await claudeRes.text();
-      console.error('Claude API error:', claudeRes.status, errText);
-      return new Response(
-        JSON.stringify({ error: `Claude API error: ${claudeRes.status}`, detail: errText }),
-        { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+      // Upstream detail goes to logs only — it can echo prompt content and
+      // names the backend the app deliberately doesn't expose.
+      console.error('Claude API error:', claudeRes.status, await claudeRes.text());
+      return jsonResponse(
+        { error: 'The generator is busy right now. Try again in a moment.' },
+        502,
       );
     }
 
@@ -334,9 +722,10 @@ serve(async (req: Request) => {
         .filter((b: { type: string }) => b.type === 'text')
         .map((b: { text: string }) => b.text)
         .join('\n');
-      return new Response(
-        JSON.stringify({ error: 'Claude did not generate tracker data', claudeResponse: textBlocks }),
-        { status: 422, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
+      console.warn('no tracker tool call; model said:', textBlocks.slice(0, 500));
+      return jsonResponse(
+        { error: "Couldn't build a tracker for that game. Try a more specific name, or paste a guide." },
+        422,
       );
     }
 
@@ -356,18 +745,9 @@ serve(async (req: Request) => {
       tags: generated.tags || [],
     };
 
-    return new Response(
-      JSON.stringify({
-        structuredData,
-        usage: claudeData.usage || null,
-      }),
-      { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    return jsonResponse({ structuredData, usage: claudeData.usage || null });
   } catch (err) {
-    console.error('Edge function error:', err);
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } },
-    );
+    console.error('Edge function error:', String(err));
+    return jsonResponse({ error: 'Tracker generation failed. Try again.' }, 500);
   }
 });

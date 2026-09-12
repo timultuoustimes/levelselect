@@ -1,0 +1,343 @@
+---
+import Base from '../layouts/Base.astro';
+import Reveal from '../components/Reveal.astro';
+import StageDemo from '../components/StageDemo.astro';
+
+/* Sections 3–5 below are the "story" half of the page: one claim, one
+   paragraph, one real screenshot each. They carry the four strongest shots
+   from the 2026-08-24 capture set.
+
+   Everything that doesn't earn a screenshot lives in `rest` at the bottom as
+   plain text. That split is deliberate — a grid where some tiles have images
+   and some don't reads as unfinished, and there is genuinely nothing to
+   photograph for "no accounts, no analytics". */
+
+const rest = [
+  {
+    title: 'Playthroughs and runs',
+    body: 'Separate progress for a second run or NG+. Roguelikes get their own record: loadout, outcome, win rate over time.',
+  },
+  {
+    title: 'Collections and shelves',
+    body: 'Group a trilogy, a comfort-games list, or everything you own on Genesis. Browse by system with icons that look like the hardware.',
+  },
+  {
+    title: 'A wishlist that watches prices',
+    body: 'Point it at your Deku Deals wishlist and see what has dropped, beside a wishlist of your own.',
+  },
+  {
+    title: 'Guides and videos in place',
+    body: 'Keep a walkthrough or a playlist attached to the game it belongs to, so you are not hunting for the tab you left it in.',
+  },
+  {
+    title: 'Import what you already have',
+    body: 'A CSV from a spreadsheet becomes a library, with its hours logged as real time rather than invented history.',
+  },
+  {
+    title: 'Numbers that stay honest',
+    body: "Hours by game, what you've finished, and how much you actually played this week versus how much you meant to. Only what your own sessions can prove — nothing estimated, nothing borrowed from anyone else's average. Flip any card between bars and a pie.",
+  },
+  {
+    title: 'A shelf that looks like yours',
+    body: 'A profile at the top of Home — a picture, a name, and your handles — with the covers of what you played this week behind it. Four game page layouts, your own accent color, and a name that can wear it.',
+  },
+];
+
+const systems = [
+  { img: 'sys-switch.png', name: 'Switch', count: '34 games' },
+  { img: 'sys-genesis.png', name: 'Genesis', count: '21 games' },
+  { img: 'sys-ps5.png', name: 'PS5', count: '12 games' },
+  { img: 'sys-mac.png', name: 'Mac', count: '51 games' },
+  { img: 'sys-snes.png', name: 'SNES', count: '7 games' },
+  { img: 'sys-nes.png', name: 'NES', count: '7 games' },
+];
+
+/* The generation triptych. Three frames because the feature is a sequence —
+   a single still of it is just a spinner. */
+const steps = [
+  {
+    img: 'iphone-36-generating-categories.webp',
+    cap: 'Ask what the game is made of.',
+    alt: 'Disco Elysium\u2019s page in LevelSelect \u2014 its logo, Paused on PC, 12 hours 48 minutes played \u2014 with "Working out the shape of this game" running underneath, a progress bar, and a Stop button.',
+  },
+  {
+    img: 'iphone-36-generating-one-category.webp',
+    cap: 'Fill one category. Leave the rest planned.',
+    alt: '"Looking for a guide to Achievements \u2014 one category only, so this is quicker than a full tracker" running above Quests, Thoughts, Skill Checks and Dialogues, each still marked Planned with its own Generate button.',
+  },
+  {
+    img: 'iphone-36-generated-achievements.webp',
+    cap: 'Come back for the next one whenever.',
+    alt: 'The finished achievements list \u2014 Superstar Cop, Baddest Of the Bad Cops, Cause a Shitstorm \u2014 each with what it asks of you, and a warning that some can be permanently missed.',
+  },
+];
+---
+<Base
+  title="LevelSelect — every game you're playing, and exactly where you left off"
+  description="A library, session timer, and progress tracker for people with more games than time. Syncs privately through your own iCloud — no account, no ads, no tracking."
+  current="features"
+>
+<main>
+  <div class="hero">
+    <div class="torchlight"></div>
+    <div class="wrap">
+      <img class="door" src="/assets/icon.png" width="164" height="164"
+           alt="LevelSelect app icon: a torch-lit dungeon door with a checklist" />
+      <h1 class="pixel wordmark">LevelSelect</h1>
+      <p class="tagline">Every game you're playing, and exactly where you left off.</p>
+      <p class="sub">A library, session timer, and progress tracker for people with more games than time. Your shelf syncs privately through your own iCloud — no account to make, nothing to sign up for.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://testflight.apple.com/join/7pwdQEMq">Join the beta</a>
+        <a class="btn btn-ghost" href="/privacy/">How your data works</a>
+      </div>
+      <p class="badge">iPhone &middot; iPad &middot; Mac &middot; Apple Watch</p>
+    </div>
+  </div>
+
+  <!-- The showcase slot used to hold a hand-built HTML mock of a game card.
+       Now a composed pair — iPad behind, iPhone in front — because a lone
+       portrait screenshot under the hero read as a poster, not a product,
+       and the platform badge above claims more than a phone. -->
+  <div class="wrap showcase">
+    <Reveal class="composite composite--hero">
+      <img class="c-ipad" src="/assets/shots/ipad-01-split-tracker.webp" width="1600" height="1226"
+           alt="LevelSelect on iPad: the Hollow Knight game page, key art running the width of the screen, beside its tracker panel in landscape split view." />
+      <img class="c-phone" src="/assets/shots/iphone-36-home-profile.webp" width="686" height="1400"
+           alt="LevelSelect home screen on iPhone: a profile at the top \u2014 Memoji, the handle timultuoustimes, and the services it is used on \u2014 over a backdrop made from this week\u2019s game covers, with 5 playing, 8 hours 35 minutes this week and 266 hours total; Hollow Knight sits in Continue Playing, left off at Grubsong, and the tabs along the bottom read Home, Library, Wishlist and Journal." />
+    </Reveal>
+  </div>
+
+  <!-- The build-32 header is the app's biggest visual change and it had no
+       section — it was a cameo in the hero, which the front door needed back.
+       Two games rather than one because the whole point is that the page
+       looks like the GAME: nothing here is LevelSelect's art. -->
+  <section class="wrap story story--flip" id="gamepage">
+    <Reveal class="story__text">
+      <h2>A page that looks like the game</h2>
+      <p class="lede">Every game gets its own key art across the top and its own logo where a title would be, so the page you open looks like the thing you played rather than like a database row.</p>
+      <p class="lede">Underneath: what you scored it, what the critics said, and how long you have actually spent on it — across every playthrough, not just the current one. Turn that row off if you don't time your play.</p>
+      <p class="lede">And four ways to arrange it. <strong>Showcase</strong> leads with the art, <strong>Classic</strong> keeps the plain original, <strong>Cover</strong> puts the box first, and <strong>Compact</strong> is nearly all list. Pick the one that suits how you read a page.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-36-layout-showcase.webp" width="686" height="1400" loading="lazy"
+           alt="The Hollow Knight game page in the Showcase layout: its own key art filling the header, the cover above the game’s logo where a title would be, five stars, Now Playing on Switch, and a row reading 44 hours 37 minutes played across 17 sessions." />
+      <img class="c-back" src="/assets/shots/iphone-36-layout-classic.webp" width="686" height="1400" loading="lazy"
+           alt="The same game arranged as Classic: the cover beside its details rather than under the art, Now Playing on Switch, five stars, and the Sessions list open beneath with a Start Session button." />
+    </Reveal>
+  </section>
+
+  <section class="wrap story" id="trackers">
+    <Reveal class="story__text">
+      <h2>The game's real checklist, not a generic one</h2>
+      <p class="lede">Import the actual RetroAchievements set for a retro game and get the real achievements, real point values, and a warning on the ones you can permanently miss. Paste a checklist you already trust. Or write your own goals in your own words.</p>
+      <p class="lede">Every tracker says where it came from, so you always know whether a number is the game's or a guess.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="right">
+      <img class="c-front" src="/assets/shots/iphone-36-super-metroid-achievements.webp" width="686" height="1400" loading="lazy"
+           alt="Super Metroid\u2019s imported RetroAchievements set: 36 of 69 earned, 197 of 656 points, a RetroAchievements badge naming the source, a warning about permanently missable entries, and each achievement with its own icon, name and requirement." />
+      <img class="c-back" src="/assets/shots/iphone-36-tracker-hidden-missable.webp" width="686" height="1400" loading="lazy"
+           alt="A Disco Elysium tracker in use: entries flagged as permanently missable, and several still reading \u201cHidden \u2014 tap circle to reveal\u201d so the list does not spoil what is coming." />
+    </Reveal>
+  </section>
+
+  <!-- Stats was a tab and is now a lens inside the Journal, so the section
+       that described it described something gone. The journal is also the
+       larger claim: the app can hold the part of your gaming life that
+       happened before you installed it. -->
+  <section class="wrap story story--flip" id="journal">
+    <Reveal class="story__text">
+      <h2>The part that already happened</h2>
+      <p class="lede">You have been writing things down since the first build — a note on a session, what you thought when you finished something. All of it was real, dated and synced, and every word of it was only ever visible inside the sheet you typed it into. The <strong>Journal</strong> is that writing, in order.</p>
+      <p class="lede">A day of a game is one entry. Three sessions of Hollow Knight on a Saturday is one row, not three, and tapping it gives you the day in full — each session with its own note, and whether that was the evening you finished it.</p>
+      <p class="lede">And it reaches back further than the app does. A <strong>memory</strong> is something that happened before you had this: when, who you were with, and pictures. How well you know the date is a choice — an exact day, a month, a year, or not sure at all. <em>“Christmas 1995 or 1996”</em> is a real answer, and that is exactly how it is shown.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-36-journal-timeline-memories.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal timeline on iPhone: Stardew Valley sessions from last week, then First time playing Halo 2 dated Friday 12 November 2004 with three screenshots and the note \u201cMultiplayer with Kumar, Eric, Omar and Kevin\u201d, then Got my Sega Genesis dated Tuesday 24 December 1996." />
+      <img class="c-back" src="/assets/shots/iphone-36-memory-photos.webp" width="686" height="1400" loading="lazy"
+           alt="A single memory opened: three photographs, one large above two smaller, over the title First time playing Halo 2, the date 13 November 2004, and the console it was played on." />
+    </Reveal>
+  </section>
+
+  <!-- The calendar answers a question the timeline cannot: not what happened,
+       but when, all at once. -->
+  <section class="wrap story" id="calendar">
+    <Reveal class="story__text">
+      <h2>A year of play, in one screen</h2>
+      <p class="lede">The calendar opens on a <strong>year</strong> — twelve small months and a heat map — because thirty years of history one month at a time is three hundred screens of scrolling.</p>
+      <p class="lede">Scrub the years along the top. Ones holding something stand out; empty ones are still tappable, because the year you have nothing in is exactly the year you are about to write your first console into. Tap a month and it opens properly: full box art on every day you played, and what the month added up to underneath.</p>
+      <p class="lede">The charts are here too, as the third view. Hours by game, what you finished, which systems you actually reach for — only what your own sessions can prove.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="right">
+      <img class="c-front" src="/assets/shots/iphone-36-journal-calendar-year.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal calendar showing a whole year as twelve small months, each day a square shaded by how much was played, with a row of years along the top and 2026 selected." />
+      <img class="c-back" src="/assets/shots/iphone-36-journal-charts.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal\u2019s charts view: 26 games, 266 hours 36 minutes played, 106 sessions, 12 percent finished, recent play, hours by month and a streak grid." />
+    </Reveal>
+  </section>
+
+  <!-- Light mode is the change people notice first, and the whole app moves
+       rather than the background alone. -->
+  <section class="wrap story story--flip" id="light">
+    <Reveal class="story__text">
+      <h2>Light, dark, and your color</h2>
+      <p class="lede">The whole app can be light now. Not the dark theme with its colors swapped — every surface knows which way <em>up</em> is, so a card lifts off a dark ground by getting lighter and off a light one by getting darker.</p>
+      <p class="lede">And the background is yours. Accent and background sit on one screen, so you see a button against the ground you are choosing while you choose it. The app keeps its own contrast, so no choice can make text vanish.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-36-light-home.webp" width="686" height="1400" loading="lazy"
+           alt="LevelSelect home in light mode: a warm cream background, the profile and week\u2019s totals across the top, and Continue Playing showing BioShock Remastered." />
+      <img class="c-back" src="/assets/shots/iphone-36-light-game-page.webp" width="686" height="1400" loading="lazy"
+           alt="A game page in light mode: Clair Obscur Expedition 33 with its key art across the top, five stars, and its session and tracker sections on a light ground." />
+    </Reveal>
+  </section>
+
+  <section class="wrap" id="generate">
+    <Reveal>
+      <h2>Built one piece at a time</h2>
+      <p class="lede">Ask what a game should be divided into and you get a plan, not a wall. Fill in the category you care about now — bosses, or shrines, or nothing at all — and leave the other nine sitting there until you want them.</p>
+    </Reveal>
+    <div class="steps">
+      {steps.map((s, i) => (
+        <Reveal class="step">
+          <div class="shot">
+            <img src={`/assets/shots/${s.img}`} width="686" height="1400" loading="lazy" alt={s.alt} />
+          </div>
+          <p><b>{i + 1}.</b> {s.cap}</p>
+        </Reveal>
+      ))}
+    </div>
+    <p class="steps__legend">{steps.map((s, i) => `${i + 1}. ${s.cap}`).join('  ·  ')}</p>
+  </section>
+
+  <section class="wrap story story--flip" id="sessions">
+    <Reveal class="story__text">
+      <h2>Start a session without opening the app</h2>
+      <p class="lede">The Live Activity keeps counting on your Lock Screen while you play, and nudges you if you forget to stop it. Widgets put the timer, the week, and your next objective on the Home Screen — and you can tick that objective off without going anywhere.</p>
+      <p class="lede"><b>Your games are Shortcuts too.</b> Say <i>"Play Hollow Knight in LevelSelect"</i> and it starts timing. Every game in your library is available to Siri, Spotlight and the Shortcuts app by name, so you can wire it into whatever you already use — an NFC tag on the console, a Focus, a scene.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-05-lock-screen-live-activity.webp" width="686" height="1400" loading="lazy"
+           alt="Lock Screen showing a LevelSelect widget with Hollow Knight at 57 percent and a Live Activity counting a session at 7 minutes 46 seconds." />
+      <img class="c-back" src="/assets/shots/iphone-07-home-screen-widgets.webp" width="686" height="1400" loading="lazy"
+           alt="Home Screen with LevelSelect widgets: Hollow Knight playing with its next objective, a Now Playing row, 139 hours this week, and a completion ring." />
+    </Reveal>
+  </section>
+
+  <!-- Build 35 shipped a whole arc — countdown, two widgets, a calendar, a
+       reminder — and it had one line in the feature list and no picture. The
+       wishlist is the one part of the app about games you do not have yet, so
+       it earns a beat of its own. -->
+  <section class="wrap story" id="waiting">
+    <Reveal class="story__text">
+      <h2>A game you're waiting for tells you when</h2>
+      <p class="lede">The wishlist counts down. <strong>"Tomorrow"</strong> when it's close, the date itself once it's further off — and it's <em>your</em> date: a game out on PC and months away on Switch 2 has two true answers, and you see the one for the platform you picked.</p>
+      <p class="lede">Three shelves, because a wishlist that quietly drops half of itself is lying about what you're waiting for: <strong>Coming soon</strong> for the ones with a real date, <strong>No date yet</strong> for the announced, and <strong>Out now</strong> for the ones you can go and buy.</p>
+      <p class="lede">On the Home Screen, <strong>Coming Soon</strong> lists what's next with the wait under each, and <strong>Release Calendar</strong> draws a real month with covers standing where the day numbers would be. A reminder arrives at 9am on the day, or up to a week before — a release is a date, so firing <em>at</em> it would wake you for a game that isn't out where you are yet.</p>
+      <p class="lede">The game's own page carries the rest: its trailers and screenshots, playable without leaving the app, and every platform it is coming to with its own date beside it.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-36-platform-dates-trailers.webp" width="686" height="1400" loading="lazy"
+           alt="Onimusha: Way of the Sword in LevelSelect: its trailers and screenshots above Game Info, where every platform is listed with its own date \u2014 Switch 2, PC, PlayStation 5 and Xbox Series all 4 September 2026, each reading Tomorrow \u2014 and PlayStation 5 carries a MINE badge for the one you chose." />
+      <img class="c-back" src="/assets/shots/iphone-36-release-widgets.webp" width="686" height="1400" loading="lazy"
+           alt="Two LevelSelect widgets on the Home Screen: a Release Calendar list reading Onimusha tomorrow and two more in two weeks, and a September month grid with each game\u2019s cover sitting on the day it arrives." />
+    </Reveal>
+  </section>
+
+  <section class="wrap" id="stage">
+    <Reveal>
+      <h2>Play, check, and follow a guide at once</h2>
+      <p class="lede">On iPad and Mac the game page slides aside to make room. This is the real layout — try it:</p>
+    </Reveal>
+    <Reveal>
+      <StageDemo />
+    </Reveal>
+  </section>
+
+  <!-- Deliberately the one section with no screenshot. What it describes is an
+       absence, and a Settings screen reading "Synced" would be a picture of
+       nothing. The comparison is the content. -->
+  <section class="wrap" id="privately">
+    <Reveal class="private">
+      <h2>Yours, privately</h2>
+      <p class="lede">Most trackers start by asking you to log in to PlayStation, and Xbox, and Steam, and Nintendo — handing over an account for every shelf you own.</p>
+      <p class="lede">LevelSelect never asks for one. Your library lives on your device and syncs through your own iCloud, where it is yours in the ordinary sense of the word.</p>
+      <ul class="nots">
+        <li>No account to create</li>
+        <li>No ads</li>
+        <li>No analytics, no tracking</li>
+        <li>Export the whole thing as readable JSON, whenever</li>
+      </ul>
+      <p class="beta-note">The one exception is spelled out in full: <a href="/privacy/">how your data works</a>.</p>
+    </Reveal>
+  </section>
+
+  <!-- Sits immediately before "Sorted by system" on purpose: the shelf below
+       is already SNES, NES and Genesis, so this reads into it. Not a flipped
+       story — the two either side of it are, and three in a row starts to
+       look like a template rather than a page. -->
+  <section class="wrap story" id="retro">
+    <Reveal class="story__text">
+      <h2>Games older than the app you're tracking them in</h2>
+      <p class="lede">Import the real <b>RetroAchievements</b> set for a retro game — the actual achievements the community authored, their real point values, and a warning on the ones you can permanently miss. Not a checklist someone guessed at.</p>
+      <p class="lede">A game you finished in 2004 can say so. Beaten records take a year on its own, or a month, or a full date, so a finish you only half-remember doesn't have to be invented to be recorded.</p>
+      <p class="lede">And a cartridge you still own, played on a handheld that isn't the original hardware, is <b>Physical and Emulated at once</b> — the shelf below sorts by the console it came out on, with emulators ranked last.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="right">
+      <img class="c-front" src="/assets/shots/iphone-36-super-metroid-header.webp" width="686" height="1400" loading="lazy"
+           alt="Super Metroid in LevelSelect: its own logo over key art, marked Completed on SNES, five stars, owned Emulated, a RetroAchievements badge, and a Beaten entry reading \u201cBeat the game \u00b7 SNES \u00b7 2022\u201d." />
+      <img class="c-back" src="/assets/shots/iphone-36-sonic-header.webp" width="686" height="1400" loading="lazy"
+           alt="Sonic the Hedgehog 2 on Genesis, its logo across the header art, marked Old Favorite and owned Physical and Emulated at once, beaten twice across 4 hours 42 minutes." />
+    </Reveal>
+  </section>
+
+  <section class="wrap">
+    <Reveal>
+      <h2>Sorted by system</h2>
+      <p class="lede">Your library grouped by the hardware it lives on — original console first, emulators last.</p>
+    </Reveal>
+    <div class="shelf">
+      {systems.map((s) => (
+        <Reveal class="system">
+          <img src={`/assets/${s.img}`} alt="" loading="lazy" />
+          <div class="n">{s.name}</div>
+          <div class="c">{s.count}</div>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap" id="features">
+    <Reveal>
+      <h2>And the rest of it</h2>
+      <p class="lede">The things you'd otherwise keep in your head, or a notes app, or nowhere.</p>
+    </Reveal>
+    <div class="grid">
+      {rest.map((f) => (
+        <Reveal class="tile">
+          <h3>{f.title}</h3>
+          <p>{f.body}</p>
+        </Reveal>
+      ))}
+    </div>
+  </section>
+
+  <section class="wrap" id="beta">
+    <Reveal class="card-hero beta-card">
+      <h2>The beta is open</h2>
+      <p class="lede">LevelSelect is in open testing on iPhone, iPad, Mac, and Apple Watch. The link below installs it — you'll need TestFlight, and it installs that too if you don't have it. No form, no waiting. Bugs and blunt opinions equally welcome.</p>
+      <a class="btn btn-primary" href="https://testflight.apple.com/join/7pwdQEMq">Join the beta</a>
+      <p class="beta-note"><a href="/changelog/">See what's changed</a> &middot; <a href="/roadmap/">where it's going</a></p>
+    </Reveal>
+  </section>
+</main>
+
+<style is:global>
+  /* Layout-only additions for the new sections. Everything else still comes
+     from the hand-written stylesheet in /assets/style.css. */
+  .beta-card { display: block; text-align: center; }
+  .beta-card h2 { margin-bottom: .4rem; }
+  .beta-card .lede { margin: 0 auto 1.2rem; }
+  .beta-note { margin: 1rem 0 0; font-size: .9rem; }
+</style>
+</Base>
