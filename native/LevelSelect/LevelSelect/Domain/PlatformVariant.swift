@@ -106,16 +106,127 @@ enum PlatformVariant {
         "GBA": [
             Variant(key: "agb", label: "Game Boy Advance",
                     detail: "Indigo, 2001", asset: nil, year: 2001),
+            Variant(key: "glacier", label: "Game Boy Advance",
+                    detail: "Glacier", asset: "variant-gba-glacier"),
+            Variant(key: "fuchsia", label: "Game Boy Advance",
+                    detail: "Fuchsia", asset: "variant-gba-fuchsia"),
+            Variant(key: "arctic", label: "Game Boy Advance",
+                    detail: "Arctic", asset: "variant-gba-arctic"),
+            Variant(key: "black", label: "Game Boy Advance",
+                    detail: "Black", asset: "variant-gba-black"),
+            Variant(key: "gba-platinum", label: "Game Boy Advance",
+                    detail: "Platinum", asset: "variant-gba-platinum"),
+            // **The SP's colors sit in the same list.** A variant has no
+            // variants of its own, and a flat list is the honest shape: the
+            // question is "which one do you have", and a Flame SP is an
+            // answer to it.
             Variant(key: "sp", label: "Game Boy Advance SP",
                     detail: "Silver clamshell, 2003", asset: "variant-gba-sp", year: 2003),
+            Variant(key: "sp-cobalt", label: "Game Boy Advance SP",
+                    detail: "Cobalt", asset: "variant-gba-sp-cobalt"),
+            Variant(key: "sp-flame", label: "Game Boy Advance SP",
+                    detail: "Flame", asset: "variant-gba-sp-flame"),
+            Variant(key: "sp-onyx", label: "Game Boy Advance SP",
+                    detail: "Onyx", asset: "variant-gba-sp-onyx"),
+            Variant(key: "sp-pearl", label: "Game Boy Advance SP",
+                    detail: "Pearl Pink", asset: "variant-gba-sp-pearl"),
+            Variant(key: "sp-nes", label: "Game Boy Advance SP",
+                    detail: "NES Classic Edition", asset: "variant-gba-sp-nes"),
         ],
         // Nintendo sold the Color in a shelf of colors, and the grape one the
         // app draws is only the one that got commissioned first.
+        // Nintendo sold the Color in a shelf of colors; the app draws Grape
+        // because that is the one that got commissioned first.
         "GBC": [
             Variant(key: "grape", label: "Grape",
                     detail: "Purple, 1998", asset: nil),
             Variant(key: "dandelion", label: "Dandelion",
                     detail: "Yellow, 1998", asset: "variant-gbc-yellow"),
+            Variant(key: "berry", label: "Berry",
+                    detail: "Magenta, 1998", asset: "variant-gbc-berry"),
+            Variant(key: "kiwi", label: "Kiwi",
+                    detail: "Green, 1998", asset: "variant-gbc-kiwi"),
+            Variant(key: "teal", label: "Teal",
+                    detail: "Blue-green, 1998", asset: "variant-gbc-teal"),
+            Variant(key: "atomic", label: "Atomic Purple",
+                    detail: "Clear, 1999", asset: "variant-gbc-atomic"),
+        ],
+
+        // **The Play It Loud! shelf.** The app draws the 1989 gray brick; the
+        // colors came in 1995 and are what a lot of people actually carried.
+        "Game Boy": [
+            Variant(key: "dmg", label: "Game Boy",
+                    detail: "Gray, 1989", asset: nil, year: 1989),
+            Variant(key: "red", label: "Play It Loud! Red",
+                    detail: "1995", asset: "variant-gameboy-red", year: 1995),
+            Variant(key: "yellow", label: "Play It Loud! Yellow",
+                    detail: "1995", asset: "variant-gameboy-yellow", year: 1995),
+            Variant(key: "green", label: "Play It Loud! Green",
+                    detail: "1995", asset: "variant-gameboy-green", year: 1995),
+            Variant(key: "black", label: "Play It Loud! Black",
+                    detail: "1995", asset: "variant-gameboy-black", year: 1995),
+            Variant(key: "clear", label: "Play It Loud! Clear",
+                    detail: "See-through, 1995", asset: "variant-gameboy-clear", year: 1995),
+        ],
+
+        // **Funtastic, and the machine that came before it.** The app draws
+        // the translucent Jungle Green; charcoal is the 1996 original.
+        "N64": [
+            Variant(key: "jungle", label: "Jungle Green",
+                    detail: "Translucent, 1999", asset: nil, year: 1999),
+            Variant(key: "charcoal", label: "Nintendo 64",
+                    detail: "Charcoal gray, 1996", asset: "variant-n64-charcoal", year: 1996),
+            Variant(key: "atomic", label: "Atomic Purple",
+                    detail: "Clear", asset: "variant-n64-atomic"),
+            Variant(key: "grape", label: "Grape Purple",
+                    detail: "Funtastic", asset: "variant-n64-grape"),
+            Variant(key: "fire", label: "Fire Orange",
+                    detail: "Funtastic", asset: "variant-n64-fire"),
+            Variant(key: "ice", label: "Ice Blue",
+                    detail: "Funtastic", asset: "variant-n64-ice"),
+            Variant(key: "smoke", label: "Smoke Black",
+                    detail: "Funtastic", asset: "variant-n64-smoke"),
+            Variant(key: "watermelon", label: "Watermelon Red",
+                    detail: "Funtastic", asset: "variant-n64-watermelon"),
+            Variant(key: "gold", label: "Gold",
+                    detail: "Limited edition", asset: "variant-n64-gold"),
+        ],
+
+        "GameCube": [
+            Variant(key: "indigo", label: "Indigo",
+                    detail: "2001", asset: nil, year: 2001),
+            Variant(key: "black", label: "Jet Black",
+                    detail: "2001", asset: "variant-gamecube-black", year: 2001),
+            Variant(key: "platinum", label: "Platinum",
+                    detail: "Silver, 2002", asset: "variant-gamecube-platinum", year: 2002),
+            Variant(key: "spice", label: "Spice",
+                    detail: "Orange, Japan", asset: "variant-gamecube-spice"),
+        ],
+
+        "DS": [
+            Variant(key: "white", label: "Polar White",
+                    detail: "DS Lite, 2006", asset: nil, year: 2006),
+            Variant(key: "onyx", label: "Onyx",
+                    detail: "DS Lite", asset: "variant-ds-onyx"),
+            Variant(key: "cobalt", label: "Cobalt & Black",
+                    detail: "DS Lite", asset: "variant-ds-cobalt"),
+            Variant(key: "crimson", label: "Crimson & Black",
+                    detail: "DS Lite", asset: "variant-ds-crimson"),
+            Variant(key: "coral", label: "Coral Pink",
+                    detail: "DS Lite", asset: "variant-ds-coral"),
+        ],
+
+        "3DS": [
+            Variant(key: "aqua", label: "Aqua Blue",
+                    detail: "2011", asset: nil, year: 2011),
+            Variant(key: "black", label: "Cosmo Black",
+                    detail: "2011", asset: "variant-3ds-black", year: 2011),
+            Variant(key: "red", label: "Flame Red",
+                    detail: "2011", asset: "variant-3ds-red", year: 2011),
+            Variant(key: "purple", label: "Midnight Purple",
+                    detail: "2012", asset: "variant-3ds-purple", year: 2012),
+            Variant(key: "pink", label: "Pearl Pink",
+                    detail: "2012", asset: "variant-3ds-pink", year: 2012),
         ],
         // **Nintendo's cost-reduced redesigns**, both drawn 2026-09-10 and both
         // the machine a lot of people actually had: the top-loader was the NES
