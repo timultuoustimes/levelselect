@@ -14,6 +14,13 @@ import {
   PLAN_MAX_TOKENS,
   quotaPlanForAI,
 } from '../_shared/ai-limits.ts';
+import {
+  keepRequestedCategories,
+  parseRequestedCategories,
+  type RequestedCategory,
+  scopeInstructions,
+  slugify,
+} from '../_shared/tracker-scope.ts';
 
 // Input caps — every one of these bounds what reaches the Anthropic API.
 const MAX_GAME_NAME = 200;
@@ -293,6 +300,7 @@ function buildUserMessage(
   payload: string | null,
   qualifier = '',
   context = '',
+  requested: RequestedCategory[] | null = null,
 ): string {
   const parts: string[] = [];
 
@@ -317,7 +325,15 @@ function buildUserMessage(
     parts.push(`\nThe user wants you to use this URL as a reference source. Search the web for this page and extract relevant game data from it: ${payload}`);
   }
 
-  parts.push('\nBe thorough — include all major bosses, collectibles, upgrades, story progression, and endings. Group items into logical categories using the right category type for each. Call the generate_tracker_data tool with the complete result.');
+  if (requested) {
+    // A refresh. The unscoped instruction below ("include all major bosses,
+    // collectibles, upgrades…") is exactly what added categories the user
+    // never had, so it is not sent alongside the list.
+    parts.push(scopeInstructions(requested));
+    parts.push('\nBe thorough within those categories, using the right category type for each. Call the generate_tracker_data tool with the complete result.');
+  } else {
+    parts.push('\nBe thorough — include all major bosses, collectibles, upgrades, story progression, and endings. Group items into logical categories using the right category type for each. Call the generate_tracker_data tool with the complete result.');
+  }
 
   return parts.join('\n');
 }
@@ -398,10 +414,6 @@ function buildCategoryMessage(
     ].join(' '));
   }
   return parts.join('\n');
-}
-
-function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'category';
 }
 
 /** One Claude call that must come back as a named tool use. */
@@ -503,6 +515,10 @@ serve(async (req: Request) => {
     const gameName = typeof body?.gameName === 'string' ? body.gameName.trim() : '';
     let mode = typeof body?.mode === 'string' ? body.mode : 'auto';
     let payload = typeof body?.payload === 'string' ? body.payload : null;
+    // The user's own categories, when this is a regeneration. Null for a first
+    // generation — and for every request from a build that predates the field,
+    // which must behave exactly as it always has.
+    const requested = parseRequestedCategories(body?.categories);
 
     if (!gameName) {
       return jsonResponse({ error: 'gameName is required' }, 400);
@@ -644,8 +660,12 @@ serve(async (req: Request) => {
         generatedBy: 'claude-sonnet-4-6',
         sources: [{ type: 'category', ...(guideUrl ? { url: guideUrl } : {}) }],
         categories: [{
-          id: slugify(String(category.name || categoryName)),
-          name: String(category.name || categoryName),
+          // The name that was ASKED for, not the model's rendering of it. The
+          // prompt says to echo it exactly; when the answer drifted ("Warrior's
+          // Graves" for "Warrior Graves") the app's by-name match found nothing,
+          // and a category that filled fine was reported as "Nothing came back".
+          id: slugify(categoryName),
+          name: categoryName,
           type: typeof category.type === 'string' ? category.type : 'checklist',
           ...(category.description ? { description: category.description } : {}),
           items,
@@ -669,7 +689,8 @@ serve(async (req: Request) => {
       }
     }
 
-    const userMessage = buildUserMessage(gameName, igdbData || null, mode, payload || null, qualifier, context);
+    const userMessage = buildUserMessage(
+      gameName, igdbData || null, mode, payload || null, qualifier, context, requested);
 
     // URL mode gets web_search so Claude can fetch the page content
     const tools: unknown[] = [TRACKER_TOOL];
@@ -730,6 +751,21 @@ serve(async (req: Request) => {
     }
 
     const generated = toolUseBlock.input;
+    let categories = generated.categories || [];
+    let missingCategories: string[] = [];
+    if (requested) {
+      // Held to the list whatever the model did: extra categories dropped,
+      // names put back to the user's, order kept.
+      const scoped = keepRequestedCategories(categories, requested);
+      if (scoped.categories.length === 0) {
+        return jsonResponse(
+          { error: "Couldn't regenerate those categories. Try again, or regenerate them one at a time." },
+          422,
+        );
+      }
+      categories = scoped.categories;
+      missingCategories = scoped.missing;
+    }
     const structuredData = {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -737,7 +773,7 @@ serve(async (req: Request) => {
       sources: [
         { type: mode, ...(payload && mode === 'url' ? { url: payload } : {}) },
       ],
-      categories: generated.categories || [],
+      categories,
       ...(generated.runTemplate ? { runTemplate: generated.runTemplate } : {}),
       runs: [],
       estimatedHours: generated.estimatedHours || undefined,
@@ -745,7 +781,14 @@ serve(async (req: Request) => {
       tags: generated.tags || [],
     };
 
-    return jsonResponse({ structuredData, usage: claudeData.usage || null });
+    // `missingCategories` sits beside structuredData, never inside it: the app
+    // stores structuredData as the tracker, and this is a note about the
+    // request, not part of anyone's tracker.
+    return jsonResponse({
+      structuredData,
+      usage: claudeData.usage || null,
+      ...(missingCategories.length > 0 ? { missingCategories } : {}),
+    });
   } catch (err) {
     console.error('Edge function error:', String(err));
     return jsonResponse({ error: 'Tracker generation failed. Try again.' }, 500);
