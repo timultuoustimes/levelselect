@@ -1,6 +1,6 @@
 # LevelSelect Privacy Policy
 
-*Last updated: August 23, 2026*
+*Last updated: September 16, 2026*
 
 LevelSelect is a game library and progress tracker for iPhone, iPad, Mac, and Apple Watch. It is built so that your data stays yours: there are no accounts, no ads, no analytics SDKs, and no tracking.
 
@@ -10,6 +10,9 @@ LevelSelect is a game library and progress tracker for iPhone, iPad, Mac, and Ap
 - The app sends **game names you search for** (and optionally guide text you paste) to our backend to look up game data and generate trackers.
 - A **random install identifier** accompanies those requests purely for rate limiting. It is not tied to you, your iCloud account, or your device's hardware identifiers.
 - If you connect a **RetroAchievements account**, its key lives in your device's Keychain and talks to RetroAchievements **directly** — it never reaches our backend, on purpose.
+- If you connect **Steam**, the Web API key you registered on Steam lives in your device's Keychain and talks to Steam **directly**, the same way.
+- If you connect **itch.io**, you approve it on itch.io's own page, and the token it gives back lives in your device's Keychain and talks to itch.io **directly**.
+- If you connect **PlayStation** or **Xbox**, the sign-in LevelSelect keeps lives in your device's Keychain and talks to Sony or Microsoft **directly**.
 - Nothing is sold, shared for advertising, or used to track you.
 
 ## Data stored on your device and in your iCloud
@@ -18,7 +21,7 @@ Everything you create in LevelSelect — your game library, play sessions, track
 
 ## Data that leaves your device
 
-LevelSelect talks to a small backend (Supabase Edge Functions) for four features. In each case, only what's listed is sent:
+LevelSelect talks to a small backend (Supabase Edge Functions) for the features below. In each case, only what's listed is sent:
 
 | Feature | What is sent | Where it goes |
 |---|---|---|
@@ -26,11 +29,18 @@ LevelSelect talks to a small backend (Supabase Edge Functions) for four features
 | **AI tracker generation** | The game's name, its public IGDB metadata, and (optionally) guide text or a guide URL you provide | Our generator → [Anthropic](https://www.anthropic.com)'s Claude API, which may also perform a web search for a game guide |
 | **RetroAchievements lookup** | A game name and system, or a RetroAchievements game id | Our proxy → [RetroAchievements](https://retroachievements.org) to find a game and fetch its published achievement list. These requests use **our** API key, not yours, and say nothing about who you are |
 | **Artwork lookup** | The game's name, then a SteamGridDB game id | Our proxy → [SteamGridDB](https://www.steamgriddb.com) to fetch covers, backdrops and logos. These requests use **our** API key, not yours, and say nothing about who you are |
+| **Steam achievement lists** | A game name you search for, or a Steam app id | Our proxy → [Steam](https://store.steampowered.com), to find a game and fetch its published achievement list. These requests use **our** API key, not yours, and say nothing about who you are |
+| **Steam game matching** | The Steam app ids of games you import from Steam or look up achievements for — numbers that identify games in Steam's store | Our proxy → IGDB, to find which game each one is. Sent with no Steam key and no SteamID, the same way a CSV import sends the titles in your file |
+| **Import matching** | The names of games you import from Xbox, PlayStation, itch.io or a CSV file, and any title you search for while reviewing them | Our proxy → IGDB, to match each one to its game, cover and release date. Sent without your sign-in for any of those services and without saying where the names came from |
 | **Map search** *(future feature)* | The game's name and optionally a wiki page URL | Our finder → Anthropic's Claude API with web search |
 
 Additionally, entirely from your device:
 
 - **Your RetroAchievements account** *(optional)*: if you connect one, your RetroAchievements username and Web API key are stored in your device's **Keychain** and are sent **directly from your device to retroachievements.org** to read what you've earned. They never pass through our backend, and they are deliberately not synced between your devices — you enter them on each device, or not at all. Removing them in Settings deletes them from the Keychain. See "Why your RetroAchievements key skips our servers" below.
+- **Your Steam account** *(optional)*: if you connect one, the Web API key you registered on Steam is stored in your device's **Keychain**, and your SteamID and Steam display name are kept in the app's settings on that device. They are sent **directly from your device to api.steampowered.com** to read the games you own and the achievements you've earned. They never pass through our backend, for the same reason as the RetroAchievements key below, and are not synced between your devices. Steam only answers when your profile's game details are public on Steam. Disconnecting in Settings deletes the key from the Keychain.
+- **Your itch.io account** *(optional)*: connecting opens itch.io's own sign-in page, where you approve LevelSelect reading your itch.io profile and the games you've bought or claimed. itch.io hands the access token back inside the web address; it passes through a page on levelselect.app that runs only in your browser and forwards it to the app, so the token is never sent to our servers. It is stored in your device's **Keychain**, not synced between your devices, and sent **directly from your device to api.itch.io** when you import. Imported games keep their itch.io cover image, which loads from itch.io's servers. Disconnecting in Settings deletes the token.
+- **Your PlayStation account** *(optional)*: PlayStation has no public way for apps to read trophies, so LevelSelect uses the same sign-in as Sony's PlayStation App. You paste your NPSSO — a sign-in code from playstation.com that works like your password — and the app sends it **directly to Sony** once, to get a sign-in token, and does not keep it. The token is stored in your device's **Keychain**, not synced, and sent **directly from your device to Sony** (ca.account.sony.com and m.np.playstation.com) to read your trophy lists, the trophies you've earned, and the PS4 and PS5 games you've played with their playtime. It never passes through our backend. Disconnecting in Settings deletes it. Because this route isn't one Sony publishes for other apps, it could stop working at any time.
+- **Your Xbox account** *(optional)*: you sign in on **Microsoft's own page**; LevelSelect never sees your password. Microsoft returns a sign-in token, stored in your device's **Keychain** and not synced, and your device uses it **directly with Microsoft and Xbox Live** (login.microsoftonline.com and xboxlive.com) to read the games you've played and the achievements you've earned. Your gamertag and Xbox user id are kept in the app's settings on that device to show who's connected. None of it passes through our backend. Disconnecting in Settings deletes the token.
 - **Deku Deals wishlist**: if you configure a wishlist, the app fetches your **public** Deku Deals wishlist JSON directly from dekudeals.com. Nothing about you is sent beyond that public URL request.
 - **Cover art and video metadata**: images load directly from IGDB's and SteamGridDB's image CDNs, and YouTube video titles/thumbnails load via YouTube's public oEmbed endpoint for links you add.
 
@@ -46,7 +56,7 @@ So the app doesn't send it to us at all. Your device talks to RetroAchievements 
 
 ## What we don't do
 
-- No user accounts, sign-ins, or passwords
+- No LevelSelect account or password — the only sign-ins are the optional services above, and they stay on your device
 - No advertising, and no data sold or shared with data brokers
 - No analytics or telemetry SDKs
 - No tracking across apps or websites (see our privacy manifest: tracking = false)
