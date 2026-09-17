@@ -52,7 +52,7 @@ We don't run analytics and we don't build profiles. We should be precise about l
 
 Because of that logging. A RetroAchievements Web API key is password-equivalent, and routing one through our backend would write it into platform logs on every sync — readable by anyone with dashboard access, and no amount of care in our own code would change that. Moving the key to a header would not have helped, because headers are logged too.
 
-So the app doesn't send it to us at all. Your device talks to RetroAchievements directly, using an ephemeral connection with caching disabled so a copy of the key isn't written to disk in a URL cache. We keep the catalogue lookups (searching for a game, fetching its published achievement list) on our own key, because those say nothing about who you are.
+So the app doesn't send it to us at all. Your device talks to RetroAchievements directly, using an ephemeral connection with caching disabled so a copy of the key isn't written to disk in a URL cache. We keep the catalog lookups (searching for a game, fetching its published achievement list) on our own key, because those say nothing about who you are.
 
 ## What we don't do
 
