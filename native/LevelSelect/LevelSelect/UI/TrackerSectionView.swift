@@ -86,6 +86,12 @@ struct TrackerSectionView: View {
     /// The map, opened from an item — in place mode for one that has no
     /// pin yet, centered on its pin otherwise.
     @State private var mapTarget: MapViewerTarget?
+    @State private var markingBeaten = false
+    @State private var pinStyleCategory: TrackerCategoryDTO?
+    /// A filled category waiting on "Regenerate?" to be confirmed.
+    @State private var regeneratingCategory: TrackerCategoryDTO?
+    /// Waiting on "Generate lists for all planned categories?" to be confirmed.
+    @State private var confirmingFillAll = false
     /// Pushed rather than presented — a list of candidates wants a full screen
     /// and a back button, and it keeps the single sheet slot free.
     @State private var importingAchievements = false
@@ -130,6 +136,10 @@ struct TrackerSectionView: View {
     @State private var removalError: String?
     @State private var raSyncing = false
     @State private var raResult: String?
+    @State private var steamSyncing = false
+    @State private var importingSteamAchievements = false
+    @State private var importingAccountSet: AccountAchievementsImportView.Source?
+    @State private var accountSyncing = false
 
     /// What a pending removal would destroy, resolved before the dialog opens
     /// so it can say the number rather than warn vaguely.
@@ -231,7 +241,8 @@ struct TrackerSectionView: View {
 
             if let started = generation.startDate(for: game.id) {
                 GeneratingTrackerView(startedAt: started,
-                                      kind: generation.kind(for: game.id)) {
+                                      kind: generation.kind(for: game.id),
+                                      batch: generation.batch(for: game.id)) {
                     generation.cancel(for: game.id)
                 }
                 .padding(.vertical, 2)
@@ -258,7 +269,20 @@ struct TrackerSectionView: View {
             // Existing content stays visible while regenerating — hiding it
             // made a regenerate look like the tracker had been wiped.
             let hiddenPlanned = hidePlanned ? cats.filter(\.pending).count : 0
+            // Generate All Planned sits above the first empty plan, INSIDE the
+            // one loop, so the categories keep their stored order — splitting
+            // filled from planned into two loops would show an order a manual
+            // move doesn't act on. Offered from two plans up (one plan has its
+            // own Generate button), and kept up while a run is going even as
+            // the plans fill and the count drops.
+            let emptyPlans = TrackerGenerationStore.plannedCategories(cats)
+            let batchRunning = generation.batch(for: game.id) != nil
+            let batchAnchor = !hidePlanned && (emptyPlans.count > 1 || batchRunning)
+                ? emptyPlans.first?.id : nil
             ForEach(hidePlanned ? cats.filter { !$0.pending } : cats) { category in
+                if category.id == batchAnchor {
+                    generateAllPlannedRow(count: emptyPlans.count)
+                }
                 categoryView(category, states: states, gating: gating)
             }
             // Says the note exists, once, to someone who has items to write one
@@ -339,53 +363,15 @@ struct TrackerSectionView: View {
             // both ways of building the thing, and which menu held which was
             // arbitrary. More could also open completely empty, since all three
             // of its items needed something to act on.
-            // Wraps whole buttons rather than hyphenating their words. With
-            // RetroAchievements promoted this row carries four controls, and
-            // an HStack squeezed them into "Gener-ate with AI" and
-            // "Retro-Achieve-ments".
-            FlowLayout(spacing: 18) {
-                // The button says what it will do, and the menu lets you run it
-                // differently just this once without changing the default —
-                // "this tracker is terrible, replace the lot" shouldn't mean a
-                // trip to Settings.
-                Menu {
-                    ForEach(TrackerGenerationAction.allCases) { choice in
-                        Button {
-                            start(choice)
-                        } label: {
-                            Label(choice.label, systemImage: choice.systemImage)
-                        }
-                    }
-                } label: {
-                    Label(defaultAction.buttonTitle(regenerating: hasNonGoalContent),
-                          systemImage: "sparkles")
-                        .font(.subheadline)
-                } primaryAction: {
-                    start(defaultAction)
-                }
-                .disabled(isGenerating)
-
-                // An achievement set is the better answer wherever it exists —
-                // the real authored list rather than a model's recollection —
-                // so on a console RA covers it is a button, not a menu item
-                // someone has to go looking for. Promoted only there: on a PC
-                // or PS5 game it would be an offer that can only disappoint.
-                if raImportPromoted {
-                    Button {
-                        importingAchievements = true
-                    } label: {
-                        Label("RetroAchievements", systemImage: "trophy")
-                            .font(.subheadline)
-                    }
-                    .disabled(isGenerating)
-                }
-
-                // **No Spacer here.** `FlowLayout` places its subviews itself
-                // at a fixed 18pt; a Spacer is not a gap to it but a subview
-                // with a width, so it opened an uneven hole after "Generate
-                // with AI" and left the row stopping short of the trailing
-                // edge. What pushed the menus right in an HStack just makes a
-                // flow layout look broken.
+            // **Even columns, icon over label.** Tim, 09-14: *"It's hard to
+            // tell what icon belongs to what text, and they're so close to each
+            // other I feel like people would accidentally tap the wrong one."*
+            // The flow layout packed worded and icon-only controls 18pt apart,
+            // so a glyph read as belonging to the word beside it. Each control
+            // now owns an equal share of the row and a full-height tap target,
+            // and every one is named: short one-word labels are what let five
+            // fit without the hyphenation the flow layout was brought in to avoid.
+            HStack(alignment: .top, spacing: 0) {
                 Menu {
                     // Suggest Categories is already a button on an empty
                     // tracker, where "what should I even be tracking?" is the
@@ -407,17 +393,6 @@ struct TrackerSectionView: View {
                     Button {
                         sheet = .importList
                     } label: { Label("Paste a List", systemImage: "doc.on.clipboard") }
-                    // Named for where it comes from, not for what it does.
-                    // "Import Achievements" left the source unsaid, which was
-                    // fine while RA was the only one — but PlayStation trophies
-                    // would arrive as a second item under the same name, and
-                    // then neither entry tells you which list you're getting.
-                    if !raImportPromoted {
-                        Button {
-                            importingAchievements = true
-                        } label: { Label("RetroAchievements…", systemImage: "trophy") }
-                            .disabled(isGenerating)
-                    }
                     Divider()
                     Button {
                         goalName = ""
@@ -446,14 +421,6 @@ struct TrackerSectionView: View {
                         } label: { Label("Use Built-in Tracker", systemImage: "checkmark.seal") }
                             .disabled(isGenerating)
                     }
-                    if raGameID != nil, RACredentials.isConfigured {
-                        Button {
-                            Task { await syncRetroAchievements() }
-                        } label: {
-                            Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .disabled(raSyncing)
-                    }
                     if game.trackerSchema != nil {
                         Divider()
                         Button(role: .destructive) {
@@ -469,9 +436,97 @@ struct TrackerSectionView: View {
                     // sentence's two halves, and "Build" was a third word for
                     // one of them — Fable's cheap win 2. Same width, so the
                     // row's hyphenation problem stays solved.
-                    Label("Plan", systemImage: "hammer")
-                        .font(.subheadline)
+                    footerLabel("Plan", systemImage: "hammer")
                 }
+                .frame(maxWidth: .infinity)
+
+                generateControl
+                    .frame(maxWidth: .infinity)
+                    .disabled(isGenerating)
+
+                // **Achievements, always, in the middle.** Tim, 09-14: it wasn't
+                // there at all on Super Metroid. The column only showed while a
+                // set could still be imported; once one was, Sync hid inside
+                // Plan. An achievement set is the real authored list rather than
+                // a model's recollection, so it gets a place of its own — the
+                // place Steam, PlayStation and Xbox achievements will join. The
+                // source stays in each item's name for the same reason: a second
+                // source can't arrive under a label that doesn't say which.
+                Menu {
+                    // Each imported list syncs from its own service; every
+                    // service not imported yet waits under Import From, so four
+                    // sources don't make eight rows.
+                    if let raID = raGameID {
+                        if RACredentials.isConfigured {
+                            Button {
+                                Task { await syncRetroAchievements() }
+                            } label: {
+                                Label("Sync from RetroAchievements", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(anySyncing)
+                        }
+                        Button {
+                            raBrowserTarget = DekuLinkTarget(url: RAArt.gamePage(raID))
+                        } label: {
+                            Label("View on RetroAchievements", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    if let appID = steamAppID {
+                        if SteamCredentials.isConfigured {
+                            Button {
+                                Task { await syncSteam() }
+                            } label: {
+                                Label("Sync from Steam", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .disabled(anySyncing)
+                        }
+                        Button {
+                            raBrowserTarget = DekuLinkTarget(url: steamPage(appID))
+                        } label: {
+                            Label("View on Steam", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    if let title = playStationTitle, PlayStationCredentials.isConfigured {
+                        Button {
+                            Task { await syncPlayStation(title) }
+                        } label: {
+                            Label("Sync from PlayStation", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(anySyncing)
+                    }
+                    if let titleID = xboxTitleID, XboxCredentials.isConfigured {
+                        Button {
+                            Task { await syncXbox(titleID) }
+                        } label: {
+                            Label("Sync from Xbox", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(anySyncing)
+                    }
+                    if hasImportedSet && !importableSources.isEmpty { Divider() }
+                    if !importableSources.isEmpty {
+                        Menu {
+                            if raGameID == nil {
+                                Button("RetroAchievements…") { importingAchievements = true }
+                            }
+                            if steamAppID == nil {
+                                Button("Steam…") { importingSteamAchievements = true }
+                            }
+                            if playStationTitle == nil {
+                                Button("PlayStation…") { importingAccountSet = .playStation }
+                            }
+                            if xboxTitleID == nil {
+                                Button("Xbox…") { importingAccountSet = .xbox }
+                            }
+                        } label: {
+                            Label("Import From", systemImage: "trophy")
+                        }
+                        .disabled(isGenerating)
+                    }
+                } label: {
+                    footerLabel("Achievements", systemImage: "trophy")
+                }
+                .frame(maxWidth: .infinity)
+
                 // How this tracker looks and whether it spoils itself are
                 // per-game overrides of a Settings default. They used to sit
                 // in the game's ⋯ menu, where nothing else was about the
@@ -501,17 +556,30 @@ struct TrackerSectionView: View {
                         Text("Hide hints (play blind)").tag(Bool?.some(false))
                     }
                 } label: {
-                    // Icon only, and it stays that way. "Generate with AI"
-                    // and "Plan" are already a wide pair, and a promoted
-                    // RetroAchievements button makes three — a fourth worded
-                    // button hyphenated the whole row into "Gener-ate with AI"
-                    // / "Op-tions". Fable asked for this glyph to be labelled;
-                    // it is, for VoiceOver, on the line below. A visible label
-                    // is the thing the row cannot afford.
-                    Image(systemName: "slider.horizontal.3")
-                        .font(.subheadline)
+                    // Named on screen now. Fable asked for this glyph to be
+                    // labelled; it stayed icon-only because a worded fourth
+                    // control hyphenated the flow layout. Even columns with
+                    // one-word labels don't.
+                    footerLabel("Options", systemImage: "slider.horizontal.3")
                 }
+                .frame(maxWidth: .infinity)
                 .accessibilityLabel("Tracker options")
+
+                // **Beaten, from where you finish.**
+                //
+                // The last thing you tick is in here; the record of having
+                // finished was three screens away — back to the game page,
+                // find Beaten, add it. Tim, 09-12: *"I should be able to mark
+                // a game as beaten from within the playthrough/tracker."* It
+                // opens the same `MarkCompletionSheet` the game page does, so
+                // there is one way to write a completion, not two.
+                Button {
+                    markingBeaten = true
+                } label: {
+                    footerLabel("Beaten", systemImage: "flag.checkered")
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel("Mark as beaten")
             }
             .buttonStyle(.borderless)
             .tint(LSTheme.accent)
@@ -531,6 +599,12 @@ struct TrackerSectionView: View {
         .navigationDestination(isPresented: $importingAchievements) {
             RetroAchievementsImportView(game: game)
         }
+        .navigationDestination(isPresented: $importingSteamAchievements) {
+            SteamAchievementsImportView(game: game)
+        }
+        .navigationDestination(item: $importingAccountSet) { source in
+            AccountAchievementsImportView(game: game, source: source)
+        }
         .dekuBrowser(target: $raBrowserTarget)
         .task(id: game.id) {
             builtinAvailable = BuiltinTrackers.match(for: game) != nil
@@ -541,7 +615,10 @@ struct TrackerSectionView: View {
             titleVisibility: .visible
         ) {
             Button("Regenerate", role: .destructive) {
-                generation.generate(for: game, context: context, action: .replace)
+                // Explicitly the whole game: `generate` now defaults to your
+                // own lists, and "Replace Whole Tracker" must not quietly
+                // become a replace of only those.
+                generation.generate(for: game, context: context, action: .replace, scope: .wholeGame)
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -571,6 +648,39 @@ struct TrackerSectionView: View {
             Text(removalWarning)
         }
         .lsFullScreen(item: $mapTarget) { MapViewerView(target: $0) }
+        .sheet(isPresented: $markingBeaten) {
+            MarkCompletionSheet(game: game)
+                .lsSheet()
+        }
+        .sheet(item: $pinStyleCategory) { category in
+            PinStylePicker(game: game, category: category)
+                .lsSheet()
+        }
+        .confirmationDialog(
+            "Regenerate the list under \(regeneratingCategory?.name ?? "this category")?",
+            isPresented: Binding(get: { regeneratingCategory != nil },
+                                 set: { if !$0 { regeneratingCategory = nil } }),
+            titleVisibility: .visible,
+            presenting: regeneratingCategory
+        ) { category in
+            Button("Regenerate") { regenerate(category) }
+            Button("Cancel", role: .cancel) {}
+        } message: { category in
+            Text("\(category.name) gets a fresh list. Ticks, notes and names you chose carry over to anything still in it, and anything you'd finished that's gone is offered back to you.")
+        }
+        .confirmationDialog("Generate lists for all planned categories?", isPresented: $confirmingFillAll,
+                            titleVisibility: .visible) {
+            Button("Generate All Planned") {
+                generation.generateAllPlanned(for: game, context: context)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            // Honest about both costs: time, and that it lives in the app. A
+            // suspended request fails; the run carries on with the rest when
+            // you come back, but the list that was filling comes back empty.
+            let count = TrackerGenerationStore.plannedCategories(categories).count
+            Text("Generates a list for each of \(count) planned categories, one at a time, so this takes a few minutes. Keep LevelSelect open while it runs — leaving the app interrupts whichever list is being generated.")
+        }
         .sheet(item: $sheet) { which in
             Group {
                 switch which {
@@ -695,6 +805,188 @@ struct TrackerSectionView: View {
         game.trackerSchema.flatMap { TrackerSchemaJSON.retroAchievementsGameID(in: $0.jsonData) }
     }
 
+    /// An imported list's account record, read from the playthrough you're on.
+    ///
+    /// Synced unlocks land in their own playthrough so a game finished years
+    /// ago can't finish this run — which left them invisible unless you
+    /// switched to it (Tim, 09-15). Nil when there's nothing earned to show, or
+    /// when you're already looking at the record itself.
+    private func earnedElsewhere(_ category: TrackerCategoryDTO) -> (source: String, done: Int, record: Playthrough)? {
+        let record: Playthrough?
+        let source: String
+        if category.steamAppID != nil {
+            record = repo.existingSteamPlaythrough(for: game)
+            source = "Steam"
+        } else if category.raGameID != nil {
+            record = repo.existingRAPlaythrough(for: game)
+            source = "RetroAchievements"
+        } else if category.psnTitleID != nil {
+            record = repo.existingPlayStationPlaythrough(for: game)
+            source = "PlayStation"
+        } else if category.xboxTitleID != nil {
+            record = repo.existingXboxPlaythrough(for: game)
+            source = "Xbox"
+        } else {
+            return nil
+        }
+        guard let record, record.id != game.activePlaythrough?.id else { return nil }
+        let ids = Set(category.items.map(\.id))
+        let done = (record.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && $0.completed && ids.contains($0.itemID) }
+            .count
+        guard done > 0 else { return nil }
+        return (source, done, record)
+    }
+
+    private func earnedRow(_ earned: (source: String, done: Int, record: Playthrough), total: Int) -> some View {
+        HStack(spacing: 8) {
+            Label("Earned on \(earned.source): \(earned.done) of \(total)", systemImage: "trophy")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            Button("View") {
+                repo.setActivePlaythrough(earned.record, for: game)
+            }
+            .font(.caption.weight(.semibold))
+            .buttonStyle(.borderless)
+            .tint(LSTheme.accent)
+            .accessibilityHint("Switches to the \(earned.record.name) playthrough")
+        }
+        .padding(.bottom, 4)
+    }
+
+    /// The PlayStation trophy list this tracker's trophies came from, if any.
+    private var playStationTitle: (id: String, service: String)? {
+        game.trackerSchema.flatMap { TrackerSchemaJSON.playStationTitle(in: $0.jsonData) }
+    }
+
+    /// The Xbox title this tracker's achievements came from, if any.
+    private var xboxTitleID: Int? {
+        game.trackerSchema.flatMap { TrackerSchemaJSON.xboxTitleID(in: $0.jsonData) }
+    }
+
+    private var hasImportedSet: Bool {
+        raGameID != nil || steamAppID != nil || playStationTitle != nil || xboxTitleID != nil
+    }
+
+    /// Services with no list on this tracker yet.
+    private var importableSources: [String] {
+        [raGameID == nil ? "ra" : nil, steamAppID == nil ? "steam" : nil,
+         playStationTitle == nil ? "psn" : nil, xboxTitleID == nil ? "xbox" : nil].compactMap { $0 }
+    }
+
+    private var anySyncing: Bool { raSyncing || steamSyncing || accountSyncing }
+
+    /// PlayStation trophies into the PlayStation playthrough, with the dates
+    /// Sony recorded, and the game's PlayStation playtime alongside when a
+    /// played game of the same name is found.
+    private func syncPlayStation(_ title: (id: String, service: String)) async {
+        accountSyncing = true
+        raResult = nil
+        defer { accountSyncing = false }
+        do {
+            let progress = try await PlayStationService.progress(titleID: title.id, service: title.service)
+            let pt = repo.playStationPlaythrough(for: game)
+            let outcome = repo.applyRAUnlocks(progress.unlocked, to: pt, in: game)
+            var extra = ""
+            if let played = try? await PlayStationService.playedGames() {
+                let minutes = PlayStationService.playtimeMatches(
+                    games: played, library: [(id: game.id, name: game.name)])[game.id] ?? 0
+                if repo.applyPlayStationPlaytime(minutes: minutes, to: game) {
+                    let hours = Int((Double(minutes) / 60).rounded())
+                    extra = minutes < 60 ? " · \(minutes) minutes on PlayStation"
+                        : " · \(hours) hour\(hours == 1 ? "" : "s") on PlayStation"
+                }
+            }
+            raResult = accountSyncSummary(progress, outcome, source: "PlayStation", noun: "trophies", extra: extra)
+        } catch {
+            raResult = error.localizedDescription
+        }
+    }
+
+    /// Xbox achievements into the Xbox playthrough, dated as Xbox recorded them.
+    private func syncXbox(_ titleID: Int) async {
+        accountSyncing = true
+        raResult = nil
+        defer { accountSyncing = false }
+        do {
+            let result = try await XboxService.achievements(titleID: titleID, titleName: game.name)
+            let pt = repo.xboxPlaythrough(for: game)
+            let outcome = repo.applyRAUnlocks(result.progress.unlocked, to: pt, in: game)
+            raResult = accountSyncSummary(result.progress, outcome, source: "Xbox", noun: "achievements")
+        } catch {
+            raResult = error.localizedDescription
+        }
+    }
+
+    private func accountSyncSummary(_ progress: ServiceProgress, _ outcome: Repository.RASyncOutcome,
+                                    source: String, noun: String, extra: String = "") -> String {
+        var text = "\(progress.unlocked.count) of \(progress.total) \(noun) earned on \(source)\(extra)"
+        if outcome.newlyTicked > 0 {
+            text += " — ticked \(outcome.newlyTicked) in \(source)"
+        } else if outcome.alreadyTicked > 0 {
+            text += " — already up to date"
+        }
+        if outcome.unknownToTracker > 0 {
+            text += ". \(outcome.unknownToTracker) aren't in this tracker — import from \(source) again to add them."
+        }
+        return text
+    }
+
+    /// The Steam app this tracker's achievements came from, if any.
+    private var steamAppID: Int? {
+        game.trackerSchema.flatMap { TrackerSchemaJSON.steamAppID(in: $0.jsonData) }
+    }
+
+    /// Your own achievements page when Steam is connected, the store page
+    /// when it isn't — a list imported on another device still has somewhere
+    /// to go.
+    private func steamPage(_ appID: Int) -> URL {
+        if let steamID = SteamCredentials.current?.steamID,
+           let url = SteamService.achievementsPage(appID: appID, steamID: steamID) {
+            return url
+        }
+        return SteamService.storePage(appID)
+    }
+
+    /// Steam's unlocks into the Steam playthrough, by RetroAchievements' rule:
+    /// union, never subtraction, and never the run you're on.
+    private func syncSteam() async {
+        guard let appID = steamAppID, let credentials = SteamCredentials.current else { return }
+        steamSyncing = true
+        raResult = nil
+        defer { steamSyncing = false }
+        do {
+            let progress = try await SteamService.progress(appID: appID, credentials: credentials)
+            let pt = repo.steamPlaythrough(for: game)
+            let outcome = repo.applyRAUnlocks(progress.unlocked, to: pt, in: game)
+            // Playtime rides along, into the same Steam playthrough, set rather
+            // than added so syncing twice counts nothing twice. A private
+            // library just skips it — the unlocks above have already landed.
+            var playtime = ""
+            if let owned = try? await SteamService.ownedGames(credentials: credentials),
+               let mine = owned.first(where: { $0.appID == appID }),
+               repo.applySteamPlaytime(minutes: mine.minutesPlayed, to: game) {
+                let hours = Int(mine.hoursPlayed.rounded())
+                playtime = mine.minutesPlayed < 60
+                    ? " · \(mine.minutesPlayed) minutes on Steam"
+                    : " · \(hours) hour\(hours == 1 ? "" : "s") on Steam"
+            }
+            var text = "\(progress.unlocked.count) of \(progress.total) earned on Steam\(playtime)"
+            if outcome.newlyTicked > 0 {
+                text += " — ticked \(outcome.newlyTicked) in Steam"
+            } else if outcome.alreadyTicked > 0 {
+                text += " — already up to date"
+            }
+            if outcome.unknownToTracker > 0 {
+                text += ". \(outcome.unknownToTracker) aren't in this tracker — import from Steam again to add them."
+            }
+            raResult = text
+        } catch {
+            raResult = error.localizedDescription
+        }
+    }
+
     /// Pull this account's unlocks into the dedicated RA playthrough.
     ///
     /// Never the playthrough you're on: RA's unlocks are account-wide and
@@ -745,38 +1037,105 @@ struct TrackerSectionView: View {
     }
 
     /// Any tracker content beyond user-created Personal Goals?
-    private var hasNonGoalContent: Bool {
-        categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
+    /// Generate on an empty tracker; a menu of ways to regenerate on one that
+    /// has lists.
+    ///
+    /// Tim, 09-14: *"regenerate should be a more obvious menu, instead of the
+    /// current press and hold."* It was a button that ran one mode, with the
+    /// others hidden behind a long press. The menu now opens on a tap and
+    /// names both questions a regenerate can answer: refresh the lists you
+    /// have, or look for categories you don't.
+    @ViewBuilder
+    private var generateControl: some View {
+        if hasNonGoalContent {
+            Menu {
+                if canUpdateLists {
+                    Button {
+                        generation.generate(for: game, context: context, action: .addNew, scope: .yourLists)
+                    } label: {
+                        Label("Update My Lists", systemImage: "arrow.clockwise")
+                        Text("Adds what's missing to the lists you have")
+                    }
+                }
+                Button {
+                    generation.generate(for: game, context: context, action: .addNew, scope: .wholeGame)
+                } label: {
+                    Label("Find New Categories", systemImage: "plus.rectangle.on.rectangle")
+                    Text("Adds categories you don't have, each with its list")
+                }
+                Divider()
+                Menu {
+                    if canUpdateLists {
+                        Button("Update My Lists") {
+                            generation.generate(for: game, context: context, action: .review, scope: .yourLists)
+                        }
+                    }
+                    Button("Find New Categories") {
+                        generation.generate(for: game, context: context, action: .review, scope: .wholeGame)
+                    }
+                } label: {
+                    Label("Review First", systemImage: "list.bullet.rectangle")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    confirmingRegenerate = true
+                } label: {
+                    Label("Replace Whole Tracker…", systemImage: "arrow.triangle.2.circlepath")
+                }
+            } label: {
+                footerLabel("Regenerate", systemImage: "sparkles")
+            }
+        } else {
+            Button {
+                generation.generate(for: game, context: context, action: defaultAction, scope: .wholeGame)
+            } label: {
+                footerLabel("Generate", systemImage: "sparkles")
+            }
+        }
     }
 
-    /// Show the RetroAchievements import as a button rather than a menu item.
-    ///
-    /// Only where RA plausibly has the game, and only while the set isn't
-    /// already installed — once it is, the useful action is Sync, which lives
-    /// in the menu beside the other things you do to an existing tracker.
-    private var raImportPromoted: Bool {
-        raGameID == nil
-            && RetroAchievementsService.mayCover(platforms: game.platforms,
-                                                 ownership: game.ownership)
+    /// Whether Update My Lists has any list to update. Codex, 09-15: a tracker
+    /// whose only lists are imported, plus plans, had nothing in scope, so the
+    /// request quietly became the whole game — and a Replace from its review
+    /// dropped the plans. With nothing to update, only Find New Categories shows.
+    private var canUpdateLists: Bool {
+        !TrackerGenerationStore.regenerationCategories(repo.trackerCategories(for: game)).isEmpty
+    }
+
+    /// One column of the action row: the glyph over its name, filling its
+    /// share of the width with a full-height tap target.
+    private func footerLabel(_ title: String, systemImage: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.medium))
+                .frame(height: 22)
+            Text(title)
+                .font(.caption2.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, minHeight: 44)
+        .contentShape(.rect)
+    }
+
+    private var hasNonGoalContent: Bool {
+        categories.contains { $0.id != TrackerSchemaJSON.personalGoalsID && !$0.items.isEmpty }
     }
 
     /// Library-wide default. Hardcoded until it can be remembered on
     /// ThemeSettings, which is frozen Schema V1 — a V2 item.
     private var defaultAction: TrackerGenerationAction { .fallbackDefault }
 
-    private func start(_ action: TrackerGenerationAction) {
-        // Only Replace can cost anything, so only Replace asks. Confirming an
-        // append-only merge would be friction that teaches people to tap
-        // through dialogs without reading them.
-        if action == .replace, hasNonGoalContent {
-            confirmingRegenerate = true
-        } else {
-            generation.generate(for: game, context: context, action: action)
-        }
-    }
-
     private func generate() {
         generation.generate(for: game, context: context, action: defaultAction)
+    }
+
+    private func regenerate(_ category: TrackerCategoryDTO) {
+        let request = TrackerGenerationStore.requested(category)
+        generation.generateCategory(category.id, named: category.name,
+                                    expectedCount: request.expectedCount,
+                                    counted: request.counted, regenerating: true,
+                                    for: game, context: context)
     }
 
     // MARK: Merge summary
@@ -936,6 +1295,45 @@ struct TrackerSectionView: View {
     /// sketching a tracker by hand produces. Shown as a real row with its own
     /// Generate button rather than an empty heading, because an empty heading
     /// reads as a bug and gives you nothing to act on.
+    /// Fill every planned list, one after another. Tim, 09-14: *"yes add
+    /// Generate All Planned."* While a run is going this row is its progress
+    /// and its Stop; the waiting card above says the same, and either stops it.
+    private func generateAllPlannedRow(count: Int) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "square.stack.3d.up")
+                .foregroundStyle(LSTheme.accent)
+            if let batch = generation.batch(for: game.id) {
+                Text("Generating list \(min(batch.done + 1, batch.total)) of \(batch.total)…")
+                    .font(.subheadline.weight(.medium))
+                Spacer(minLength: 0)
+                Button("Stop") { generation.cancel(for: game.id) }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(.borderless)
+                    .tint(LSTheme.accent)
+            } else {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(count) planned categories")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Generate a list for each, one after another")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    confirmingFillAll = true
+                } label: {
+                    Label("Generate All Planned", systemImage: "sparkles")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .tint(LSTheme.accent)
+                .disabled(isGenerating)
+            }
+        }
+        .padding(10)
+        .background(LSTheme.accent.opacity(0.08), in: .rect(cornerRadius: 12))
+    }
+
     @ViewBuilder
     private func plannedCategoryRow(_ category: TrackerCategoryDTO) -> some View {
         HStack(spacing: 10) {
@@ -1008,6 +1406,9 @@ struct TrackerSectionView: View {
         } else if !visibleItems.isEmpty {
             let done = category.items.filter { states[$0.id]?.completed == true }.count
             DisclosureGroup(isExpanded: expansionBinding(category.id)) {
+                if let earned = earnedElsewhere(category) {
+                    earnedRow(earned, total: category.items.count)
+                }
                 Group {
                     if let groups = hintsShown ? locationGroups(visibleItems) : nil {
                         // "Koala Village" under all nine of its Heart Coins is
@@ -1072,6 +1473,11 @@ struct TrackerSectionView: View {
                             .foregroundStyle(LSTheme.accent)
                     }
                     Spacer()
+                    // Regenerating this list: the spinner sits on the list it's
+                    // happening to, as it does on a planned one.
+                    if generation.isGenerating(game.id, category: category.id) {
+                        ProgressView().controlSize(.small)
+                    }
                     Text("\(done)/\(category.items.count)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(done == category.items.count ? .green : .secondary)
@@ -1084,10 +1490,46 @@ struct TrackerSectionView: View {
                         } label: { Label("View on RetroAchievements", systemImage: "arrow.up.right.square") }
                         Divider()
                     }
+                    if let appID = category.steamAppID {
+                        Button {
+                            raBrowserTarget = DekuLinkTarget(url: steamPage(appID))
+                        } label: { Label("View on Steam", systemImage: "arrow.up.right.square") }
+                        Divider()
+                    }
                     Button {
                         renameText = category.name
                         renaming = (category.id, nil)
                     } label: { Label("Rename Category", systemImage: "pencil") }
+                    // "I am pinning items from the tracker > this category"
+                    // — the list you're looking at, straight onto the map.
+                    if !repo.liveMaps(of: game).isEmpty {
+                        Button {
+                            mapTarget = MapViewerTarget(game: game, pinningCategoryID: category.id)
+                        } label: {
+                            Label("Pin These on the Map…",
+                                  systemImage: PinStyle.symbol(for: category))
+                        }
+                        Button {
+                            pinStyleCategory = category
+                        } label: {
+                            Label("Pin Icon…", systemImage: "paintpalette")
+                        }
+                    }
+                    // Regenerate just this list. Tim, 09-14: *"I can't
+                    // regenerate specific categories."* The machinery was
+                    // there — it fills planned categories — but nothing offered
+                    // it once a list had items. Not on a pasted list, a
+                    // RetroAchievements set or Personal Goals: a scoped replace
+                    // leaves those alone by design, so it would do nothing.
+                    if category.id != TrackerSchemaJSON.personalGoalsID,
+                       !category.locked, !category.isImportedSet {
+                        Button {
+                            regeneratingCategory = category
+                        } label: {
+                            Label("Regenerate This List…", systemImage: "sparkles")
+                        }
+                        .disabled(isGenerating)
+                    }
                     Divider()
                     moveActions(category)
                     Divider()
@@ -1500,7 +1942,10 @@ struct ApplicabilitySheet: View {
                 if !game.platforms.isEmpty && platform.isEmpty {
                     Section("Your platforms") {
                         ForEach(game.platforms, id: \.self) { p in
-                            Button(PlatformShort.name(p)) { platform = PlatformShort.name(p) }
+                            // The machine's own name: this is a record of
+                            // which version the numbers are true of, read by
+                            // people who don't share your console's nickname.
+                            Button(PlatformShort.name(p)) { platform = PlatformShort.builtinName(p) }
                         }
                     }
                 }

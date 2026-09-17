@@ -45,8 +45,15 @@ struct GameDetailView: View {
     @State private var newCollectionName = ""
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var nav = AppNavigator.shared
-    /// Wide-screen sliding stage: 1 = game page, 2 = +tracker, 3 = tracker+videos.
-    @State private var stage = 1
+    /// Which panes are open beside the game page — see `StageLayout.StagePanes`.
+    @State private var panes: StageLayout.StagePanes = []
+    /// The map, lifted out of its pane and over the stage.
+    @State private var mapExpanded = false
+    /// What part of the map is on screen, shared by the pane and the
+    /// expanded copy so popping in and out keeps your place.
+    @State private var mapViewport = MapViewport()
+    /// A tracker list being pinned, shared the same way.
+    @State private var pinSession: PinSession?
 
     // Playthrough management
     @State private var namingNewPlaythrough = false
@@ -78,7 +85,8 @@ struct GameDetailView: View {
         GeometryReader { geo in
             let stageMode = isStage(geo.size)
             pageLayout(stageMode: stageMode, width: geo.size.width,
-                       topInset: geo.safeAreaInsets.top)
+                       topInset: geo.safeAreaInsets.top,
+                       bottomInset: geo.safeAreaInsets.bottom)
             // ORDER IS LOAD-BEARING. `ignoresSafeArea` lives HERE, inside the
             // GeometryReader, not on it. Applied outside, it consumed the
             // safe area before `geo` measured anything, so
@@ -96,18 +104,23 @@ struct GameDetailView: View {
             // and the video panel sat at `width * 1.02` — off the trailing
             // edge, still playing, invisible. Both inputs decide the stage, so
             // both have to be observed.
+            // Playing a video opens the VIDEO pane and nothing else. It used
+            // to jump to stage 3, which dragged the tracker open with it —
+            // the ladder had no way to say "video alone", and Tim's spec asks
+            // for exactly that.
             .onChange(of: pagePlaying != nil) { _, hasVideo in
-                if stageMode, hasVideo { stage = 3 }
+                if stageMode, hasVideo { panes.insert(.video) }
             }
             .onChange(of: stageMode) { _, isStage in
-                if isStage, pagePlaying != nil { stage = 3 }
+                if isStage, pagePlaying != nil { panes.insert(.video) }
             }
             // A tracker page that dismissed itself because the stage became
             // available asks for its pane to be opened here.
             .task(id: stageMode) {
                 guard stageMode, nav.trackerStageRequest == game.id else { return }
                 nav.trackerStageRequest = nil
-                stage = pagePlaying == nil ? 2 : 3
+                panes.insert(.tracker)
+                if pagePlaying != nil { panes.insert(.video) }
             }
         }
         .background { ambientBackdrop }
@@ -718,7 +731,7 @@ struct GameDetailView: View {
                 // or behind a card.
                 LastTickedRow(game: game)
                 if game.resolvedTrackerDisplay == .compact {
-                    CompactTrackerCard(game: game, onOpen: stageMode ? { _ in stage = 2 } : nil)
+                    CompactTrackerCard(game: game, onOpen: stageMode ? { _ in panes.insert(.tracker) } : nil)
                 } else {
                     TrackerSectionView(game: game)
                 }
@@ -893,8 +906,9 @@ struct GameDetailView: View {
     /// the page is the full width and nothing is beside it. The fractions,
     /// including the three-column stage above 1,400pt, are
     /// `StageLayout.columns`.
-    private func pageLayout(stageMode: Bool, width: CGFloat, topInset: CGFloat) -> some View {
-        let cols = StageLayout.columns(width: width, stage: stageMode ? stage : 1)
+    private func pageLayout(stageMode: Bool, width: CGFloat, topInset: CGFloat,
+                            bottomInset: CGFloat) -> some View {
+        let cols = StageLayout.columns(width: width, panes: stageMode ? panes : [])
         return ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 if !stageMode, let video = pagePlaying {
@@ -910,9 +924,13 @@ struct GameDetailView: View {
                     .frame(width: cols.trackerWidth)
                     .offset(x: cols.trackerX)
 
-                videoPanel
-                    .frame(width: cols.videoWidth)
-                    .offset(x: cols.videoX)
+                sideColumn(bottomInset: bottomInset)
+                    .frame(width: cols.sideWidth)
+                    .offset(x: cols.sideX)
+
+                if panes.contains(.map), mapExpanded {
+                    expandedMap(width: width, bottomInset: bottomInset)
+                }
             }
         }
         // The ZStack must span the FULL stage, not shrink to its widest child
@@ -921,7 +939,9 @@ struct GameDetailView: View {
         // The title handoff above already branches on Reduce Motion; this
         // full-pane horizontal slide is a much larger movement and did not.
         .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.85),
-                   value: stage)
+                   value: panes)
+        .animation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.85),
+                   value: mapExpanded)
         // Clips HORIZONTALLY only. The panes slide in and out sideways and
         // must not leak past the trailing edge — but the header art
         // deliberately draws ABOVE this container, pulled up by the safe-area
@@ -938,24 +958,17 @@ struct GameDetailView: View {
                 Circle().fill(.green).frame(width: 7, height: 7)
                 Text(game.activePlaythrough?.name ?? "Playthrough")
                     .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
                 Text("tracker").font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1)
                 Spacer()
-                if stage == 3 {
-                    stageTimerControl
-                } else {
-                    // At stage 3 this button is a no-op (videos are already
-                    // open beside us), and the timer needs the room.
-                    Button {
-                        stage = 3
-                    } label: {
-                        Label("Videos", systemImage: "play.rectangle.fill")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(LSTheme.accent)
-                }
+                // The timer earns its place once the side column is open,
+                // because that is the arrangement where the game page — and
+                // with it the Sessions section — has slid away.
+                if panes.usesSideColumn { stageTimerControl }
+                panesMenu
                 Button {
-                    stage = 1
+                    panes.remove(.tracker)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
@@ -991,7 +1004,147 @@ struct GameDetailView: View {
         }
     }
 
-    /// Compact timer for the tracker panel, shown only at stage 3.
+    /// One pane, as a switch.
+    ///
+    /// `insert` returns a tuple and `remove` an Optional, so the obvious
+    /// ternary in a setter does not typecheck — and both toggles wanted the
+    /// same three lines regardless.
+    private func paneBinding(_ pane: StageLayout.StagePanes) -> Binding<Bool> {
+        Binding(get: { panes.contains(pane) },
+                set: { on in
+                    if on { panes.insert(pane) } else { panes.remove(pane) }
+                })
+    }
+
+    /// Every combination from one control.
+    ///
+    /// The old "Videos" button meant "the next arrangement", which is all a
+    /// 1/2/3 ladder could express. Tim's spec is a set — *"tracker and map;
+    /// tracker and video; tracker and video and map; tracker or map or
+    /// video"* — so the control is a set of toggles.
+    private var panesMenu: some View {
+        Menu {
+            Toggle(isOn: paneBinding(.video)) {
+                Label("Guides & Videos", systemImage: "play.rectangle.fill")
+            }
+            Toggle(isOn: paneBinding(.map)) {
+                Label("Maps", systemImage: "map")
+            }
+            .disabled(repo.liveMaps(of: game).isEmpty)
+        } label: {
+            Image(systemName: "rectangle.righthalf.inset.filled")
+                .font(.caption.weight(.bold))
+                .padding(6)
+                .background(LSTheme.cardFill, in: .circle)
+        }
+        .buttonStyle(.plain)
+        .lsTapTarget()
+        .accessibilityLabel("Panes beside the tracker")
+    }
+
+    /// Video and map, stacked — Tim's 09-08 mockup, videos above the map.
+    ///
+    /// Two flexible children, so the split needs no arithmetic: one alone
+    /// fills the column, two share it. That is why `StageLayout.Columns`
+    /// describes horizontal geometry only.
+    /// Both panes open: the column is the video's chrome that has to go, not
+    /// the split.
+    ///
+    /// Weighting the halves was the wrong lever. The video was tiny because
+    /// the Guides & Videos header, the video list and the paste-a-URL bar sat
+    /// in the same half as the player, and the Maps header and the map's name
+    /// row took another slice below. Tim, 09-12: *"the video is tiny and I
+    /// can't see anything that's happening in it… That column should be half
+    /// map, and half a video, hiding selection and pasting controls and
+    /// headers."* So it is half and half, and in that arrangement each pane
+    /// shows only its own content.
+    private var denseSide: Bool {
+        panes.contains(.video) && panes.contains(.map)
+    }
+
+    private func sideColumn(bottomInset: CGFloat) -> some View {
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                if panes.contains(.video) {
+                    videoPanel
+                        .frame(height: denseSide ? geo.size.height * 0.5 : nil)
+                }
+                if denseSide { Divider() }
+                if panes.contains(.map) { mapPanel(bottomInset: bottomInset) }
+            }
+        }
+    }
+
+    /// The map beside the tracker, rather than over it.
+    ///
+    /// The same `MapViewerView` the full-screen route uses — pins, pinch and
+    /// pan, place mode and all — with the pane's own header instead of a
+    /// navigation bar. A second implementation would be a second set of
+    /// gesture bugs.
+    private func mapPanel(bottomInset: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            if !denseSide {
+                HStack {
+                    Label("Maps", systemImage: "map")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button {
+                        panes.remove(.map)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .padding(6)
+                            .background(LSTheme.cardFill, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .lsTapTarget()
+                    .accessibilityLabel("Close")
+                }
+                .padding(12)
+                Divider()
+            }
+            // While it is expanded the big one is the real map; drawing a
+            // second copy behind it would decode the image twice for a view
+            // nobody can see.
+            if mapExpanded {
+                Color.clear
+            } else {
+                MapViewerView(target: MapViewerTarget(game: game),
+                              embedded: true, dense: denseSide,
+                              onToggleExpand: { mapExpanded = true },
+                              viewport: $mapViewport,
+                              bottomInset: bottomInset,
+                              pinning: $pinSession)
+            }
+        }
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .leading) {
+            Rectangle().fill(LSTheme.accent.opacity(0.25)).frame(width: 1)
+        }
+    }
+
+    /// The map, out of its panel and over the stage — **and the video keeps
+    /// playing**.
+    ///
+    /// This is an overlay in the same tree, not a sheet or a new screen, so
+    /// `videoPanel` is never torn down and YouTube never reloads: the audio
+    /// runs on underneath and the picture is there again the moment the map
+    /// goes back. Tim, 09-12: *"users should be able to expand a map outside
+    /// of the panel… without stopping a video playing behind it, and then
+    /// they can quickly pop it back down into the panel confines."*
+    private func expandedMap(width: CGFloat, bottomInset: CGFloat) -> some View {
+        MapViewerView(target: MapViewerTarget(game: game),
+                      embedded: true, dense: true,
+                      onToggleExpand: { mapExpanded = false },
+                      expanded: true,
+                      viewport: $mapViewport,
+                      bottomInset: bottomInset,
+                      pinning: $pinSession)
+            .frame(width: width)
+            .background(.ultraThinMaterial)
+    }
+
+    /// Compact timer for the tracker panel, shown only beside the side column.
     ///
     /// Stage 3 is the one arrangement where the game page — and with it the
     /// Sessions section — has slid off screen, yet it's also the arrangement
@@ -1046,6 +1199,10 @@ struct GameDetailView: View {
             } label: {
                 Label("Start", systemImage: "play.fill")
                     .font(.caption.weight(.semibold))
+                    // A phone in landscape squeezed this to "Star / t".
+                    // The playthrough name truncates instead.
+                    .lineLimit(1)
+                    .fixedSize()
             }
             // `.bordered` already draws its own press; all it lacked was
             // something to say to the hand. See `LSPlayPulse`.
@@ -1057,32 +1214,41 @@ struct GameDetailView: View {
 
     private var videoPanel: some View {
         VStack(spacing: 0) {
-            HStack {
-                Label("Guides & Videos", systemImage: "play.rectangle.fill")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Button {
-                    stage = 2
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.bold))
-                        .padding(6)
-                        .background(LSTheme.cardFill, in: .circle)
+            if !denseSide {
+                HStack {
+                    Label("Guides & Videos", systemImage: "play.rectangle.fill")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button {
+                        panes.remove(.video)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .padding(6)
+                            .background(LSTheme.cardFill, in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .lsTapTarget()
+                    .accessibilityLabel("Close")
                 }
-                .buttonStyle(.plain)
-                .lsTapTarget()
-                .accessibilityLabel("Close")
+                .padding(12)
+                Divider()
             }
-            .padding(12)
-            Divider()
             if let video = pagePlaying {
                 VideoPlayerDock(video: video) { pagePlaying = nil }
             }
-            ScrollView {
-                VideoListView(game: game, playing: $pagePlaying)
-                    .padding()
+            // Sharing the column with a map: the player gets the half, and
+            // the list and the paste bar — which are for choosing a video,
+            // not watching one — stand down. They come back the moment
+            // nothing is playing, because otherwise there'd be no way to
+            // start one.
+            if !denseSide || pagePlaying == nil {
+                ScrollView {
+                    VideoListView(game: game, playing: $pagePlaying)
+                        .padding()
+                }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
         .background(.ultraThinMaterial)
         .overlay(alignment: .leading) {

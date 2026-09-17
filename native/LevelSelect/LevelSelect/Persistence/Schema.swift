@@ -197,7 +197,15 @@ enum LevelSelectStore {
         let memory = inMemory || underTest
 
         if memory {
-            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            // `cloudKitDatabase` must be said out loud. Its default is
+            // `.automatic`, which means "mirror to the entitlement's container"
+            // — and the app target has one — so an in-memory store was quietly
+            // getting a CloudKit mirroring delegate at `/dev/null`. Its setup
+            // fails on a background queue, and when that lands during a save
+            // Core Data throws "No eligible connection available", which took
+            // the test host down intermittently (2026-09-14).
+            let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true,
+                                            cloudKitDatabase: .none)
             return try! ModelContainer(for: schema, configurations: [config])
         }
 
@@ -221,7 +229,14 @@ enum LevelSelectStore {
             // dangerous outcome here — seeding demo data into it is exactly
             // what this feature exists to prevent. In-memory instead: the demo
             // is disposable by nature.
-            let memoryOnly = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            //
+            // And CloudKit-free, said out loud like the file store above. Left
+            // unset, `cloudKitDatabase` is `.automatic` — the app's iCloud
+            // container — so this fallback would have handed seeded demo games
+            // a mirroring delegate pointed at the real library, the exact thing
+            // the demo exists to keep out of iCloud.
+            let memoryOnly = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true,
+                                                cloudKitDatabase: .none)
             return try! ModelContainer(for: schema, configurations: [memoryOnly])
         }
 

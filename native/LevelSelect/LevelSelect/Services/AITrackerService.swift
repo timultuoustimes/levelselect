@@ -19,7 +19,34 @@ enum AITrackerService {
     /// future shared tracker cache a stable key from day one, since
     /// `gameName` alone collides across remasters, regional titles, and
     /// Deluxe/Definitive editions.
-    static func generate(gameName: String, igdbID: Int? = nil, referenceText: String? = nil) async throws -> Data {
+    static func generate(gameName: String, igdbID: Int? = nil, referenceText: String? = nil,
+                         categories: [RequestedCategory]? = nil) async throws -> Data {
+        let body = generateBody(gameName: gameName, igdbID: igdbID,
+                                referenceText: referenceText, categories: categories)
+        // Edge functions cap at 150s wall clock; wait just under that.
+        let root = try await post(body, timeout: 145)
+        return try schema(from: root)
+    }
+
+    /// One of the user's own categories, sent with a regeneration.
+    struct RequestedCategory: Sendable, Hashable {
+        let name: String
+        let expectedCount: Int?
+        let counted: Bool
+    }
+
+    /// The request body, kept separate so what a regeneration asks for is
+    /// something a test can read.
+    ///
+    /// `categories` is what makes a regeneration a REFRESH. Without it the
+    /// server was asked for "a tracker for this game" and chose the headings
+    /// itself, so regenerating added lists the user never had. Tim, 09-14:
+    /// *"hitting regenerate… does every category possible."* Finding NEW
+    /// categories is Plan's job. Omitted when there are none, so a first
+    /// generation is unchanged — and a server that has never heard of the
+    /// field, or a build that never sends it, behaves exactly as before.
+    static func generateBody(gameName: String, igdbID: Int?, referenceText: String?,
+                             categories: [RequestedCategory]?) -> [String: Any] {
         var body: [String: Any] = ["gameName": gameName]
         if let igdbID { body["igdbID"] = igdbID }
         if let referenceText, !referenceText.isEmpty {
@@ -28,9 +55,15 @@ enum AITrackerService {
         } else {
             body["mode"] = "auto"
         }
-        // Edge functions cap at 150s wall clock; wait just under that.
-        let root = try await post(body, timeout: 145)
-        return try schema(from: root)
+        if let categories, !categories.isEmpty {
+            body["categories"] = categories.map { category -> [String: Any] in
+                var entry: [String: Any] = ["name": category.name]
+                if let count = category.expectedCount, count > 0 { entry["expectedCount"] = count }
+                if category.counted { entry["counted"] = true }
+                return entry
+            }
+        }
+        return body
     }
 
     /// One category proposal from the planning stage.

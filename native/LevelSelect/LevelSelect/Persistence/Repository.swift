@@ -823,6 +823,133 @@ struct Repository {
         return pt
     }
 
+    static let steamPlaythroughName = "Steam"
+    /// Marks the playthrough as the Steam record, so a run someone happens to
+    /// name "Steam" is never mistaken for it.
+    static let steamPlaythroughMarker = "Unlocks synced from Steam. Separate from your own runs."
+
+    /// Steam's account-wide unlocks, kept apart from your runs for the same
+    /// reason as `raPlaythrough`: an achievement earned years ago says nothing
+    /// about the run you're on. Created by sync, never by importing a list.
+    @discardableResult
+    func steamPlaythrough(for game: Game) -> Playthrough {
+        if let existing = game.livePlaythroughs.first(where: {
+            $0.name == Self.steamPlaythroughName && $0.notes == Self.steamPlaythroughMarker
+        }) {
+            return existing
+        }
+        let pt = Playthrough(name: Self.steamPlaythroughName)
+        pt.notes = Self.steamPlaythroughMarker
+        context.insert(pt)
+        pt.game = game
+        touch(game)
+        persist()
+        return pt
+    }
+
+    /// The record playthroughs, found without being made — a view asking "has
+    /// this game synced?" must not turn the answer into yes.
+    func existingSteamPlaythrough(for game: Game) -> Playthrough? {
+        game.livePlaythroughs.first {
+            $0.name == Self.steamPlaythroughName && $0.notes == Self.steamPlaythroughMarker
+        }
+    }
+
+    func existingRAPlaythrough(for game: Game) -> Playthrough? {
+        game.livePlaythroughs.first {
+            $0.name == Self.raPlaythroughName && $0.notes == Self.raPlaythroughMarker
+        }
+    }
+
+    /// The note the first Steam library import left on the manual session it
+    /// logged, before playtime moved to the Steam playthrough.
+    static let steamImportNote = "Imported from Steam"
+
+    /// Steam's total playtime for a game, as the Steam playthrough's carried-over
+    /// time. Tim, 09-15: *"If we can have that playtime be pulled into the Steam
+    /// playthrough where the achievements go, that would be amazing."*
+    ///
+    /// Carried over rather than a session, for the reason `setCarriedOver`
+    /// gives: Steam knows how long, not when, and one enormous dated session
+    /// puts a play in the Journal on a day nothing happened. **Set, never
+    /// added**, so importing or syncing again counts nothing twice. False when
+    /// Steam has no playtime to give.
+    @discardableResult
+    func applySteamPlaytime(minutes: Int, to game: Game) -> Bool {
+        guard minutes > 0 else { return false }
+        // The run you're on stays the run you're on. A game with no playthrough
+        // yet would otherwise have the Steam record as its only one — and so
+        // its active one.
+        ensureDefaultPlaythrough(for: game)
+        let pt = steamPlaythrough(for: game)
+        // The first import logged Steam hours as a manual session in the
+        // default playthrough; left there, they'd count again beside this.
+        for session in game.livePlaythroughs.flatMap({ $0.sessions ?? [] })
+        where session.deletedAt == nil && session.isManual && session.notes == Self.steamImportNote {
+            deleteSession(session)
+        }
+        let seconds = TimeInterval(minutes * 60)
+        if pt.carriedOverSeconds != seconds { setCarriedOver(seconds, on: pt) }
+        return true
+    }
+
+    static let playStationPlaythroughName = "PlayStation"
+    static let playStationPlaythroughMarker =
+        "Trophies earned on your PlayStation account, across every time you've played this."
+    static let xboxPlaythroughName = "Xbox"
+    static let xboxPlaythroughMarker =
+        "Achievements earned on your Xbox account, across every time you've played this."
+
+    /// The PlayStation and Xbox account records — `raPlaythrough`'s rules:
+    /// found by name AND marker, made by sync, never the run you're on.
+    @discardableResult
+    func playStationPlaythrough(for game: Game) -> Playthrough {
+        recordPlaythrough(for: game, name: Self.playStationPlaythroughName,
+                          marker: Self.playStationPlaythroughMarker)
+    }
+
+    @discardableResult
+    func xboxPlaythrough(for game: Game) -> Playthrough {
+        recordPlaythrough(for: game, name: Self.xboxPlaythroughName, marker: Self.xboxPlaythroughMarker)
+    }
+
+    func existingPlayStationPlaythrough(for game: Game) -> Playthrough? {
+        game.livePlaythroughs.first {
+            $0.name == Self.playStationPlaythroughName && $0.notes == Self.playStationPlaythroughMarker
+        }
+    }
+
+    func existingXboxPlaythrough(for game: Game) -> Playthrough? {
+        game.livePlaythroughs.first {
+            $0.name == Self.xboxPlaythroughName && $0.notes == Self.xboxPlaythroughMarker
+        }
+    }
+
+    private func recordPlaythrough(for game: Game, name: String, marker: String) -> Playthrough {
+        if let existing = game.livePlaythroughs.first(where: { $0.name == name && $0.notes == marker }) {
+            return existing
+        }
+        let pt = Playthrough(name: name)
+        pt.notes = marker
+        context.insert(pt)
+        pt.game = game
+        touch(game)
+        persist()
+        return pt
+    }
+
+    /// PlayStation's playtime for a game, as its PlayStation playthrough's
+    /// carried-over time — `applySteamPlaytime`'s rules: set, never added.
+    @discardableResult
+    func applyPlayStationPlaytime(minutes: Int, to game: Game) -> Bool {
+        guard minutes > 0 else { return false }
+        ensureDefaultPlaythrough(for: game)
+        let pt = playStationPlaythrough(for: game)
+        let seconds = TimeInterval(minutes * 60)
+        if pt.carriedOverSeconds != seconds { setCarriedOver(seconds, on: pt) }
+        return true
+    }
+
     struct RASyncOutcome: Sendable, Equatable {
         var newlyTicked = 0
         var alreadyTicked = 0
@@ -849,10 +976,20 @@ struct Repository {
                 outcome.unknownToTracker += 1
                 continue
             }
-            if trackerState(pt, itemID: unlock.itemID)?.completed == true {
+            if let record = trackerState(pt, itemID: unlock.itemID), record.completed {
                 outcome.alreadyTicked += 1
+                // Synced before dates were kept, a tick carries the sync's
+                // moment; the service's own date replaces it, once.
+                if let earned = unlock.earnedAt, record.completedAt != earned {
+                    record.completedAt = earned
+                    touch(record)
+                    persist()
+                }
             } else {
-                setTrackerItem(pt, itemID: unlock.itemID, done: true)
+                // The day it was earned, not the day it was synced. Tim, 09-15:
+                // "Where you left off in Steam … 17 seconds ago" was a sync
+                // reading as the last thing he played.
+                setTrackerItem(pt, itemID: unlock.itemID, done: true, at: unlock.earnedAt)
                 outcome.newlyTicked += 1
             }
         }
@@ -1217,7 +1354,10 @@ struct Repository {
     }
 
     @discardableResult
-    private func ensureTrackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord {
+    // Not private: a pin on a counted item reads the current count through
+    // this (MapsRepository.setExplored), and a second copy of the find-or-
+    // create-under-the-winner-rule logic is how two readers end up disagreeing.
+    func ensureTrackerState(_ pt: Playthrough, itemID: String) -> TrackerStateRecord {
         if let existing = trackerState(pt, itemID: itemID) { return existing }
         let record = TrackerStateRecord(itemID: itemID)
         context.insert(record)
@@ -1235,12 +1375,13 @@ struct Repository {
     /// callers must NOT also recompute; that doubled the parse/touch/save per
     /// tap. It recomputes `pt`, the playthrough actually written, and commits
     /// exactly once.
-    func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool) {
+    func setTrackerItem(_ pt: Playthrough, itemID: String, done: Bool, at date: Date? = nil) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.completed = done
         // The moment, not the edit: un-ticking clears it so an item you
         // changed your mind about stops claiming to be where you left off.
-        record.completedAt = done ? .now : nil
+        // A synced unlock passes the day it was earned.
+        record.completedAt = done ? (date ?? .now) : nil
         touch(record)
         touch(pt)
         recomputeProgress(pt)
@@ -1640,6 +1781,21 @@ struct Repository {
         return true
     }
 
+    /// Choose a tracker category's pin icon and color, for this game. `nil`
+    /// puts that half back to automatic. Same path as renaming a category.
+    @discardableResult
+    func setPinStyle(_ game: Game, categoryID: String, symbol: String?, color: String?) -> Bool {
+        guard let schema = game.trackerSchema,
+              let data = TrackerSchemaJSON.settingPinStyle(categoryID: categoryID, symbol: symbol,
+                                                          color: color, in: schema.jsonData)
+        else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
     /// Edit an item's name, location and the user's own note.
     @discardableResult
     func editTrackerItem(_ game: Game, categoryID: String, itemID: String,
@@ -1839,7 +1995,13 @@ struct Repository {
 
     /// What a generated schema *would* do, without touching anything. Feeds the
     /// review screen so the choice is made against real numbers.
-    func previewGeneratedSchema(for game: Game, jsonData: Data) -> TrackerDiff {
+    ///
+    /// `untouched` names categories that no choice on the review screen can
+    /// remove — on a limited refresh, every list the answer didn't bring back.
+    /// Without it they were listed as "removed" when a confined Replace leaves
+    /// them exactly as they are.
+    func previewGeneratedSchema(for game: Game, jsonData: Data,
+                                untouched: Set<String> = []) -> TrackerDiff {
         // Same sanitation as the apply path, so the preview describes exactly
         // what an apply would install.
         let jsonData = TrackerMerge.deduplicated(jsonData)
@@ -1853,7 +2015,8 @@ struct Repository {
             // survives both — a replace preserves it, and the additive modes
             // never remove anything. Listing its items as at risk would put a
             // loss on the screen that neither choice can cause.
-            preserving: TrackerSchemaJSON.importedSourceCategoryIDs(in: existing.jsonData))
+            preserving: TrackerSchemaJSON.importedSourceCategoryIDs(in: existing.jsonData)
+                .union(untouched))
     }
 
     /// Fold a generated schema into the game's existing one on the user's
@@ -1917,9 +2080,17 @@ struct Repository {
                 added: scoped.flatMap(\.added).count,
                 removed: scoped.flatMap(\.removed).count,
                 renamed: scoped.flatMap(\.renamed).count)
-        } else {
+        } else if case .replace = mode {
             outcome = TrackerMergeOutcome(
                 added: diff.added.count, removed: diff.removed.count, renamed: diff.renamed.count)
+        } else {
+            // The additive modes can't remove or rename anything, but the diff
+            // counts what a REPLACE would do — so Add New reported "added 16,
+            // removed 16" after removing nothing (Tim, 09-14). Say what the
+            // merge actually did: how many more items the tracker holds.
+            let before = TrackerSchemaJSON.categories(from: existing.jsonData).flatMap(\.items).count
+            let after = TrackerSchemaJSON.categories(from: merged).flatMap(\.items).count
+            outcome = TrackerMergeOutcome(added: max(0, after - before))
         }
 
         // Only the replacing modes adopt incoming ids, so only they need the
@@ -1957,15 +2128,17 @@ struct Repository {
         }
 
         // A category that now has content is no longer a plan.
+        //
+        // In EVERY mode, not only a scoped fill. A pasted list or a merge that
+        // lands items in a planned category by name used to leave it marked
+        // planned: it showed its items but sank below the real lists with the
+        // unfilled plans, and the next regeneration read its old plan size
+        // instead of what it holds.
         var filledSchema = merged
-        if case .replaceCategories(let ids) = mode {
-            for id in ids {
-                let hasContent = TrackerSchemaJSON.categories(from: filledSchema)
-                    .first { $0.id == id }?.items.isEmpty == false
-                if hasContent,
-                   let cleared = TrackerSchemaJSON.markingFilled(categoryID: id, in: filledSchema) {
-                    filledSchema = cleared
-                }
+        for category in TrackerSchemaJSON.categories(from: merged)
+        where category.pending && !category.items.isEmpty {
+            if let cleared = TrackerSchemaJSON.markingFilled(categoryID: category.id, in: filledSchema) {
+                filledSchema = cleared
             }
         }
         // A category that just gained content should rise above the ones still
@@ -2711,7 +2884,16 @@ struct Repository {
     struct ReconcileOutcome {
         var mergedStates = 0
         var closedSessions = 0
-        var isNoOp: Bool { mergedStates == 0 && closedSessions == 0 }
+        /// Duplicate Steam or RetroAchievements record playthroughs folded into one.
+        var mergedRecordPlaythroughs = 0
+        /// Pins whose old game-wide found stamp moved into a playthrough.
+        var migratedPins = 0
+        /// Counted items raised to the number of pins found for them.
+        var flooredCounts = 0
+        var isNoOp: Bool {
+            mergedStates == 0 && closedSessions == 0 && mergedRecordPlaythroughs == 0
+                && migratedPins == 0 && flooredCounts == 0
+        }
     }
 
     /// Duplicate playthroughs are deliberately NOT auto-deleted. An "empty
@@ -2725,14 +2907,68 @@ struct Repository {
     @discardableResult
     func reconcile(_ game: Game, at date: Date = .now) -> ReconcileOutcome {
         var outcome = ReconcileOutcome()
+        // Record playthroughs first, so their states fold together below.
+        outcome.mergedRecordPlaythroughs = mergeDuplicateRecordPlaythroughs(in: game, at: date)
         for pt in game.livePlaythroughs {
             outcome.mergedStates += mergeDuplicateStates(in: pt, at: date)
         }
         outcome.closedSessions = reconcileSessions(in: game, at: date)
         repairProvenance(of: game)
-        if outcome.mergedStates > 0 { recomputeProgress(game) }
+        // Pins: old game-wide found stamps into the playthrough, then every
+        // counted item at least as high as the pins found for it — which is how
+        // two devices' finds, synced, add up instead of overwriting each other.
+        // Maps don't exist on the watch — `MapsRepository` isn't in its target.
+        #if !os(watchOS)
+        outcome.migratedPins = migrateLegacyPinStamps(in: game)
+        outcome.flooredCounts = floorCountedItemsToFoundPins(in: game)
+        #endif
+        if outcome.mergedStates > 0 || outcome.mergedRecordPlaythroughs > 0 { recomputeProgress(game) }
         if !outcome.isNoOp { persist() }
         return outcome
+    }
+
+    /// Fold duplicate Steam or RetroAchievements record playthroughs into one.
+    ///
+    /// The exception to "duplicates are never auto-deleted", and why: these
+    /// aren't runs anyone is playing. Each is found by its name AND its marker
+    /// note, is created only by a sync, and is rebuilt from the service by the
+    /// next one. Codex, 09-15: two devices each creating one before iCloud met
+    /// them counted Steam playtime twice — totals add every live playthrough's
+    /// carried-over time — and split the ticks between two records.
+    ///
+    /// The oldest survives: `livePlaythroughs` is oldest-first with an id
+    /// tie-break, so every device folds toward the same one. Carried-over time
+    /// is the larger, never the sum — both are the same Steam total. States and
+    /// sessions move across, and `mergeDuplicateStates` then folds anything
+    /// ticked in both.
+    private func mergeDuplicateRecordPlaythroughs(in game: Game, at date: Date) -> Int {
+        var merged = 0
+        let kinds = [(Self.steamPlaythroughName, Self.steamPlaythroughMarker),
+                     (Self.raPlaythroughName, Self.raPlaythroughMarker),
+                     (Self.playStationPlaythroughName, Self.playStationPlaythroughMarker),
+                     (Self.xboxPlaythroughName, Self.xboxPlaythroughMarker)]
+        for (name, marker) in kinds {
+            let records = game.livePlaythroughs.filter { $0.name == name && $0.notes == marker }
+            guard let keeper = records.first, records.count > 1 else { continue }
+            for duplicate in records.dropFirst() {
+                keeper.carriedOverSeconds = max(keeper.carriedOverSeconds, duplicate.carriedOverSeconds)
+                for state in duplicate.trackerStates ?? [] where state.deletedAt == nil {
+                    state.playthrough = keeper
+                    touch(state, at: date)
+                }
+                for session in duplicate.sessions ?? [] where session.deletedAt == nil {
+                    session.playthrough = keeper
+                    touch(session, at: date)
+                }
+                if game.currentPlaythroughID == duplicate.id { game.currentPlaythroughID = keeper.id }
+                duplicate.deletedAt = date
+                touch(duplicate, at: date)
+                merged += 1
+            }
+            touch(keeper, at: date)
+        }
+        if merged > 0 { touch(game, at: date) }
+        return merged
     }
 
     /// Re-stamp records whose ingest predates the `.imported` source: a

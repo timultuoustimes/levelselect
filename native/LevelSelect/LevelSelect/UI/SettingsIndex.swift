@@ -249,6 +249,9 @@ struct ServicesSettingsPage: View {
                      icon: "link",
                      blurb: "Bring in games and achievements you already have somewhere else. Keys stay in this device's Keychain and go to the service directly — never through a server of ours.") {
             RetroAchievementsSettings()
+            SteamSettings()
+            PlayStationSettings()
+            XboxSettings()
             ItchSettings()
         }
     }

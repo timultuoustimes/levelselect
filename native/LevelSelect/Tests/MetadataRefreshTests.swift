@@ -1105,21 +1105,60 @@ struct StageLayoutTests {
     @Test("A wide stage keeps the page as the first of three columns; a narrower one slides it aside")
     func threeColumnsAtWidth() {
         // Wide: every pane on screen, side by side, filling the width.
-        let wide = StageLayout.columns(width: 1600, stage: 3)
+        let wide = StageLayout.columns(width: 1600, panes: [.tracker, .video])
         #expect(wide.pageX == 0)
         #expect(wide.pageX + wide.pageWidth <= wide.trackerX + 0.5)
-        #expect(wide.trackerX + wide.trackerWidth <= wide.videoX + 0.5)
-        #expect(abs(wide.videoX + wide.videoWidth - 1600) < 0.5)
+        #expect(wide.trackerX + wide.trackerWidth <= wide.sideX + 0.5)
+        #expect(abs(wide.sideX + wide.sideWidth - 1600) < 0.5)
         // A 13" iPad in landscape is under the line: the page slides off as it
         // always has, and the two panels fill the screen.
-        let ipad = StageLayout.columns(width: 1376, stage: 3)
+        let ipad = StageLayout.columns(width: 1376, panes: [.tracker, .map])
         #expect(ipad.pageX + ipad.pageWidth <= 0.5)
         #expect(ipad.trackerX == 0)
-        // Stages 1 and 2 are the same either side of it.
+        #expect(abs(ipad.trackerWidth + ipad.sideWidth - 1376) < 0.5)
+        // The tracker alone, and nothing open, are the same either side of it.
         for w: CGFloat in [1376, 1600] {
-            #expect(StageLayout.columns(width: w, stage: 2).pageWidth == w * 0.58)
-            #expect(StageLayout.columns(width: w, stage: 1).trackerX == w)
+            #expect(StageLayout.columns(width: w, panes: .tracker).pageWidth == w * 0.58)
+            #expect(StageLayout.columns(width: w, panes: []).trackerX == w)
         }
+    }
+
+    /// Tim, 09-12, on his own 09-08 mockup: *"the left side tracker half is a
+    /// lot of wasted space."* The checklist's rows are a name and "0/3"; the
+    /// map beside it is the pane that actually spends width.
+    @Test("The tracker yields width to the map once there is enough of it — but never on a phone")
+    func trackerYieldsWidthOnLargeStages() {
+        let ipad = StageLayout.columns(width: 1376, panes: [.tracker, .map])
+        #expect(ipad.trackerWidth < ipad.sideWidth)
+        #expect(abs(ipad.trackerWidth - 1376 * 0.36) < 0.5)
+
+        // A phone in landscape keeps 46%: `minimumWidth` was chosen so that
+        // share clears 300pt, and narrowing it everywhere would undo the
+        // reason 720 is the threshold at all.
+        let phone = StageLayout.columns(width: 832, panes: [.tracker, .video])
+        #expect(abs(phone.trackerWidth - 832 * 0.46) < 0.5)
+        #expect(phone.trackerWidth > 300)
+    }
+
+    /// The 1/2/3 ladder could not say "a map open with no tracker". Tim's
+    /// spec asks for it in as many words: *"tracker or map or video"*.
+    @Test("Panes are a set, not a ladder — including a side pane with no tracker")
+    func panesAreASetNotALadder() {
+        let mapOnly = StageLayout.columns(width: 1376, panes: .map)
+        #expect(mapOnly.trackerX == 1376)       // parked past the trailing edge
+        #expect(mapOnly.pageX == 0)             // the page keeps its place
+        #expect(abs(mapOnly.sideX + mapOnly.sideWidth - 1376) < 0.5)
+
+        // Video and map SHARE one column, so opening the second does not
+        // change the column's width — only how it divides, which a VStack of
+        // two flexible children does and this type deliberately does not.
+        let one = StageLayout.columns(width: 1376, panes: [.tracker, .video])
+        let both = StageLayout.columns(width: 1376, panes: [.tracker, .video, .map])
+        #expect(one == both)
+
+        #expect(StageLayout.StagePanes.map.usesSideColumn)
+        #expect(StageLayout.StagePanes.video.usesSideColumn)
+        #expect(!StageLayout.StagePanes.tracker.usesSideColumn)
     }
 
     @Test("The game page's scroll is built in exactly one place, so resizing keeps your place")
@@ -1146,6 +1185,59 @@ struct StageLayoutTests {
         #expect(!StageLayout.fits(CGSize(width: 402, height: 830)))
         // The sliver a resizable window can be dragged to.
         #expect(!StageLayout.fits(CGSize(width: 240, height: 900)))
+    }
+}
+
+/// Tim, 09-12, on expanding a map out of its pane and back: *"it should stay
+/// zoomed in and centered at whatever you can see on screen when it was full
+/// screen, and then if I move the view in the smaller pane then vice versa."*
+struct MapViewportTests {
+    // A tall map, fitted into a pane and into the expanded stage.
+    let pixel = CGSize(width: 2000, height: 3000)
+    let pane = CGSize(width: 400, height: 600)
+    let expanded = CGSize(width: 1000, height: 1500)
+
+    @Test("Moving between pane and expanded keeps the same spot in the middle, at the same size")
+    func survivesExpandAndCollapse() {
+        let inPane = MapViewport.captured(mapID: nil, zoom: 3, pan: CGSize(width: -120, height: 90),
+                                          pixel: pixel, fitted: pane)
+        // Expand: the island must stay the same size on screen, so the zoom
+        // relative to the bigger fit is SMALLER — 3 × 400/1000.
+        let big = inPane.transform(pixel: pixel, fitted: expanded)
+        #expect(abs(big.zoom - 1.2) < 1e-9)
+        let seenBig = MapViewport.captured(mapID: nil, zoom: big.zoom, pan: big.pan,
+                                           pixel: pixel, fitted: expanded)
+        #expect(abs(seenBig.center.x - inPane.center.x) < 1e-9)
+        #expect(abs(seenBig.center.y - inPane.center.y) < 1e-9)
+
+        // And back down: exactly where the pane was.
+        let back = seenBig.transform(pixel: pixel, fitted: pane)
+        #expect(abs(back.zoom - 3) < 1e-9)
+        #expect(abs(back.pan.width - -120) < 1e-9)
+        #expect(abs(back.pan.height - 90) < 1e-9)
+    }
+
+    @Test("A view that can't draw it that small shows it fitted, but still centered on the same spot")
+    func clampsTheZoomButKeepsTheCenter() {
+        // Zoom 2 in the pane is smaller on screen than the expanded view's
+        // fit, so the expanded view can only show it fitted.
+        let inPane = MapViewport.captured(mapID: nil, zoom: 2, pan: CGSize(width: 80, height: -40),
+                                          pixel: pixel, fitted: pane)
+        let big = inPane.transform(pixel: pixel, fitted: expanded)
+        #expect(big.zoom == 1)
+        let seen = MapViewport.captured(mapID: nil, zoom: big.zoom, pan: big.pan,
+                                        pixel: pixel, fitted: expanded)
+        #expect(abs(seen.center.x - inPane.center.x) < 1e-9)
+        #expect(abs(seen.center.y - inPane.center.y) < 1e-9)
+    }
+
+    @Test("A fitted map stays fitted in whichever view shows it next")
+    func fittedIsFittedEverywhere() {
+        let fitted = MapViewport.captured(mapID: nil, zoom: 1, pan: .zero, pixel: pixel, fitted: pane)
+        #expect(fitted.pointsPerPixel == nil)
+        let big = fitted.transform(pixel: pixel, fitted: expanded)
+        #expect(big.zoom == 1)
+        #expect(big.pan == .zero)
     }
 }
 
@@ -1392,7 +1484,7 @@ struct CSVImportGameryTests {
                          publishers: [])
             })
         }
-        #expect(CSVImport.apply(picks, context: context) == 3)
+        #expect(CSVImport.apply(picks, context: context) == CSVImport.Applied(added: 3))
         let games = (try? context.fetch(FetchDescriptor<Game>())) ?? []
         #expect(games.count == 3)
         #expect(Set(games.compactMap(\.igdbID)) == [1001, 1002])

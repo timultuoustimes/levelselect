@@ -148,6 +148,16 @@ struct TrackerPageView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tab: Tab = .tracker
     @State private var playing: GameVideo?
+    /// The map opened from the bar. Tim, 09-14, on King Kai: *"I cannot open a
+    /// map on King Kai when I'm in a tracker page, I can only open videos."*
+    /// The stage has a map pane; this page, which is the iPhone's stage, had
+    /// no way to one at all.
+    @State private var viewingMap: MapViewerTarget?
+    /// The name has scrolled away with the header, so the bar shows it.
+    @State private var titleInBar = false
+    /// Measured, not assumed: a logo's height depends on its shape.
+    @State private var headerHeight: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     enum Tab: String, CaseIterable {
         case tracker = "Tracker"
@@ -184,6 +194,7 @@ struct TrackerPageView: View {
                         // without this you'd have to navigate back to the game
                         // just to start or stop the timer — exactly when you're
                         // most likely to be playing and checking things off.
+                        trackerHeader
                         SessionControlsView(game: game)
                         trackerContent
                     } else {
@@ -193,6 +204,22 @@ struct TrackerPageView: View {
                 .padding()
             }
             .scrollIndicators(.hidden)
+            // Same handoff as the game page: the name moves to the bar once
+            // most of the header art has gone under it. The point is measured
+            // from the header itself, because a tall logo and a wide one leave
+            // at very different offsets. 16 is the content's top padding.
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, offset in
+                let handedOver = headerHeight > 0 && offset > 16 + headerHeight * 0.6
+                guard handedOver != titleInBar else { return }
+                // The information is the point, the fade is decoration.
+                if reduceMotion {
+                    titleInBar = handedOver
+                } else {
+                    withAnimation(.easeInOut(duration: 0.18)) { titleInBar = handedOver }
+                }
+            }
         }
         .lsBackground()
         // Rotation watcher, not layout. This single-screen tracker page only
@@ -262,16 +289,32 @@ struct TrackerPageView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
-            // The game's logo where its name would be, when it has one and
-            // logos are on — Tim, 09-08: *"Tracker page's game title should be
-            // the logo."* The title string stays for VoiceOver and for games
-            // without one.
-            if ThemePalette.showGameLogos, !typeSize.isAccessibilitySize,
-               !game.resolvedArtwork(.logo).isEmpty {
-                ToolbarItem(placement: .principal) {
-                    ArtworkView(game.resolvedArtwork(.logo), contentMode: .fit)
-                        .frame(maxWidth: 200, maxHeight: 30)
-                        .accessibilityLabel(trackerTitle)
+            // **The logo is a header now; the bar gets the name once it has
+            // scrolled away.** Tim, 09-14: *"we need to let the art for the
+            // name be a bit larger. Super Metroid is super tiny… maybe we make
+            // it work like it does on the game page."* A logo in the bar's
+            // title slot is held to the bar's height, so a wide, short one like
+            // Super Metroid's shrank to a smudge. The drawn title is hidden
+            // from VoiceOver while the header still shows the name.
+            #if !os(macOS)
+            ToolbarItem(placement: .principal) {
+                let showing = titleInBar || !showsHeader
+                Text(trackerTitle)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(showing ? 1 : 0)
+                    .accessibilityHidden(!showing)
+            }
+            #endif
+            // The first map, the way Videos plays the first video. Choosing
+            // another map, or adding the first, is the Maps section below.
+            if let first = Repository(context).liveMaps(of: game).first {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        viewingMap = MapViewerTarget(game: game, map: first)
+                    } label: {
+                        Label("Maps", systemImage: "map.fill")
+                    }
                 }
             }
             ToolbarItem(placement: .primaryAction) {
@@ -285,6 +328,43 @@ struct TrackerPageView: View {
                 }
             }
         }
+        // Over the page rather than replacing it, so a video playing in the
+        // dock keeps playing under the map.
+        .lsFullScreen(item: $viewingMap) { MapViewerView(target: $0) }
+    }
+
+    /// Whether the header is on screen at all: the videos tab has none, so
+    /// the bar keeps the name there.
+    private var showsHeader: Bool { tab == .tracker || playing == nil }
+
+    /// Same rule as the game page's header: logos on and a type size that
+    /// leaves room for one; otherwise the name is drawn as text.
+    private var headerLogo: ResolvedArtwork {
+        guard ThemePalette.showGameLogos, !typeSize.isAccessibilitySize else { return .none }
+        return game.resolvedArtwork(.logo)
+    }
+
+    /// The game's logo, large, or its name — the head of the tracker.
+    private var trackerHeader: some View {
+        Group {
+            if !headerLogo.isEmpty {
+                ArtworkView(headerLogo, contentMode: .fit)
+                    .frame(maxWidth: 300, maxHeight: 96)
+            } else {
+                Text(game.name)
+                    .font(.title2.weight(.bold))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(game.name)
+        .accessibilityAddTraits(.isHeader)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            headerHeight = height
+        }
     }
 
     @ViewBuilder
@@ -297,6 +377,13 @@ struct TrackerPageView: View {
             Divider()
         }
         TrackerSectionView(game: game)
+        Divider()
+        // Same order as the game page: Maps after the tracker, before Videos.
+        // The whole section, so a game without a map can get one from here.
+        CollapsibleSection("Maps", icon: "map", defaultExpanded: false,
+                           scope: game.id.uuidString) {
+            MapsSection(game: game)
+        }
         Divider()
         CollapsibleSection("Videos", icon: "play.rectangle", defaultExpanded: false,
                            scope: game.id.uuidString) {

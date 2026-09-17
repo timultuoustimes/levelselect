@@ -75,18 +75,23 @@ struct Build38MapsTests {
         #expect(repo.liveMaps(of: game).count == 1)
     }
 
-    @Test("An unlinked pin keeps its own explored stamp")
+    @Test("An unlinked pin is found in the playthrough, not on the pin")
     func unlinkedPinExplored() throws {
         let repo = store()
         let game = repo.addGame(name: "Hollow Knight", status: .playing)
+        let pt = repo.ensureDefaultPlaythrough(for: game)
         let map = try repo.addMap(to: game, data: png, name: "Hallownest", kind: .world)
         let pin = repo.addMarker(to: map, x: 0.25, y: 0.75, category: .secret, label: "Hidden wall")
-        #expect(!repo.isExplored(pin, states: [:]))
+        func states() -> [String: TrackerStateRecord] {
+            Dictionary((pt.trackerStates ?? []).filter { $0.deletedAt == nil }.map { ($0.itemID, $0) },
+                       uniquingKeysWith: { a, _ in a })
+        }
+        #expect(!repo.isExplored(pin, states: states()))
         repo.setExplored(pin, true, in: game)
-        #expect(pin.exploredAt != nil)
-        #expect(repo.isExplored(pin, states: [:]))
-        repo.setExplored(pin, false, in: game)
         #expect(pin.exploredAt == nil)
+        #expect(repo.isExplored(pin, states: states()))
+        repo.setExplored(pin, false, in: game)
+        #expect(!repo.isExplored(pin, states: states()))
     }
 
     @Test("A linked pin shows the item's state, and ticking the pin ticks the item")
@@ -134,7 +139,7 @@ struct Build38MapsTests {
         #expect(repo.trashedImages().contains { $0.id == image.id })
     }
 
-    @Test("A pin's explored stamp survives export and import")
+    @Test("A pin's found state survives export and import")
     func exploredExports() throws {
         let repo = store()
         let game = repo.addGame(name: "Hollow Knight", status: .playing)
@@ -147,8 +152,11 @@ struct Build38MapsTests {
         _ = try LibraryImport.apply(data: data, context: fresh.context)
         let imported = try fresh.context.fetch(FetchDescriptor<Marker>())
         #expect(imported.count == 1)
-        #expect(imported.first?.exploredAt != nil)
         #expect(imported.first?.label == "Bench")
+        // Found lives in the playthrough, keyed by the pin's id, which import keeps.
+        let importedPin = try #require(imported.first)
+        let states = try fresh.context.fetch(FetchDescriptor<TrackerStateRecord>())
+        #expect(states.contains { $0.itemID == fresh.pinStateID(importedPin) && $0.completed })
     }
 }
 

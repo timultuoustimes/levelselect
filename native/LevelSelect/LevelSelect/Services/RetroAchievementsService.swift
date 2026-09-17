@@ -355,12 +355,10 @@ enum RetroAchievementsService {
     /// keyed by the full URL, which for these calls contains the API key. An
     /// ephemeral configuration with no URL cache is what actually prevents a
     /// second copy of the secret landing on disk.
-    private static let credentialSession: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        return URLSession(configuration: configuration)
-    }()
+    ///
+    /// Redirects are held to retroachievements.org, so a response can't carry
+    /// the key somewhere else (`CredentialRedirectGuard`).
+    private static let credentialSession: URLSession = CredentialRedirectGuard.session()
 
     /// Fold RA's raw achievement map into the shape `progress` reads.
     ///

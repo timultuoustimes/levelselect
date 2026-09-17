@@ -36,6 +36,172 @@ enum CSVImport {
         var igdbID: Int? = nil
         /// Original line number, for error messages that a human can act on.
         var line: Int
+        /// Why this row starts unticked in the review, when an importer has a
+        /// reason to think it isn't wanted — a played Steam demo counts as owned.
+        /// Shown beside the row; the user can still tick it.
+        var skipReason: String? = nil
+        /// True when the source can't say which machine a game was played on,
+        /// so the review offers a choice. Xbox lists every machine a game runs
+        /// on: a 360 game also names the Series consoles.
+        var offersPlatformChoice = false
+        /// The source's machines, in the order to prefer them.
+        var platformChoices: [String] = []
+        /// Machines offered only when you have a record for one, and never
+        /// picked for you: any Steam game might be on your Steam Deck, and
+        /// nothing says which are.
+        var ownedOnlyChoices: [String] = []
+        /// Headsets offered, when you have one, for a game IGDB lists on any
+        /// of them. A SteamVR game plays on a Quest or a Vive as well as the
+        /// Index that IGDB's "SteamVR" folds to. Never picked for you.
+        var vrChoices: [String] = []
+        /// The source knows which machines it was played on (PlayStation
+        /// does), so the row keeps them; the choices only add to them — a
+        /// PlayStation VR game can be on the headset too.
+        var platformsKnown = false
+        /// Where the row lands when you have none of the choices.
+        var fallbackPlatform: String? = nil
+        /// The source calls it a game but has little to show for it — Xbox
+        /// with no achievements. The review unticks it unless IGDB knows the
+        /// title exactly: companion apps like Halo Waypoint.
+        var mayBeAnApp = false
+        /// A game you already have. Importing it adds the row's consoles to
+        /// the ones you own it on and changes nothing else.
+        var existingGameID: UUID? = nil
+        /// Box art from the source, kept when IGDB has none for the game.
+        var coverURL: String? = nil
+        /// Take IGDB's game only when the title matches exactly. itch.io is
+        /// mostly games IGDB has never heard of, and its nearest hit is
+        /// usually an unrelated game with a similar name.
+        var exactMatchOnly = false
+
+        /// The row lands on this console alone.
+        mutating func choosePlatform(_ platform: String?) {
+            self.platform = platform
+            platforms = platform.map { [$0] } ?? []
+        }
+
+        /// Add or remove one console, keeping at least one. Several mark the
+        /// game owned on each, which is the point: the same game on the 360
+        /// and the Switch.
+        mutating func togglePlatform(_ option: String, order: [String]) {
+            var picked = platforms
+            if let index = picked.firstIndex(of: option) {
+                guard picked.count > 1 else { return }
+                picked.remove(at: index)
+            } else {
+                picked.append(option)
+            }
+            platforms = order.filter(picked.contains) + picked.filter { !order.contains($0) }
+            platform = platforms.first
+        }
+    }
+
+    /// What the review offers for a row: the source's consoles, then any
+    /// other machine the matched game is on that you have a record for (Mac,
+    /// the Switch — Minecraft Dungeons signs in to Xbox there
+    /// too, and Xbox doesn't say so), then your hardware from
+    /// `ownedOnlyChoices` and, for a VR game, your `vrChoices`, then PC.
+    static func platformChoices(for row: Row, matchPlatforms: [String], owned: Set<String>) -> [String] {
+        guard row.offersPlatformChoice else { return row.platformChoices }
+        let isPC = { (name: String) in PlatformKey.canonical(name) == "PC" }
+        var seen = Set(row.platformChoices.map(PlatformKey.canonical))
+        let others = matchPlatforms.filter {
+            let key = PlatformKey.canonical($0)
+            return !isPC($0) && owned.contains(key) && seen.insert(key).inserted
+        }
+        let vrKeys = Set(row.vrChoices.map(PlatformKey.canonical))
+        let isVR = matchPlatforms.contains { vrKeys.contains(PlatformKey.canonical($0)) }
+        let hardware = (row.ownedOnlyChoices + (isVR ? row.vrChoices : [])).filter {
+            let key = PlatformKey.canonical($0)
+            return owned.contains(key) && seen.insert(key).inserted
+        }
+        return row.platformChoices.filter { !isPC($0) } + others + hardware
+            + row.platformChoices.filter(isPC)
+    }
+
+    /// The row on the first choice you have a record for, or its fallback. A
+    /// record counts even when it's marked former: the question is which
+    /// machine you played it on. `ownedOnlyChoices` are offered, never picked.
+    static func preferOwnedPlatform(_ row: Row, choices: [String], owned: Set<String>) -> Row {
+        var row = row
+        let hardware = Set((row.ownedOnlyChoices + row.vrChoices).map(PlatformKey.canonical))
+        row.choosePlatform(choices.first {
+            let key = PlatformKey.canonical($0)
+            return owned.contains(key) && !hardware.contains(key)
+        } ?? row.fallbackPlatform)
+        return row
+    }
+
+    /// The machines a review can set every row to at once, each with how many
+    /// rows offer it, in the order they first appear.
+    static func bulkPlatforms(_ choices: [[String]]) -> [(platform: String, rows: Int)] {
+        var order: [String] = []
+        var counts: [String: Int] = [:]
+        var names: [String: String] = [:]
+        for list in choices where list.count > 1 {
+            var inRow = Set<String>()
+            for key in list.map(PlatformKey.canonical) where inRow.insert(key).inserted {
+                if counts[key] == nil { order.append(key) }
+                counts[key, default: 0] += 1
+            }
+            for name in list where names[PlatformKey.canonical(name)] == nil {
+                names[PlatformKey.canonical(name)] = name
+            }
+        }
+        return order.map { (names[$0] ?? $0, counts[$0] ?? 0) }
+    }
+
+    // MARK: Title matching
+
+    /// Two titles are the same when they differ only in case, accents,
+    /// punctuation or ™ ® ©. Compared exactly, "Brink™" was not "Brink", and
+    /// the review fell back to IGDB's first hit: "Brink of Consciousness".
+    static func sameTitle(_ a: String, _ b: String) -> Bool {
+        TrackerMerge.matchKey(a) == TrackerMerge.matchKey(b)
+    }
+
+    /// The consoles a title search should favor: the one the source says the
+    /// game was made for (Xbox's original console, Steam's PC), else the ones
+    /// the row names. "Modern Warfare® 3" from a 360 is the 2011 game, not
+    /// the 2023 "Modern Warfare III" IGDB ranks first.
+    static func matchHints(for row: Row) -> [String] {
+        row.fallbackPlatform.map { [$0] } ?? row.platforms
+    }
+
+    static func isOn(_ game: IGDBGame, _ hints: [String]) -> Bool {
+        let keys = Set(hints.map(PlatformKey.canonical))
+        return game.platforms.contains { keys.contains(PlatformKey.canonical($0)) }
+    }
+
+    /// IGDB's hits with the ones on a hinted console first, order otherwise kept.
+    static func ranked(_ hits: [IGDBGame], hints: [String]) -> [IGDBGame] {
+        guard !hints.isEmpty else { return hits }
+        return hits.filter { isOn($0, hints) } + hits.filter { !isOn($0, hints) }
+    }
+
+    /// The hit to start a row on: the exact title on a hinted console, then the
+    /// exact title anywhere, then the first hit on a hinted console, then the
+    /// first hit. `exact` says whether the title matched.
+    static func bestMatch(_ hits: [IGDBGame], name: String, hints: [String]) -> (game: IGDBGame?, exact: Bool) {
+        let exact = hits.filter { sameTitle($0.name, name) }
+        if let game = exact.first(where: { isOn($0, hints) }) ?? exact.first { return (game, true) }
+        return (ranked(hits, hints: hints).first, false)
+    }
+
+    /// How long to wait before the next IGDB request so an import stays
+    /// under the proxy's 60 a minute (55, leaving room for anything else the
+    /// app asks meanwhile). `recent` is when the last requests went out.
+    static func paceDelay(now: Date, recent: [Date], limit: Int = 55) -> TimeInterval {
+        let window = recent.filter { now.timeIntervalSince($0) < 60 }.sorted()
+        guard window.count >= limit else { return 0 }
+        return max(0, 60 - now.timeIntervalSince(window[window.count - limit]))
+    }
+
+    /// The name to search IGDB for. Its search doesn't fold the marks, so
+    /// "Assassin's Creed® III" found nothing at all.
+    static func searchName(_ name: String) -> String {
+        name.replacingOccurrences(of: "[™®©]", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespaces)
     }
 
     struct ParseResult {
@@ -200,11 +366,28 @@ enum CSVImport {
     /// goes, which for a 140-row file was 140 saves on the main thread, each
     /// queuing its own iCloud export. The rows are inserted, then committed
     /// together.
+    struct Applied: Equatable {
+        /// Games new to the library.
+        var added = 0
+        /// Games you had, now owned on another console too.
+        var updated = 0
+    }
+
     @MainActor @discardableResult
-    static func apply(_ picks: [(row: Row, match: IGDBGame?)], context: ModelContext) -> Int {
+    static func apply(_ picks: [(row: Row, match: IGDBGame?)], context: ModelContext,
+                      sourceLabel: String = "CSV") -> Applied {
         let repo = Repository(context)
         var count = 0
+        var updated = 0
         for (row, match) in picks {
+            if let id = row.existingGameID {
+                let found = try? context.fetch(FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })).first
+                if let found, addOwnedPlatforms(row.platforms, to: found) {
+                    repo.touch(found)
+                    updated += 1
+                }
+                continue
+            }
             let game: Game
             if let match {
                 game = repo.addGame(from: match, platform: row.platform,
@@ -219,6 +402,9 @@ enum CSVImport {
                 game.ownedPlatforms = row.platforms
                 game.platforms = row.platforms + game.platforms.filter { !row.platforms.contains($0) }
             }
+            if let cover = row.coverURL, (game.coverURLString ?? "").isEmpty {
+                game.coverURLString = cover
+            }
             game.rating = row.rating
             if let notes = row.notes { game.notes = notes }
             // Hours become one manual session, so the number shows up in
@@ -226,13 +412,74 @@ enum CSVImport {
             if let hours = row.hoursPlayed, hours > 0 {
                 let pt = repo.ensureDefaultPlaythrough(for: game)
                 repo.logManualSession(on: pt, duration: hours * 3600,
-                                      notes: "Imported from CSV")
+                                      // Ending now, not starting now: dated at the
+                                      // import, a 42-minute session ended in the future.
+                                      date: .now.addingTimeInterval(-hours * 3600),
+                                      notes: "Imported from \(sourceLabel)")
             }
             count += 1
         }
         BuiltinTrackers.installMissing(context: context)
         PersistenceMonitor.shared.commit(context)
-        return count
+        return Applied(added: count, updated: updated)
+    }
+
+    /// How a service import sees the library: games it can add a console to,
+    /// by `TrackerMerge.matchKey` of the name and by IGDB id, and the
+    /// wishlist it skips (nobody owns a game they're waiting for).
+    struct LibraryKeys {
+        var byName: [String: UUID] = [:]
+        var byIGDB: [Int: UUID] = [:]
+        var wishlistNames: Set<String> = []
+        var wishlistIGDBIDs: Set<Int> = []
+
+        init(_ games: [Game]) {
+            for game in games {
+                if game.status == .wishlist {
+                    wishlistNames.insert(game.name.lowercased())
+                    if let id = game.igdbID { wishlistIGDBIDs.insert(id) }
+                } else {
+                    byName[TrackerMerge.matchKey(game.name)] = byName[TrackerMerge.matchKey(game.name)] ?? game.id
+                    if let id = game.igdbID { byIGDB[id] = byIGDB[id] ?? game.id }
+                }
+            }
+        }
+    }
+
+    /// Rows worth reviewing: a game you have only gets one when the console
+    /// it would start on isn't already one you own it on. Otherwise a second
+    /// run of an import opens on a sheet of games with nothing to add.
+    @MainActor
+    static func dropNothingToAdd(_ rows: [Row], context: ModelContext) -> [Row] {
+        let owned = Set(Repository(context).liveConsoles().map(\.platform))
+        return rows.filter { row in
+            guard let id = row.existingGameID else { return true }
+            guard let game = try? context.fetch(
+                FetchDescriptor<Game>(predicate: #Predicate { $0.id == id })).first else { return false }
+            let have = Set(game.ownedPlatformNames.map(PlatformKey.canonical))
+            let start = row.offersPlatformChoice && !row.platformsKnown
+                ? preferOwnedPlatform(row, choices: platformChoices(for: row, matchPlatforms: [], owned: owned),
+                                      owned: owned).platforms
+                : row.platforms
+            return start.contains { !have.contains(PlatformKey.canonical($0)) }
+        }
+    }
+
+    /// Own `game` on each of `platforms` as well, under any spelling. False
+    /// when it already was.
+    static func addOwnedPlatforms(_ platforms: [String], to game: Game) -> Bool {
+        let current = game.ownedPlatformNames
+        var keys = Set(current.map(PlatformKey.canonical))
+        let added = platforms.filter { keys.insert(PlatformKey.canonical($0)).inserted }
+        guard !added.isEmpty else { return false }
+        game.ownedPlatforms = current + added
+        for platform in added {
+            let key = PlatformKey.canonical(platform)
+            if !game.platforms.contains(where: { PlatformKey.canonical($0) == key }) {
+                game.platforms.append(platform)
+            }
+        }
+        return true
     }
 
     /// Accepts 1–5, 1–10, and percentages, normalizing to the app's 1–5.

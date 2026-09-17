@@ -37,11 +37,22 @@ struct MarkerCard: View {
                           uniquingKeysWith: { a, _ in a })
     }
 
+    /// Found in another playthrough and not this one.
+    private var foundBefore: Bool {
+        let counted: Set<String> = (linkedItem?.countTarget ?? 0) > 0 ? Set([linkedID].compactMap { $0 }) : []
+        return repo.markersFoundBefore(in: game, counted: counted).contains(marker.id)
+    }
+
     private var exploredBinding: Binding<Bool> {
         Binding(
             get: {
-                if let linkedID { return states[linkedID]?.completed ?? false }
-                return marker.exploredAt != nil
+                // A counted item's pin is one spot of many, so it keeps its
+                // own stamp — the same rule as `MapsRepository.isExplored`.
+                if let linkedID, (linkedItem?.countTarget ?? 0) <= 0 {
+                    return states[linkedID]?.completed ?? false
+                }
+                // Found in this playthrough, not the game (`pinStateID`).
+                return states[repo.pinStateID(marker)]?.completed ?? false
             },
             set: { on in
                 save()
@@ -91,9 +102,15 @@ struct MarkerCard: View {
 
                 Section {
                     Toggle(isOn: exploredBinding) {
-                        Label(linkedItem == nil ? "Explored" : "Done", systemImage: "checkmark.circle")
+                        Label(linkedItem == nil ? "Explored"
+                              : ((linkedItem?.countTarget ?? 0) > 0 ? "Found here" : "Done"),
+                              systemImage: "checkmark.circle")
                     }
                     .tint(LSTheme.accent)
+                } footer: {
+                    if foundBefore && !exploredBinding.wrappedValue {
+                        Text("Found in an earlier playthrough. Mark it here when you find it again.")
+                    }
                 }
 
                 Section {

@@ -54,9 +54,12 @@ struct TrackerMergeReviewView: View {
             didPrime = true
             selected = Set(diff.added.map(\.id))
         }
-        .confirmationDialog("Replace the whole tracker?",
+        // A limited refresh replaces only the lists that came back, so it must
+        // not be offered in words that promise the whole tracker.
+        .confirmationDialog(merge.inScope.isEmpty ? "Replace the whole tracker?" : "Replace these lists?",
                             isPresented: $confirmingReplace, titleVisibility: .visible) {
-            Button("Replace Everything", role: .destructive) { apply(.replace) }
+            Button(merge.inScope.isEmpty ? "Replace Everything" : "Replace Lists",
+                   role: .destructive) { apply(.replace) }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(replaceWarningText)
@@ -102,7 +105,9 @@ struct TrackerMergeReviewView: View {
     private var replaceWarningText: String {
         let lost = diff.removed.filter { d in diff.strandedByReplace.contains { $0.id == d.id } }
         guard !lost.isEmpty else {
-            return "Replacing swaps the tracker content. Your progress follows anything that came back under a new name."
+            return merge.inScope.isEmpty
+                ? "Replacing swaps the tracker content. Your progress follows anything that came back under a new name."
+                : "Replacing swaps only the lists that came back; your other categories stay as they are. Your progress follows anything that came back under a new name."
         }
         let names = lost.prefix(3).map(\.name).joined(separator: ", ")
         let more = lost.count > 3 ? " and \(lost.count - 3) more" : ""

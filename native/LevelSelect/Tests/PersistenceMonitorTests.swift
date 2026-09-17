@@ -27,6 +27,16 @@ struct PersistenceMonitorTests {
         #expect(sessions.first?.state == .running)
     }
 
+    /// Every test store comes from this factory, so this is the one place the
+    /// suite's stability is decided. An in-memory configuration left on
+    /// `.automatic` resolves to the app's iCloud container, and the mirroring
+    /// delegate that comes with it intermittently crashed saves with "No
+    /// eligible connection available" — reported as a PASS with exit code 65.
+    @Test func inMemoryStoresNeverMirrorToCloudKit() {
+        let container = LevelSelectStore.makeContainer(inMemory: true)
+        #expect(container.configurations.allSatisfy { $0.cloudKitContainerIdentifier == nil })
+    }
+
     @Test func sessionLifecycleCommitsEachTransition() throws {
         let container = LevelSelectStore.makeContainer(inMemory: true)
         let context = ModelContext(container)

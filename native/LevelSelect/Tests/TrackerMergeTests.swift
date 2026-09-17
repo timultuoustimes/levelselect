@@ -581,3 +581,220 @@ struct TrackerMergeTests {
         #expect(TrackerMerge.matchKey("Hornet") != TrackerMerge.matchKey("Hornet Sentinel"))
     }
 }
+
+/// A list's pin icon is the user's, not the generator's, so it has to live
+/// through a regeneration the way a chosen name does. Tim, 09-13: *"I think
+/// only for that game seems right."*
+struct PinStyleMergeTests {
+    private func schema(_ categories: [[String: Any]]) -> Data {
+        try! JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": categories])
+    }
+
+    private func category(id: String, name: String, items: [(String, String)],
+                          symbol: String? = nil, color: String? = nil) -> [String: Any] {
+        var cat: [String: Any] = ["id": id, "name": name, "type": "checklist",
+                                  "items": items.map { ["id": $0.0, "name": $0.1] }]
+        if let symbol { cat["pinSymbol"] = symbol }
+        if let color { cat["pinColor"] = color }
+        return cat
+    }
+
+    private func find(_ id: String, in data: Data) -> TrackerCategoryDTO? {
+        TrackerSchemaJSON.categories(from: data).first { $0.id == id }
+    }
+
+    /// The bug this pins: a replace builds each category from the incoming
+    /// payload, which has never heard of `pinSymbol`, so a regeneration put
+    /// every custom pin back to automatic.
+    @Test("A full regeneration keeps the pin you chose for a list")
+    func survivesReplace() {
+        let current = schema([category(id: "graves", name: "Warrior Graves", items: [("xero", "Xero")],
+                                       symbol: "moon.stars.fill", color: "purple")])
+        let incoming = schema([category(id: "graves", name: "Warrior Graves",
+                                        items: [("xero", "Xero"), ("gorb", "Gorb")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        let graves = find("graves", in: out)
+        #expect(graves?.items.count == 2)
+        #expect(graves?.pinSymbol == "moon.stars.fill")
+        #expect(graves?.pinColor == "purple")
+    }
+
+    @Test("A regeneration that re-slugs the list's id still finds its pin by name")
+    func survivesAReSlug() {
+        let current = schema([category(id: "graves", name: "Warrior Graves", items: [("xero", "Xero")],
+                                       symbol: "moon.stars.fill")])
+        let incoming = schema([category(id: "warrior-graves", name: "Warrior Graves",
+                                        items: [("xero", "Xero")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        #expect(find("warrior-graves", in: out)?.pinSymbol == "moon.stars.fill")
+    }
+
+    @Test("Regenerating one list keeps that list's pin")
+    func survivesReplacingOneCategory() {
+        let current = schema([category(id: "endings", name: "Endings", items: [("sealed", "Sealed Siblings")],
+                                       symbol: "flag.checkered", color: "gray")])
+        let incoming = schema([category(id: "endings", name: "Endings",
+                                        items: [("sealed", "Sealed Siblings"), ("dream", "Dream No More")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming,
+                                      mode: .replaceCategories(ids: ["endings"]))
+        let endings = find("endings", in: out)
+        #expect(endings?.items.count == 2)
+        #expect(endings?.pinSymbol == "flag.checkered")
+        #expect(endings?.pinColor == "gray")
+    }
+
+    /// Two lists answering to one name can't say whose pin it was, so neither
+    /// donates it — the rule notes and chosen names already follow.
+    @Test("A name two lists share carries no pin")
+    func ambiguousNameCarriesNothing() {
+        let current = schema([
+            category(id: "c1", name: "Charms", items: [("a", "A")], symbol: "sparkles"),
+            category(id: "c2", name: "Charms", items: [("b", "B")], symbol: "heart.fill"),
+        ])
+        let incoming = schema([category(id: "charms-new", name: "Charms", items: [("a", "A")])])
+        let out = TrackerMerge.merged(current: current, incoming: incoming, mode: .replace)
+        #expect(find("charms-new", in: out)?.pinSymbol == nil)
+    }
+
+    @Test("Setting a pin writes it, and clearing one half leaves the other")
+    func settingAndClearing() throws {
+        let start = schema([category(id: "grubs", name: "Grubs", items: [("g1", "Grub")])])
+        let set = try #require(TrackerSchemaJSON.settingPinStyle(
+            categoryID: "grubs", symbol: "ladybug.fill", color: "yellow", in: start))
+        #expect(find("grubs", in: set)?.pinSymbol == "ladybug.fill")
+        #expect(find("grubs", in: set)?.pinColor == "yellow")
+        let cleared = try #require(TrackerSchemaJSON.settingPinStyle(
+            categoryID: "grubs", symbol: nil, color: "yellow", in: set))
+        #expect(find("grubs", in: cleared)?.pinSymbol == nil)
+        #expect(find("grubs", in: cleared)?.pinColor == "yellow")
+        #expect(TrackerSchemaJSON.settingPinStyle(categoryID: "nope", symbol: "x", color: nil, in: start) == nil)
+    }
+}
+
+/// Regenerating refreshes the tracker you have. Tim, 09-14: *"hitting
+/// regenerate… does every category possible"* — because the request never
+/// said which categories you had.
+@MainActor
+struct RegenerationScopeTests {
+    private func categories(_ raw: [[String: Any]]) -> [TrackerCategoryDTO] {
+        let data = try! JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": raw])
+        return TrackerSchemaJSON.categories(from: data)
+    }
+
+    @Test("A regeneration sends your categories; a first generation sends none")
+    func bodyCarriesCategories() {
+        let scoped = AITrackerService.generateBody(
+            gameName: "Hollow Knight", igdbID: 14593, referenceText: nil,
+            categories: [.init(name: "Warrior Graves", expectedCount: 7, counted: false),
+                         .init(name: "Grubs", expectedCount: 46, counted: false)])
+        let sent = scoped["categories"] as? [[String: Any]]
+        #expect(sent?.map { $0["name"] as? String } == ["Warrior Graves", "Grubs"])
+        #expect(sent?.first?["expectedCount"] as? Int == 7)
+        #expect(sent?.first?["counted"] == nil)
+        #expect(scoped["mode"] as? String == "auto")
+
+        // Nothing to scope to: the body is exactly what it always was.
+        let first = AITrackerService.generateBody(gameName: "Hollow Knight", igdbID: 14593,
+                                                  referenceText: nil, categories: nil)
+        #expect(first["categories"] == nil)
+        let empty = AITrackerService.generateBody(gameName: "Hollow Knight", igdbID: nil,
+                                                  referenceText: nil, categories: [])
+        #expect(empty["categories"] == nil)
+    }
+
+    @Test("A counter goes as one running total, with its target as the size")
+    func counterRequest() {
+        let cats = categories([["id": "koroks", "name": "Korok Seeds",
+                                "items": [["id": "k", "name": "Korok Seeds", "countTarget": 900]]]])
+        let request = TrackerGenerationStore.requested(cats[0])
+        #expect(request.counted)
+        #expect(request.expectedCount == 900)
+        let body = AITrackerService.generateBody(gameName: "BotW", igdbID: nil, referenceText: nil,
+                                                 categories: [request])
+        #expect((body["categories"] as? [[String: Any]])?.first?["counted"] as? Bool == true)
+    }
+
+    @Test("Personal Goals, pasted lists and RetroAchievements sets are never sent to be rewritten")
+    func scopeLeavesOthersContentAlone() {
+        let cats = categories([
+            ["id": "graves", "name": "Warrior Graves", "items": [["id": "xero", "name": "Xero"]]],
+            ["id": TrackerSchemaJSON.personalGoalsID, "name": "Personal Goals",
+             "items": [["id": "g", "name": "Beat it blind"]]],
+            ["id": "pasted", "name": "Charm Table", "locked": true, "items": [["id": "c", "name": "Grubsong"]]],
+            ["id": "retroachievements", "name": "Achievements", "raGameID": 1234,
+             "items": [["id": "a", "name": "Gotta Go Fast"]]],
+            ["id": "planned", "name": "Endings", "pending": true, "plannedCount": 5, "items": []],
+        ])
+        let scope = TrackerGenerationStore.regenerationScope(cats)
+        // Planned categories stay out as well — Tim, 09-14: "skip planned".
+        // They fill one at a time, sized to fit the edge limit.
+        #expect(scope.map(\.name) == ["Warrior Graves"])
+        #expect(scope.first?.expectedCount == 1)
+
+        // When a plan IS filled, it asks for its plan's size, not its zero items.
+        let planned = cats.first { $0.id == "planned" }!
+        #expect(TrackerGenerationStore.requested(planned).expectedCount == 5)
+    }
+}
+
+/// Tim, 09-14: *"yes add Generate All Planned."* It fills plans one at a time
+/// through the one-category path; this pins which categories it takes.
+@MainActor
+struct GenerateAllPlannedTests {
+    @Test("Generate All Planned takes the empty plans, in tracker order, and nothing else")
+    func takesOnlyEmptyPlans() {
+        let data = try! JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": [
+            ["id": "grubs", "name": "Grubs", "items": [["id": "g1", "name": "Grub 1"]]],
+            ["id": "p-endings", "name": "Endings", "pending": true, "plannedCount": 4, "items": []],
+            // Planned, but already holding items — filled some other way.
+            ["id": "p-charms", "name": "Charms", "pending": true, "items": [["id": "c1", "name": "Grubsong"]]],
+            ["id": "p-areas", "name": "Areas", "pending": true, "plannedCount": 17, "items": []],
+        ]])
+        let queue = TrackerGenerationStore.plannedCategories(TrackerSchemaJSON.categories(from: data))
+        #expect(queue.map(\.name) == ["Endings", "Areas"])
+    }
+}
+
+/// Two bugs Tim's 09-14 screenshots showed: a reviewed Replace on a limited
+/// refresh would delete every category the answer didn't mention, and Add New
+/// reported removals it never made.
+@MainActor
+struct RegenerateMenuTests {
+    private func categories(_ raw: [[String: Any]]) -> [TrackerCategoryDTO] {
+        TrackerSchemaJSON.categories(from: data(raw))
+    }
+
+    private func data(_ raw: [[String: Any]]) -> Data {
+        try! JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "categories": raw])
+    }
+
+    @Test("A Replace on a limited refresh replaces only the lists that came back")
+    func replaceStaysWithinTheRefresh() {
+        let inScope = categories([
+            ["id": "graves", "name": "Warrior Graves", "items": [["id": "xero", "name": "Xero"]]],
+            ["id": "grubs", "name": "Grubs", "items": [["id": "g1", "name": "Grub 1"]]],
+        ])
+        // The answer only brought Warrior Graves back.
+        let incoming = data([["id": "warrior-graves", "name": "Warrior Graves",
+                              "items": [["id": "gorb", "name": "Gorb"]]]])
+
+        guard case .replaceCategories(let ids) =
+                TrackerGenerationStore.scoped(.replace, inScope: inScope, incoming: incoming) else {
+            Issue.record("a Replace on a limited refresh must not be a full Replace")
+            return
+        }
+        #expect(ids == ["graves"])
+    }
+
+    @Test("A whole-game Replace, and every other mode, pass through unchanged")
+    func otherModesUntouched() {
+        let incoming = data([["id": "bosses", "name": "Bosses", "items": []]])
+        if case .replace = TrackerGenerationStore.scoped(.replace, inScope: [], incoming: incoming) {} else {
+            Issue.record("Replace Whole Tracker must stay a full Replace")
+        }
+        let inScope = categories([["id": "bosses", "name": "Bosses", "items": [["id": "b", "name": "B"]]]])
+        if case .addAll = TrackerGenerationStore.scoped(.addAll, inScope: inScope, incoming: incoming) {} else {
+            Issue.record("Add New must pass through")
+        }
+    }
+}

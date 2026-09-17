@@ -395,6 +395,9 @@ enum TrackerMerge {
         // named place is worse than a note that stays put; id matches still
         // work, and only the genuinely ambiguous name is refused.
         var byCategory: [String: [String: [String: Any]]] = [:]
+        /// The current categories themselves, under the same keys, for the
+        /// choices that belong to a list rather than to its items.
+        var categoryByKey: [String: [String: Any]] = [:]
         var ambiguousCategoryKeys = Set<String>()
         for category in curCats {
             let catID = (category["id"] as? String) ?? ""
@@ -418,6 +421,7 @@ enum TrackerMerge {
             for key in ambiguousItemKeys { byKey.removeValue(forKey: key) }
 
             byCategory[catID] = byKey
+            categoryByKey[catID] = category
             // A renamed category still has to find its old self — but only if
             // exactly one category answers to that name.
             let catNameKeys = [category["sourceName"], category["name"]]
@@ -427,14 +431,30 @@ enum TrackerMerge {
                     ambiguousCategoryKeys.insert(key)
                 } else {
                     byCategory[key] = byKey
+                    categoryByKey[key] = category
                 }
             }
         }
-        for key in ambiguousCategoryKeys { byCategory.removeValue(forKey: key) }
+        for key in ambiguousCategoryKeys {
+            byCategory.removeValue(forKey: key)
+            categoryByKey.removeValue(forKey: key)
+        }
 
         for (cIdx, category) in cats.enumerated() {
             let catID = (category["id"] as? String) ?? ""
             let catName = (category["name"] as? String).map { "name:\(matchKey($0))" } ?? ""
+            // The pin icon and color the user chose for this list. A replace
+            // builds each category from the incoming payload, which has never
+            // heard of them, so without this a regeneration quietly put every
+            // custom pin back to automatic. Found the way the items are: by
+            // id, or by a name exactly one current list answers to.
+            var carried = category
+            if let previous = categoryByKey[catID] ?? categoryByKey[catName] {
+                for key in [TrackerSchemaJSON.pinSymbolKey, TrackerSchemaJSON.pinColorKey] {
+                    if let value = previous[key] { carried[key] = value }
+                }
+            }
+            cats[cIdx] = carried
             guard let byKey = byCategory[catID] ?? byCategory[catName] else { continue }
             var items = (category["items"] as? [[String: Any]]) ?? []
             for (iIdx, item) in items.enumerated() {
@@ -451,7 +471,7 @@ enum TrackerMerge {
                 }
                 items[iIdx] = updated
             }
-            var next = category
+            var next = carried
             next["items"] = items
             cats[cIdx] = next
         }

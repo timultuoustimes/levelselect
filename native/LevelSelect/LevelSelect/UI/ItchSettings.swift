@@ -20,6 +20,7 @@ struct ItchSettings: View {
     @State private var working = false
     @State private var message: String?
     @State private var lastImport: Report?
+    @State private var reviewing: SteamSettings.LibraryRows?
 
     var body: some View {
         Section {
@@ -42,6 +43,12 @@ struct ItchSettings: View {
                     }
                 }
                 .disabled(working)
+                // On the row, not the Section — a sheet on a Section becomes
+                // one per child and flickers.
+                .sheet(item: $reviewing) { batch in
+                    CSVImportView(rows: batch.rows, title: "Import from itch.io", sourceLabel: "itch.io")
+                        .lsSheet()
+                }
 
                 Button(role: .destructive) {
                     // False means the Keychain delete failed, and claiming
@@ -117,11 +124,10 @@ struct ItchSettings: View {
     private func connect() async {}
     #endif
 
-    /// Additive only, matching every other import in the app.
-    ///
-    /// Matched by name because itch games have no IGDB id to match on — which
-    /// is the whole reason they need this. A name collision costs a duplicate,
-    /// which is recoverable; overwriting a game someone has played is not.
+    /// Additive only, matching every other import in the app, and reviewed
+    /// like them: each game is matched to IGDB where IGDB knows it by exactly
+    /// that name, and otherwise comes in as named with itch.io's own cover.
+    /// A game already here gets itch.io added to it.
     @MainActor
     private func importLibrary() async {
         working = true
@@ -129,27 +135,19 @@ struct ItchSettings: View {
         do {
             var ownedProbe = ItchService.Probe()
             let owned = try await ItchService.ownedGames(probe: &ownedProbe)
-
-            var byID: [Int: ItchService.OwnedGame] = [:]
-            for game in owned { byID[game.id] = game }
-
-            let existing = Set(games.map { $0.name.lowercased() })
-            let repo = Repository(context)
-            var added = 0
-            for game in byID.values where !existing.contains(game.name.lowercased()) {
-                let new = repo.addGame(name: game.name, status: .backlog)
-                repo.edit(new) {
-                    $0.platforms = ["itch.io"]
-                    $0.ownedPlatforms = ["itch.io"]
-                    if let cover = game.coverURL { $0.coverURLString = cover }
-                }
-                added += 1
-            }
-            lastImport = Report(added: added,
-                                already: byID.count - added,
+            let keys = CSVImport.LibraryKeys(games)
+            let rows = CSVImport.dropNothingToAdd(
+                ItchService.libraryRows(from: owned, existingNames: keys.wishlistNames, library: keys.byName),
+                context: context)
+            let unique = Set(owned.map(\.id)).count
+            lastImport = Report(added: rows.filter { $0.existingGameID == nil }.count,
+                                already: unique - rows.filter { $0.existingGameID == nil }.count,
                                 owned: owned.count,
                                 ownedProbe: ownedProbe.line)
             message = nil
+            if !rows.isEmpty {
+                reviewing = SteamSettings.LibraryRows(rows: rows)
+            }
         } catch {
             message = (error as? LocalizedError)?.errorDescription ?? "Couldn't read your itch.io library."
         }
@@ -179,7 +177,7 @@ struct Report {
                  + "zero-dollar purchase. Collections cannot help: itch's API reports how many games a collection holds but not which ones, so those need adding by hand."
                  + "\n\nowned-keys: \(ownedProbe)"
         }
-        return "^[\(added) game](inflect: true) added, \(already) already in your library, "
+        return "^[\(added) game](inflect: true) to review, \(already) already in your library, "
              + "from \(owned) owned on itch.io."
     }
 }

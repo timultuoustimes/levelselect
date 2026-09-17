@@ -405,3 +405,107 @@ struct GroundReachTests {
                         + "(a sheet or popover): " + offenders.joined(separator: ", ")))
     }
 }
+
+/// Pins linked to a tracker item wear their category: Tim, 09-08, *"custom
+/// names for pin types (based on tracker category names)… and multiple pin
+/// icons for different things, not just colors."*
+struct PinStyleTests {
+
+    /// A misspelled SF Symbol draws nothing and throws nothing. The only way
+    /// to know every name in the table is real is to ask for each one.
+    @Test("Every icon a category can get is a real symbol")
+    func everySymbolExists() {
+        for name in PinStyle.allSymbols {
+            #expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil,
+                    "\(name) is not an SF Symbol")
+        }
+    }
+
+    @Test("Hollow Knight's own categories read as what they are")
+    func hollowKnightCategories() {
+        #expect(PinStyle.symbol(forCategory: "Main Bosses") == "crown.fill")
+        #expect(PinStyle.symbol(forCategory: "Dream Bosses") == "crown.fill")
+        #expect(PinStyle.symbol(forCategory: "Grubs") == "ladybug.fill")
+        #expect(PinStyle.symbol(forCategory: "Mask Shards") == "heart.fill")
+        #expect(PinStyle.symbol(forCategory: "Vessel Fragments") == "drop.fill")
+        #expect(PinStyle.symbol(forCategory: "Charms") == "sparkles")
+        #expect(PinStyle.symbol(forCategory: "King's Idols") == "seal.fill")
+        #expect(PinStyle.symbol(forCategory: "Colosseum of Fools") == "building.columns.fill")
+    }
+
+    /// Substring matching found "ring" inside "whispering" and made the roots
+    /// a charm. Keys match the start of a word.
+    @Test("A key matches the start of a word, not the middle of one")
+    func matchesWordStarts() {
+        #expect(PinStyle.symbol(forCategory: "Whispering Roots") == "leaf.fill")
+        #expect(PinStyle.symbol(forCategory: "Monkeys") == PinStyle.fallback)
+    }
+
+    @Test("A category nothing recognizes still gets a pin")
+    func fallsBack() {
+        #expect(PinStyle.symbol(forCategory: "Miscellaneous") == PinStyle.fallback)
+        #expect(PinStyle.symbol(forCategory: "") == PinStyle.fallback)
+    }
+
+    /// `hashValue` is reseeded every launch, so a category colored by it would
+    /// change color each time the app opened. These are djb2's own answers.
+    @Test("A category's color is the same every launch")
+    func colorIsStable() {
+        #expect(PinStyle.paletteIndex(for: "a", count: 10) == 0)   // 5381·33 + 97 = 177670
+        #expect(PinStyle.paletteIndex(for: "b", count: 10) == 1)   // 177671
+        for id in ["grubs", "bosses", "c1", ""] {
+            let slot = PinStyle.paletteIndex(for: id, count: 7)
+            #expect((0..<7).contains(slot))
+        }
+    }
+}
+
+struct PinStyleChoiceTests {
+    @Test("Everything the picker offers is a real symbol, offered once")
+    func choicesExist() {
+        for name in PinStyle.choices {
+            #expect(NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil,
+                    "\(name) is not an SF Symbol")
+        }
+        #expect(Set(PinStyle.choices).count == PinStyle.choices.count)
+    }
+
+    @Test("A chosen pin wins over the one read from the name")
+    func choiceWins() {
+        let chosen = Self.category(symbol: "moon.stars.fill", color: "purple")
+        #expect(PinStyle.symbol(for: chosen) == "moon.stars.fill")
+        #expect(PinStyle.colorName(for: chosen) == "purple")
+        // "Warrior Graves" — the list nothing in the table recognizes.
+        #expect(PinStyle.symbol(for: Self.category(symbol: nil, color: nil)) == PinStyle.fallback)
+    }
+
+    /// Making colors choosable must not repaint anyone's existing pins.
+    @Test("Automatic colors are the palette they always were")
+    func automaticColorsUnchanged() {
+        #expect(Array(PinStyle.colorNames.prefix(PinStyle.automaticColorCount))
+                == ["orange", "teal", "pink", "yellow", "mint", "cyan", "indigo", "brown", "green", "coral"])
+        #expect(PinStyle.colorName(for: Self.category(symbol: nil, color: nil))
+                == PinStyle.colorNames[PinStyle.paletteIndex(for: "graves", count: 10)])
+    }
+
+    @Test("A stored color the app doesn't know falls back to automatic")
+    func unknownColorFallsBack() {
+        #expect(PinStyle.colorName(for: Self.category(symbol: nil, color: "chartreuse"))
+                == PinStyle.colorNames[PinStyle.paletteIndex(for: "graves", count: 10)])
+    }
+
+    @Test("Endings read as an ending; Warrior Graves is left for the user")
+    func endings() {
+        #expect(PinStyle.symbol(forCategory: "Endings") == "flag.checkered")
+        #expect(PinStyle.symbol(forCategory: "Warrior Graves") == PinStyle.fallback)
+    }
+
+    private static func category(symbol: String?, color: String?) -> TrackerCategoryDTO {
+        var cat: [String: Any] = ["id": "graves", "name": "Warrior Graves",
+                                  "items": [["id": "xero", "name": "Xero"]]]
+        if let symbol { cat["pinSymbol"] = symbol }
+        if let color { cat["pinColor"] = color }
+        let data = try! JSONSerialization.data(withJSONObject: ["categories": [cat]])
+        return TrackerSchemaJSON.categories(from: data)[0]
+    }
+}

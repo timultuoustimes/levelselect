@@ -22,6 +22,8 @@ import SwiftUI
 struct GeneratingTrackerView: View {
     let startedAt: Date
     var kind: GenerationKind = .full
+    /// Set during Generate All Planned: which planned list of how many.
+    var batch: PlannedBatchProgress? = nil
     var onCancel: (() -> Void)?
 
     /// Roughly tracks what the backend does: search for a guide, read it,
@@ -54,14 +56,31 @@ struct GeneratingTrackerView: View {
             (50, "Listing them out…"),
             (90, "Long list — still going…"),
         ]
+        // A refresh of your own lists. It used to show the whole-game captions
+        // ("Finding bosses and collectibles… Sorting them into categories"),
+        // which describe work a refresh doesn't do.
+        case .refresh(let names): [
+            (0,   "Looking for a good guide…"),
+            (20,  names.count <= 2
+                ? "Updating \(names.joined(separator: " and "))…"
+                : "Updating your \(names.count) lists…"),
+            (60,  "Checking for anything missing…"),
+            (100, "Long lists — still going…"),
+        ]
         }
     }
 
     private var subtitle: String {
+        // A batch is many one-category fills in a row. "Quicker than a full
+        // tracker" would be true of each and misleading about the whole.
+        if let batch {
+            return "List \(min(batch.done + 1, batch.total)) of \(batch.total). Each is generated on its own, so a long plan takes a few minutes."
+        }
         switch kind {
-        case .full:     "Usually 1–2 minutes. Big games can take longer."
-        case .plan:     "Just the categories — this part is quick."
-        case .category: "One category only, so this is quicker than a full tracker."
+        case .full:     return "Usually 1–2 minutes. Big games can take longer."
+        case .plan:     return "Just the categories — this part is quick."
+        case .category: return "One list only, so this is quicker than a full tracker."
+        case .refresh:  return "Only the lists you have — no new categories."
         }
     }
 

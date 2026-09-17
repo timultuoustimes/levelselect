@@ -73,8 +73,28 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     /// The RetroAchievements game this category was imported from, stamped at
     /// import. Its presence is what makes this list the authored one.
     var raGameID: Int? = nil
+    /// The Steam app this category was imported from — `raGameID`'s twin, and
+    /// the id a Steam sync looks the game up by.
+    var steamAppID: Int? = nil
+    /// A PlayStation trophy list: its NP communication id (`NPWR…`) and the
+    /// trophy service it lives on (`trophy` for PS4/PS3/Vita, `trophy2` for PS5).
+    var psnTitleID: String? = nil
+    var psnService: String? = nil
+    /// An Xbox title's achievements, by its decimal title id.
+    var xboxTitleID: Int? = nil
+
+    /// Imported from an authored source — RetroAchievements, Steam, PlayStation
+    /// or Xbox — rather than generated: never regenerated, kept through Replace.
+    var isImportedSet: Bool {
+        raGameID != nil || steamAppID != nil || psnTitleID != nil || xboxTitleID != nil
+    }
     /// Written by the list parser for a checklist the user pasted in.
     var locked: Bool = false
+    /// The pin icon the user chose for this list, on this game. Nil means
+    /// read one from the name (`PinStyle`).
+    var pinSymbol: String? = nil
+    /// …and its color, as one of `PinStyle.colorNames`.
+    var pinColor: String? = nil
 
     /// Where this list came from, when the tracker recorded it at creation.
     ///
@@ -86,6 +106,9 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     /// Unlabelled therefore means "nobody wrote it down", not "AI wrote it".
     var provenance: String? {
         if raGameID != nil { return "RetroAchievements" }
+        if steamAppID != nil { return "Steam" }
+        if psnTitleID != nil { return "PlayStation" }
+        if xboxTitleID != nil { return "Xbox" }
         if locked { return "Pasted" }
         return nil
     }
@@ -238,7 +261,13 @@ enum TrackerSchemaJSON {
                 plannedCount: (raw["plannedCount"] as? NSNumber)?.intValue,
                 counted: (raw["counted"] as? Bool) ?? false,
                 raGameID: (raw["raGameID"] as? NSNumber)?.intValue,
-                locked: (raw["locked"] as? Bool) ?? false
+                steamAppID: (raw[steamAppIDKey] as? NSNumber)?.intValue,
+                psnTitleID: (raw[psnTitleIDKey] as? String).flatMap { $0.isEmpty ? nil : $0 },
+                psnService: raw[psnServiceKey] as? String,
+                xboxTitleID: (raw[xboxTitleIDKey] as? NSNumber)?.intValue,
+                locked: (raw["locked"] as? Bool) ?? false,
+                pinSymbol: raw[pinSymbolKey] as? String,
+                pinColor: raw[pinColorKey] as? String
             )
         }
     }
@@ -345,6 +374,46 @@ enum TrackerSchemaJSON {
         cats[idx] = category
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)
+    }
+
+    /// The category key a Steam import stamps, beside `raGameID`.
+    static let steamAppIDKey = "steamAppID"
+
+    /// The Steam app this tracker's achievements came from, if any. Only the
+    /// category stamp: a Steam import is never the whole tracker's root.
+    static func steamAppID(in data: Data) -> Int? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        for category in (root["categories"] as? [[String: Any]]) ?? [] {
+            if let id = (category[steamAppIDKey] as? NSNumber)?.intValue, id > 0 { return id }
+        }
+        return nil
+    }
+
+    static let psnTitleIDKey = "psnTitleID"
+    static let psnServiceKey = "psnService"
+    static let xboxTitleIDKey = "xboxTitleID"
+
+    /// The PlayStation trophy list this tracker's trophies came from, if any.
+    static func playStationTitle(in data: Data) -> (id: String, service: String)? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        for category in (root["categories"] as? [[String: Any]]) ?? [] {
+            if let id = category[psnTitleIDKey] as? String, !id.isEmpty {
+                return (id, (category[psnServiceKey] as? String) ?? "trophy2")
+            }
+        }
+        return nil
+    }
+
+    /// The Xbox title this tracker's achievements came from, if any.
+    static func xboxTitleID(in data: Data) -> Int? {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return nil }
+        for category in (root["categories"] as? [[String: Any]]) ?? [] {
+            if let id = (category[xboxTitleIDKey] as? NSNumber)?.intValue, id > 0 { return id }
+        }
+        return nil
     }
 
     /// The RetroAchievements game id this tracker was imported from, if any.
@@ -460,6 +529,39 @@ enum TrackerSchemaJSON {
         return try? JSONSerialization.data(withJSONObject: root)
     }
 
+    static let pinSymbolKey = "pinSymbol"
+    static let pinColorKey = "pinColor"
+
+    /// The pin icon and color the user chose for a category. `nil` puts that
+    /// half back to automatic.
+    ///
+    /// In the blob, beside the category's name, because that is where a
+    /// renamed category already lives — so an icon syncs exactly as well as
+    /// the name it belongs to, with no schema version. It survives a
+    /// regeneration because `TrackerMerge.carryingUserEdits` carries both keys
+    /// across the way it carries a chosen name.
+    static func settingPinStyle(categoryID: String, symbol: String?, color: String?,
+                                in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let cIdx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+        var category = cats[cIdx]
+        if let symbol, !symbol.isEmpty {
+            category[pinSymbolKey] = symbol
+        } else {
+            category.removeValue(forKey: pinSymbolKey)
+        }
+        if let color, !color.isEmpty {
+            category[pinColorKey] = color
+        } else {
+            category.removeValue(forKey: pinColorKey)
+        }
+        cats[cIdx] = category
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
     /// Edit an item's user-facing fields. `nil` leaves a field alone; an empty
     /// string clears it.
     ///
@@ -529,7 +631,7 @@ enum TrackerSchemaJSON {
     }
 
     /// Categories that came from an authored external source rather than from
-    /// the generator — today, a RetroAchievements import.
+    /// the generator — an import from RetroAchievements, Steam, PlayStation or Xbox.
     ///
     /// These are not regenerable content. The achievement list is the real one
     /// RA publishes, and the category carries the `raGameID` stamp that every
@@ -545,7 +647,11 @@ enum TrackerSchemaJSON {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let cats = root["categories"] as? [[String: Any]] else { return [] }
         return Set(cats.compactMap { cat in
-            guard let id = (cat["raGameID"] as? NSNumber)?.intValue, id > 0 else { return nil }
+            let ra = (cat["raGameID"] as? NSNumber)?.intValue ?? 0
+            let steam = (cat[steamAppIDKey] as? NSNumber)?.intValue ?? 0
+            let xbox = (cat[xboxTitleIDKey] as? NSNumber)?.intValue ?? 0
+            let psn = (cat[psnTitleIDKey] as? String) ?? ""
+            guard ra > 0 || steam > 0 || xbox > 0 || !psn.isEmpty else { return nil }
             return cat["id"] as? String
         })
     }
@@ -636,6 +742,14 @@ enum TrackerSchemaJSON {
         var placedByID: [String: Int] = [:]
         for category in preserved {
             let id = (category["id"] as? String) ?? ""
+            // A plan is kept only while the new tracker hasn't already got that
+            // list — otherwise Replace would leave "Bosses" twice. Its own id
+            // doesn't count: an additive merge can already carry the plan.
+            if (category["pending"] as? Bool) == true {
+                let key = TrackerMerge.matchKey((category["name"] as? String) ?? "")
+                if newCats.contains(where: { ($0["id"] as? String) != id
+                        && TrackerMerge.matchKey(($0["name"] as? String) ?? "") == key }) { continue }
+            }
             if let prior = placedByID[id] {
                 var target = newCats[prior]
                 var items = (target["items"] as? [[String: Any]]) ?? []
@@ -669,8 +783,8 @@ enum TrackerSchemaJSON {
     }
 
     /// Every category the merge must carry across untouched: Personal Goals
-    /// (if it has anything in it), everything locked, and everything imported
-    /// from an authored source.
+    /// (if it has anything in it), everything locked, everything imported from
+    /// an authored source, and every plan that hasn't been filled yet.
     private static func preservedCategories(from oldData: Data) -> [[String: Any]] {
         guard let old = (try? JSONSerialization.jsonObject(with: oldData)) as? [String: Any],
               let oldCats = old["categories"] as? [[String: Any]] else { return [] }
@@ -679,6 +793,11 @@ enum TrackerSchemaJSON {
             let id = cat["id"] as? String
             if (cat["locked"] as? Bool) == true { return true }
             if let id, imported.contains(id) { return true }
+            // A plan is the user's intention, not generated content. Codex,
+            // 09-15: a Replace dropped plans without a word, because the loss
+            // warning counts items and a plan has none.
+            if (cat["pending"] as? Bool) == true,
+               ((cat["items"] as? [[String: Any]]) ?? []).isEmpty { return true }
             guard id == personalGoalsID else { return false }
             return !((cat["items"] as? [[String: Any]]) ?? []).isEmpty
         }

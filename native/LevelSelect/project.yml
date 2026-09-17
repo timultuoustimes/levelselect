@@ -85,6 +85,9 @@ targets:
         # nothing on its own — but it lives beside the app key so a build
         # without it simply hides the feature rather than failing.
         LSItchClientID: $(LS_ITCH_CLIENT_ID)
+        # Microsoft app registration for Xbox sign-in (vault: "LevelSelect Xbox
+        # app registration"). Empty until Tim adds it to Secrets.xcconfig.
+        LSXboxClientID: $(LS_XBOX_CLIENT_ID)
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo

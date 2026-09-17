@@ -55,35 +55,79 @@ enum StageLayout {
     /// 1,376pt, just under it, where three columns would be cramped.
     static let threeColumnWidth: CGFloat = 1400
 
+    /// Where the tracker stops being the thing that needs the room.
+    ///
+    /// The checklist's rows are a name and "0/3". At 46% of a 13" iPad that
+    /// is 633pt holding a short line of text, while the map beside it — the
+    /// one pane whose whole job is detail you zoom into — takes what's left.
+    /// Tim, 09-12: *"the left side tracker half is a lot of wasted space."*
+    /// Above this width the tracker yields; below it it keeps 46%, because
+    /// `minimumWidth` was chosen so that share clears 300pt on a phone in
+    /// landscape, and narrowing it everywhere would undo that.
+    static let trackerYieldsWidth: CGFloat = 1100
+
+    /// Which panes are open beside the page. Not a ladder: Tim's spec asks
+    /// for *"tracker and map; tracker and video; tracker and video and map;
+    /// tracker or map or video"* — every combination, which an Int counting
+    /// 1/2/3 cannot say.
+    struct StagePanes: OptionSet {
+        let rawValue: Int
+        static let tracker = StagePanes(rawValue: 1 << 0)
+        static let video   = StagePanes(rawValue: 1 << 1)
+        static let map     = StagePanes(rawValue: 1 << 2)
+
+        /// Video and map share one column, stacked — the arrangement in
+        /// Tim's 09-08 mockup, videos above and the map below.
+        var usesSideColumn: Bool { !isDisjoint(with: [.video, .map]) }
+    }
+
     /// Where each pane sits, as offsets and widths across the stage.
+    ///
+    /// Horizontal only, on purpose: the side column's two panes are a
+    /// `VStack` of flexible children, so one alone fills the height and two
+    /// share it without any of it being computed here.
     struct Columns: Equatable {
         var pageWidth: CGFloat, pageX: CGFloat
         var trackerWidth: CGFloat, trackerX: CGFloat
-        var videoWidth: CGFloat, videoX: CGFloat
+        /// The column video and map share.
+        var sideWidth: CGFloat, sideX: CGFloat
     }
 
-    /// The panes for a stage (1 = page, 2 = + tracker, 3 = + videos). A pane
-    /// that is closed is parked just past the trailing edge, so it slides in
-    /// rather than appearing.
-    static func columns(width w: CGFloat, stage: Int) -> Columns {
-        let three = w >= threeColumnWidth
-        switch stage {
-        case 1:
+    /// The columns for a set of open panes. A pane that is closed is parked
+    /// just past the trailing edge, so it slides in rather than appearing.
+    static func columns(width w: CGFloat, panes: StagePanes) -> Columns {
+        let parkedTracker = w
+        let parkedSide = w * 1.02
+
+        switch (panes.contains(.tracker), panes.usesSideColumn) {
+        case (false, false):
             return Columns(pageWidth: w, pageX: 0,
-                           trackerWidth: w * 0.42, trackerX: w,
-                           videoWidth: w * 0.54, videoX: w * 1.02)
-        case 2:
+                           trackerWidth: w * 0.42, trackerX: parkedTracker,
+                           sideWidth: w * 0.54, sideX: parkedSide)
+
+        case (true, false):
             return Columns(pageWidth: w * 0.58, pageX: 0,
                            trackerWidth: w * 0.42, trackerX: w * 0.58,
-                           videoWidth: w * 0.54, videoX: w * 1.02)
-        default:
-            return three
-                ? Columns(pageWidth: w * 0.36, pageX: 0,
-                          trackerWidth: w * 0.30, trackerX: w * 0.36,
-                          videoWidth: w * 0.34, videoX: w * 0.66)
-                : Columns(pageWidth: w * 0.58, pageX: -w * 0.58,
-                          trackerWidth: w * 0.46, trackerX: 0,
-                          videoWidth: w * 0.54, videoX: w * 0.46)
+                           sideWidth: w * 0.54, sideX: parkedSide)
+
+        // A map or a video open with no tracker — new, and the reason the
+        // ladder had to go. It reads like the tracker's own arrangement:
+        // the page keeps its 58% and the pane takes the rest.
+        case (false, true):
+            return Columns(pageWidth: w * 0.58, pageX: 0,
+                           trackerWidth: w * 0.42, trackerX: parkedTracker,
+                           sideWidth: w * 0.42, sideX: w * 0.58)
+
+        case (true, true):
+            if w >= threeColumnWidth {
+                return Columns(pageWidth: w * 0.36, pageX: 0,
+                               trackerWidth: w * 0.26, trackerX: w * 0.36,
+                               sideWidth: w * 0.38, sideX: w * 0.62)
+            }
+            let tracker: CGFloat = w >= trackerYieldsWidth ? 0.36 : 0.46
+            return Columns(pageWidth: w * 0.58, pageX: -w * 0.58,
+                           trackerWidth: w * tracker, trackerX: 0,
+                           sideWidth: w * (1 - tracker), sideX: w * tracker)
         }
     }
 }

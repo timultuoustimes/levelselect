@@ -35,6 +35,9 @@ enum ItchService {
     static var isAvailable: Bool { clientID != nil }
 
     private static let callback = "https://levelselect.app/itch/callback"
+    /// The bearer token stays on api.itch.io: redirects off the host aren't
+    /// followed (`CredentialRedirectGuard`).
+    private static let session = CredentialRedirectGuard.session()
     private static let scheme = "levelselect"
 
     /// Only what is needed to read a library, and nothing else.
@@ -84,6 +87,24 @@ enum ItchService {
     }
 
     // MARK: The library
+
+    /// The library as import rows, one per game, minus `existingNames` (the
+    /// wishlist). A game in `library` comes as a row that adds itch.io to it.
+    static func libraryRows(from owned: [OwnedGame], existingNames: Set<String>,
+                            library: [String: UUID] = [:]) -> [CSVImport.Row] {
+        var seen = Set<Int>()
+        return owned.enumerated().compactMap { index, game in
+            guard seen.insert(game.id).inserted else { return nil }
+            let existing = library[TrackerMerge.matchKey(game.name)]
+            guard existing != nil || !existingNames.contains(game.name.lowercased()) else { return nil }
+            return CSVImport.Row(name: game.name, platform: "itch.io", platforms: ["itch.io"],
+                                 status: nil, rating: nil, notes: nil, hoursPlayed: nil,
+                                 igdbID: nil, line: index + 1,
+                                 existingGameID: existing,
+                                 coverURL: game.coverURL,
+                                 exactMatchOnly: true)
+        }
+    }
 
     struct OwnedGame: Sendable, Identifiable {
         var id: Int
@@ -156,7 +177,7 @@ enum ItchService {
     private static func get(_ url: URL, token: String) async -> (json: [String: Any]?, probe: Probe) {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        guard let (data, response) = try? await URLSession.shared.data(for: request) else {
+        guard let (data, response) = try? await session.data(for: request) else {
             return (nil, Probe())
         }
         var probe = Probe(status: (response as? HTTPURLResponse)?.statusCode ?? 0)
@@ -179,7 +200,7 @@ enum ItchService {
 
         let (data, response): (Data, URLResponse)
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch {
             throw ItchError.transport
         }

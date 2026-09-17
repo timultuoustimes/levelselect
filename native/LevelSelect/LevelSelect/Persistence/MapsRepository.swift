@@ -16,7 +16,13 @@ import SwiftData
 /// through the one write path a tick has, with the same completion event and
 /// journal line. Tim's reason for pins on items was so that finding the thing
 /// on the map and ticking it are one motion — two states that could disagree
-/// would be the opposite of that. Unlinked pins use `exploredAt`.
+/// would be the opposite of that.
+///
+/// **Found belongs to the playthrough.** An unlinked pin, or a pin on a counted
+/// item, is found in the playthrough it was found in — a tracker state under
+/// `pinStateID`, not the old game-wide `exploredAt`. Tim, 09-15: *"if I start a
+/// game over completely then I have to re-find all the items again"*, while still
+/// seeing what was found last time.
 extension Repository {
 
     static let mapImageStorageType = "image"
@@ -108,7 +114,12 @@ extension Repository {
         // Linking hands the state to the item; the pin's own stamp is
         // cleared so unlinking later starts from "not explored" rather than
         // from whatever was true before the link.
-        if marker.linkedTrackerItemID != linkedTrackerItemID { marker.exploredAt = nil }
+        if marker.linkedTrackerItemID != linkedTrackerItemID {
+            // Relinking takes the pin's finds back from what it pointed at —
+            // a counted item's +1 included — before it points somewhere else.
+            if let game = marker.map?.game { clearPinFinds(marker, in: game) }
+            marker.exploredAt = nil
+        }
         marker.linkedTrackerItemID = linkedTrackerItemID
         marker.updatedAt = .now
         marker.revision += 1
@@ -124,34 +135,177 @@ extension Repository {
     }
 
     func deleteMarker(_ marker: Marker, at date: Date = .now) {
+        // A found pin on a counted item was +1; deleting it takes that back, in
+        // every playthrough it was found in. Codex, 09-15.
+        if let game = marker.map?.game { clearPinFinds(marker, in: game, at: date) }
         marker.deletedAt = date
         marker.updatedAt = date
         marker.revision += 1
         persist()
     }
 
-    /// Whether a pin reads as explored: the item's state when linked, its
-    /// own stamp otherwise.
-    func isExplored(_ marker: Marker, states: [String: TrackerStateRecord]) -> Bool {
-        if let itemID = marker.linkedTrackerItemID {
+    /// Whether a pin reads as explored: the item's state when linked, its own
+    /// found state in this playthrough otherwise (`pinStateID`).
+    ///
+    /// **Except for a counted item.** 900 Korok Seeds is one tracker row and
+    /// hundreds of spots, so a pin on it is ONE spot, not the item: reading
+    /// the item's state meant exploring one seed showed every seed explored.
+    /// Those pins keep their own found state. `counted` is the set of such items,
+    /// built once by the caller rather than once per pin.
+    func isExplored(_ marker: Marker, states: [String: TrackerStateRecord],
+                    counted: Set<String> = []) -> Bool {
+        if let itemID = marker.linkedTrackerItemID, !counted.contains(itemID) {
             return states[itemID]?.completed ?? false
         }
-        return marker.exploredAt != nil
+        return states[pinStateID(marker)]?.completed ?? false
     }
 
     /// Tap ✓ on a pin. A linked pin ticks the item — the same act as the
     /// checkbox in the tracker, with the same journal line — and an unlinked
     /// pin stamps itself.
     func setExplored(_ marker: Marker, _ explored: Bool, in game: Game, at date: Date = .now) {
-        if let itemID = marker.linkedTrackerItemID {
-            let pt = ensureDefaultPlaythrough(for: game)
+        let pt = ensureDefaultPlaythrough(for: game)
+        let target = marker.linkedTrackerItemID.flatMap { countTarget(of: $0, in: game) }
+        if let itemID = marker.linkedTrackerItemID, target == nil {
             setTrackerItem(pt, itemID: itemID, done: explored)
             return
         }
-        marker.exploredAt = explored ? date : nil
-        marker.updatedAt = date
-        marker.revision += 1
-        persist()
+        // An unlinked pin, or one spot of a counted item: found in THIS
+        // playthrough. Setting it to the state it already has changes nothing,
+        // so a double tap can't move a count.
+        let key = pinStateID(marker)
+        guard (trackerState(pt, itemID: key)?.completed ?? false) != explored else { return }
+        setTrackerItem(pt, itemID: key, done: explored, at: date)
+        if let itemID = marker.linkedTrackerItemID, let target {
+            // Forty found seed pins read 40/900 — instead of ticking the item,
+            // which said all 900 were found. Never below the pins found here,
+            // so a find synced from another device isn't overwritten by this
+            // one's ± 1.
+            let have = trackerState(pt, itemID: itemID)?.count ?? 0
+            let found = foundPinCount(of: itemID, in: game, pt: pt)
+            setTrackerCount(pt, itemID: itemID, count: max(have + (explored ? 1 : -1), found), target: target)
+        }
+    }
+
+    // MARK: Found, per playthrough
+
+    /// A pin's own found state is a tracker state in the playthrough under this
+    /// id. No schema: it syncs, merges and backs up exactly as a tick does, and
+    /// progress never counts it because it isn't a tracker item.
+    static let pinStatePrefix = "pin:"
+
+    func pinStateID(_ marker: Marker) -> String {
+        Self.pinStatePrefix + marker.id.uuidString
+    }
+
+    /// Pins found in another playthrough and not in this one — Tim's Korok
+    /// case, 09-15: *"see all the koroks they had found the last time, and which
+    /// ones they need to look harder for."* A pin still carrying the old
+    /// game-wide stamp counts as found before until `reconcile` moves it.
+    func markersFoundBefore(in game: Game, counted: Set<String>) -> Set<UUID> {
+        guard let active = game.activePlaythrough else { return [] }
+        func completed(_ pt: Playthrough) -> Set<String> {
+            Set((pt.trackerStates ?? []).filter { $0.deletedAt == nil && $0.completed }.map(\.itemID))
+        }
+        let here = completed(active)
+        let elsewhere = game.livePlaythroughs.filter { $0.id != active.id }
+            .reduce(into: Set<String>()) { $0.formUnion(completed($1)) }
+        var out = Set<UUID>()
+        for map in liveMaps(of: game) {
+            for marker in liveMarkers(of: map) {
+                let key: String
+                if let itemID = marker.linkedTrackerItemID, !counted.contains(itemID) {
+                    key = itemID
+                } else {
+                    key = pinStateID(marker)
+                }
+                guard !here.contains(key) else { continue }
+                let legacy = key.hasPrefix(Self.pinStatePrefix) && marker.exploredAt != nil
+                if elsewhere.contains(key) || legacy { out.insert(marker.id) }
+            }
+        }
+        return out
+    }
+
+    /// Pins linked to a counted item that are found in this playthrough.
+    func foundPinCount(of itemID: String, in game: Game, pt: Playthrough) -> Int {
+        let done = Set((pt.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && $0.completed }.map(\.itemID))
+        return liveMaps(of: game).flatMap { liveMarkers(of: $0) }
+            .filter { $0.linkedTrackerItemID == itemID && done.contains(pinStateID($0)) }
+            .count
+    }
+
+    /// Take a pin's finds back from every playthrough, and a counted item's +1
+    /// with them — never below the pins still found for it.
+    func clearPinFinds(_ marker: Marker, in game: Game, at date: Date = .now) {
+        let key = pinStateID(marker)
+        let target = marker.linkedTrackerItemID.flatMap { countTarget(of: $0, in: game) }
+        for pt in game.livePlaythroughs where trackerState(pt, itemID: key)?.completed == true {
+            setTrackerItem(pt, itemID: key, done: false)
+            if let itemID = marker.linkedTrackerItemID, let target {
+                let have = trackerState(pt, itemID: itemID)?.count ?? 0
+                let found = foundPinCount(of: itemID, in: game, pt: pt)
+                setTrackerCount(pt, itemID: itemID, count: max(have - 1, found), target: target)
+            }
+        }
+    }
+
+    /// Move pins' old game-wide found stamps into the playthrough in use, once.
+    /// Before 09-15 a found pin was found for the whole game, and the playthrough
+    /// someone is on is the best record of which run that was. A counted item's
+    /// count already includes these, so it isn't touched.
+    func migrateLegacyPinStamps(in game: Game) -> Int {
+        guard let pt = game.activePlaythrough else { return 0 }
+        let counted = Set(trackerCategories(for: game).flatMap(\.items)
+            .filter { ($0.countTarget ?? 0) > 0 }.map(\.id))
+        var moved = 0
+        for map in liveMaps(of: game) {
+            for marker in liveMarkers(of: map) {
+                guard let stamp = marker.exploredAt else { continue }
+                if let itemID = marker.linkedTrackerItemID, !counted.contains(itemID) { continue }
+                let key = pinStateID(marker)
+                if !game.livePlaythroughs.contains(where: { trackerState($0, itemID: key) != nil }) {
+                    setTrackerItem(pt, itemID: key, done: true, at: stamp)
+                }
+                marker.exploredAt = nil
+                marker.updatedAt = .now
+                marker.revision += 1
+                moved += 1
+            }
+        }
+        if moved > 0 { persist() }
+        return moved
+    }
+
+    /// Raise every counted item to at least the pins found for it, per
+    /// playthrough. Two devices each finding a different seed write count 1
+    /// from their own 0; both finds sync as separate states, and this is where
+    /// the count catches up to them. Never lowers a count set by hand.
+    func floorCountedItemsToFoundPins(in game: Game) -> Int {
+        let items = trackerCategories(for: game).flatMap(\.items).filter { ($0.countTarget ?? 0) > 0 }
+        guard !items.isEmpty, !liveMaps(of: game).isEmpty else { return 0 }
+        var raised = 0
+        for pt in game.livePlaythroughs {
+            for item in items {
+                let found = foundPinCount(of: item.id, in: game, pt: pt)
+                guard found > (trackerState(pt, itemID: item.id)?.count ?? 0) else { continue }
+                setTrackerCount(pt, itemID: item.id, count: found, target: item.countTarget)
+                raised += 1
+            }
+        }
+        return raised
+    }
+
+    /// The target of a counted item — 900 for the Korok Seeds — or nil when
+    /// the item is a checkbox.
+    func countTarget(of itemID: String, in game: Game) -> Int? {
+        for category in trackerCategories(for: game) {
+            if let item = category.items.first(where: { $0.id == itemID }) {
+                return (item.countTarget ?? 0) > 0 ? item.countTarget : nil
+            }
+        }
+        return nil
     }
 
     /// Every live marker on this game, keyed by the tracker item it points

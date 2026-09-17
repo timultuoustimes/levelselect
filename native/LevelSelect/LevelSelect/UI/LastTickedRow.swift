@@ -39,7 +39,8 @@ struct LastTickedRow: View {
     private var recent: Recent? {
         guard let playthrough = game.activePlaythrough else { return nil }
         let done = (playthrough.trackerStates ?? [])
-            .filter { $0.deletedAt == nil && $0.completed }
+            // A found map pin is a state too, but it isn't where you left off.
+            .filter { $0.deletedAt == nil && $0.completed && !$0.itemID.hasPrefix(Repository.pinStatePrefix) }
         guard let latest = done.max(by: { $0.tickedAt < $1.tickedAt }) else { return nil }
 
         // Names and notes come from the overlaid read, so a renamed item shows
