@@ -72,9 +72,9 @@ struct LibraryFilterBar: View {
                         .accessibilityLabel("Status: \(status.sectionTitle). Remove")
                 }
                 if let platform = platformFilter {
-                    FilterChip(label: platform, systemImage: "gamecontroller",
+                    FilterChip(label: PlatformShort.name(platform), systemImage: "gamecontroller",
                                isOn: true, onRemove: { platformFilter = nil })
-                        .accessibilityLabel("System: \(platform). Remove")
+                        .accessibilityLabel("System: \(PlatformShort.name(platform)). Remove")
                 }
                 if statusFilter != nil || platformFilter != nil,
                    !ownerships.isEmpty || !tags.isEmpty || showsGap {

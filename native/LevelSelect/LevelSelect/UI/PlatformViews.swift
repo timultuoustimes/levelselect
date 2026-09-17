@@ -17,7 +17,8 @@ struct PlatformRoute: Hashable {
     static func matches(_ game: Game, platform: String, ownership: OwnershipFilter?) -> Bool {
         let owned = game.ownedPlatformNames
         let mine = owned.isEmpty ? ["Other"] : owned
-        return mine.contains(platform) && (ownership?.matches(game) ?? true)
+        let key = PlatformKey.canonical(platform)
+        return mine.contains { PlatformKey.canonical($0) == key } && (ownership?.matches(game) ?? true)
     }
 }
 

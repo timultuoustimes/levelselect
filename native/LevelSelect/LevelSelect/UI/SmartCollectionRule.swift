@@ -70,7 +70,7 @@ struct SmartCollectionRule: Equatable, Hashable {
     func describe(statusName: (GameStatus) -> String) -> [String] {
         var parts: [String] = []
         if let status { parts.append(statusName(status)) }
-        if let system { parts.append(system) }
+        if let system { parts.append(PlatformShort.name(system)) }
         if let ownership {
             switch ownership {
             case .kind(let k): parts.append(k.label)

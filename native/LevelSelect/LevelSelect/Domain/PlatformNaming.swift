@@ -46,7 +46,7 @@ enum PlatformNaming {
         // The source already admits this one is an editorial call — IGDB says
         // "PlayStation", the app says PS1 because it reads clearly beside PS2.
         "PS1":           ["PS1", "PlayStation"],
-        "PC":            ["PC", "Windows"],
+        "PC":            ["PC", "Windows", "Linux", "Computer"],
         "Vita":          ["Vita", "PS Vita"],
         "Xbox Series":   ["Xbox Series", "Xbox Series X|S"],
     ]
@@ -66,7 +66,8 @@ enum PlatformNaming {
         "NES":           "Nintendo Entertainment System",
         "SNES":          "Super Nintendo Entertainment System",
         "PS1":           "Sony PlayStation",
-        "PC":            "Windows PC",
+        // Linux folds into PC too (see `PlatformKey.canonical`).
+        "PC":            "PC (Windows or Linux)",
         "Vita":          "PlayStation Vita",
         "Xbox Series":   "Xbox Series X and S",
     ]
@@ -102,6 +103,13 @@ enum PlatformNaming {
     static func resolved(_ short: String, overrides: [String: String]) -> String {
         guard let chosen = overrides[short], isValid(chosen, for: short) else { return short }
         return chosen
+    }
+
+    /// The console a shown name belongs to: the one renamed to it, or the
+    /// machine the app reads it as. For anything saved with a shown name in
+    /// it before filters and widgets stored the console — a widget, a link.
+    static func key(forShown name: String, overrides: [String: String]) -> String {
+        overrides.first { $0.value == name }?.key ?? PlatformKey.canonical(name)
     }
 
     /// Drops entries that name nothing, so a stored map cannot grow stale

@@ -356,11 +356,28 @@ struct ConsoleEditor: View {
                         HStack(spacing: 12) {
                             PlatformIconView(platform: console.platform, size: 44)
                                 .frame(width: 58, height: 58)
-                            Text(PlatformShort.name(console.platform))
-                                .font(.title3.weight(.semibold))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(PlatformShort.name(console.platform))
+                                    .font(.title3.weight(.semibold))
+                                if console.platform == "PC" {
+                                    Text("Windows or Linux")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                             Spacer(minLength: 0)
                         }
                         .padding(.vertical, 2)
+                    }
+
+                    if PlatformNaming.alternatives[PlatformShort.builtinName(console.platform)] != nil {
+                        Section {
+                            SystemNamePicker(short: PlatformShort.builtinName(console.platform)) {
+                                Text("Called")
+                            }
+                        } footer: {
+                            Text("The system's name everywhere in the app — its games too.")
+                        }
                     }
 
                     Section {

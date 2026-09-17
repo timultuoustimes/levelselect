@@ -152,9 +152,10 @@ enum WidgetBridge {
                     id: g.id.uuidString, name: g.name,
                     coverFileName: g.displayCoverURLString.map { coverFileName(for: $0) },
                     statusRaw: g.status.rawValue,
-                    platform: PlatformShort.name(g.primaryOwnedPlatform ?? "Other"))
+                    platform: PlatformShort.name(g.primaryOwnedPlatform ?? "Other"),
+                    platformKey: PlatformShort.builtinName(g.primaryOwnedPlatform ?? "Other"))
             }
-        let libraryPlatforms = Array(Set(shufflePool.map(\.platform))).sorted()
+        let libraryPlatforms = Array(Set(shufflePool.compactMap(\.platformKey))).sorted()
         // **The shelf, not the pool.** A console is a record you can own with
         // no games on it since build 39, and Home shows those — so the
         // launcher's picker has to see them too, or a library of consoles and
@@ -164,7 +165,11 @@ enum WidgetBridge {
             predicate: #Predicate { $0.deletedAt == nil })
         let ownedConsoles = (try? context.fetch(consoleDescriptor)) ?? []
         let systemShelves = Array(Set(libraryPlatforms
-            + ownedConsoles.map { PlatformShort.name($0.platform) })).sorted()
+            + ownedConsoles.map { PlatformShort.builtinName($0.platform) })).sorted()
+        var platformNames: [String: String] = [:]
+        for key in systemShelves where PlatformShort.name(key) != key {
+            platformNames[key] = PlatformShort.name(key)
+        }
 
         // Daily rollup (16 weeks), the 4-week pace, finished share, and the
         // collections the launcher widget can point at.
@@ -204,7 +209,7 @@ enum WidgetBridge {
         var platformIcons: [String: String] = [:]
         for g in games {
             guard let raw = g.primaryOwnedPlatform else { continue }
-            let short = PlatformShort.name(raw)
+            let short = PlatformShort.builtinName(raw)
             if platformIcons[short] == nil, let asset = PlatformIcon.assetName(raw) {
                 platformIcons[short] = asset
             }
@@ -274,6 +279,7 @@ enum WidgetBridge {
             shufflePool: shufflePool,
             libraryPlatforms: libraryPlatforms,
             systemShelves: systemShelves,
+            platformNames: platformNames,
             dailyMinutes: daily,
             weeklyAverageSeconds: weeklyAverage,
             completedCount: completedCount,

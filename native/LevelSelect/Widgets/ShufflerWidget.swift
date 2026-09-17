@@ -36,8 +36,16 @@ enum ShuffleStatusOption: String, AppEnum {
 }
 
 struct ShufflePlatformProvider: DynamicOptionsProvider {
-    func results() async throws -> [String] {
-        ["Any"] + (WidgetSnapshot.load()?.libraryPlatforms ?? [])
+    /// The console is the value and its name the title, so renaming a console
+    /// leaves a configured shuffler pointing at the same games.
+    func results() async throws -> ItemCollection<String> {
+        let snapshot = WidgetSnapshot.load()
+        let systems = (snapshot?.libraryPlatforms ?? []).map { key in
+            IntentItem<String>(key, title: "\(snapshot?.platformNames[key] ?? key)")
+        }
+        return ItemCollection(sections: [
+            ItemSection(items: [IntentItem<String>("Any", title: "Any")] + systems),
+        ])
     }
     func defaultResult() async -> String? { "Any" }
 }

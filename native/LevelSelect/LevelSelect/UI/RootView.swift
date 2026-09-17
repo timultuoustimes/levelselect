@@ -255,7 +255,10 @@ struct RootView: View {
             }
         case "platform":
             if let name = url.pathComponents.last?.removingPercentEncoding {
-                nav.push(PlatformRoute(platform: name))
+                // Widgets send the console's key; one configured before that
+                // may send the name it had then.
+                nav.push(PlatformRoute(platform: PlatformNaming.key(
+                    forShown: name, overrides: PlatformShort.displayOverrides)))
             }
         case "collection":
             if let last = url.pathComponents.last, let id = UUID(uuidString: last) {

@@ -117,6 +117,19 @@ struct PlatformNamingTests {
         #expect(PlatformNaming.order.count == Set(PlatformNaming.order).count)
     }
 
+    /// Filters, smart collections and widgets store the console, so choosing
+    /// another name for it doesn't empty them. Rules saved with a shown name
+    /// still match.
+    @Test func aSavedFilterSurvivesARename() {
+        withOverrides(["Genesis": "Mega Drive"]) {
+            #expect(PlatformShort.ownedMatches(["Sega Genesis"], short: "Genesis"))
+            #expect(PlatformShort.ownedMatches(["Sega Genesis"], short: "Mega Drive"))
+            #expect(!PlatformShort.ownedMatches(["Sega Genesis"], short: "SNES"))
+            #expect(PlatformNaming.key(forShown: "Mega Drive", overrides: ["Genesis": "Mega Drive"]) == "Genesis")
+            #expect(PlatformNaming.key(forShown: "Nintendo Switch", overrides: [:]) == "Switch")
+        }
+    }
+
     // MARK: Storing
 
     /// Choosing the default back stores nothing. A row saying "Genesis is

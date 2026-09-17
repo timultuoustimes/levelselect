@@ -21,6 +21,9 @@ struct LauncherTarget: AppEntity, Identifiable {
         DisplayRepresentation(title: "\(name)", subtitle: "\(subtitle)")
     }
 
+    /// The console a system target opens, from its id.
+    var platformKey: String { String(id.drop { $0 != ":" }.dropFirst()) }
+
     var url: URL? {
         let parts = id.split(separator: ":", maxSplits: 1).map(String.init)
         guard parts.count == 2 else { return nil }
@@ -53,9 +56,11 @@ struct LauncherTarget: AppEntity, Identifiable {
         }
         // `systemShelves`, not `libraryPlatforms`: the consoles you own are
         // openable whether or not a game sits on them. See `WidgetSnapshot`.
+        // Keyed by the console, named as you call it: a rename must not
+        // unpick the widget.
         for platform in snapshot?.systemShelves ?? [] {
             targets.append(LauncherTarget(
-                id: "platform:\(platform)", name: platform,
+                id: "platform:\(platform)", name: snapshot?.platformNames[platform] ?? platform,
                 subtitle: "System", symbol: "gamecontroller.fill"))
         }
         return targets
@@ -64,7 +69,15 @@ struct LauncherTarget: AppEntity, Identifiable {
 
 struct LauncherTargetQuery: EntityQuery {
     func entities(for identifiers: [String]) async throws -> [LauncherTarget] {
-        LauncherTarget.all().filter { identifiers.contains($0.id) }
+        let all = LauncherTarget.all()
+        return identifiers.compactMap { id in
+            if let target = all.first(where: { $0.id == id }) { return target }
+            // A system picked before widgets stored the console: its id holds
+            // the name it had then.
+            guard id.hasPrefix("platform:") else { return nil }
+            let name = String(id.dropFirst("platform:".count))
+            return all.first { $0.id.hasPrefix("platform:") && $0.name == name }
+        }
     }
     func suggestedEntities() async throws -> [LauncherTarget] {
         LauncherTarget.all()
@@ -130,7 +143,7 @@ func portalGames(for target: LauncherTarget,
         return snapshot.shufflePool.filter { $0.statusRaw == parts[1] }
             .prefix(8).map { ($0.id, $0.coverFileName) }
     case "platform":
-        return snapshot.shufflePool.filter { $0.platform == parts[1] }
+        return snapshot.shufflePool.filter { $0.platformKey == parts[1] || $0.platform == parts[1] }
             .prefix(8).map { ($0.id, $0.coverFileName) }
     case "collection":
         guard let ref = snapshot.collections.first(where: { $0.id == parts[1] })
@@ -153,7 +166,7 @@ struct PortalMark: View {
 
     var body: some View {
         if target.id.hasPrefix("platform:"),
-           let asset = snapshot?.platformIcons[target.name],
+           let asset = snapshot?.platformIcons[target.platformKey] ?? snapshot?.platformIcons[target.name],
            let ui = UIImage(named: asset) {
             Image(uiImage: ui)
                 .resizable()
@@ -282,7 +295,8 @@ struct LauncherSmallView: View {
     var body: some View {
         if let target = entry.target,
            target.id.hasPrefix("platform:"),
-           let asset = entry.snapshot?.platformIcons[target.name],
+           let asset = entry.snapshot?.platformIcons[target.platformKey]
+                ?? entry.snapshot?.platformIcons[target.name],
            let ui = UIImage(named: asset) {
             // A system's small launcher is a shelf ornament: the claymorphic
             // hardware nearly fills the widget, name beneath. A row of these

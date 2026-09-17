@@ -401,7 +401,7 @@ struct LibraryTab: View {
     private func seeAll(_ group: LibGroup) {
         withAnimation {
             if let status = group.status { statusFilter = status }
-            if let platform = group.platform { platformFilter = PlatformShort.name(platform) }
+            if let platform = group.platform { platformFilter = PlatformShort.builtinName(platform) }
             viewModeRaw = LibraryViewMode.grid.rawValue
         }
     }
@@ -673,7 +673,9 @@ struct LibraryTab: View {
                         } icon: {
                             PlatformMenuIcon(platform: entry.icon)
                         }
-                        .tag(String?.some(entry.short))
+                        // The console, not its name: a smart collection
+                        // saved from this filter must survive a rename.
+                        .tag(String?.some(PlatformShort.builtinName(entry.icon)))
                     }
                 }
                 Divider()
@@ -1025,8 +1027,11 @@ enum PlatformShort {
     /// Takes `Game.ownedPlatformNames`, not the whole availability list.
     /// Crypt of the NecroDancer lists eight platforms and is owned on one or
     /// two; the library filter means the ones you own.
+    /// `short` is the console's own name (`builtinName`) — what filters and
+    /// smart collections store, so renaming a console never empties them.
+    /// A shown name still matches, for rules saved before that.
     static func ownedMatches(_ ownedNames: [String], short: String) -> Bool {
-        ownedNames.contains { name($0) == short }
+        ownedNames.contains { builtinName($0) == short || name($0) == short }
     }
 }
 
@@ -1203,12 +1208,12 @@ struct GameSelectionBar: View {
         let mine = Repository(context).liveConsoles().map(\.platform).sorted()
         Section("Your consoles") {
             ForEach(mine, id: \.self) { platform in
-                Button(platform) { setConsole(platform) }
+                Button(PlatformShort.name(platform)) { setConsole(platform) }
             }
         }
         Menu("Other systems") {
             ForEach(PlatformCatalog.all.filter { !mine.contains($0) }, id: \.self) { platform in
-                Button(platform) { setConsole(platform) }
+                Button(PlatformShort.name(platform)) { setConsole(platform) }
             }
         }
     }

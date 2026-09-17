@@ -76,9 +76,12 @@ struct WidgetPoolGame: Codable, Hashable, Identifiable {
     var name: String
     var coverFileName: String?
     var statusRaw: String
-    /// Preferred platform's short display name ("Switch", "SNES") — doubles
-    /// as the value the shuffler's console filter matches against.
+    /// Preferred platform's name as you see it ("Switch", or "Luffy").
     var platform: String
+    /// The console itself ("Switch"), which the shuffler's filter matches —
+    /// a name can change and a saved widget must not stop matching. Nil in a
+    /// snapshot written before this existed.
+    var platformKey: String? = nil
 
     /// The filter the shuffler applies, pure so it's testable. Statuses are
     /// raw values; completed joins the pool only when the toggle says so —
@@ -90,7 +93,8 @@ struct WidgetPoolGame: Codable, Hashable, Identifiable {
         pool.filter { game in
             let statusOK = statuses.contains(game.statusRaw)
                 || (includeCompleted && game.statusRaw == "completed")
-            let platformOK = platform == nil || platform == game.platform
+            let platformOK = platform == nil || platform == (game.platformKey ?? game.platform)
+                || platform == game.platform
             return statusOK && platformOK
         }
     }
@@ -156,6 +160,10 @@ struct WidgetSnapshot: Codable, Hashable {
     /// I can't do consoles anymore?"* This is Home's own list — games'
     /// platforms unioned with the consoles you hold a record for.
     var systemShelves: [String] = []
+    /// Console key → the name you gave it. `libraryPlatforms`,
+    /// `systemShelves` and `platformIcons` are keyed by console; this is how
+    /// a widget shows them. Absent keys show as themselves.
+    var platformNames: [String: String] = [:]
     /// Minutes played per day, oldest → newest, today last (16 weeks' worth).
     /// Feeds the heatmap widget, the streak, and the week gauge.
     var dailyMinutes: [Double] = []
@@ -269,6 +277,7 @@ struct WidgetSnapshot: Codable, Hashable {
         weeklySeconds: [Double], gamesPlayedThisWeek: Int, runGame: WidgetRunGame?,
         shufflePool: [WidgetPoolGame] = [], libraryPlatforms: [String] = [],
         systemShelves: [String] = [],
+        platformNames: [String: String] = [:],
         dailyMinutes: [Double] = [], weeklyAverageSeconds: Double = 0,
         completedCount: Int = 0, libraryCount: Int = 0,
         collections: [WidgetCollectionRef] = [],
@@ -304,6 +313,7 @@ struct WidgetSnapshot: Codable, Hashable {
         self.objectives = objectives; self.nowPlaying = nowPlaying
         self.shufflePool = shufflePool; self.libraryPlatforms = libraryPlatforms
         self.systemShelves = systemShelves
+        self.platformNames = platformNames
         self.dailyMinutes = dailyMinutes; self.weeklyAverageSeconds = weeklyAverageSeconds
         self.completedCount = completedCount; self.libraryCount = libraryCount
         self.collections = collections
@@ -342,6 +352,7 @@ struct WidgetSnapshot: Codable, Hashable {
         // still offer the systems it can see — so it falls back to the list
         // that used to be the only one.
         systemShelves = try c.decodeIfPresent([String].self, forKey: .systemShelves) ?? libraryPlatforms
+        platformNames = try c.decodeIfPresent([String: String].self, forKey: .platformNames) ?? [:]
         dailyMinutes = try c.decodeIfPresent([Double].self, forKey: .dailyMinutes) ?? []
         accentHex = try c.decodeIfPresent(String.self, forKey: .accentHex)
         // A snapshot written before build 38 carries only the single hex, and

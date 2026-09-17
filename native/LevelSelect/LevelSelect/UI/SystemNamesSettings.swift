@@ -46,10 +46,7 @@ struct SystemNamesSettingsPage: View {
 
     /// One console, its names, and the one in force.
     private func row(_ short: String) -> some View {
-        let names = PlatformNaming.alternatives[short] ?? [short]
-        return Picker(selection: binding(for: short)) {
-            ForEach(names, id: \.self) { Text($0).tag($0) }
-        } label: {
+        SystemNamePicker(short: short) {
             Label {
                 Text(PlatformNaming.hardwareName(for: short))
             } icon: {
@@ -58,38 +55,6 @@ struct SystemNamesSettingsPage: View {
                 PlatformMenuIcon(platform: iconSource[short] ?? short)
             }
         }
-    }
-
-    /// Writes the choice, and removes it again when you pick the default back.
-    ///
-    /// Storing "Genesis" for Genesis would be a row of data that says nothing,
-    /// and it would then sync, merge and outlive the build that wrote it. An
-    /// absent key is the same answer with none of that.
-    private func binding(for short: String) -> Binding<String> {
-        Binding(
-            get: {
-                let stored = themeSettings.first?.platformNames[short]
-                guard let stored, PlatformNaming.isValid(stored, for: short) else {
-                    return PlatformNaming.defaultName(for: short)
-                }
-                return stored
-            },
-            set: { chosen in
-                let settings = ThemePalette.fetchOrCreate(in: context)
-                var map = settings.platformNames
-                if chosen == PlatformNaming.defaultName(for: short) {
-                    map.removeValue(forKey: short)
-                } else {
-                    map[short] = chosen
-                }
-                settings.platformNames = PlatformNaming.sanitized(map)
-                settings.updatedAt = .now
-                PersistenceMonitor.shared.commit(context)
-                ThemePalette.refresh(from: settings)
-                // Widgets read a snapshot, not the store — without this the
-                // Home Screen keeps the old name until something else changes.
-                WidgetBridge.refresh()
-            })
     }
 
     // MARK: What you own
@@ -120,5 +85,55 @@ struct SystemNamesSettingsPage: View {
     private var others: [String] {
         let mineSet = Set(mine)
         return PlatformNaming.order.filter { !mineSet.contains($0) }
+    }
+}
+
+/// Which of its real names a console goes by, for System Names and the
+/// console's own sheet.
+struct SystemNamePicker<Title: View>: View {
+    let short: String
+    @ViewBuilder var title: () -> Title
+
+    @Environment(\.modelContext) private var context
+    @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
+
+    var body: some View {
+        Picker(selection: binding) {
+            ForEach(PlatformNaming.alternatives[short] ?? [short], id: \.self) { Text($0).tag($0) }
+        } label: {
+            title()
+        }
+    }
+
+    /// Writes the choice, and removes it again when you pick the default back.
+    ///
+    /// Storing "Genesis" for Genesis would be a row of data that says nothing,
+    /// and it would then sync, merge and outlive the build that wrote it. An
+    /// absent key is the same answer with none of that.
+    private var binding: Binding<String> {
+        Binding(
+            get: {
+                let stored = themeSettings.first?.platformNames[short]
+                guard let stored, PlatformNaming.isValid(stored, for: short) else {
+                    return PlatformNaming.defaultName(for: short)
+                }
+                return stored
+            },
+            set: { chosen in
+                let settings = ThemePalette.fetchOrCreate(in: context)
+                var map = settings.platformNames
+                if chosen == PlatformNaming.defaultName(for: short) {
+                    map.removeValue(forKey: short)
+                } else {
+                    map[short] = chosen
+                }
+                settings.platformNames = PlatformNaming.sanitized(map)
+                settings.updatedAt = .now
+                PersistenceMonitor.shared.commit(context)
+                ThemePalette.refresh(from: settings)
+                // Widgets read a snapshot, not the store — without this the
+                // Home Screen keeps the old name until something else changes.
+                WidgetBridge.refresh()
+            })
     }
 }
