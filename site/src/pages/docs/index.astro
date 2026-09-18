@@ -115,7 +115,7 @@ const sections = [
   { id: 'search',            q: 'Where do I search everything at once?',
     a: 'The magnifying glass beside the tab bar: games, tracker items, notes, news and releases, then games you do not have yet.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
-    a: 'Home Screen, Lock Screen, and extra-large boards on iPad. Long-press to aim one.' },
+    a: 'Home Screen, Lock Screen, Control Center, and extra-large boards on iPad. Long-press to aim one.' },
   { id: 'shortcuts',         q: 'Can I use Siri for this?',
     a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
   { id: 'beaten',            q: 'I finished a game — what do I mark?',
@@ -682,6 +682,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <li><strong>Releases:</strong> <em>Coming Soon</em> is your wishlist covers with the wait printed under each; <em>Release Calendar</em> is the dates themselves &mdash; one game at small, four at medium, and at large a real month grid with covers standing where the day numbers would be.</li>
       <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
       <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
+      <li><strong>Control Center, Lock Screen and the Action button:</strong> the <em>Play Session</em> control starts a session for the game you were last playing, and tapping it again stops it. Add it from Control Center's editor, the Lock Screen's customize screen, or Settings &rarr; Action Button.</li>
       <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
       <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
     </ul>
@@ -697,7 +698,8 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>Every game in your library is a real entity in the Shortcuts app, Siri, and Spotlight — not just the app itself, each <em>game</em>. That means:</p>
     <ul>
       <li><strong>"Play Hollow Knight in LevelSelect"</strong> starts a timed session for that game — from Siri, without opening anything. "Open <em>game</em> in LevelSelect" jumps to its page.</li>
-      <li><strong>"Continue playing in LevelSelect"</strong> resumes whatever you were last playing. "Open LevelSelect stats" (or library, or wishlist) goes straight to a tab.</li>
+      <li><strong>"Continue playing in LevelSelect"</strong> resumes whatever you were last playing. <em>Open Section</em> goes straight to Home, Library, the Wishlist, News, Search or the Journal.</li>
+      <li><strong>Spotlight finds your games</strong> by name, with a line of detail &mdash; &ldquo;Switch &middot; Playing &middot; 12h&rdquo; &mdash; and tapping one opens it. The same details (platform, status, hours played, rating, last played) are what Shortcuts&rsquo; <em>Use Model</em> action can read, so you can ask it about your own library.</li>
       <li><strong>Build your own automations.</strong> Because sessions are Shortcuts actions, you can wire them to anything the Shortcuts app can see: an NFC tag stuck to the console that starts a session when you tap your phone on it, a Focus that opens your library, a bedtime automation that reminds you a timer's still running.</li>
     </ul>
     <p>Nothing to set up — the shortcuts register themselves when the app is installed. Open the Shortcuts app and search LevelSelect to see the full set.</p>

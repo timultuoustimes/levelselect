@@ -19,6 +19,8 @@ LevelSelect is a game library and progress tracker for iPhone, iPad, Mac, and Ap
 
 Everything you create in LevelSelect — your game library, play sessions, tracker progress, playthroughs, runs, collections, ratings, notes, and videos you've linked — is stored locally on your device using Apple's SwiftData, and synced through **CloudKit to your private iCloud database** when iCloud is available. This data is under your Apple account's control; the developer has no access to it. Deleting the app and its iCloud data removes it.
 
+So that Spotlight and Siri can find your games, LevelSelect adds each game's name, platform, status, hours played and rating to your device's own **Spotlight index**. The index is kept by your device, is not sent to us, and is rebuilt whenever your library changes.
+
 ## Data that leaves your device
 
 LevelSelect talks to a small backend (Supabase Edge Functions) for the features below. In each case, only what's listed is sent:
