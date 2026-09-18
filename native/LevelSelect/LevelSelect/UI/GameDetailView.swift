@@ -959,6 +959,26 @@ struct GameDetailView: View {
         .mask(Rectangle().padding(.vertical, -4_000))
     }
 
+    /// The game's logo, or its name, above the stage tracker.
+    @ViewBuilder private var stageGameHeader: some View {
+        Group {
+            if !headerLogo.isEmpty {
+                ArtworkView(headerLogo, contentMode: .fit)
+                    .frame(maxWidth: 260, maxHeight: 64)
+                    .accessibilityLabel(game.name)
+            } else {
+                Text(game.name)
+                    .font(.title3.weight(.bold))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
+        .transition(.opacity)
+    }
+
     private var trackerPanel: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -987,6 +1007,11 @@ struct GameDetailView: View {
                 .accessibilityLabel("Close")
             }
             .padding(12)
+            // Once the side column opens, the game page has slid away and
+            // nothing on screen says which game this is — Tim, iPad, 09-18:
+            // *"I can't even tell what game it is."* Its logo heads the
+            // tracker then, as it does on the tracker's own page.
+            if panes.usesSideColumn { stageGameHeader }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
