@@ -47,9 +47,24 @@ enum WikidataService {
     struct Entry: Codable, Hashable {
         let qid: String
         let title: String?
-        let series: String?
+        /// Raw, as the query returned it. Wikidata's label service falls back
+        /// to the item id when a series has no English label, so Control
+        /// Resonant's page read "Series: Q116947323" (09-18). Read `series`.
+        let seriesLabel: String?
         let released: String?
         let credits: [Credit]
+
+        /// The series name, or nil when Wikidata only had an id for it.
+        var series: String? {
+            guard let s = seriesLabel, s.range(of: #"^Q\d+$"#, options: .regularExpression) == nil
+            else { return nil }
+            return s
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case qid, title, released, credits
+            case seriesLabel = "series"
+        }
 
         /// Credits in a stable, readable order rather than query order.
         var orderedCredits: [Credit] {

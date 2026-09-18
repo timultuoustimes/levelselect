@@ -16,7 +16,18 @@ struct WikidataServiceTests {
     private func entry(released: String? = nil,
                        credits: [WikidataService.Credit] = []) -> WikidataService.Entry {
         WikidataService.Entry(qid: "Q29300592", title: "Hollow Knight",
-                              series: nil, released: released, credits: credits)
+                              seriesLabel: nil, released: released, credits: credits)
+    }
+
+    /// Wikidata's label service returns the item id when a series has no
+    /// English label; a page should say nothing rather than "Q116947323".
+    @Test func aSeriesWithOnlyAnIdIsNoSeries() {
+        let bare = WikidataService.Entry(qid: "Q1", title: nil, seriesLabel: "Q116947323",
+                                         released: nil, credits: [])
+        let named = WikidataService.Entry(qid: "Q1", title: nil, seriesLabel: "Control",
+                                          released: nil, credits: [])
+        #expect(bare.series == nil)
+        #expect(named.series == "Control")
     }
 
     // MARK: Credits
