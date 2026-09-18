@@ -53,7 +53,9 @@ struct MemorySheet: View {
     @State private var vagueMonth = 12
     @State private var vagueDay = 25
 
-    @State private var photoItem: PhotosPickerItem?
+    /// Several at once (09-18, Tim): a memory is usually a handful of
+    /// pictures, and picking them one sheet at a time was the slow part.
+    @State private var photoItems: [PhotosPickerItem] = []
     /// The grain to come back to when "Do you know when?" is switched on again.
     @State private var lastGrain: HowKnown = .day
     @State private var importing = false
@@ -284,11 +286,12 @@ struct MemorySheet: View {
                             }
                         }
                     }
-                    PhotosPicker(selection: $photoItem, matching: .images, photoLibrary: .shared()) {
+                    PhotosPicker(selection: $photoItems, maxSelectionCount: 20, selectionBehavior: .ordered,
+                                 matching: .images, photoLibrary: .shared()) {
                         if importing {
                             HStack(spacing: 6) { ProgressView(); Text("Adding…") }
                         } else {
-                            Label("Add a picture", systemImage: "photo.badge.plus")
+                            Label("Add pictures", systemImage: "photo.badge.plus")
                         }
                     }
                     .disabled(importing)
@@ -356,7 +359,7 @@ struct MemorySheet: View {
                 }
             }
             .onAppear(perform: load)
-            .task(id: photoItem) { await ingestPickedPhoto() }
+            .task(id: photoItems) { await ingestPickedPhotos() }
         }
     }
 
@@ -430,26 +433,31 @@ struct MemorySheet: View {
             .sorted { $0.addedAt < $1.addedAt }
     }
 
-    private func ingestPickedPhoto() async {
-        guard let photoItem else { return }
+    private func ingestPickedPhotos() async {
+        guard !photoItems.isEmpty else { return }
+        let items = photoItems
         importing = true
         importError = nil
-        defer { importing = false; self.photoItem = nil }
-        do {
-            guard let raw = try await photoItem.loadTransferable(type: Data.self) else {
-                importError = "That photo couldn't be read."
-                return
+        defer { importing = false; photoItems = [] }
+        var failed = 0
+        // In the order they were picked, so the first one chosen leads.
+        for item in items {
+            do {
+                guard let raw = try await item.loadTransferable(type: Data.self) else { failed += 1; continue }
+                if let existing {
+                    try Repository(context).addImage(to: existing, data: raw)
+                } else {
+                    // Held until Save makes a record to hang them on.
+                    pendingPhotos.append(PendingPhoto(data: raw))
+                }
+            } catch {
+                failed += 1
             }
-            if let existing {
-                try Repository(context).addImage(to: existing, data: raw)
-            } else {
-                // Held until Save makes a record to hang it on.
-                pendingPhotos.append(PendingPhoto(data: raw))
-            }
-        } catch ImageIngest.Failure.unreadable {
-            importError = "That file isn't an image this device can read."
-        } catch {
-            importError = "Couldn't add that picture."
+        }
+        if failed > 0 {
+            importError = failed == items.count
+                ? (items.count == 1 ? "That picture couldn't be added." : "Those pictures couldn't be added.")
+                : "\(failed) of \(items.count) pictures couldn't be added."
         }
     }
 
