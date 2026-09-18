@@ -36,7 +36,7 @@ struct TrackerItemEditView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section("Name") {
                     TextField("Name", text: $name, axis: .vertical)
                         .lineLimit(1...4)

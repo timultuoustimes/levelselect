@@ -454,7 +454,7 @@ struct RunFieldsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 RunFieldsForm(template: template, categories: categories,
                               progressed: progressed, phase: .start, values: $values)
             }
@@ -608,7 +608,7 @@ struct EndRunSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     Picker("Outcome", selection: $outcomeID) {
                         ForEach(template.outcomes) { o in
@@ -671,7 +671,7 @@ struct LogRunSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section("Loadout") {
                     RunFieldsForm(template: template, categories: categories,
                                   progressed: progressed, phase: .all, values: $values)

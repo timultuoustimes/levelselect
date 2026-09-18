@@ -76,12 +76,10 @@ extension View {
         return formStyle(.grouped)
             .scrollContentBackground(.hidden)
             .background(LSTheme.liveSheetGround)
-            .listRowBackground(LSTheme.cardFill)
         #else
         return self
             .scrollContentBackground(.hidden)
             .background(LSTheme.liveSheetGround)
-            .listRowBackground(LSTheme.cardFill)
         #endif
     }
 }
@@ -178,5 +176,18 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+/// **A sheet's Form with the theme's cards.** `listRowBackground` only
+/// reaches rows when it's set on the Form's CONTENT — on the Form itself it
+/// did nothing, and the cards went gray at full height (09-18). Pair with
+/// `lsFormStyle()` for the ground. A row that sets its own background wins.
+struct LSForm<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        Form {
+            content.listRowBackground(LSTheme.cardFill)
+        }
     }
 }

@@ -88,7 +88,7 @@ struct RunFieldsEditorSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 ForEach($drafts) { $draft in
                     Section {
                         TextField("Name", text: $draft.label)

@@ -149,7 +149,7 @@ struct MarkCompletionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     Picker("What happened", selection: $label) {
                         Text("Beat the game").tag(CompletionLabel.cleared)

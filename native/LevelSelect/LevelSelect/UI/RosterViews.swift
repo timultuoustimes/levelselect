@@ -146,7 +146,7 @@ struct ItemDetailsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 if let category {
                     if category.fields.isEmpty {
                         Section {
@@ -370,7 +370,7 @@ struct ListSetupSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     Picker("Type", selection: $type) {
                         ForEach(ListType.allCases) { Text($0.label).tag($0) }
@@ -584,7 +584,7 @@ struct TrackerFocusSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 if newRun {
                     Section {
                         NavigationLink {

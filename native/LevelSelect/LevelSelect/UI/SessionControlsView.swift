@@ -318,7 +318,7 @@ struct LogSessionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section("Duration") {
                     Stepper("\(hours) h", value: $hours, in: 0...100)
                     Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
@@ -370,7 +370,7 @@ struct CarriedOverSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     Stepper("\(hours) h", value: $hours, in: 0...9_999)
                     Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)

@@ -266,7 +266,7 @@ struct AddGameSheet: View {
     @State private var manualStatus: GameStatus = .playing
 
     private var manualForm: some View {
-        Form {
+        LSForm {
             Section {
                 TextField("Name", text: $manualName)
                 TextField("Platform", text: $manualPlatform)
@@ -492,7 +492,7 @@ private struct ConfirmAddView: View {
     }
 
     var body: some View {
-        Form {
+        LSForm {
             Section {
                 HStack(spacing: 14) {
                     // Big enough to judge, and tappable, because deciding

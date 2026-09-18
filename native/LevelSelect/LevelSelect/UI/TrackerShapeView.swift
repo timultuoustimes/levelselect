@@ -20,7 +20,7 @@ struct TrackerShapeView: View {
     }
 
     var body: some View {
-        Form {
+        LSForm {
             Section {
                 ForEach(offered) { shape in
                     Button {

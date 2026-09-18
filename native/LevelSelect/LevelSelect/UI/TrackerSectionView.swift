@@ -2187,7 +2187,7 @@ struct ApplicabilitySheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     TextField("Platform (e.g. Switch)", text: $platform)
                     TextField("Edition (e.g. Definitive Edition)", text: $edition)

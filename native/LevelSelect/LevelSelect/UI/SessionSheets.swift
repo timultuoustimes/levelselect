@@ -35,7 +35,7 @@ struct EndSessionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     LabeledContent("Game", value: session.playthrough?.game?.name ?? "—")
                     LabeledContent("Started") {
@@ -128,7 +128,7 @@ struct EditSessionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section("Time") {
                     DatePicker("Started", selection: $start)
                     DatePicker("Ended", selection: $end, in: start...)

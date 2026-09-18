@@ -114,7 +114,7 @@ struct MemorySheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     TextField("What happened?", text: $title)
                     TextField("Anything more", text: $body_, axis: .vertical)
