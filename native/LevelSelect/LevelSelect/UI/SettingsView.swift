@@ -103,6 +103,9 @@ struct SettingsView: View {
                     SettingsRow(title: "Notifications", icon: "bell.badge") {
                         NotificationSettingsPage()
                     }
+                    SettingsRow(title: "Siri & Shortcuts", icon: "waveform") {
+                        SiriShortcutsSettingsPage()
+                    }
                 } header: {
                     Text("General")
                 }
