@@ -49,6 +49,20 @@ final class TrackerStateRecord {
     /// value AND its stamp before tombstoning the losers.
     var selectedVariantUpdatedAt: Date?
 
+    /// Everything else this playthrough recorded against the item — a unit's
+    /// class and level, whether it's in the party, and its status (failed,
+    /// fallen…). JSON, one entry per field with its own time, read and
+    /// written through `TrackerFieldValues`. Build 39 (RPG rosters).
+    ///
+    /// ⚠️ Seed-and-promote before any build that writes it reaches a device
+    /// on Production.
+    var valuesJSON: String?
+
+    var fieldValues: TrackerFieldValues {
+        get { TrackerFieldValues(json: valuesJSON) }
+        set { valuesJSON = newValue.json }
+    }
+
     var playthrough: Playthrough?
 
     init(

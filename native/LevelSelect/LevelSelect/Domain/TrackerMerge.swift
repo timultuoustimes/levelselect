@@ -450,8 +450,18 @@ enum TrackerMerge {
             // id, or by a name exactly one current list answers to.
             var carried = category
             if let previous = categoryByKey[catID] ?? categoryByKey[catName] {
-                for key in [TrackerSchemaJSON.pinSymbolKey, TrackerSchemaJSON.pinColorKey] {
+                for key in [TrackerSchemaJSON.pinSymbolKey, TrackerSchemaJSON.pinColorKey,
+                            TrackerSchemaJSON.fieldsKey, TrackerSchemaJSON.partySizeKey,
+                            TrackerSchemaJSON.progressKey, TrackerSchemaJSON.carriedKey,
+                            TrackerSchemaJSON.fromRunsKey] {
                     if let value = previous[key] { carried[key] = value }
+                }
+                // A list you made a roster or a sequence stays one: the
+                // generator only ever says "checklist" for most lists.
+                let kinds = [TrackerSchemaJSON.rosterKind, TrackerSchemaJSON.sequenceKind]
+                if let kind = previous["type"] as? String, kinds.contains(kind),
+                   !kinds.contains((carried["type"] as? String) ?? "") {
+                    carried["type"] = kind
                 }
             }
             cats[cIdx] = carried
@@ -463,6 +473,11 @@ enum TrackerMerge {
                 guard let previous = byKey[id] ?? byKey[name] else { continue }
                 var updated = item
                 if let note = previous["note"] { updated["note"] = note }
+                // Filters you gave an item stay when the new list has none.
+                let filtersKey = TrackerSchemaJSON.filtersKey
+                if (updated[filtersKey] as? [Any])?.isEmpty ?? true, let filters = previous[filtersKey] {
+                    updated[filtersKey] = filters
+                }
                 // A user-chosen name wins over the generator's, and keeps the
                 // anchor that let it be matched at all.
                 if let source = previous["sourceName"], let chosen = previous["name"] {

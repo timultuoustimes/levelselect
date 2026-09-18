@@ -45,6 +45,15 @@ struct LibraryBackupContractTests {
         static let starName        = "Adored it"
         static let statusName      = "Currently Obsessed"
         static let dekuURL         = "https://example.invalid/deku-sentinel"
+        static let barcode         = "045496590420"
+        static let suggestionPrefs = "studio.followed=team cherry"
+        static let shelfOrder      = "playing=a,b,c"
+        static let feedURL         = "https://example.invalid/feed.xml"
+        static let feedTitle       = "Sentinel Feed"
+        static let feedFolder      = "Nintendo"
+        static let articleGUID     = "sentinel-article-1"
+        static let articleTitle    = "A sentinel article"
+        static let articleLink     = "https://example.invalid/article"
         /// Deliberately not a 1×1: the avatar is the one value in the whole
         /// backup that cannot be retyped from memory.
         static let avatar          = Data([0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04])
@@ -73,6 +82,10 @@ struct LibraryBackupContractTests {
         game.showItemHintsOverride = false
         game.userTags = ["sentinel-tag"]
         game.notes = "Game notes sentinel"
+        game.sectionStateRaw = "beaten:1,maps:1"
+        game.barcodes = [S.barcode]
+        let smart = repo.createCollection(name: "Smart sentinel")
+        smart.filterRuleRaw = "status=playing"
 
         let pt = repo.ensureDefaultPlaythrough(for: game)
         repo.setTrackerItem(pt, itemID: S.itemID, done: true)
@@ -118,6 +131,27 @@ struct LibraryBackupContractTests {
         theme.starNames = ["", "", "", "", S.starName]
         theme.statusNames = [GameStatus.playing.rawValue: S.statusName]
         theme.statusColors = [GameStatus.playing.rawValue: "#123456"]
+        theme.homeLayoutRaw = "continue,systems:6:grid"
+        theme.homeSystemsRaw = "sort=custom,Switch 2,Switch"
+        theme.dismissedConsolesRaw = "Android"
+        theme.expandedSectionsRaw = "tracker"
+        theme.ownershipChipsRaw = "physical,digital"
+        theme.suggestionPrefsRaw = S.suggestionPrefs
+        theme.shelfOrderRaw = S.shelfOrder
+
+        // V7 — a feed you follow and an article you kept.
+        let feed = NewsFeed(urlString: S.feedURL, title: S.feedTitle)
+        feed.folder = S.feedFolder
+        feed.sortIndex = 3
+        feed.muted = true
+        context.insert(feed)
+        let article = NewsItemState(guid: S.articleGUID)
+        article.feedID = feed.id
+        article.title = S.articleTitle
+        article.linkString = S.articleLink
+        article.saved = true
+        article.read = true
+        context.insert(article)
 
         try? context.save()
         return context
@@ -195,6 +229,39 @@ struct LibraryBackupContractTests {
         #expect(theme.starNames.last == S.starName)
         #expect(theme.statusNames[GameStatus.playing.rawValue] == S.statusName)
         #expect(theme.statusColors[GameStatus.playing.rawValue] == "#123456")
+        // 2026-09-17: the Home arrangement, which a Development merge reverted
+        // and no backup could put back.
+        #expect(theme.homeLayoutRaw == "continue,systems:6:grid")
+        #expect(theme.homeSystemsRaw == "sort=custom,Switch 2,Switch")
+        #expect(theme.dismissedConsolesRaw == "Android")
+        #expect(theme.expandedSectionsRaw == "tracker")
+        #expect(theme.ownershipChipsRaw == "physical,digital")
+    }
+
+    @Test func newsFeedsAndSavedArticlesSurvive() throws {
+        let restored = try roundTrip(authored())
+        let feed = try #require(try restored.fetch(FetchDescriptor<NewsFeed>()).first)
+        #expect(feed.urlString == S.feedURL && feed.title == S.feedTitle)
+        #expect(feed.folder == S.feedFolder && feed.sortIndex == 3 && feed.muted)
+
+        let article = try #require(try restored.fetch(FetchDescriptor<NewsItemState>()).first)
+        #expect(article.guid == S.articleGUID && article.saved && article.read)
+        #expect(article.title == S.articleTitle && article.linkString == S.articleLink)
+        #expect(article.feedID == feed.id, "a kept article still knows which feed it came from")
+
+        let game = try #require(try restored.fetch(FetchDescriptor<Game>()).first)
+        #expect(game.barcodes == [S.barcode])
+        let theme = try #require(try restored.fetch(FetchDescriptor<ThemeSettings>()).first)
+        #expect(theme.suggestionPrefsRaw == S.suggestionPrefs)
+        #expect(theme.shelfOrderRaw == S.shelfOrder)
+    }
+
+    @Test func sectionStateAndSmartRulesSurvive() throws {
+        let restored = try roundTrip(authored())
+        let game = try #require(try restored.fetch(FetchDescriptor<Game>()).first)
+        #expect(game.sectionStateRaw == "beaten:1,maps:1")
+        let smart = try #require(try restored.fetch(FetchDescriptor<GameCollection>()).first)
+        #expect(smart.filterRuleRaw == "status=playing")
     }
 
     // MARK: Partial restore
@@ -234,12 +301,13 @@ struct LibraryBackupContractTests {
 
     // MARK: Version gate
 
-    /// v4 must not be silently thinned by an older importer, which is the same
-    /// reason the Memory fix bumped v1 → v2. A console you own with nothing
-    /// logged on it exists ONLY as a console record, so an older build reading
-    /// a v4 file would restore a library quietly missing hardware.
+    /// v5 must not be silently thinned by an older importer, which is the same
+    /// reason the Memory fix bumped v1 → v2 and consoles bumped v3 → v4. A feed
+    /// you follow and an article you kept exist ONLY as those records, so an
+    /// older build reading a v5 file would restore a library quietly missing
+    /// both.
     @Test func formatVersionIsCurrentAndImporterAcceptsOlderFiles() throws {
-        #expect(LibraryExport.formatVersion == 4)
+        #expect(LibraryExport.formatVersion == 5)
         #expect(LibraryImport.supportedVersion == LibraryExport.formatVersion)
 
         // An older file still restores: accept older, refuse newer.

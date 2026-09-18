@@ -45,6 +45,96 @@ struct TrackerItemDTO: Identifiable, Hashable, Sendable {
     /// arrived from an imported set. Presence is what turns the row's art on;
     /// schemas without it render exactly as before.
     var badge: String? = nil
+    /// Filters a life sim reads by: Spring, Rain, Night, Ocean. Items with
+    /// none show under every filter. Its own key, `filters`: generated
+    /// trackers already use `tags` for internal labels ("dlc:grimm-troupe",
+    /// "part:1") that were never meant to be shown.
+    var filters: [String] = []
+}
+
+/// One field a category's items carry — a unit's class, level, emblem, or
+/// whether it's in the party. Declared in the tracker blob; the values are
+/// per playthrough (`TrackerFieldValues`). Four kinds, on purpose.
+struct TrackerFieldDTO: Identifiable, Hashable, Sendable {
+    enum Kind: String, CaseIterable, Sendable {
+        case text, number, choice, multi, toggle
+
+        var label: String {
+            switch self {
+            case .text: "Text"
+            case .number: "Number"
+            case .choice: "Choice"
+            case .multi: "Several choices"
+            case .toggle: "On / off"
+            }
+        }
+
+        /// Kinds that offer a list of options.
+        var hasOptions: Bool { self == .choice || self == .multi }
+    }
+
+    var id: String
+    var name: String
+    var kind: Kind
+    /// For `choice`; empty means free entry with your earlier answers offered.
+    var options: [String] = []
+    /// For `multi`: how many can be picked at once — two skills, four moves.
+    /// Nil is no limit.
+    var max: Int? = nil
+
+    init(id: String, name: String, kind: Kind, options: [String] = [], max: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.options = options
+        self.max = max
+    }
+
+    /// A `multi` value is stored as one text value, joined. One place owns
+    /// the separator, as `RunFieldDTO.multiSeparator` does for runs.
+    static let multiSeparator = ", "
+
+    static func picks(in text: String?) -> [String] {
+        (text ?? "").components(separatedBy: multiSeparator)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+
+    init?(json: [String: Any]) {
+        guard let id = json["id"] as? String, !id.isEmpty, !id.hasPrefix("_"),
+              let name = json["name"] as? String else { return nil }
+        self.id = id
+        self.name = name
+        self.kind = (json["type"] as? String).flatMap(Kind.init(rawValue:)) ?? .text
+        self.options = (json["options"] as? [Any])?.compactMap { $0 as? String } ?? []
+        self.max = (json["max"] as? NSNumber)?.intValue
+    }
+
+    var json: [String: Any] {
+        var out: [String: Any] = ["id": id, "name": name, "type": kind.rawValue]
+        if !options.isEmpty { out["options"] = options }
+        if kind == .multi, let max, max > 0 { out["max"] = max }
+        return out
+    }
+
+    /// The field that says a unit is in the party, when the category has one.
+    static let partyID = "party"
+
+    /// A start for a party RPG: Class, Level, Weapon, In party — and Emblem
+    /// when a sheet offers a list of them. Choices come from `options`
+    /// (keyed by field id) when a source has them; otherwise free entry.
+    static func rpgDefaults(options: [String: [String]] = [:]) -> [TrackerFieldDTO] {
+        var fields: [TrackerFieldDTO] = [
+            .init(id: "class", name: "Class", kind: .choice, options: options["class"] ?? []),
+            .init(id: "level", name: "Level", kind: .number),
+            .init(id: "weapon", name: "Weapon", kind: .choice, options: options["weapon"] ?? []),
+        ]
+        if let emblems = options["emblem"], !emblems.isEmpty {
+            fields.append(.init(id: "emblem", name: "Emblem", kind: .choice, options: emblems))
+        }
+        fields.append(.init(id: partyID, name: "In party", kind: .toggle))
+        return fields
+    }
 }
 
 struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
@@ -95,6 +185,51 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
     var pinSymbol: String? = nil
     /// …and its color, as one of `PinStyle.colorNames`.
     var pinColor: String? = nil
+    /// What each item in this list records beyond its checkbox.
+    var fields: [TrackerFieldDTO] = []
+    /// How many can be in the party at once, for a roster. A limit to show,
+    /// not one to enforce.
+    var partySize: Int? = nil
+    /// How this list counts toward the game's percentage.
+    var progress: ProgressMode = .counts
+    /// Ticks here belong to the game, not a playthrough: endings seen, New
+    /// Game+ unlocks. They live on the "Across Playthroughs" record.
+    var carried: Bool = false
+    /// Tick items from run history — "win with every weapon".
+    var fromRuns: RunTick? = nil
+
+    enum ProgressMode: String, CaseIterable, Sendable {
+        /// An item counts when it's ticked. The default, and every list before
+        /// 2026-09-17.
+        case counts
+        /// Not part of the percentage at all — a list of 900 Koroks you have
+        /// no intention of finishing.
+        case excluded
+        /// A counter or a rank counts for how far along it is.
+        case partial
+
+        var label: String {
+            switch self {
+            case .counts: "Counts"
+            case .excluded: "Doesn't count"
+            case .partial: "Partial credit"
+            }
+        }
+    }
+
+    /// Which run field names an item, and whether only won runs count.
+    struct RunTick: Hashable, Sendable {
+        var field: String
+        var winsOnly: Bool
+    }
+
+    /// A list of characters — rendered with their fields, party and fate.
+    var isRoster: Bool { kind == TrackerSchemaJSON.rosterKind }
+    /// A list done in order — chapters, a questline — with the next one marked.
+    var isSequence: Bool { kind == TrackerSchemaJSON.sequenceKind }
+    var partyField: TrackerFieldDTO? {
+        fields.first { $0.id == TrackerFieldDTO.partyID && $0.kind == .toggle }
+    }
 
     /// Where this list came from, when the tracker recorded it at creation.
     ///
@@ -119,7 +254,7 @@ struct TrackerCategoryDTO: Identifiable, Hashable, Sendable {
 struct RunFieldDTO: Identifiable, Hashable, Sendable {
     let id: String
     let label: String
-    let kind: String            // "text" | "select" | "multi"
+    let kind: String            // "text" | "select" | "multi" | "number" | "time" | "list"
     let options: [String]
     /// Draw options from a tracker category's items instead of a static list
     /// — the Hades keepsake picker is the Keepsakes category, not a copy of
@@ -137,11 +272,28 @@ struct RunFieldDTO: Identifiable, Hashable, Sendable {
     /// "start" (default) or "end": where the value is known. You pick a
     /// keepsake before a run; you know where you died after it.
     var phase: String = "start"
+    /// For `number` and `time`: which way is better. "high" (score, floor
+    /// reached) or "low" (a speedrun time). Nil shows no best.
+    var best: String? = nil
 
     var isEndPhase: Bool { phase == "end" }
+    /// A list that fills up while the run is live — boons, relics, jokers.
+    var isRunList: Bool { kind == "list" }
+    var isNumeric: Bool { kind == "number" || kind == "time" }
     /// Multi-valued fields store their value comma-joined; one place owns
     /// the separator so entry and analytics can't drift apart.
     static let multiSeparator = ", "
+
+    var json: [String: Any] {
+        var out: [String: Any] = ["id": id, "label": label, "type": kind]
+        if !options.isEmpty { out["options"] = options }
+        if let optionsFrom { out["optionsFrom"] = optionsFrom }
+        if onlyUnlocked { out["onlyUnlocked"] = true }
+        if let dependsOn { out["dependsOn"] = dependsOn }
+        if phase != "start" { out["phase"] = phase }
+        if let best { out["best"] = best }
+        return out
+    }
 }
 
 struct RunOutcomeDTO: Identifiable, Hashable, Sendable {
@@ -186,7 +338,9 @@ enum TrackerSchemaJSON {
                 optionsFrom: f["optionsFrom"] as? String,
                 onlyUnlocked: (f["onlyUnlocked"] as? Bool) ?? false,
                 dependsOn: f["dependsOn"] as? String,
-                phase: (f["phase"] as? String) ?? "start"
+                // A run list is filled during the run whatever the file says.
+                phase: (f["type"] as? String) == "list" ? "during" : ((f["phase"] as? String) ?? "start"),
+                best: f["best"] as? String
             )
         }
         // Outcomes arrive in two shapes and both have to work.
@@ -247,7 +401,8 @@ enum TrackerSchemaJSON {
                     sourceName: item["sourceName"] as? String,
                     note: item["note"] as? String,
                     points: ((item["metadata"] as? [String: Any])?["points"] as? NSNumber)?.intValue,
-                    badge: (item["metadata"] as? [String: Any])?["badge"] as? String
+                    badge: (item["metadata"] as? [String: Any])?["badge"] as? String,
+                    filters: (item[filtersKey] as? [Any])?.compactMap { $0 as? String } ?? []
                 )
             }
             return TrackerCategoryDTO(
@@ -267,7 +422,16 @@ enum TrackerSchemaJSON {
                 xboxTitleID: (raw[xboxTitleIDKey] as? NSNumber)?.intValue,
                 locked: (raw["locked"] as? Bool) ?? false,
                 pinSymbol: raw[pinSymbolKey] as? String,
-                pinColor: raw[pinColorKey] as? String
+                pinColor: raw[pinColorKey] as? String,
+                fields: (raw[fieldsKey] as? [[String: Any]])?.compactMap(TrackerFieldDTO.init(json:)) ?? [],
+                partySize: (raw[partySizeKey] as? NSNumber)?.intValue,
+                progress: (raw[progressKey] as? String).flatMap(TrackerCategoryDTO.ProgressMode.init(rawValue:)) ?? .counts,
+                carried: (raw[carriedKey] as? Bool) ?? false,
+                fromRuns: (raw[fromRunsKey] as? [String: Any]).flatMap { rule in
+                    (rule["field"] as? String).map {
+                        TrackerCategoryDTO.RunTick(field: $0, winsOnly: (rule["winsOnly"] as? Bool) ?? false)
+                    }
+                }
             )
         }
     }
@@ -311,6 +475,8 @@ enum TrackerSchemaJSON {
     /// a generation.
     static func addingCategory(named name: String, id: String? = nil,
                                plannedCount: Int? = nil, counted: Bool = false,
+                               kind: String? = nil, fields: [TrackerFieldDTO] = [],
+                               partySize: Int? = nil,
                                to data: Data) -> Data? {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
@@ -324,6 +490,11 @@ enum TrackerSchemaJSON {
         ]
         if let plannedCount, plannedCount > 0 { category["plannedCount"] = plannedCount }
         if counted { category["counted"] = true }
+        // A roster or sequence the planner proposed arrives as one, fields and
+        // all, so filling it keeps the shape (TrackerMerge carries both).
+        if let kind, [rosterKind, sequenceKind].contains(kind) { category["type"] = kind }
+        if !fields.isEmpty { category[fieldsKey] = fields.map(\.json) }
+        if let partySize, partySize > 0 { category[partySizeKey] = partySize }
         cats.append(category)
         root["categories"] = cats
         return try? JSONSerialization.data(withJSONObject: root)
@@ -476,6 +647,17 @@ enum TrackerSchemaJSON {
     /// Turn run logging off. Existing runs are untouched — they stay in the
     /// playthrough and reappear if it's switched back on, so this is never
     /// a destructive action.
+    /// Replace the run template's fields, keeping its outcomes. A field's
+    /// values stay on the runs that recorded them, so removing one and adding
+    /// it back by the same id brings its history back.
+    static func settingRunFields(_ fields: [RunFieldDTO], in data: Data) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var template = root["runTemplate"] as? [String: Any] else { return nil }
+        template["fields"] = fields.map(\.json)
+        root["runTemplate"] = template
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
+
     static func removingRunTemplate(from data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else { return nil }
@@ -530,6 +712,85 @@ enum TrackerSchemaJSON {
     }
 
     static let pinSymbolKey = "pinSymbol"
+    static let fieldsKey = "fields"
+    static let partySizeKey = "partySize"
+    static let rosterKind = "roster"
+    static let progressKey = "progress"
+    static let filtersKey = "filters"
+    static let carriedKey = "carried"
+    static let fromRunsKey = "fromRuns"
+    /// The state row a playthrough's focus rides on. Item ids never start
+    /// with an underscore (`TrackerFieldDTO` refuses them for fields; the
+    /// generator and every importer write slugs).
+    static let focusItemID = "_focus"
+
+    /// Set how a list counts, whether it's shared across playthroughs, and
+    /// whether runs tick it.
+    static func settingListRules(categoryID: String, progress: TrackerCategoryDTO.ProgressMode,
+                                 carried: Bool, fromRuns: TrackerCategoryDTO.RunTick?,
+                                 in data: Data) -> Data? {
+        editingCategory(categoryID, in: data) { category in
+            if progress == .counts { category.removeValue(forKey: progressKey) }
+            else { category[progressKey] = progress.rawValue }
+            if carried { category[carriedKey] = true } else { category.removeValue(forKey: carriedKey) }
+            if let fromRuns {
+                category[fromRunsKey] = ["field": fromRuns.field, "winsOnly": fromRuns.winsOnly]
+            } else {
+                category.removeValue(forKey: fromRunsKey)
+            }
+        }
+    }
+    static let sequenceKind = "sequence"
+
+    /// Set how a list reads — a roster of characters, a sequence done in
+    /// order, or an ordinary checklist (nil) — and, for a roster, its party
+    /// size. The type is the category's `type` key, which every tracker
+    /// already carries and nothing read until now.
+    static func settingListKind(categoryID: String, kind: String?, partySize: Int?,
+                                in data: Data) -> Data? {
+        editingCategory(categoryID, in: data) { category in
+            if let kind, !kind.isEmpty { category["type"] = kind } else { category["type"] = "checklist" }
+            if let partySize, partySize > 0 { category[partySizeKey] = partySize }
+            else { category.removeValue(forKey: partySizeKey) }
+        }
+    }
+
+    /// Replace a category's field declarations. Values already recorded for a
+    /// field that is removed stay on the state rows, so adding it back finds
+    /// them.
+    static func settingFields(_ fields: [TrackerFieldDTO], categoryID: String,
+                              in data: Data) -> Data? {
+        editingCategory(categoryID, in: data) { category in
+            if fields.isEmpty { category.removeValue(forKey: fieldsKey) }
+            else { category[fieldsKey] = fields.map(\.json) }
+        }
+    }
+
+    /// A new item at the end of a category — a unit the list didn't have.
+    static func addingItem(named name: String, id: String, categoryID: String,
+                           in data: Data) -> Data? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return editingCategory(categoryID, in: data) { category in
+            var items = (category["items"] as? [[String: Any]]) ?? []
+            items.append(["id": id, "name": trimmed])
+            category["items"] = items
+            category["pending"] = false
+        }
+    }
+
+    private static func editingCategory(_ categoryID: String, in data: Data,
+                                        _ change: (inout [String: Any]) -> Void) -> Data? {
+        guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              var cats = root["categories"] as? [[String: Any]],
+              let cIdx = cats.firstIndex(where: { ($0["id"] as? String) == categoryID })
+        else { return nil }
+        var category = cats[cIdx]
+        change(&category)
+        cats[cIdx] = category
+        root["categories"] = cats
+        return try? JSONSerialization.data(withJSONObject: root)
+    }
     static let pinColorKey = "pinColor"
 
     /// The pin icon and color the user chose for a category. `nil` puts that
@@ -572,6 +833,7 @@ enum TrackerSchemaJSON {
     static func editingItem(categoryID: String, itemID: String,
                             name: String? = nil, location: String? = nil,
                             note: String? = nil, countTarget: Int? = nil,
+                            filters: [String]? = nil,
                             in data: Data) -> Data? {
         guard var root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               var cats = root["categories"] as? [[String: Any]],
@@ -601,6 +863,12 @@ enum TrackerSchemaJSON {
             let trimmed = note.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { item.removeValue(forKey: "note") }
             else { item["note"] = trimmed }
+        }
+        if let filters {
+            var seen = Set<String>()
+            let cleaned = filters.map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty && seen.insert($0.lowercased()).inserted }
+            if cleaned.isEmpty { item.removeValue(forKey: filtersKey) } else { item[filtersKey] = cleaned }
         }
         if let countTarget {
             // Zero clears it: the row goes back to a plain checkbox rather

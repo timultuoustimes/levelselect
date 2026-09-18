@@ -77,6 +77,12 @@ enum ThemePalette {
     /// The chosen ground tint per appearance (nil = the built-in ground).
     private(set) static var backgroundOverrideLight: Color?
     private(set) static var backgroundOverrideDark: Color?
+    /// The Continue Playing card's own tint per appearance (build 39). Nil
+    /// follows the ground, as the card always did.
+    private(set) static var heroOverrideLight: Color?
+    private(set) static var heroOverrideDark: Color?
+    static var heroTintLight: Color? { heroOverrideLight ?? backgroundOverrideLight }
+    static var heroTintDark: Color? { heroOverrideDark ?? backgroundOverrideDark }
     /// The dark value, for the one path left that cannot express two: the
     /// LEGACY `backgroundHex` key in the widget snapshot, kept so a widget
     /// binary from before build 38 still themes.
@@ -291,6 +297,8 @@ enum ThemePalette {
         // computes against the candidate ground. Codex K1.
         backgroundOverrideLight = settings?.backgroundHex(dark: false).flatMap(Color.init(hex:))
         backgroundOverrideDark = settings?.backgroundHex(dark: true).flatMap(Color.init(hex:))
+        heroOverrideLight = settings?.heroHex(dark: false).flatMap(Color.init(hex:))
+        heroOverrideDark = settings?.heroHex(dark: true).flatMap(Color.init(hex:))
         let lightCustom = settings?.accentHex(dark: false).flatMap { Color(hex: $0) }
         let darkCustom = settings?.accentHex(dark: true).flatMap { Color(hex: $0) }
         // A pair is recognized by its stored hex, on either appearance —

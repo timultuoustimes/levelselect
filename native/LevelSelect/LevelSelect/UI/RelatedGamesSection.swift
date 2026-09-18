@@ -27,6 +27,14 @@ struct RelatedGamesSection: View {
            sort: \GameCollection.name)
     private var collections: [GameCollection]
 
+    /// The series and studio shelves of games you DON'T have. Asked once per
+    /// game page, after the library's own answers, because those are instant
+    /// and this is a network call.
+    @State private var connections: [SuggestionsService.Connection] = []
+    @State private var addingConnection: String?
+    @State private var askedConnections = false
+    @AppStorage("levelselect.showConnections") private var showConnections = true
+
     /// Two different things that both happen to be collections.
     ///
     /// "Comfort games" is a statement you made about this game. "Mega Man X
@@ -48,9 +56,12 @@ struct RelatedGamesSection: View {
         let studio = series.isEmpty ? RelatedGames.sameDeveloper(as: game, in: library) : nil
         let alike = RelatedGames.similar(to: game, in: library)
 
-        if !personalLists.isEmpty || !bundles.isEmpty
-            || !series.isEmpty || studio != nil || !alike.isEmpty {
-            VStack(alignment: .leading, spacing: 18) {
+        // The whole section, including the task, exists whatever the library
+        // has to say: a game with no relations of its own is exactly the one
+        // whose series and studio shelves are worth fetching.
+        VStack(alignment: .leading, spacing: 18) {
+            if !personalLists.isEmpty || !bundles.isEmpty
+                || !series.isEmpty || studio != nil || !alike.isEmpty || !connections.isEmpty {
                 if !bundles.isEmpty {
                     chips("Included in Bundles", bundles, systemImage: "shippingbox")
                 }
@@ -72,8 +83,69 @@ struct RelatedGamesSection: View {
                     shelf("Plays Like This", games: alike,
                           footnote: "Matched on genre, theme and perspective — at least two in common.")
                 }
+                ForEach(connections) { connection in
+                    outsideShelf(connection)
+                }
             }
         }
+        .task(id: game.id) { await loadConnections() }
+        .sheet(item: Binding(get: { addingConnection.map(NamedTarget.init) },
+                             set: { addingConnection = $0?.name })) { target in
+            AddGameSheet(initialSearch: target.name, defaultStatus: .wishlist).lsSheet()
+        }
+    }
+
+    private struct NamedTarget: Identifiable {
+        let name: String
+        var id: String { name }
+    }
+
+    /// Games this one connects to that aren't yours. Tapping adds to the
+    /// wishlist rather than opening a page that doesn't exist.
+    private func outsideShelf(_ connection: SuggestionsService.Connection) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(connection.title) — not in your library")
+                .font(.subheadline.weight(.semibold))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(connection.games) { other in
+                        Button {
+                            addingConnection = other.name
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                AsyncImage(url: other.coverImageID.flatMap {
+                                    URL(string: "https://images.igdb.com/igdb/image/upload/t_cover_big/\($0).jpg")
+                                }) { phase in
+                                    if case .success(let image) = phase {
+                                        image.resizable().scaledToFill()
+                                    } else {
+                                        LSTheme.accent.opacity(0.12)
+                                    }
+                                }
+                                .frame(width: coverWidth, height: coverWidth * 4 / 3)
+                                .clipShape(.rect(cornerRadius: 8))
+                                Text(other.name)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(width: coverWidth, alignment: .leading)
+                            }
+                        }
+                        .buttonStyle(PressableCardStyle())
+                        .accessibilityLabel("\(other.name). Add to wishlist")
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func loadConnections() async {
+        guard showConnections, !askedConnections else { return }
+        askedConnections = true
+        let have = Set(library.compactMap(\.igdbID))
+        connections = await SuggestionsService.connections(for: game, have: have)
     }
 
     /// Collection membership, which nothing else on the game page tells you.

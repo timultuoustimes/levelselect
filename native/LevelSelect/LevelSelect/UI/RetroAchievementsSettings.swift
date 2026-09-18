@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Connect a RetroAchievements account, so imported sets can arrive already
 /// ticked.
@@ -7,12 +8,20 @@ import SwiftUI
 /// silently at the first sync days later, and look like the sync is broken
 /// rather than the credentials.
 struct RetroAchievementsSettings: View {
+    @Environment(\.modelContext) private var context
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil })
+    private var games: [Game]
+
     @State private var username = ""
     @State private var apiKey = ""
     @State private var checking = false
     @State private var error: String?
     @State private var connectedAs: String?
     @State private var profileTarget: DekuLinkTarget?
+    @State private var reading = false
+    @State private var message: String?
+    @State private var reviewing: SteamSettings.LibraryRows?
+    @AppStorage(RASync.autoKey) private var autoSync = true
 
     var body: some View {
         Section {
@@ -39,6 +48,28 @@ struct RetroAchievementsSettings: View {
                         RAAwardsCache.clear()
                     }
                     .font(.caption)
+                }
+                Toggle(isOn: $autoSync) {
+                    Label("Sync when I open a game", systemImage: "arrow.triangle.2.circlepath")
+                }
+                Button {
+                    Task { await readLibrary() }
+                } label: {
+                    if reading {
+                        HStack { ProgressView().controlSize(.small); Text("Reading your RetroAchievements games…") }
+                    } else {
+                        Label("Import my RetroAchievements library", systemImage: "square.and.arrow.down")
+                    }
+                }
+                .disabled(reading)
+                // On the row, not the Section.
+                .sheet(item: $reviewing) { batch in
+                    CSVImportView(rows: batch.rows, title: "Import from RetroAchievements",
+                                  sourceLabel: "RetroAchievements")
+                        .lsSheet()
+                }
+                if let message {
+                    Text(message).font(.caption).foregroundStyle(.secondary)
                 }
                 Button {
                     if let url = RAArt.profilePage(username: connectedAs) {
@@ -85,6 +116,7 @@ struct RetroAchievementsSettings: View {
             Text("RetroAchievements")
         } footer: {
             VStack(alignment: .leading, spacing: 6) {
+                Text("Opening a game with a RetroAchievements set checks your account for anything newly earned, at most once every six hours per game. It only says something when it finds something.")
                 Text("Find your Web API key on retroachievements.org under Settings → Keys. It reads your account, so it's kept in the Keychain and sent only to RetroAchievements when connecting or syncing.")
                 // Said plainly, because a preference that quietly doesn't sync
                 // reads as a bug. The key never rides iCloud Keychain.
@@ -94,6 +126,37 @@ struct RetroAchievementsSettings: View {
         }
         .task {
             connectedAs = RACredentials.current?.username
+        }
+    }
+
+    /// The games this account has earned achievements in, offered one by one.
+    ///
+    /// Through the same review screen as Steam, Xbox, PlayStation and itch:
+    /// RA's titles are a decade of emulator naming, so matching them to IGDB
+    /// unattended would be the picker's fuzzy-match problem at scale with
+    /// nobody watching (the 08-19 design record says exactly this).
+    private func readLibrary() async {
+        guard let credentials = RACredentials.current else { return }
+        reading = true
+        error = nil
+        message = nil
+        defer { reading = false }
+        do {
+            let played = try await RetroAchievementsService.played(credentials: credentials)
+            let keys = CSVImport.LibraryKeys(games)
+            let rows = CSVImport.dropNothingToAdd(
+                RetroAchievementsService.libraryRows(from: played, existingNames: keys.wishlistNames,
+                                                     library: keys.byName),
+                context: context)
+            guard !rows.isEmpty else {
+                message = played.isEmpty
+                    ? "This account has no achievements earned yet."
+                    : "Every game you've earned achievements in is already in your library, on its console."
+                return
+            }
+            reviewing = SteamSettings.LibraryRows(rows: rows)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

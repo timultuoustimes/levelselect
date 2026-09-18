@@ -88,6 +88,17 @@ targets:
         # Microsoft app registration for Xbox sign-in (vault: "LevelSelect Xbox
         # app registration"). Empty until Tim adds it to Secrets.xcconfig.
         LSXboxClientID: $(LS_XBOX_CLIENT_ID)
+        # Which CloudKit environment this build syncs to, so the app can keep
+        # fields Production hasn't been deployed with out of reach (SchemaDeploy).
+        LSCloudKitEnvironment: $(LS_CK_ENV)
+        # The app's Documents folder shows in Files, so the safety copy taken
+        # before Replace Library or Erase Library is somewhere a person can
+        # find it (LibraryReplace.safetyFolder).
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Barcode scanning in Add Game (BarcodeScannerView). The camera reads
+        # the code on the device; only the number is looked up.
+        NSCameraUsageDescription: "LevelSelect uses the camera to read the barcode on a game box, so you can add it without typing."
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo

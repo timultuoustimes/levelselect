@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 /// Add Game: IGDB search-first (by name OR numeric IGDB id), tap a result →
 /// quick Platform + Status confirm → Add. Manual entry stays as a fallback
@@ -27,6 +28,19 @@ struct AddGameSheet: View {
     @State private var selected: IGDBGame?
     @State private var manualMode = false
 
+    // Barcode (ScanDex, V7 `Game.barcodes`).
+    @State private var scanning = false
+    /// The last box scanned, remembered on the game you add from here.
+    @State private var scannedBarcode: String?
+    /// The platform ScanDex says that box is for.
+    @State private var scanPlatform: String?
+    /// A game you already have with this barcode (or this IGDB id).
+    @State private var scanOwned: Game?
+    @State private var scanLooking = false
+    @State private var scanMessage: String?
+    /// ScanDex didn't know it: share the pairing when you add.
+    @State private var scanShareMatch = false
+
     var body: some View {
         NavigationStack {
             Group {
@@ -37,6 +51,9 @@ struct AddGameSheet: View {
                         game: selected,
                         lastPlatform: lastPlatform,
                         lastStatus: defaultStatus ?? GameStatus(rawValue: lastStatusRaw) ?? .playing,
+                        preferredPlatform: scanPlatform,
+                        // A box in your hand is a physical copy.
+                        defaultOwnership: scannedBarcode == nil ? [] : [Ownership.physical.rawValue],
                         onBack: { self.selected = nil },
                         onAdd: add(igdb:platform:status:ownership:)
                     )
@@ -55,6 +72,9 @@ struct AddGameSheet: View {
             }
         }
         .tint(LSTheme.accent)
+        #if os(iOS)
+        .sheet(isPresented: $scanning) { BarcodeScanSheet(onScan: handleScan) }
+        #endif
         // The whole sheet, not just its rows. Tim: "Can the entire menu be
         // slightly translucent, like a frosted glass?" — the library behind it
         // staying faintly visible is what makes this read as a layer over your
@@ -85,12 +105,25 @@ struct AddGameSheet: View {
                     .autocorrectionDisabled()
                     #endif
                 if isSearching { ProgressView().controlSize(.small) }
+                #if os(iOS)
+                if SchemaDeploy.v7Fields && BarcodeScannerView.isSupported {
+                    Button { scanning = true } label: {
+                        Image(systemName: "barcode.viewfinder")
+                            .font(.title3)
+                            .foregroundStyle(LSTheme.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .lsTapTargetTall(8, horizontal: 6)
+                    .accessibilityLabel("Scan a barcode")
+                }
+                #endif
             }
             .padding(12)
             .background(AddSheetCard(cornerRadius: 12))
             .padding()
 
             List {
+                scanSections
                 // Failure/empty states live INSIDE the list, above the manual
                 // fallback — as a full-list overlay they visually covered the
                 // one path that still works with no network and no IGDB match,
@@ -269,6 +302,107 @@ struct AddGameSheet: View {
         }
     }
 
+    // MARK: Barcode
+
+    @ViewBuilder
+    private var scanSections: some View {
+        if let owned = scanOwned {
+            Section("Already in your library") {
+                Button {
+                    AppNavigator.shared.open(gameID: owned.id)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        CoverThumb(urlString: owned.displayCoverURLString,
+                                   artwork: owned.resolvedArtwork(.cover), name: owned.name, status: owned.status)
+                            .frame(width: 34, height: 45)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(owned.name).foregroundStyle(.primary)
+                            Text(owned.status.label).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text("Open").font(.subheadline.weight(.semibold))
+                    }
+                }
+            }
+        } else if scanLooking {
+            Section {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Looking up \(scannedBarcode ?? "")…").foregroundStyle(.secondary)
+                }
+            }
+        } else if let scanMessage, let code = scannedBarcode {
+            Section {
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(code).font(.subheadline.monospacedDigit().weight(.semibold))
+                        Text(scanMessage).font(.footnote).foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "barcode").foregroundStyle(LSTheme.accent)
+                }
+            }
+        }
+    }
+
+    private func libraryGames() -> [Game] {
+        ((try? context.fetch(FetchDescriptor<Game>())) ?? []).filter { $0.deletedAt == nil }
+    }
+
+    /// What a scanned box is: yours already, a ScanDex match (straight to the
+    /// confirm step), or something to find by name — which is remembered.
+    private func handleScan(_ raw: String) {
+        guard let code = BarcodeService.normalized(raw) else { return }
+        scannedBarcode = code
+        scanPlatform = nil
+        scanOwned = nil
+        scanMessage = nil
+        scanShareMatch = false
+        selected = nil
+        if let mine = libraryGames().first(where: { $0.barcodes.contains { BarcodeService.same($0, code) } }) {
+            scanOwned = mine
+            return
+        }
+        scanLooking = true
+        Task {
+            let result = await BarcodeService.lookup(code)
+            switch result {
+            case .matched(let id, let name, let platform, _):
+                if let mine = libraryGames().first(where: { $0.igdbID == id }) {
+                    // Yours already, just never scanned: remember the box.
+                    Repository(context).edit(mine) {
+                        if !$0.barcodes.contains(where: { BarcodeService.same($0, code) }) { $0.barcodes.append(code) }
+                    }
+                    scanOwned = mine
+                } else if let game = try? await IGDBService.lookup(id: id) {
+                    scanPlatform = platform
+                    selected = game
+                } else {
+                    searchText = name ?? ""
+                    scanMessage = "Found \(name ?? "it") on ScanDex but couldn't load it from IGDB. Search below."
+                }
+            case .unmatched, .unknown:
+                scanShareMatch = true
+                scanMessage = "ScanDex doesn't know this box yet. Find the game below: LevelSelect will remember the barcode, and share the match with ScanDex so the next scan of it works."
+            case .unavailable(let why):
+                scanMessage = "\(why) Find the game below — LevelSelect will still remember the barcode on it."
+            }
+            scanLooking = false
+        }
+    }
+
+    /// The scanned box, on the game it turned out to be.
+    private func rememberBarcode(on game: Game, igdb: IGDBGame, platform: String?) {
+        guard SchemaDeploy.v7Fields, let code = scannedBarcode else { return }
+        Repository(context).edit(game) {
+            if !$0.barcodes.contains(where: { BarcodeService.same($0, code) }) { $0.barcodes.append(code) }
+        }
+        if scanShareMatch, let platform {
+            Task { await BarcodeService.suggest(barcode: code, igdbID: igdb.id, name: igdb.name, platform: platform) }
+        }
+    }
+
     // MARK: Add
 
     private func add(igdb: IGDBGame, platform: String?, status: GameStatus, ownership: [String]) {
@@ -279,6 +413,7 @@ struct AddGameSheet: View {
         // until the next cold start. Attach immediately instead.
         BuiltinTrackers.installMissing(context: context)
         repo.edit(game) { $0.ownership = ownership }
+        rememberBarcode(on: game, igdb: igdb, platform: platform)
         if let platform, !platform.isEmpty { lastPlatform = platform }
         // Don't let a wishlist promotion hijack the everyday default status.
         if defaultStatus == nil { lastStatusRaw = status.rawValue }
@@ -291,6 +426,10 @@ private struct ConfirmAddView: View {
     let game: IGDBGame
     let lastPlatform: String
     let lastStatus: GameStatus
+    /// From a scanned box: the platform it's for.
+    var preferredPlatform: String? = nil
+    /// From a scanned box: physical.
+    var defaultOwnership: [String] = []
     var onBack: () -> Void
     var onAdd: (IGDBGame, String?, GameStatus, [String]) -> Void
 
@@ -305,6 +444,13 @@ private struct ConfirmAddView: View {
     @State private var zoomed: ZoomTarget?
     @State private var browsing: DekuLinkTarget?
     @State private var playingTrailer: String?
+
+    private func commit() {
+        let chosen = platform == customOption
+            ? customPlatform.trimmingCharacters(in: .whitespaces)
+            : platform
+        onAdd(game, chosen.isEmpty ? nil : chosen, status, ownership)
+    }
 
     /// Picker options in preference order (Switch 2 → Switch → PC → …).
     private var orderedPlatforms: [String] {
@@ -520,12 +666,7 @@ private struct ConfirmAddView: View {
                 // word for them; Wishlist is the one that means you don't own
                 // it yet, and being told you're adding it to your library is
                 // the sentence that reads wrong at exactly that moment.
-                Button(status == .wishlist ? "Add to Wishlist" : "Add to Library") {
-                    let chosen = platform == customOption
-                        ? customPlatform.trimmingCharacters(in: .whitespaces)
-                        : platform
-                    onAdd(game, chosen.isEmpty ? nil : chosen, status, ownership)
-                }
+                Button(status == .wishlist ? "Add to Wishlist" : "Add to Library", action: commit)
                 .font(.headline)
                 Button("Back to search", action: onBack)
             }
@@ -554,9 +695,26 @@ private struct ConfirmAddView: View {
         // they open straight from the game's page." That one is Safari's own
         // compact bar; mine was a full navigation bar around a web view.
         .dekuBrowser(target: $browsing)
+        // The same Add, where the sheet's own actions sit. Tim, 09-18:
+        // "Could there be an add game button in the top right of the sheet?
+        // That way users aren't required to scroll all the way past the game
+        // info." The one at the bottom stays for anyone who read down to it.
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Add", action: commit)
+                    .fontWeight(.semibold)
+                    .accessibilityLabel(status == .wishlist ? "Add to Wishlist" : "Add to Library")
+            }
+        }
         .task { preview = await GamePreviewService.load(igdbID: game.id) }
         .onAppear {
             status = lastStatus
+            if ownership.isEmpty { ownership = defaultOwnership }
+            // The box says which platform — nothing to guess.
+            if let preferredPlatform, game.platforms.contains(preferredPlatform) {
+                platform = preferredPlatform
+                return
+            }
             // Default: highest-preference platform (Switch 2 → Switch → PC)
             // when the game supports one; otherwise the last platform picked;
             // otherwise IGDB's first; otherwise free entry.

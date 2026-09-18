@@ -26,6 +26,8 @@ struct AppearanceSettingsSection: View {
     /// disclosure groups inside a section about something else. Tim, on the
     /// same question: *"its own page."*
     enum Scope { case theme, statuses, gamePages, trackers }
+
+    @AppStorage("levelselect.showConnections") private var showConnections = true
     var scope: Scope = .theme
 
     @Environment(\.modelContext) private var context
@@ -315,6 +317,15 @@ struct AppearanceSettingsSection: View {
                 .foregroundStyle(.secondary)
                 .listRowSeparator(.hidden)
 
+            // Games from IGDB, not from your library, so it's a network call
+            // and a matter of taste — both reasons to be able to say no.
+            Toggle("Suggest games you don't have", isOn: $showConnections)
+                .tint(LSTheme.accent)
+            Text("On a game page, shows more from its series and its studio that aren't in your library.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .listRowSeparator(.hidden)
+
             Toggle("Use game logos", isOn: Binding(
                 get: { ThemePalette.showGameLogos },
                 set: { on in
@@ -577,9 +588,41 @@ struct AppearanceSettingsSection: View {
                     save(s)
                 })
         }
+        func hero(_ dark: Bool) -> ColorTarget {
+            let word = dark ? "Dark" : "Light"
+            return ColorTarget(
+                id: "hero-\(word.lowercased())",
+                label: dark ? "☾ Card" : "☀ Card",
+                // No default of its own: unset follows the ground.
+                defaultColor: nil,
+                isCustomised: (dark ? settings?.heroHexDark : settings?.heroHexLight) != nil,
+                binding: heroBinding(dark: dark),
+                onReset: {
+                    let s = ensureSettings()
+                    if dark { s.heroHexDark = nil } else { s.heroHexLight = nil }
+                    save(s)
+                })
+        }
         // Accent first, because it is what people come here to change, and the
         // two appearances adjacent so a pair can be judged together.
-        return [accent(false), accent(true), background(false), background(true)]
+        let base = [accent(false), accent(true), background(false), background(true)]
+        return SchemaDeploy.build39Fields ? base + [hero(false), hero(true)] : base
+    }
+
+    /// The card's tint: its own when chosen, otherwise the ground's pair, so
+    /// the circles tick what the card is actually wearing.
+    private func heroBinding(dark: Bool) -> Binding<Color> {
+        Binding(
+            get: {
+                (settings?.heroHex(dark: dark) ?? settings?.backgroundHex(dark: dark))
+                    .flatMap { Color(hex: $0) } ?? LSPalette.defaultGround.accentColor
+            },
+            set: { color in
+                let s = ensureSettings()
+                if dark { s.heroHexDark = color.hexString() } else { s.heroHexLight = color.hexString() }
+                scheduleSave(s)
+            }
+        )
     }
 
     /// The ground's tint. Only its hue and saturation are used — the theme

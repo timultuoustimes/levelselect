@@ -63,6 +63,53 @@ enum WikidataService {
 
     private struct Payload: Codable { let games: [String: Entry] }
 
+    /// A person who worked on a game, and what else they are credited on.
+    ///
+    /// IGDB has no person field, so "the composer of Symphony of the Night
+    /// also scored these" can only come from here.
+    struct Person: Codable, Hashable, Identifiable, Sendable {
+        let name: String
+        let role: String
+        let games: [Credited]
+        var id: String { name }
+
+        struct Credited: Codable, Hashable, Sendable {
+            let name: String
+            let slug: String
+        }
+    }
+
+    private struct PeoplePayload: Codable { let people: [String: [Person]] }
+
+    /// Who made these games, and what else those people made.
+    static func people(slugs: [String]) async throws -> [String: [Person]] {
+        let clean = slugs.filter { !$0.isEmpty }
+        guard !clean.isEmpty else { return [:] }
+
+        var request = URLRequest(url: proxyURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        EdgeFunctions.authorize(&request)
+        request.httpBody = try JSONSerialization.data(withJSONObject: [
+            "slugs": Array(clean.prefix(12)), "mode": "people",
+        ])
+        // Wikidata's query service is a shared, unpaid resource and this is
+        // two queries deep; a page must not wait on it.
+        request.timeoutInterval = 20
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            throw WikidataError.offline
+        }
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw WikidataError.unavailable
+        }
+        return try JSONDecoder().decode(PeoplePayload.self, from: data).people
+    }
+
     enum WikidataError: Error { case offline, unavailable, rejected(status: Int) }
 
     /// Look up several games at once, keyed by IGDB slug.

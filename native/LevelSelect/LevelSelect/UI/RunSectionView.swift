@@ -14,6 +14,9 @@ struct RunSectionView: View {
     @State private var endingRun: Run?
     @State private var showAnalytics = false
     @State private var historyFilter: HistoryFilter = .all
+    @State private var editingFields = false
+    @State private var addingTo: RunFieldDTO?
+    @State private var newEntry = ""
 
     enum HistoryFilter: String, CaseIterable {
         case all = "All", wins = "Wins", losses = "Losses"
@@ -42,6 +45,7 @@ struct RunSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             statsRow
+            bestsRow
 
             if let active = playthrough?.activeRun {
                 activeRunView(active)
@@ -98,6 +102,20 @@ struct RunSectionView: View {
             }
             .lsSheet()
         }
+        .sheet(isPresented: $editingFields) {
+            RunFieldsEditorSheet(game: game, template: template, categories: categories)
+        }
+        .alert("Add to \(addingTo?.label ?? "the list")", isPresented: Binding(
+            get: { addingTo != nil }, set: { if !$0 { addingTo = nil } })) {
+            TextField("Name", text: $newEntry)
+            Button("Add") {
+                if let field = addingTo, let run = playthrough?.activeRun {
+                    repo.appendRunValue(newEntry, fieldID: field.id, to: run)
+                }
+                addingTo = nil
+            }
+            Button("Cancel", role: .cancel) { addingTo = nil }
+        }
         .sheet(item: $endingRun) { run in
             EndRunSheet(template: template, categories: categories,
                         progressed: progressedIDs, run: run) { outcome, notes, endFields in
@@ -107,6 +125,95 @@ struct RunSectionView: View {
     }
 
     // MARK: Pieces
+
+    /// Personal bests, for the number and time fields that say which way is
+    /// better.
+    @ViewBuilder
+    private var bestsRow: some View {
+        let bests = template.fields.compactMap { field -> (RunFieldDTO, RunFieldSupport.Best)? in
+            RunFieldSupport.best(for: field, runs: runs.map { ($0.fieldsDict, $0.outcome, $0.startedAt) })
+                .map { (field, $0) }
+        }
+        if !bests.isEmpty {
+            HStack(spacing: 12) {
+                ForEach(bests, id: \.0.id) { field, best in
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Best \(field.label)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Text(best.text)
+                                .font(.subheadline.weight(.semibold).monospacedDigit())
+                            if best.setByLatest {
+                                Text("New")
+                                    .font(.caption2.weight(.bold))
+                                    .padding(.horizontal, 5)
+                                    .background(.green.opacity(0.2), in: .capsule)
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    /// A list the run fills as it goes: what's in it, and a way to add.
+    private func runList(_ field: RunFieldDTO, run: Run) -> some View {
+        let entries = RunFieldSupport.entries(run.fieldsDict[field.id])
+        let options = RunFieldSupport.options(for: field, categories: categories,
+                                              progressed: progressedIDs, values: run.fieldsDict)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(field.label)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text("\(entries.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Menu {
+                    ForEach(options, id: \.self) { option in
+                        Button(option) { repo.appendRunValue(option, fieldID: field.id, to: run) }
+                    }
+                    if !options.isEmpty { Divider() }
+                    Button("Other…") {
+                        newEntry = ""
+                        addingTo = field
+                    }
+                } label: {
+                    Label("Add", systemImage: "plus.circle.fill")
+                        .font(.caption.weight(.semibold))
+                }
+                .fixedSize()
+            }
+            if !entries.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(Array(entries.enumerated()), id: \.offset) { index, entry in
+                            Button {
+                                repo.removeRunValue(at: index, fieldID: field.id, from: run)
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Text(entry)
+                                    Image(systemName: "xmark").font(.caption2)
+                                }
+                                .font(.caption)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(LSTheme.accent.opacity(0.15), in: .capsule)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(entry). Remove")
+                        }
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
     private var statsRow: some View {
         let finished = runs.filter { $0.outcome != .inProgress }
@@ -126,6 +233,11 @@ struct RunSectionView: View {
             // here, where the runs are and where the wording can promise that
             // they survive it.
             Menu {
+                Button {
+                    editingFields = true
+                } label: {
+                    Label("Run Fields…", systemImage: "slider.horizontal.3")
+                }
                 Button {
                     repo.setRunTracking(false, for: game)
                 } label: {
@@ -151,6 +263,9 @@ struct RunSectionView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+            }
+            ForEach(template.fields.filter(\.isRunList)) { field in
+                runList(field, run: run)
             }
             Button {
                 endingRun = run
@@ -289,7 +404,15 @@ struct RunSectionView: View {
     private func summary(_ run: Run) -> String {
         let dict = run.fieldsDict
         return template.fields
-            .compactMap { field in dict[field.id].flatMap { $0.isEmpty ? nil : $0 } }
+            .compactMap { field -> String? in
+                guard let raw = dict[field.id], !raw.isEmpty else { return nil }
+                if field.isRunList {
+                    let n = RunFieldSupport.entries(raw).count
+                    return "\(n) \(field.label.lowercased())"
+                }
+                if field.isNumeric { return "\(field.label) \(RunFieldSupport.display(raw, field: field))" }
+                return raw
+            }
             .joined(separator: " · ")
     }
 
@@ -346,7 +469,7 @@ struct RunFieldsSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(confirm) {
-                        onConfirm(values)
+                        onConfirm(RunFieldSupport.normalized(values, fields: template.fields))
                         dismiss()
                     }
                 }
@@ -369,8 +492,9 @@ struct RunFieldsForm: View {
     private var visibleFields: [RunFieldDTO] {
         switch phase {
         case .all: template.fields
-        case .start: template.fields.filter { !$0.isEndPhase }
-        case .end: template.fields.filter { $0.isEndPhase }
+        // A run's list fills while it's live, not in the start or end sheet.
+        case .start: template.fields.filter { !$0.isEndPhase && !$0.isRunList }
+        case .end: template.fields.filter { $0.isEndPhase && !$0.isRunList }
         }
     }
 
@@ -379,7 +503,17 @@ struct RunFieldsForm: View {
             let options = RunFieldSupport.options(
                 for: field, categories: categories,
                 progressed: progressed, values: values)
-            if field.kind == "multi", !options.isEmpty {
+            if field.isNumeric {
+                LabeledContent(field.label) {
+                    TextField(field.kind == "time" ? "1:23.45" : "0", text: binding(field.id))
+                        .multilineTextAlignment(.trailing)
+                        #if !os(macOS)
+                        .keyboardType(field.kind == "time" ? .numbersAndPunctuation : .decimalPad)
+                        #endif
+                }
+            } else if field.isRunList {
+                TextField("\(field.label), separated by commas", text: binding(field.id))
+            } else if field.kind == "multi", !options.isEmpty {
                 MultiPickRow(label: field.label, options: options,
                              value: binding(field.id))
             } else if !options.isEmpty {
@@ -412,6 +546,8 @@ struct MultiPickRow: View {
     let label: String
     let options: [String]
     @Binding var value: String
+    /// How many can be chosen; nil is no limit. At the limit the rest wait.
+    var max: Int? = nil
 
     private var chosen: Set<String> {
         Set(value.components(separatedBy: RunFieldDTO.multiSeparator)
@@ -439,12 +575,13 @@ struct MultiPickRow: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(!chosen.contains(option) && max.map { chosen.count >= $0 } == true)
             }
         } label: {
             HStack {
                 Text(label)
                 Spacer()
-                Text(chosen.isEmpty ? "—" : "\(chosen.count)")
+                Text(chosen.isEmpty ? "—" : max.map { "\(chosen.count) of \($0)" } ?? "\(chosen.count)")
                     .foregroundStyle(.secondary)
             }
         }
@@ -504,7 +641,8 @@ struct EndRunSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("End") {
                         let outcome = template.outcomes.first { $0.id == outcomeID }?.result ?? .neutral
-                        onEnd(outcome, notes.isEmpty ? nil : notes, endValues)
+                        onEnd(outcome, notes.isEmpty ? nil : notes,
+                              RunFieldSupport.normalized(endValues, fields: template.fields))
                         dismiss()
                     }
                 }
@@ -563,7 +701,8 @@ struct LogRunSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         let outcome = template.outcomes.first { $0.id == outcomeID }?.result ?? .neutral
-                        onSave(values, outcome, date, TimeInterval(minutes * 60),
+                        onSave(RunFieldSupport.normalized(values, fields: template.fields),
+                               outcome, date, TimeInterval(minutes * 60),
                                notes.isEmpty ? nil : notes)
                         dismiss()
                     }

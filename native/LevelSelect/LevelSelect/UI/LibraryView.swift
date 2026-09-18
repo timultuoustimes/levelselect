@@ -84,6 +84,7 @@ struct LibraryTab: View {
             // pills, or other top tab pills."*
             content
                 .safeAreaBar(edge: .top) { filterBar }
+                .safeAreaBar(edge: .top) { if LSTab.wishlistInLibrary { LibraryHalfPicker() } }
             .lsBackground()
             // "See all" on a Home shelf lands here, filtered, rather than
             // pushing a list onto Home's own stack. Consumed on arrival so
@@ -642,6 +643,9 @@ struct LibraryTab: View {
         // not sometimes 3, sometimes 1, sometimes 4, sometimes 2."* They are
         // one menu now, in sections, and the glyph still fills when a filter is
         // on — the one piece of state a collapsed menu has to keep showing.
+        if !LSTab.wishlistInLibrary {
+            ToolbarItem { SearchButton() }
+        }
         ToolbarItem {
             Menu {
                 Button {

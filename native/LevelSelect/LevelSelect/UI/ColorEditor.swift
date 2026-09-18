@@ -44,9 +44,17 @@ struct ColorEditor: View {
     let targets: [ColorTarget]
 
     enum Role: String, CaseIterable, Identifiable {
-        case accent, background
+        case accent, background, hero
         var id: String { rawValue }
-        var label: String { self == .accent ? "Accent" : "Background" }
+        var label: String {
+            switch self {
+            case .accent: "Accent"
+            case .background: "Background"
+            // The Continue Playing card. Tim, 09-09: a third target beside
+            // Accent and Ground.
+            case .hero: "Card"
+            }
+        }
     }
 
     /// **Which appearance a tap on a circle writes to.** Nil is both, which
@@ -78,7 +86,9 @@ struct ColorEditor: View {
     init(title: String, targets: [ColorTarget], initial: String? = nil) {
         self.title = title
         self.targets = targets
-        _role = State(initialValue: initial?.hasPrefix("background") == true ? .background : .accent)
+        _role = State(initialValue: initial.flatMap { id in
+            Role.allCases.first { id.hasPrefix("\($0.rawValue)-") }
+        } ?? .accent)
     }
 
     // MARK: What is being edited
@@ -89,8 +99,10 @@ struct ColorEditor: View {
     private var offersBackground: Bool { targets.contains { $0.id.hasPrefix("background-") } }
 
     private func targets(for role: Role) -> [ColorTarget] {
-        targets.filter { $0.id.hasPrefix(role == .accent ? "accent-" : "background-") }
+        targets.filter { $0.id.hasPrefix("\(role.rawValue)-") }
     }
+
+    private var roles: [Role] { Role.allCases.filter { !targets(for: $0).isEmpty } }
 
     /// The targets a tap on a circle writes to: the current role's, narrowed
     /// to one appearance when a half is selected.
@@ -195,7 +207,7 @@ struct ColorEditor: View {
             VStack(spacing: 18) {
                 if isThemeEditor, offersBackground {
                     Picker("Editing", selection: $role) {
-                        ForEach(Role.allCases) { Text($0.label).tag($0) }
+                        ForEach(roles) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
@@ -296,9 +308,13 @@ struct ColorEditor: View {
             return "How \"\(name)\" reads at the top of Home, on both grounds. The darker shade is its step."
         }
         if !isThemeEditor { return "One color for this status, everywhere it appears." }
+        let noun = role == .accent ? "accent" : role == .hero ? "card" : "ground"
+        if role == .hero, half == nil {
+            return "The Continue Playing card's own color, lifted off the ground the way the ground is laid over gray. Until you pick one it follows the ground. Tap Light or Dark above to give each its own."
+        }
         switch half {
-        case .light: return "Setting the light \(role == .accent ? "accent" : "ground"). Tap Light again to set both at once."
-        case .dark:  return "Setting the dark \(role == .accent ? "accent" : "ground"). Tap Dark again to set both at once."
+        case .light: return "Setting the light \(noun). Tap Light again to set both at once."
+        case .dark:  return "Setting the dark \(noun). Tap Dark again to set both at once."
         case nil:
             return role == .accent
                 ? "On light the accent writes in its darker step; on dark it writes as itself. Tap Light or Dark above to give each its own."
@@ -460,6 +476,21 @@ struct ColorEditor: View {
                     }
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(accent.opacity(0.15), in: .capsule)
+                } else if role == .hero {
+                    // The card itself, in this appearance, with the accent's
+                    // Play on it — the thing the color is for.
+                    HStack(spacing: 8) {
+                        Text("Continue")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(dark ? Color.white.opacity(0.9) : Color.black.opacity(0.8))
+                        Spacer(minLength: 0)
+                        PairButtonLabel(text: "Play", icon: "play.fill", accent: accent, step: step)
+                    }
+                    .padding(8)
+                    .background(LinearGradient(colors: LSTheme.heroStops(tint: stored(.hero, dark: dark), dark: dark),
+                                               startPoint: .topLeading, endPoint: .bottomTrailing),
+                                in: .rect(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(accent.opacity(0.35)))
                 } else {
                     HStack(spacing: 8) {
                         PairButtonLabel(text: "Play", icon: "play.fill", accent: accent, step: step)

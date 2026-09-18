@@ -136,7 +136,22 @@ struct GeneratingTrackerView: View {
 
     /// A torch that breathes. Two offset pulses so the glow and the flame
     /// don't move in lockstep, which reads as alive rather than as a loop.
+    @ViewBuilder
     private func torch(elapsed: TimeInterval) -> some View {
+        if GenieArt.enabled {
+            // The genie at work over its orb for the whole wait (Tim, 09-17). A
+            // slow float rather than the torch's pulse: a character breathes.
+            let float = sin(elapsed * 1.6) * 2.5
+            GenieFigure(pose: .working, size: 52)
+                .offset(y: float)
+                .shadow(color: LSTheme.working.opacity(0.35), radius: 6)
+                .frame(width: 52, height: 52)
+        } else {
+            flame(elapsed: elapsed)
+        }
+    }
+
+    private func flame(elapsed: TimeInterval) -> some View {
         let pulse = (sin(elapsed * 2.2) + 1) / 2          // 0…1
         let slow  = (sin(elapsed * 1.3 + 0.8) + 1) / 2
         return Image(systemName: "sparkles")

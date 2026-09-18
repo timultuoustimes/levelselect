@@ -1457,6 +1457,40 @@ struct Repository {
         persist()
     }
 
+    /// Record one field of an item for this playthrough — a unit's class,
+    /// level or party place. Nil clears it, stamped, so the clear can beat an
+    /// older value from another device.
+    func setTrackerField(_ pt: Playthrough, itemID: String, fieldID: String,
+                         value: TrackerFieldValues.Value?, at date: Date = .now) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        var values = record.fieldValues
+        values.set(fieldID, value, at: date)
+        record.fieldValues = values
+        touch(record)
+        touch(pt)
+        persist()
+    }
+
+    /// Where an item stands beyond its checkbox. A fallen unit keeps its
+    /// recruit tick — you did recruit them — and `where` records the place
+    /// ("Chapter 12") under the reserved `_fellIn` key.
+    func setTrackerStatus(_ pt: Playthrough, itemID: String, status: TrackerItemStatus?,
+                          fellIn: String? = nil, at date: Date = .now) {
+        let record = ensureTrackerState(pt, itemID: itemID)
+        var values = record.fieldValues
+        values.setStatus(status, at: date)
+        if status == .fallen {
+            let place = fellIn?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            values.set(TrackerFieldValues.fellInKey, place.isEmpty ? nil : .text(place), at: date)
+        } else if values.value(TrackerFieldValues.fellInKey) != nil {
+            values.set(TrackerFieldValues.fellInKey, nil, at: date)
+        }
+        record.fieldValues = values
+        touch(record)
+        touch(pt)
+        persist()
+    }
+
     func revealTrackerItem(_ pt: Playthrough, itemID: String) {
         let record = ensureTrackerState(pt, itemID: itemID)
         record.revealed = true
@@ -1498,7 +1532,9 @@ struct Repository {
     /// the same structure a generated plan will write.
     @discardableResult
     func addPlannedCategory(to game: Game, named name: String,
-                            plannedCount: Int? = nil, counted: Bool = false) -> Bool {
+                            plannedCount: Int? = nil, counted: Bool = false,
+                            kind: String? = nil, fields: [TrackerFieldDTO] = [],
+                            partySize: Int? = nil) -> Bool {
         let schema: TrackerSchemaRecord
         if let existing = game.trackerSchema {
             schema = existing
@@ -1520,7 +1556,8 @@ struct Repository {
             .contains(where: { TrackerMerge.matchKey($0.name) == key })
         else { return false }
         guard let updated = TrackerSchemaJSON.addingCategory(
-            named: name, plannedCount: plannedCount, counted: counted, to: schema.jsonData)
+            named: name, plannedCount: plannedCount, counted: counted,
+            kind: kind, fields: fields, partySize: partySize, to: schema.jsonData)
         else { return false }
         schema.jsonData = updated
         touch(schema)
@@ -1688,8 +1725,8 @@ struct Repository {
     }
 
     private func recomputeAll(for game: Game) {
-        let items = trackerItems(of: game)
-        for pt in game.livePlaythroughs { recompute(pt, allItems: items) }
+        let categories = trackerCategories(for: game)
+        for pt in game.livePlaythroughs { recompute(pt, categories: categories) }
     }
 
     /// Drop a planned category that was never filled.
@@ -1794,6 +1831,81 @@ struct Repository {
         touch(game)
         persist()
         return true
+    }
+
+    /// Make a list a roster or a sequence (or ordinary again), with a party size.
+    @discardableResult
+    func setListKind(_ game: Game, categoryID: String, kind: String?, partySize: Int?) -> Bool {
+        editSchema(game) { TrackerSchemaJSON.settingListKind(categoryID: categoryID, kind: kind,
+                                                            partySize: partySize, in: $0) }
+    }
+
+    /// How a list counts, whether it's shared across playthroughs, and
+    /// whether runs tick it. Setting up run ticks applies past runs once.
+    @discardableResult
+    func setListRules(_ game: Game, categoryID: String, progress: TrackerCategoryDTO.ProgressMode,
+                      carried: Bool, fromRuns: TrackerCategoryDTO.RunTick?) -> Bool {
+        let before = trackerCategories(for: game).first { $0.id == categoryID }
+        let ok = editSchema(game) {
+            TrackerSchemaJSON.settingListRules(categoryID: categoryID, progress: progress,
+                                               carried: carried, fromRuns: fromRuns, in: $0)
+        }
+        guard ok else { return false }
+        if carried, before?.carried != true, let category = before {
+            carryProgress(of: category, in: game)
+        }
+        if fromRuns != nil, fromRuns != before?.fromRuns { applyAllRunTicks(for: game) }
+        recomputeProgress(game)
+        return true
+    }
+
+    /// A list that becomes shared keeps what you'd done: every tick in any
+    /// playthrough moves onto the shared record, since an ending seen in one
+    /// playthrough is seen.
+    private func carryProgress(of category: TrackerCategoryDTO, in game: Game) {
+        let record = carriedPlaythrough(for: game)
+        let ids = Set(category.items.map(\.id))
+        for pt in game.livePlaythroughs where pt.id != record.id {
+            for state in (pt.trackerStates ?? []) where state.deletedAt == nil && state.completed && ids.contains(state.itemID) {
+                if trackerState(record, itemID: state.itemID)?.completed != true {
+                    setTrackerItem(record, itemID: state.itemID, done: true, at: state.completedAt)
+                }
+            }
+        }
+    }
+
+    /// Replace what a list's items record — class, level, party…
+    @discardableResult
+    func setListFields(_ game: Game, categoryID: String, fields: [TrackerFieldDTO]) -> Bool {
+        editSchema(game) { TrackerSchemaJSON.settingFields(fields, categoryID: categoryID, in: $0) }
+    }
+
+    /// Add an item to a list by hand — a unit the generated roster didn't have.
+    @discardableResult
+    func addTrackerItem(_ game: Game, categoryID: String, name: String) -> String? {
+        let id = "user-\(UUID().uuidString.prefix(8).lowercased())"
+        let ok = editSchema(game) {
+            TrackerSchemaJSON.addingItem(named: name, id: id, categoryID: categoryID, in: $0)
+        }
+        if ok { recomputeProgress(game) }
+        return ok ? id : nil
+    }
+
+    private func editSchema(_ game: Game, _ change: (Data) -> Data?) -> Bool {
+        guard let schema = game.trackerSchema, let data = change(schema.jsonData) else { return false }
+        schema.jsonData = data
+        touch(schema)
+        touch(game)
+        persist()
+        return true
+    }
+
+    /// An item's filters — Spring, Rain, Night — for the tracker's filter row.
+    @discardableResult
+    func setTrackerItemFilters(_ game: Game, categoryID: String, itemID: String, filters: [String]) -> Bool {
+        editSchema(game) {
+            TrackerSchemaJSON.editingItem(categoryID: categoryID, itemID: itemID, filters: filters, in: $0)
+        }
     }
 
     /// Edit an item's name, location and the user's own note.
@@ -1968,6 +2080,8 @@ struct Repository {
     /// unlisted, because "work" was defined as only the checkable kinds.
     func progressItemIDs(for game: Game) -> Set<String> {
         var ids = Set(allTrackerStates(for: game)
+            // A playthrough's focus is a setting, not progress on an item.
+            .filter { !$0.itemID.hasPrefix("_") }
             .filter {
                 $0.completed || ($0.rank ?? 0) > 0 || ($0.count ?? 0) > 0
                     || $0.revealed || !($0.notes ?? "").isEmpty
@@ -1976,6 +2090,9 @@ struct Repository {
                     // that reports "nothing to lose" and then deletes it is
                     // the exact failure this function exists to prevent.
                     || !($0.selectedVariant ?? "").isEmpty
+                    // A unit's class, level, party place or fate is the same
+                    // kind of recorded decision.
+                    || $0.fieldValues.hasContent
             }
             .map(\.itemID))
 
@@ -2279,7 +2396,8 @@ struct Repository {
     }
 
     private func recomputeAllPlaythroughs(of game: Game) {
-        for pt in game.livePlaythroughs { recompute(pt, allItems: trackerItems(of: game)) }
+        let categories = trackerCategories(for: game)
+        for pt in game.livePlaythroughs { recompute(pt, categories: categories) }
     }
 
     /// Recompute the cache of the playthrough that CHANGED — the setters take
@@ -2288,14 +2406,19 @@ struct Repository {
     /// refreshed a different playthrough's percentage.
     private func recomputeProgress(_ pt: Playthrough) {
         guard let game = pt.game else { return }
-        recompute(pt, allItems: trackerItems(of: game))
+        // A shared list's ticks count on every playthrough.
+        if isCarriedRecord(pt) {
+            recomputeAllPlaythroughs(of: game)
+        } else {
+            recompute(pt, categories: trackerCategories(for: game))
+        }
     }
 
     private func trackerItems(of game: Game) -> [TrackerItemDTO] {
         trackerCategories(for: game).flatMap(\.items)
     }
 
-    private func recompute(_ pt: Playthrough, allItems: [TrackerItemDTO]) {
+    private func recompute(_ pt: Playthrough, categories: [TrackerCategoryDTO]) {
         // Winner rule, not "any twin completed": OR-ing across duplicates let
         // a stale completed twin keep the ring full after the user's latest
         // action was an untick.
@@ -2305,18 +2428,108 @@ struct Repository {
         // before, so replacing a completed tracker with an empty one kept
         // every ring full forever.
         let percent: Double
-        if allItems.isEmpty {
+        if categories.allSatisfy(\.items.isEmpty) {
             percent = 0
         } else {
-            let byItem = Dictionary(grouping: (pt.trackerStates ?? [])
-                .filter { $0.deletedAt == nil }, by: \.itemID)
-            percent = TrackerProgress.tally(items: allItems) {
-                byItem[$0].flatMap(TrackerStateRecord.winner)?.completed == true
+            let lookup = stateLookup(for: pt, categories: categories)
+            percent = TrackerProgress.tally(categories: categories, focus: focus(of: pt)) {
+                lookup($0).map(TrackerProgress.ItemState.init)
             }.percent
         }
         guard pt.progressPercent != percent else { return }
         pt.progressPercent = percent
         touch(pt)
+    }
+
+    // MARK: Lists shared across playthroughs
+
+    static let carriedPlaythroughName = "Across Playthroughs"
+    static let carriedPlaythroughMarker =
+        "What this game remembers between playthroughs: endings seen, unlocks that carry over."
+
+    /// The record a shared list's ticks live on — `raPlaythrough`'s rules:
+    /// found by name AND marker, made on first use, never the run you're on.
+    @discardableResult
+    func carriedPlaythrough(for game: Game) -> Playthrough {
+        // The run you're on stays the run you're on; a game whose only
+        // playthrough is this record would otherwise be playing it.
+        ensureDefaultPlaythrough(for: game)
+        return recordPlaythrough(for: game, name: Self.carriedPlaythroughName,
+                                 marker: Self.carriedPlaythroughMarker)
+    }
+
+    func existingCarriedPlaythrough(for game: Game) -> Playthrough? {
+        game.livePlaythroughs.first {
+            $0.name == Self.carriedPlaythroughName && $0.notes == Self.carriedPlaythroughMarker
+        }
+    }
+
+    func isCarriedRecord(_ pt: Playthrough) -> Bool {
+        pt.name == Self.carriedPlaythroughName && pt.notes == Self.carriedPlaythroughMarker
+    }
+
+    /// Where a tick in this list is written.
+    func statePlaythrough(for game: Game, category: TrackerCategoryDTO?) -> Playthrough {
+        if category?.carried == true { return carriedPlaythrough(for: game) }
+        return ensureDefaultPlaythrough(for: game)
+    }
+
+    /// Each item's winning state as `pt` sees it: its own rows, and the shared
+    /// record's for a shared list.
+    func stateLookup(for pt: Playthrough?, categories: [TrackerCategoryDTO])
+        -> (String) -> TrackerStateRecord? {
+        let map = stateMap(for: pt, categories: categories)
+        return { map[$0] }
+    }
+
+    func stateMap(for pt: Playthrough?, categories: [TrackerCategoryDTO])
+        -> [String: TrackerStateRecord] {
+        func winners(_ owner: Playthrough?) -> [String: TrackerStateRecord] {
+            Dictionary((owner?.trackerStates ?? []).filter { $0.deletedAt == nil }.map { ($0.itemID, $0) },
+                       uniquingKeysWith: { a, b in b.outranks(a) ? b : a })
+        }
+        var byItem = winners(pt)
+        if let game = pt?.game, categories.contains(where: \.carried),
+           let record = existingCarriedPlaythrough(for: game), record.id != pt?.id {
+            let shared = winners(record)
+            for category in categories where category.carried {
+                for item in category.items { byItem[item.id] = shared[item.id] }
+            }
+        }
+        return byItem
+    }
+
+    // MARK: Focus
+
+    /// The lists this playthrough is chasing, or nil for all of them.
+    func focus(of pt: Playthrough?) -> Set<String>? {
+        guard let row = TrackerStateRecord.winner(of: (pt?.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && $0.itemID == TrackerSchemaJSON.focusItemID }),
+              let raw = row.selectedVariant, !raw.isEmpty
+        else { return nil }
+        let ids = Set(raw.split(separator: "\n").map(String.init))
+        return ids.isEmpty ? nil : ids
+    }
+
+    /// Choose the lists a playthrough chases. Nil or empty is all of them.
+    /// The choice rides on a reserved state row, with the variant's own
+    /// timestamp, so two devices settle it the way they settle a variant.
+    func setFocus(_ ids: Set<String>?, on pt: Playthrough, at date: Date = .now) {
+        let rows = (pt.trackerStates ?? [])
+            .filter { $0.deletedAt == nil && $0.itemID == TrackerSchemaJSON.focusItemID }
+        let row: TrackerStateRecord
+        if let existing = TrackerStateRecord.winner(of: rows) {
+            row = existing
+        } else {
+            row = TrackerStateRecord(itemID: TrackerSchemaJSON.focusItemID)
+            context.insert(row)
+            row.playthrough = pt
+        }
+        row.selectedVariant = (ids ?? []).sorted().joined(separator: "\n")
+        row.selectedVariantUpdatedAt = date
+        touch(row, at: date)
+        if let game = pt.game { recompute(pt, categories: trackerCategories(for: game)) }
+        persist()
     }
 
     /// Record what the tracker applies to (platform/edition/scope).
@@ -2368,6 +2581,81 @@ struct Repository {
             touch(pt, at: date)
         }
         persist()
+        applyRunTicks(from: run)
+    }
+
+    /// What a run records: loadout, score, time, the list it fills.
+    @discardableResult
+    func setRunFields(_ fields: [RunFieldDTO], for game: Game) -> Bool {
+        editSchema(game) { TrackerSchemaJSON.settingRunFields(fields, in: $0) }
+    }
+
+    /// Add to a list that fills up during the run — a boon, a relic.
+    func appendRunValue(_ value: String, fieldID: String, to run: Run, at date: Date = .now) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        var fields = run.fieldsDict
+        var entries = RunFieldSupport.entries(fields[fieldID])
+        entries.append(trimmed)
+        fields[fieldID] = entries.joined(separator: RunFieldDTO.multiSeparator)
+        run.fieldsJSON = (try? JSONSerialization.data(withJSONObject: fields)) ?? run.fieldsJSON
+        touch(run, at: date)
+        persist()
+    }
+
+    /// Take one entry back off a run's list — the one at `index`, so two
+    /// copies of the same boon stay two.
+    func removeRunValue(at index: Int, fieldID: String, from run: Run, at date: Date = .now) {
+        var fields = run.fieldsDict
+        var entries = RunFieldSupport.entries(fields[fieldID])
+        guard entries.indices.contains(index) else { return }
+        entries.remove(at: index)
+        fields[fieldID] = entries.isEmpty ? nil : entries.joined(separator: RunFieldDTO.multiSeparator)
+        run.fieldsJSON = (try? JSONSerialization.data(withJSONObject: fields)) ?? run.fieldsJSON
+        touch(run, at: date)
+        persist()
+    }
+
+    /// Tick what a finished run earned in lists that tick from runs — the
+    /// first won run with the Stygian Blade ticks Stygian Blade.
+    ///
+    /// One run at a time, when it ends, so an item you untick by hand stays
+    /// unticked until a run that earns it again. `applyAllRunTicks` does the
+    /// whole history, once, when a list is first set up this way.
+    @discardableResult
+    func applyRunTicks(from run: Run) -> Int {
+        guard let pt = run.playthrough, let game = pt.game else { return 0 }
+        return applyRunTicks([run], game: game)
+    }
+
+    @discardableResult
+    func applyAllRunTicks(for game: Game) -> Int {
+        applyRunTicks(game.livePlaythroughs.flatMap(\.liveRuns), game: game)
+    }
+
+    private func applyRunTicks(_ runs: [Run], game: Game) -> Int {
+        let categories = trackerCategories(for: game).filter { $0.fromRuns != nil }
+        guard !categories.isEmpty else { return 0 }
+        var ticked = 0
+        for category in categories {
+            guard let rule = category.fromRuns else { continue }
+            // Each run ticks the playthrough it was played in, unless the list
+            // is shared across playthroughs.
+            for run in runs {
+                guard let runPT = run.playthrough else { continue }
+                let earned = RunFieldSupport.earnedNames(
+                    field: rule.field, winsOnly: rule.winsOnly,
+                    runs: [(run.fieldsDict, run.outcome)])
+                guard !earned.isEmpty else { continue }
+                let pt = category.carried ? carriedPlaythrough(for: game) : runPT
+                for item in category.items where earned.contains(RunFieldSupport.key(item.name)) {
+                    if trackerState(pt, itemID: item.id)?.completed == true { continue }
+                    setTrackerItem(pt, itemID: item.id, done: true)
+                    ticked += 1
+                }
+            }
+        }
+        return ticked
     }
 
     /// Log a finished run after the fact.
@@ -2393,6 +2681,7 @@ struct Repository {
         pt.lastPlayedAt = started
         touch(pt)
         persist()
+        applyRunTicks(from: run)
         return run
     }
 
@@ -3125,6 +3414,7 @@ struct Repository {
             take(\.accentHex); take(\.accentHexLight); take(\.accentHexDark)
             take(\.accentHue); take(\.accentSaturation)
             take(\.backgroundHex); take(\.backgroundHexLight); take(\.backgroundHexDark)
+            take(\.heroHexLight); take(\.heroHexDark)
             take(\.statusColorsData); take(\.starNamesData); take(\.statusNamesData)
             take(\.savedSwatchesData); take(\.platformIconVariantsData)
             take(\.platformNamesData)
@@ -3285,6 +3575,12 @@ struct Repository {
                 winner.selectedVariant = byVariantTime.selectedVariant
                 winner.selectedVariantUpdatedAt = byVariantTime.selectedVariantUpdatedAt
             }
+
+            // Fields and status: field by field, newest time wins — every
+            // entry carries its own stamp for exactly this fold. Folding in
+            // total order keeps two devices' answers identical.
+            let values = losers.reduce(winner.fieldValues) { $0.merged(with: $1.fieldValues) }
+            if values != winner.fieldValues { winner.fieldValues = values }
 
             // Notes: winner's first, then each loser's in the same total
             // order, skipping any text an earlier part already contains —

@@ -39,11 +39,25 @@ struct RootView: View {
                 // as the tab's identity. Spines on a shelf are what a
                 // collection actually looks like, which is the same reason
                 // the systems shelf draws real console art.
-                Tab("Library", systemImage: "books.vertical.fill", value: LSTab.library) { LibraryTab() }
+                Tab("Library", systemImage: "books.vertical.fill", value: LSTab.library) {
+                    if LSTab.wishlistInLibrary { LibraryHalves() } else { LibraryTab() }
+                }
                 // Bag, not a heart: the wishlist is things to buy, and a heart
                 // reads as "favorited" (which is what `pinned` already means).
-                Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
+                if LSTab.wishlist.isAvailable {
+                    Tab("Wishlist", systemImage: "bag.fill", value: LSTab.wishlist) { WishlistTab() }
+                }
+                // Build 39, schema V7 — gated until Production has the record
+                // types (`LSTab.isAvailable`).
+                if LSTab.news.isAvailable {
+                    Tab("News", systemImage: "newspaper.fill", value: LSTab.news) { NewsTab() }
+                }
                 Tab("Journal", systemImage: "book.closed.fill", value: LSTab.journal) { JournalTab() }
+                // Universal search as the bar's own circle — possible because
+                // Wishlist moved into Library and the bar has four tabs.
+                if LSTab.search.isAvailable {
+                    Tab(value: LSTab.search, role: .search) { SearchScreen(inTab: true) }
+                }
             }
             .tint(LSTheme.accent)
             .staleSessionGuard()
@@ -51,6 +65,19 @@ struct RootView: View {
             .releaseRemindersPrompt()
             .overlappingTimerGuard()
             .whatsNewOnUpdate()
+            // Universal search, over any tab. Not the tab bar's search
+            // circle: iOS only draws that beside four tabs, and five plus
+            // search folded Journal into "More" (measured 09-18). Tim chose a
+            // toolbar button on every tab instead.
+            #if os(iOS)
+            .fullScreenCover(isPresented: Binding(get: { nav.searchPresented },
+                                                  set: { nav.searchPresented = $0 })) { SearchScreen() }
+            #else
+            .sheet(isPresented: Binding(get: { nav.searchPresented },
+                                        set: { nav.searchPresented = $0 })) {
+                SearchScreen().frame(minWidth: 560, minHeight: 620)
+            }
+            #endif
             .id(nav.themeRevision)
 
             if showingSplash {
@@ -154,6 +181,12 @@ struct RootView: View {
         .onOpenURL { route($0) }
         .onAppear {
             ThemePalette.refresh(from: themeSettings.first)
+            startSuggestionSync()
+        }
+        // Follows, hides and News's chosen systems arriving from another
+        // device — see `SuggestionPrefs` (V7).
+        .onChange(of: themeSettings.first?.suggestionPrefsRaw) { _, _ in
+            pullSuggestionPrefs()
         }
         .onChange(of: themeSettings.first?.updatedAt) { _, _ in
             // Refresh the values, but do NOT re-key the tree here — see
@@ -231,6 +264,33 @@ struct RootView: View {
 
     /// Route a `levelselect://` deep link (widgets + App Intents) through the
     /// shared navigator.
+    /// Suggestion preferences sync (V7): local changes go up, synced ones
+    /// come down. Off on a build whose Production lacks the field.
+    private func startSuggestionSync() {
+        guard SchemaDeploy.v7Fields else { return }
+        let context = self.context
+        SuggestionPrefs.onChange = { raw in
+            Repository(context).setSuggestionPrefs(raw)
+        }
+        pullSuggestionPrefs()
+    }
+
+    private func pullSuggestionPrefs() {
+        guard SchemaDeploy.v7Fields else { return }
+        guard let raw = themeSettings.first?.suggestionPrefsRaw, !raw.isEmpty else {
+            // Nothing synced yet: this device's choices become the copy.
+            UserDefaults.standard.set(true, forKey: "levelselect.suggest.synced")
+            if SuggestionPrefs.snapshot() != SuggestionPrefs.Snapshot() {
+                Repository(context).setSuggestionPrefs(SuggestionPrefs.encoded())
+            }
+            return
+        }
+        guard raw != SuggestionPrefs.encoded() else { return }
+        if let merged = SuggestionPrefs.apply(raw) {
+            Repository(context).setSuggestionPrefs(merged)
+        }
+    }
+
     private func route(_ url: URL) {
         guard url.scheme == "levelselect" else { return }
         switch url.host {
@@ -518,6 +578,8 @@ struct HomeTab: View {
     @Query(filter: #Predicate<GameCollection> { $0.deletedAt == nil }, sort: \GameCollection.sortIndex)
     private var collections: [GameCollection]
     @State private var arrangingHome = false
+    /// The shelf being put in your own order (`ShelfOrder`).
+    @State private var arrangingShelf: GameStatus?
     @State private var arrangingSystems = false
     @State private var addingConsole = false
     @State private var editingConsole: Console?
@@ -641,6 +703,9 @@ struct HomeTab: View {
                 // `Button`'s. Neither `.tint` nor `.buttonStyle(.bordered)`
                 // moved them; `foregroundStyle` on the label does, because it
                 // stops asking and just says the color.
+                if !LSTab.wishlistInLibrary {
+                    ToolbarItem(placement: Self.trailing) { SearchButton() }
+                }
                 ToolbarItem(placement: Self.trailing) {
                     Button {
                         themeStampAtOpen = themeSettings.first?.updatedAt
@@ -660,6 +725,15 @@ struct HomeTab: View {
         }
         .sheet(isPresented: $showingAdd) { AddGameSheet().lsSheet() }
         .sheet(isPresented: $arrangingHome) { ArrangeHomeSheet().lsSheet() }
+        .sheet(item: Binding(get: { arrangingShelf.map(ShelfTarget.init) },
+                             set: { arrangingShelf = $0?.status })) { target in
+            ArrangeShelfSheet(
+                status: target.status,
+                games: grouped[target.status] ?? [],
+                hasOrder: !(ShelfOrder.decode(themeSettings.first?.shelfOrderRaw)[target.status.rawValue] ?? []).isEmpty,
+                save: { Repository(context).setShelfOrder(target.status, $0) })
+            .lsSheet([.large])
+        }
         // The launcher widget's picker is built from the snapshot, so a
         // console added here is not openable from the Home Screen until the
         // snapshot is rewritten. Backgrounding the app used to be the only
@@ -1019,9 +1093,16 @@ struct HomeTab: View {
 
     // MARK: Derived
 
+    /// Each shelf in its automatic order — pinned, then most recently played —
+    /// or in yours, when you've arranged it (`ShelfOrder`).
     private var grouped: [GameStatus: [Game]] {
-        Dictionary(grouping: games, by: \.status)
-            .mapValues { $0.sorted { sortKey($0) > sortKey($1) } }
+        let orders = ShelfOrder.decode(themeSettings.first?.shelfOrderRaw)
+        var out: [GameStatus: [Game]] = [:]
+        for (status, list) in Dictionary(grouping: games, by: \.status) {
+            let automatic = list.sorted { sortKey($0) > sortKey($1) }
+            out[status] = ShelfOrder.arrange(automatic, id: \.id, order: orders[status.rawValue])
+        }
+        return out
     }
 
     private var collapsedStatuses: Set<String> {
@@ -1229,12 +1310,18 @@ struct HomeTab: View {
                     collapsed: collapsedStatuses.contains(status.rawValue),
                     onOpen: { path.append($0) },
                     onSeeAll: {
-                        nav.pendingLibraryStatus = status
-                        nav.selectedTab = .library
+                        if status == .wishlist && LSTab.wishlistInLibrary {
+                            nav.go(to: .wishlist)
+                        } else {
+                            nav.libraryHalf = .collection
+                            nav.pendingLibraryStatus = status
+                            nav.selectedTab = .library
+                        }
                     },
                     onToggleCollapse: { toggleCollapse(status) },
                     onHide: { setHidden(status, true) },
-                    onArrange: { arrangingHome = true }
+                    onArrange: { arrangingHome = true },
+                    onArrangeShelf: SchemaDeploy.v7Fields ? { arrangingShelf = status } : nil
                 )
             }
 
@@ -1418,4 +1505,10 @@ func < (lhs: (Bool, Date), rhs: (Bool, Date)) -> Bool { rhs > lhs }
 #Preview {
     RootView()
         .modelContainer(LevelSelectStore.makeContainer(inMemory: true))
+}
+
+/// `sheet(item:)` needs an identity; a status is its own.
+private struct ShelfTarget: Identifiable {
+    let status: GameStatus
+    var id: String { status.rawValue }
 }

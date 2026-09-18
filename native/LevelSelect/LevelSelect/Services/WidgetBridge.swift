@@ -85,7 +85,7 @@ enum WidgetBridge {
 
         let pt = game?.activePlaythrough
         let session = pt?.activeSession
-        let (objectives, done, total) = game.map { trackerItems(game: $0, pt: pt) } ?? ([], 0, 0)
+        let (objectives, done, total) = game.map { trackerItems(game: $0, pt: pt, context: context) } ?? ([], 0, 0)
         let nextIncomplete = objectives.first { !$0.done }
 
         // Shelf: playing games most active first, then paused, then queued —
@@ -118,7 +118,7 @@ enum WidgetBridge {
                 let pt = g.activePlaythrough
                 // Per-game progress for the extra-large widgets: the tracker
                 // fraction when one exists, the run record when runs do.
-                let (_, gDone, gTotal) = trackerItems(game: g, pt: pt)
+                let (_, gDone, gTotal) = trackerItems(game: g, pt: pt, context: context)
                 let runs = pt?.liveRuns.filter { $0.outcome != .inProgress } ?? []
                 let wins = runs.filter { $0.outcome == .success }.count
                 let losses = runs.filter { $0.outcome == .failure }.count
@@ -326,19 +326,25 @@ enum WidgetBridge {
     }
 
     /// Visible tracker items (spoiler items hidden until revealed) + done/total.
-    private static func trackerItems(game: Game, pt: Playthrough?) -> ([WidgetObjective], Int, Int) {
+    private static func trackerItems(game: Game, pt: Playthrough?, context: ModelContext) -> ([WidgetObjective], Int, Int) {
         guard let schema = game.trackerSchema else { return ([], 0, 0) }
         let cats = TrackerSchemaJSON.categories(from: schema.jsonData)
-        let states = (pt?.trackerStates ?? []).filter { $0.deletedAt == nil }
         // Same winner rule as the repository read: the widget refreshes on
         // foreground BEFORE any per-game reconcile has folded sync twins, so
         // an arbitrary-first pick here could show an objective the app
-        // considers unticked as done (or hide it).
-        let byItem = Dictionary(states.map { ($0.itemID, $0) },
-                                uniquingKeysWith: { a, b in b.outranks(a) ? b : a })
+        // considers unticked as done (or hide it). Shared lists read the
+        // Across Playthroughs record, and the playthrough's focus decides
+        // what counts, exactly as on the tracker page.
+        let repo = Repository(context)
+        let byItem = repo.stateMap(for: pt, categories: cats)
+        let focus = repo.focus(of: pt)
 
-        let allItems = cats.flatMap(\.items)
-        let done = TrackerProgress.tally(items: allItems) { byItem[$0]?.completed == true }.done
+        let counted = TrackerProgress.counted(cats, focus: focus)
+        let allItems = counted.flatMap(\.items)
+        let tally = TrackerProgress.tally(categories: cats, focus: focus) {
+            byItem[$0].map(TrackerProgress.ItemState.init)
+        }
+        let done = tally.done
 
         // Objectives for the checklist: incomplete non-spoiler items first, in
         // schema order (capped) — the actionable "what's next" list.

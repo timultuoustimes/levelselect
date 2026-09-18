@@ -30,7 +30,11 @@ enum LibraryExport {
     /// the same kind of thing: a Dreamcast you own with nothing logged on it
     /// exists ONLY as a console record, so an older build reading a v4 file
     /// would restore a library that had quietly lost hardware.
-    static let formatVersion = 4
+    /// **v5 (2026-09-17).** The news reader's feeds and the articles you kept
+    /// are records that exist nowhere else: unfollow a feed on one device and
+    /// restore from a v4 file and they are simply gone. Barcodes and the
+    /// suggestion preferences ride in the same version.
+    static let formatVersion = 5
 
     struct Manifest: Codable {
         var formatVersion: Int
@@ -130,6 +134,14 @@ enum LibraryExport {
             dict["ownedPlatforms"] = game.ownedPlatforms
             dict["platformReleases"] = game.platformReleasesData?.base64EncodedString()
             dict["showItemHintsOverride"] = game.showItemHintsOverride
+            // Which sections are collapsed, so a replace from backup brings the
+            // page back as it was. Absent before 2026-09-17.
+            // Written even when blank, so a replace can tell "none collapsed"
+            // from a file made before the key existed.
+            dict["sectionState"] = game.sectionStateRaw ?? NSNull()
+            // v5 — ScanDex. Written even when empty, so a replace can clear
+            // barcodes a backup doesn't have.
+            dict["barcodes"] = game.barcodes
 
             // The user's own notes and renames on tracker items.
             //
@@ -240,6 +252,7 @@ enum LibraryExport {
                         t["completedAt"] = state.completedAt.map(iso)
                         t["selectedVariant"] = state.selectedVariant
                         t["selectedVariantUpdatedAt"] = state.selectedVariantUpdatedAt.map(iso)
+                        t["valuesJSON"] = state.valuesJSON
                         return t
                     }
 
@@ -398,6 +411,7 @@ enum LibraryExport {
                     "createdAt": iso(console.createdAt),
                 ]
                 c["variant"] = console.variant
+                c["nickname"] = console.nickname
                 c["notes"] = console.notes
                 if let acquired = console.acquiredAt { c["acquiredAt"] = iso(acquired) }
                 // **Photographs of the machine.** Same shape as a memory's
@@ -488,7 +502,7 @@ enum LibraryExport {
         let collectionObjects = collections
             .sorted { $0.sortIndex < $1.sortIndex }
             .map { collection -> [String: Any] in
-                [
+                var c: [String: Any] = [
                     "id": collection.id.uuidString,
                     "name": collection.name,
                     "isBundle": collection.isBundle,
@@ -496,6 +510,10 @@ enum LibraryExport {
                     "notes": collection.notes,
                     "gameIDs": collection.gameIDs,
                 ]
+                // A smart collection's rule. Absent before 2026-09-17, which
+                // left a restored smart collection empty.
+                c["filterRule"] = collection.filterRuleRaw ?? NSNull()
+                return c
             }
 
         let total = games.count + counts.playthroughs + counts.sessions + counts.runs
@@ -526,12 +544,51 @@ enum LibraryExport {
             totalRecords: total
         )
 
+        // v5 — the news reader. Feeds you follow, and the articles you read or
+        // kept; nothing of the articles themselves beyond a title and a link.
+        let feeds = ((try? context.fetch(FetchDescriptor<NewsFeed>(
+            predicate: #Predicate { $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.sortIndex), SortDescriptor(\.title)]))) ?? [])
+        let feedObjects: [[String: Any]] = feeds.map { feed in
+            var f: [String: Any] = [
+                "id": feed.id.uuidString,
+                "url": feed.urlString,
+                "title": feed.title,
+                "sortIndex": feed.sortIndex,
+                "muted": feed.muted,
+                "createdAt": iso(feed.createdAt),
+            ]
+            f["siteURL"] = feed.siteURLString
+            f["folder"] = feed.folder
+            f["lastItemAt"] = feed.lastItemAt.map(iso)
+            return f
+        }
+        let articles = ((try? context.fetch(FetchDescriptor<NewsItemState>(
+            predicate: #Predicate { $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.createdAt)]))) ?? [])
+        let articleObjects: [[String: Any]] = articles.map { item in
+            var a: [String: Any] = [
+                "id": item.id.uuidString,
+                "guid": item.guid,
+                "read": item.read,
+                "saved": item.saved,
+                "createdAt": iso(item.createdAt),
+            ]
+            a["feedID"] = item.feedID?.uuidString
+            a["title"] = item.title
+            a["link"] = item.linkString
+            a["publishedAt"] = item.publishedAt.map(iso)
+            return a
+        }
+
         var root: [String: Any] = [
             "manifest": try manifestDictionary(manifest),
             "games": gameObjects,
             "collections": collectionObjects,
             "memories": memoryObjects,
             "consoles": consoleObjects,
+            "newsFeeds": feedObjects,
+            "newsArticles": articleObjects,
         ]
         // The player's own identity. NOT the obsolete `Profile` bookkeeping
         // row this file's comment excludes — this is the name, the handles and
@@ -581,6 +638,8 @@ enum LibraryExport {
                 "accentHexLight": theme.accentHexLight as Any,
                 "accentHexDark": theme.accentHexDark as Any,
                 "backgroundHexLight": theme.backgroundHexLight as Any,
+                "heroHexLight": theme.heroHexLight as Any,
+                "heroHexDark": theme.heroHexDark as Any,
                 "backgroundHexDark": theme.backgroundHexDark as Any,
                 "appearance": theme.appearanceRaw as Any,
                 "statusColors": theme.statusColors,
@@ -598,6 +657,18 @@ enum LibraryExport {
                 "dekuWishlistURL": theme.dekuWishlistURLString as Any,
                 "platformIconVariants": theme.platformIconVariantsData?.base64EncodedString() as Any,
                 "savedSwatches": theme.savedSwatchesData?.base64EncodedString() as Any,
+                // v5 — what you follow and hide in suggestions, and your own
+                // order inside a Home shelf.
+                "suggestionPrefs": theme.suggestionPrefsRaw as Any,
+                "shelfOrder": theme.shelfOrderRaw as Any,
+                // Home and shelf arrangement, from 2026-09-17. These are the
+                // choices that took longest to put back by hand after the
+                // Development merge that morning.
+                "homeLayout": theme.homeLayoutRaw as Any,
+                "homeSystems": theme.homeSystemsRaw as Any,
+                "dismissedConsoles": theme.dismissedConsolesRaw as Any,
+                "expandedSections": theme.expandedSectionsRaw as Any,
+                "ownershipChips": theme.ownershipChipsRaw as Any,
             ] as [String: Any?]).compactMapValues { $0 }
         }
         return try JSONSerialization.data(

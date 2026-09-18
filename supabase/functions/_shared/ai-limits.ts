@@ -18,7 +18,8 @@ export interface AIQuotaPlan {
 
 export function quotaPlanForAI(body: Record<string, unknown>): AIQuotaPlan {
   const mode = typeof body.mode === 'string' ? body.mode : 'auto';
-  if (mode === 'plan') {
+  // Run fields are a plan-sized call and share its bucket.
+  if (mode === 'plan' || mode === 'runFields') {
     return {
       fn: 'ai-plan',
       quotas: [

@@ -11,6 +11,7 @@ struct EditTarget: Identifiable, Hashable {
     /// Present when the item is already a counter, so the sheet opens with
     /// its total rather than looking unset.
     var countTarget: Int? = nil
+    var filters: [String] = []
 
     var id: String { "\(categoryID)/\(itemID)" }
 }
@@ -30,6 +31,7 @@ struct TrackerItemEditView: View {
     @State private var location = ""
     @State private var note = ""
     @State private var countTarget = ""
+    @State private var filters = ""
     @State private var primed = false
 
     var body: some View {
@@ -58,6 +60,14 @@ struct TrackerItemEditView: View {
                     // The row that makes 900 koroks a single line instead of
                     // an unusable wall.
                     Text("Give this a number and the row becomes a counter — tap to add one as you find them, and it ticks itself off when you reach the total. Leave it empty for a plain checkbox.")
+                }
+
+                Section {
+                    TextField("Spring, Rain, Night", text: $filters)
+                } header: {
+                    Text("Filters")
+                } footer: {
+                    Text("Filters for the tracker — when and where you can get this. Separate them with commas.")
                 }
 
                 Section {
@@ -93,6 +103,7 @@ struct TrackerItemEditView: View {
             location = target.location
             note = target.note
             countTarget = target.countTarget.map(String.init) ?? ""
+            filters = target.filters.joined(separator: ", ")
         }
     }
 
@@ -107,6 +118,12 @@ struct TrackerItemEditView: View {
         if parsed != target.countTarget {
             repo.setTrackerCountTarget(game, categoryID: target.categoryID,
                                        itemID: target.itemID, target: parsed)
+        }
+        let newFilters = filters.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        if newFilters != target.filters {
+            repo.setTrackerItemFilters(game, categoryID: target.categoryID, itemID: target.itemID,
+                                       filters: newFilters)
         }
         dismiss()
     }

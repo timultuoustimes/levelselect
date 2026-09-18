@@ -70,6 +70,14 @@ struct TrackerMergeReviewView: View {
 
     private var summarySection: some View {
         Section {
+            if GenieArt.enabled {
+                HStack(spacing: 12) {
+                    GenieFigure(pose: .scroll, size: 64)
+                    Text("Here's what came back. Have a look before it goes in.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
             row("plus.circle.fill", .green, "\(diff.added.count) new",
                 diff.added.isEmpty ? "Nothing this tracker doesn't already have"
                                    : "Items the current tracker is missing")

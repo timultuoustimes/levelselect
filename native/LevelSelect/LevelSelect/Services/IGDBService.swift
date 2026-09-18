@@ -288,6 +288,37 @@ enum IGDBService {
         return "where id = (\(list)); \(fields) limit \(ids.count);"
     }
 
+    /// Games matching a plain IGDB `where` clause — the series a game belongs
+    /// to, the studio that made it. Main games only: a shelf of connections
+    /// should not be half DLC and bundles.
+    ///
+    /// Returns empty on any failure, like `raw`: this backs a browsing shelf
+    /// and a page must not fail to draw because IGDB was slow.
+    static func games(where clause: String, limit: Int = 20,
+                      sort: String = "first_release_date desc") async -> [IGDBGame] {
+        let query = "where \(clause) & game_type = 0; \(fields) sort \(sort); limit \(limit);"
+        return (try? await perform(query)) ?? []
+    }
+
+    /// One page of games matching a raw `where` clause — any game type, since
+    /// the clause says which. For News → Upcoming, which pages through every
+    /// game with a platform launch in a window (a month is several hundred).
+    static func page(where clause: String, limit: Int = 500, offset: Int = 0,
+                     sort: String = "id asc") async -> [IGDBGame]? {
+        let query = "where \(clause); \(fields) sort \(sort); limit \(limit); offset \(offset);"
+        return try? await perform(query)
+    }
+
+    /// Games by IGDB slug — what Wikidata answers with, since P5794 stores
+    /// the slug rather than the numeric id.
+    static func games(slugs: [String]) async -> [IGDBGame] {
+        let clean = slugs.filter { !$0.isEmpty }.prefix(30)
+        guard !clean.isEmpty else { return [] }
+        let list = clean.map { "\"\($0.replacingOccurrences(of: "\"", with: ""))\"" }
+            .joined(separator: ",")
+        return (try? await perform("where slug = (\(list)); \(fields) limit \(clean.count);")) ?? []
+    }
+
     /// Untyped passthrough, for endpoints whose shape isn't a game.
     ///
     /// `game_time_to_beats` returns rows of integers, and the critic fields

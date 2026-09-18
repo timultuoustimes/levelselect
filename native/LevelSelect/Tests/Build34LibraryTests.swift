@@ -633,9 +633,23 @@ struct Build34LibraryTests {
     /// ⌘1–⌘4 are assigned by tab-bar position, so the number pressed matches
     /// the position seen. If the tab order ever changes, the shortcuts follow
     /// it — this pins the order they are derived from.
+    /// Everything that names the wishlist lands on Library's wishlist half.
+    @Test func theWishlistLivesInLibrary() {
+        let nav = AppNavigator.shared
+        nav.go(to: .wishlist)
+        #expect(nav.selectedTab == .library)
+        #expect(nav.libraryHalf == .wishlist)
+        nav.go(to: .library)
+        #expect(nav.libraryHalf == .collection)
+        nav.go(to: .home)
+    }
+
     @Test func theTabsAreInTheOrderTheMenuNumbersThem() {
-        #expect(LSTab.allCases == [.home, .library, .wishlist, .journal])
-        #expect(LSTab.allCases.map(\.menuTitle) == ["Home", "Library", "Wishlist", "Journal"])
+        // News (build 39) sits before the journal, as on the tab bar.
+        #expect(LSTab.allCases == [.home, .library, .wishlist, .news, .journal, .search])
+        // Wishlist is half of Library and search is the bar's circle (09-18).
+        #expect(LSTab.numbered == [.home, .library, .news, .journal])
+        #expect(LSTab.numbered.map(\.menuTitle) == ["Home", "Library", "News", "Journal"])
     }
 
     /// **The raw values are a shipped contract, not an implementation detail.**
@@ -677,15 +691,14 @@ struct Build34LibraryTests {
         #expect(nav.selectedTab == .library)
     }
 
-    /// From Home or Stats, which have no search at all, ⌘F goes to Library —
-    /// so the shortcut always means "find a game" rather than sometimes
-    /// meaning nothing.
-    @Test func findGoesToLibraryFromATabWithNoSearch() {
+    /// From a tab with no search of its own, ⌘F opens universal search
+    /// (09-18) — it used to go to Library, when that was the only search.
+    @Test func findGoesToUniversalSearchFromATabWithNoSearch() {
         let nav = AppNavigator.shared
-        for tab in [LSTab.home, .journal] {
+        for tab in [LSTab.home, .journal, .news] {
             nav.selectedTab = tab
             nav.requestSearch()
-            #expect(nav.selectedTab == .library)
+            #expect(nav.selectedTab == .search)
         }
     }
 
@@ -701,4 +714,35 @@ struct Build34LibraryTests {
         nav.requestClearFilters()
         #expect(nav.selectedTab == .library)
     }
+
+    @Test("A console page keeps wishlist games apart from the games you have")
+    func consolePageSeparatesTheWishlist() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let owned = repo.addGame(name: "Metroid Prime 4", status: .playing)
+        owned.platforms = ["Nintendo Switch 2"]; owned.ownedPlatforms = ["Nintendo Switch 2"]
+        let waiting = repo.addGame(name: "Pragmata", status: .wishlist)
+        waiting.platforms = ["Nintendo Switch 2"]; waiting.ownedPlatforms = ["Nintendo Switch 2"]
+        let elsewhere = repo.addGame(name: "Halo 3", status: .wishlist)
+        elsewhere.platforms = ["Xbox 360"]; elsewhere.ownedPlatforms = ["Xbox 360"]
+        let page = PlatformRoute.split([owned, waiting, elsewhere], platform: "Switch 2")
+        #expect(page.mine.map(\.name) == ["Metroid Prime 4"])
+        #expect(page.wishlist.map(\.name) == ["Pragmata"])
+    }
+
+
+    @Test("A deleted game's finishes leave the year's Beaten list")
+    func deletedGamesLeaveTheBeatenList() {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let date = DateComponents(calendar: .current, year: 2011, month: 11, day: 20).date!
+        let kept = repo.addGame(name: "Skyrim", status: .completed)
+        let gone = repo.addGame(name: "Skyrim", status: .completed)
+        _ = repo.addCompletion(to: kept, date: date)
+        _ = repo.addCompletion(to: gone, date: date)
+        repo.softDelete(gone)
+        let rows = CompletionYearView.rows(in: [kept, gone], year: 2011)
+        #expect(rows.map(\.game.id) == [kept.id])
+    }
+
 }

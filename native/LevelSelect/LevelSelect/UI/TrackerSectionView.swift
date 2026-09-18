@@ -32,6 +32,7 @@ struct MergeReviewPresentationState {
 /// schema. Everything syncs via CloudKit like the rest of the model.
 struct TrackerSectionView: View {
     @AppStorage("levelselect.showRAArt") private var showRAArt = true
+    @AppStorage(RASync.autoKey) private var autoSyncRAEnabled = true
     @State private var raBrowserTarget: DekuLinkTarget?
     @Query(sort: \ThemeSettings.createdAt) private var themeSettings: [ThemeSettings]
     /// "Show item hints" (synced): hints are the description and location a
@@ -49,6 +50,9 @@ struct TrackerSectionView: View {
     /// statement about this game, and it outlives one visit to the screen.
     @AppStorage private var hidePlanned: Bool
     @State private var addingGoal = false
+    /// The list a hand-added item goes into.
+    @State private var addingItemTo: TrackerCategoryDTO?
+    @State private var newItemName = ""
     @State private var goalName = ""
     /// **Which categories are open, remembered per game.**
     ///
@@ -105,6 +109,10 @@ struct TrackerSectionView: View {
         case editItem(EditTarget)
         case reviewMerge(UUID)
         case arrange
+        case itemDetails(ItemDetailsTarget)
+        case listSetup(ListSetupTarget)
+        case focus
+        case shape
 
         var id: String {
             switch self {
@@ -112,6 +120,10 @@ struct TrackerSectionView: View {
             case .editItem(let target): "edit-\(target.id)"
             case .reviewMerge(let id): "merge-\(id.uuidString)"
             case .arrange:             "arrange"
+            case .itemDetails(let t):  "details-\(t.id)"
+            case .listSetup(let t):    "list-\(t.id)"
+            case .focus:               "focus"
+            case .shape:               "shape"
             }
         }
 
@@ -151,8 +163,13 @@ struct TrackerSectionView: View {
         var id: String { categoryID ?? "__tracker__" }
     }
 
+    /// The life-sim filter — "Spring", "Rain" — remembered per game.
+    @AppStorage private var tagFilter: String
+    @State private var showingOutOfFocus = false
+
     init(game: Game) {
         self.game = game
+        _tagFilter = AppStorage(wrappedValue: "", "trackerTag.\(game.id.uuidString)")
         _hidePlanned = AppStorage(wrappedValue: false, "hidePlanned.\(game.id.uuidString)")
         _expandedRaw = AppStorage(wrappedValue: "", "trackerOpen.\(game.id.uuidString)")
     }
@@ -210,16 +227,10 @@ struct TrackerSectionView: View {
             ?? TrackerSchemaJSON.Applicability()
     }
 
-    private var stateByItem: [String: TrackerStateRecord] {
-        Dictionary(
-            (playthrough?.trackerStates ?? [])
-                .filter { $0.deletedAt == nil }
-                .map { ($0.itemID, $0) },
-            // Same winner rule as the repository read — "whichever row the
-            // relationship listed first" could show a different state than
-            // repo.trackerState until reconciliation ran.
-            uniquingKeysWith: { a, b in b.outranks(a) ? b : a }
-        )
+    /// Same winner rule as the repository read, with a shared list's ticks
+    /// read from the Across Playthroughs record.
+    private func stateByItem(_ cats: [TrackerCategoryDTO]) -> [String: TrackerStateRecord] {
+        repo.stateMap(for: playthrough, categories: cats)
     }
 
     /// Built once per render beside the state map — gating is a whole-tracker
@@ -234,8 +245,10 @@ struct TrackerSectionView: View {
 
     var body: some View {
         let cats = categories
-        let states = stateByItem
+        let states = stateByItem(cats)
         let gating = resolver(cats, states: states)
+        let focus = repo.focus(of: playthrough)
+        let outOfFocus = focus.map { f in cats.filter { !$0.pending && !f.contains($0.id) } } ?? []
         VStack(alignment: .leading, spacing: 12) {
             header(cats, states: states)
 
@@ -256,7 +269,7 @@ struct TrackerSectionView: View {
                     // and it is answerable in a few seconds rather than the two
                     // minutes a full generation costs.
                     Button {
-                        generation.suggestCategories(for: game, context: context)
+                        sheet = .shape
                     } label: {
                         Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
                             .font(.subheadline.weight(.medium))
@@ -279,11 +292,30 @@ struct TrackerSectionView: View {
             let batchRunning = generation.batch(for: game.id) != nil
             let batchAnchor = !hidePlanned && (emptyPlans.count > 1 || batchRunning)
                 ? emptyPlans.first?.id : nil
-            ForEach(hidePlanned ? cats.filter { !$0.pending } : cats) { category in
+            let hiddenByFocus = showingOutOfFocus ? Set<String>() : Set(outOfFocus.map(\.id))
+            if !allTags(cats).isEmpty {
+                tagFilterBar(allTags(cats))
+            }
+            ForEach((hidePlanned ? cats.filter { !$0.pending } : cats).filter { !hiddenByFocus.contains($0.id) }) { category in
                 if category.id == batchAnchor {
                     generateAllPlannedRow(count: emptyPlans.count)
                 }
                 categoryView(category, states: states, gating: gating)
+            }
+            // Out of focus, never out of sight: one row says how many, and
+            // opens them.
+            if !outOfFocus.isEmpty {
+                Button {
+                    withAnimation(.snappy) { showingOutOfFocus.toggle() }
+                } label: {
+                    Label(showingOutOfFocus
+                          ? "Hide the \(outOfFocus.count) list\(outOfFocus.count == 1 ? "" : "s") not in focus"
+                          : "\(outOfFocus.count) list\(outOfFocus.count == 1 ? "" : "s") not in focus",
+                          systemImage: showingOutOfFocus ? "scope" : "eye.slash")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                .tint(.secondary)
             }
             // Says the note exists, once, to someone who has items to write one
             // on and hasn't. It disappears the moment any item has a note —
@@ -334,7 +366,8 @@ struct TrackerSectionView: View {
             }
 
             if let error = generation.error(for: game.id) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: GenieArt.enabled ? .center : .firstTextBaseline, spacing: 8) {
+                    GenieFigure(pose: .conceding, size: 40)
                     Label(error, systemImage: "exclamationmark.triangle")
                         .font(.caption)
                         .foregroundStyle(LSTheme.working)
@@ -379,7 +412,7 @@ struct TrackerSectionView: View {
                     // just make the menu look longer than it is.
                     if hasNonGoalContent {
                         Button {
-                            generation.suggestCategories(for: game, context: context)
+                            sheet = .shape
                         } label: {
                             Label("Suggest Categories", systemImage: "list.bullet.rectangle.portrait")
                         }
@@ -398,6 +431,11 @@ struct TrackerSectionView: View {
                         goalName = ""
                         addingGoal = true
                     } label: { Label("Add Personal Goal", systemImage: "plus.circle") }
+                    if cats.filter({ !$0.pending }).count > 1 {
+                        Button {
+                            sheet = .focus
+                        } label: { Label("Choose Focus…", systemImage: "scope") }
+                    }
                     Button {
                         editingApplicability = true
                     } label: { Label(applicability.isEmpty ? "Set What This Applies To…"
@@ -608,6 +646,7 @@ struct TrackerSectionView: View {
         .dekuBrowser(target: $raBrowserTarget)
         .task(id: game.id) {
             builtinAvailable = BuiltinTrackers.match(for: game) != nil
+            await autoSyncRA()
         }
         .confirmationDialog(
             "Regenerate this tracker?",
@@ -694,6 +733,14 @@ struct TrackerSectionView: View {
                     }
                 case .arrange:
                     TrackerArrangeSheet(game: game)
+                case .itemDetails(let target):
+                    ItemDetailsSheet(game: game, target: target)
+                case .focus:
+                    TrackerFocusSheet(game: game)
+                case .shape:
+                    TrackerShapeSheet(game: game)
+                case .listSetup(let target):
+                    ListSetupSheet(game: game, target: target)
                 }
             }
             .lsSheet()
@@ -749,7 +796,8 @@ struct TrackerSectionView: View {
         ) {
             Button("Tick it") {
                 if let prompt = confirmingLockout {
-                    let pt = repo.ensureDefaultPlaythrough(for: game)
+                    let pt = repo.statePlaythrough(
+                        for: game, category: categories.first { $0.items.contains { $0.id == prompt.item.id } })
                     repo.setTrackerItem(pt, itemID: prompt.item.id, done: true)
                 }
                 confirmingLockout = nil
@@ -785,6 +833,23 @@ struct TrackerSectionView: View {
         }
         .sheet(isPresented: $editingApplicability) {
             ApplicabilitySheet(game: game).lsSheet()
+        }
+        .alert("Add to \(addingItemTo?.name ?? "List")", isPresented: Binding(
+            get: { addingItemTo != nil },
+            set: { if !$0 { addingItemTo = nil } }
+        )) {
+            TextField("Name", text: $newItemName)
+            Button("Add") {
+                if let category = addingItemTo {
+                    repo.addTrackerItem(game, categoryID: category.id, name: newItemName)
+                    expanded = expanded.union([category.id])
+                }
+                newItemName = ""
+                addingItemTo = nil
+            }
+            Button("Cancel", role: .cancel) { newItemName = ""; addingItemTo = nil }
+        } message: {
+            Text("A unit, chapter or anything else the list is missing.")
         }
         .alert("New Personal Goal", isPresented: $addingGoal) {
             TextField("Goal", text: $goalName)
@@ -992,7 +1057,24 @@ struct TrackerSectionView: View {
     /// Never the playthrough you're on: RA's unlocks are account-wide and
     /// permanent, so folding them into a run in progress would mark it
     /// finished on the strength of a run you played years ago.
-    private func syncRetroAchievements() async {
+    /// Sync this game's RetroAchievements set when you open it.
+    ///
+    /// Quiet on purpose: it says nothing unless something new arrived, so
+    /// opening a game you finished years ago doesn't announce "0 new". Once
+    /// every six hours per game, because unlocks are account-wide and
+    /// permanent — nothing here is urgent, and RA's rate limit is the user's
+    /// own. Off with one switch in Settings.
+    private func autoSyncRA() async {
+        guard autoSyncRAEnabled, !raSyncing, raGameID != nil, RACredentials.isConfigured else { return }
+        let key = "ra.autoSync.\(game.id.uuidString)"
+        let last = UserDefaults.standard.double(forKey: key)
+        let now = Date.now.timeIntervalSince1970
+        guard now - last > 6 * 60 * 60 else { return }
+        UserDefaults.standard.set(now, forKey: key)
+        await syncRetroAchievements(announcing: false)
+    }
+
+    private func syncRetroAchievements(announcing: Bool = true) async {
         guard let gameID = raGameID, let credentials = RACredentials.current else { return }
         raSyncing = true
         raResult = nil
@@ -1002,9 +1084,14 @@ struct TrackerSectionView: View {
                 gameID: gameID, credentials: credentials)
             let pt = repo.raPlaythrough(for: game)
             let outcome = repo.applyRAUnlocks(progress.unlocked, to: pt, in: game)
-            raResult = summary(progress, outcome)
+            // A quiet sync reports only what it changed.
+            if announcing || outcome.newlyTicked > 0 {
+                raResult = summary(progress, outcome)
+            }
         } catch {
-            raResult = error.localizedDescription
+            // A sync you didn't ask for fails silently: you came to look at
+            // the tracker, not to be told RA was unreachable.
+            if announcing { raResult = error.localizedDescription }
         }
     }
 
@@ -1147,10 +1234,14 @@ struct TrackerSectionView: View {
     @ViewBuilder
     private func mergeSummary(_ outcome: Repository.TrackerMergeOutcome) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(LSTheme.accent)
+            HStack(alignment: GenieArt.enabled ? .center : .firstTextBaseline, spacing: 8) {
+                if GenieArt.enabled {
+                    GenieFigure(pose: .scroll, size: 40)
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(LSTheme.accent)
+                }
                 Text(summaryText(outcome))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -1207,7 +1298,10 @@ struct TrackerSectionView: View {
 
     private func header(_ cats: [TrackerCategoryDTO], states: [String: TrackerStateRecord]) -> some View {
         let allItems = cats.flatMap(\.items)
-        let tally = TrackerProgress.tally(items: allItems) { states[$0]?.completed == true }
+        let focus = repo.focus(of: playthrough)
+        let tally = TrackerProgress.tally(categories: cats, focus: focus) {
+            states[$0].map(TrackerProgress.ItemState.init)
+        }
         let done = tally.done
         // Only sources that score their items have any of this — RetroAchievements
         // does, a generated tracker doesn't — so the whole readout stays absent
@@ -1398,9 +1492,10 @@ struct TrackerSectionView: View {
     @ViewBuilder
     private func categoryView(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord],
                               gating: TrackerGating.Resolver) -> some View {
-        let visibleItems = hideCompleted
-            ? category.items.filter { states[$0.id]?.completed != true }
-            : category.items
+        let visibleItems = Self.displayOrder(
+            Self.matching(tag: tagFilter,
+                          hideCompleted ? category.items.filter { states[$0.id]?.completed != true } : category.items),
+            category: category, states: states)
         if category.pending && category.items.isEmpty {
             plannedCategoryRow(category)
         } else if !visibleItems.isEmpty {
@@ -1426,7 +1521,7 @@ struct TrackerSectionView: View {
                                 }
                             }
                         }
-                    } else if isDense(visibleItems) {
+                    } else if !category.isRoster, isDense(visibleItems) {
                         // Short, detail-free items waste most of a row each.
                         // An adaptive grid self-tunes by available width rather
                         // than by item count: one column on a narrow phone with
@@ -1478,6 +1573,39 @@ struct TrackerSectionView: View {
                     if generation.isGenerating(game.id, category: category.id) {
                         ProgressView().controlSize(.small)
                     }
+                    if category.carried {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .help("Remembered across playthroughs")
+                            .accessibilityLabel("Remembered across playthroughs")
+                    }
+                    if category.progress == .excluded {
+                        Text("Not counted")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    if SchemaDeploy.build39Fields, category.partyField != nil {
+                        let party = Self.partyCount(category, states: states)
+                        Label(category.partySize.map { "\(party)/\($0)" } ?? "\(party)",
+                              systemImage: "person.3.fill")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(category.partySize.map { party > $0 } == true
+                                             ? AnyShapeStyle(.orange) : AnyShapeStyle(LSTheme.accent))
+                            .accessibilityLabel("Party \(party)" + (category.partySize.map { " of \($0)" } ?? ""))
+                    }
+                    // Points, where the source scores its items — a
+                    // RetroAchievements set does, a generated list doesn't, so
+                    // the readout is absent rather than a meaningless "0 pts".
+                    // Tim pulled this into 39 on 09-17; it had been a "not
+                    // built yet" line in the 08-19 RA design record.
+                    if let points = Self.points(category, states: states) {
+                        Text("\(points.earned)/\(points.total) pts")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(points.earned == points.total ? AnyShapeStyle(.green)
+                                             : AnyShapeStyle(LSTheme.accent.opacity(0.85)))
+                            .accessibilityLabel("\(points.earned) of \(points.total) points")
+                    }
                     Text("\(done)/\(category.items.count)")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(done == category.items.count ? .green : .secondary)
@@ -1500,6 +1628,18 @@ struct TrackerSectionView: View {
                         renameText = category.name
                         renaming = (category.id, nil)
                     } label: { Label("Rename Category", systemImage: "pencil") }
+                    if SchemaDeploy.build39Fields, !category.isImportedSet {
+                        Button {
+                            sheet = .listSetup(ListSetupTarget(categoryID: category.id))
+                        } label: {
+                            Label(category.isRoster ? "Roster & Fields…" : "List Type & Fields…",
+                                  systemImage: "list.bullet.rectangle")
+                        }
+                        Button {
+                            newItemName = ""
+                            addingItemTo = category
+                        } label: { Label("Add to This List…", systemImage: "plus") }
+                    }
                     // "I am pinning items from the tracker > this category"
                     // — the list you're looking at, straight onto the map.
                     if !repo.liveMaps(of: game).isEmpty {
@@ -1542,6 +1682,77 @@ struct TrackerSectionView: View {
             }
             .tint(LSTheme.accent)
         }
+    }
+
+    /// What a scored list is worth, and what you've earned of it. Nil when
+    /// its items carry no points.
+    static func points(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord])
+        -> (earned: Int, total: Int)? {
+        let total = category.items.compactMap(\.points).reduce(0, +)
+        guard total > 0 else { return nil }
+        let earned = category.items
+            .filter { states[$0.id]?.completed == true }
+            .compactMap(\.points).reduce(0, +)
+        return (earned, total)
+    }
+
+    /// Items under the life-sim filter. Untagged items show under every
+    /// filter — "Spring" shouldn't hide a list that has no seasons.
+    static func matching(tag: String, _ items: [TrackerItemDTO]) -> [TrackerItemDTO] {
+        guard !tag.isEmpty, items.contains(where: { !$0.filters.isEmpty }) else { return items }
+        let key = tag.lowercased()
+        return items.filter { $0.filters.isEmpty || $0.filters.contains { $0.lowercased() == key } }
+    }
+
+    /// Every tag in the tracker, in first-seen order.
+    private func allTags(_ cats: [TrackerCategoryDTO]) -> [String] {
+        var seen = Set<String>()
+        return cats.flatMap(\.items).flatMap(\.filters).filter { seen.insert($0.lowercased()).inserted }
+    }
+
+    private func tagFilterBar(_ tags: [String]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                tagChip("All", selected: tagFilter.isEmpty) { tagFilter = "" }
+                ForEach(tags, id: \.self) { tag in
+                    tagChip(tag, selected: tagFilter.lowercased() == tag.lowercased()) {
+                        tagFilter = tagFilter.lowercased() == tag.lowercased() ? "" : tag
+                    }
+                }
+            }
+        }
+        .accessibilityLabel("Filter")
+    }
+
+    private func tagChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(selected ? LSTheme.accent.opacity(0.25) : Color.secondary.opacity(0.12), in: .capsule)
+                .foregroundStyle(selected ? AnyShapeStyle(LSTheme.accent) : AnyShapeStyle(.primary))
+        }
+        .buttonStyle(.plain)
+        .lsTapTargetInline()
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    /// A roster keeps its fallen at the bottom, apart from the living; every
+    /// other list keeps its own order.
+    static func displayOrder(_ items: [TrackerItemDTO], category: TrackerCategoryDTO,
+                             states: [String: TrackerStateRecord]) -> [TrackerItemDTO] {
+        guard category.isRoster, SchemaDeploy.build39Fields else { return items }
+        let fallen = { (item: TrackerItemDTO) in states[item.id]?.fieldValues.status == .fallen }
+        return items.filter { !fallen($0) } + items.filter(fallen)
+    }
+
+    /// Units in the party, the fallen never among them.
+    static func partyCount(_ category: TrackerCategoryDTO, states: [String: TrackerStateRecord]) -> Int {
+        category.items.filter {
+            guard let values = states[$0.id]?.fieldValues else { return false }
+            return values.toggle(TrackerFieldDTO.partyID) && values.status != .fallen
+        }.count
     }
 
     /// Pin this category to the top, or open the sheet to drag them all.
@@ -1596,7 +1807,7 @@ struct TrackerSectionView: View {
     @ViewBuilder
     private func itemsBody(_ items: [TrackerItemDTO], category: TrackerCategoryDTO, states: [String: TrackerStateRecord],
                            gating: TrackerGating.Resolver) -> some View {
-        if isDense(items, ignoringLocation: true) {
+        if !category.isRoster, isDense(items, ignoringLocation: true) {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), alignment: .leading)],
                       alignment: .leading, spacing: 2) {
                 ForEach(items) { itemRow($0, category: category, states: states, gating: gating, hideLocation: true) }
@@ -1660,10 +1871,14 @@ struct TrackerSectionView: View {
         let state = states[item.id]
         let done = state?.completed == true
         let hidden = item.hideUntilDiscovered && state?.revealed != true && !done
+        let values = SchemaDeploy.build39Fields ? (state?.fieldValues ?? TrackerFieldValues()) : TrackerFieldValues()
+        let setAside = [TrackerItemStatus.fallen, .failed, .missed, .skipped].contains(values.status)
+        let isNext = category.isSequence && !done
+            && category.items.first(where: { states[$0.id]?.completed != true })?.id == item.id
 
         HStack(alignment: .top, spacing: 4) {
             Button {
-                let pt = repo.ensureDefaultPlaythrough(for: game)
+                let pt = repo.statePlaythrough(for: game, category: category)
                 if hidden {
                     repo.revealTrackerItem(pt, itemID: item.id)
                 } else if !done {
@@ -1734,6 +1949,12 @@ struct TrackerSectionView: View {
                             .accessibilityLabel("Missable")
                     }
                 }
+                TrackerItemExtras(category: category, values: values, isNext: isNext,
+                                  hidden: hidden, recruited: done) { inParty in
+                    let pt = repo.statePlaythrough(for: game, category: category)
+                    repo.setTrackerField(pt, itemID: item.id, fieldID: TrackerFieldDTO.partyID,
+                                         value: inParty ? .toggle(true) : nil)
+                }
                 if !hidden, case .blocked(let needs) = gating.status(of: item) {
                     Label("Needs \(needs.joined(separator: ", "))", systemImage: "lock")
                         .font(.caption2)
@@ -1769,7 +1990,7 @@ struct TrackerSectionView: View {
                 if !hidden, hintsShown, let description = item.itemDescription, !description.isEmpty {
                     AltDescription(text: description, tint: LSTheme.accent,
                                    selectedVariant: state?.selectedVariant) { variant in
-                        let pt = repo.ensureDefaultPlaythrough(for: game)
+                        let pt = repo.statePlaythrough(for: game, category: category)
                         repo.setTrackerVariant(pt, itemID: item.id, variant: variant)
                     }
                 }
@@ -1785,7 +2006,7 @@ struct TrackerSectionView: View {
                                 current: state?.rank ?? 0)
                 }
                 if !hidden, let target = item.countTarget, target > 0 {
-                    countControl(item, target: target, current: state?.count ?? 0)
+                    countControl(item, category: category, target: target, current: state?.count ?? 0)
                 }
             }
             Spacer(minLength: 0)
@@ -1795,7 +2016,10 @@ struct TrackerSectionView: View {
         // Dimmed rather than hidden: knowing a thing exists and is not yet
         // reachable is the point — hiding it would just look like a shorter
         // tracker.
-        .opacity({ if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 } }())
+        .opacity({
+            if setAside { return 0.55 }
+            if case .available = gating.status(of: item) { return 1.0 } else { return 0.55 }
+        }())
         .contextMenu {
             // Where it is, on the map. An item with a pin opens the map on
             // it; one without opens the map in place mode with this item
@@ -1819,11 +2043,42 @@ struct TrackerSectionView: View {
             // One destination, one row. These were two labels opening the
             // identical sheet — a menu that offers you a choice and then
             // ignores it teaches you not to read it.
+            if SchemaDeploy.build39Fields, !hidden {
+                if !category.fields.isEmpty || category.isRoster {
+                    Button {
+                        sheet = .itemDetails(ItemDetailsTarget(categoryID: category.id, itemID: item.id))
+                    } label: { Label("Details…", systemImage: "person.text.rectangle") }
+                }
+                Menu {
+                    Picker("Status", selection: Binding(
+                        get: { values.status },
+                        set: { new in
+                            if new == .fallen {
+                                sheet = .itemDetails(ItemDetailsTarget(categoryID: category.id, itemID: item.id))
+                                let pt = repo.statePlaythrough(for: game, category: category)
+                                repo.setTrackerStatus(pt, itemID: item.id, status: .fallen)
+                                repo.setTrackerField(pt, itemID: item.id, fieldID: TrackerFieldDTO.partyID, value: nil)
+                            } else {
+                                let pt = repo.statePlaythrough(for: game, category: category)
+                                repo.setTrackerStatus(pt, itemID: item.id, status: new)
+                            }
+                        })) {
+                        Text("None").tag(TrackerItemStatus?.none)
+                        ForEach(category.isRoster ? [.fallen] + TrackerItemStatus.general
+                                                  : TrackerItemStatus.general, id: \.self) { s in
+                            Label(s.label, systemImage: s.systemImage).tag(TrackerItemStatus?.some(s))
+                        }
+                    }
+                } label: {
+                    Label("Status", systemImage: values.status?.systemImage ?? "circle.dashed")
+                }
+            }
             Button {
                 sheet = .editItem(EditTarget(categoryID: category.id, itemID: item.id,
                                              name: item.name, location: item.location ?? "",
                                              note: item.note ?? "",
-                                             countTarget: item.countTarget))
+                                             countTarget: item.countTarget,
+                                             filters: item.filters))
             } label: {
                 Label(item.note?.isEmpty == false ? "Edit item & note…" : "Edit item…",
                       systemImage: "pencil")
@@ -1843,11 +2098,12 @@ struct TrackerSectionView: View {
     /// those games become trackable at all. Minus and plus are separated by
     /// the number itself so a mis-tap costs one, and holding is not required
     /// for the common case of "I found another one".
-    private func countControl(_ item: TrackerItemDTO, target: Int, current: Int) -> some View {
+    private func countControl(_ item: TrackerItemDTO, category: TrackerCategoryDTO,
+                              target: Int, current: Int) -> some View {
         let pct = target > 0 ? Double(current) / Double(target) : 0
         return HStack(spacing: 10) {
             Button {
-                let pt = repo.ensureDefaultPlaythrough(for: game)
+                let pt = repo.statePlaythrough(for: game, category: category)
                 repo.setTrackerCount(pt, itemID: item.id, count: current - 1, target: target)
             } label: {
                 Image(systemName: "minus")
@@ -1874,7 +2130,7 @@ struct TrackerSectionView: View {
             }
 
             Button {
-                let pt = repo.ensureDefaultPlaythrough(for: game)
+                let pt = repo.statePlaythrough(for: game, category: category)
                 repo.setTrackerCount(pt, itemID: item.id, count: current + 1, target: target)
             } label: {
                 Image(systemName: "plus")
@@ -1908,7 +2164,7 @@ struct TrackerSectionView: View {
             rankNames: item.rankNames,
             tint: category.name.localizedCaseInsensitiveContains("keepsake") ? .pink : LSTheme.accent
         ) { newRank in
-            let pt = repo.ensureDefaultPlaythrough(for: game)
+            let pt = repo.statePlaythrough(for: game, category: category)
             repo.setTrackerRank(pt, itemID: item.id,
                                 rank: max(0, min(newRank, maxRank)), maxRank: maxRank)
         }

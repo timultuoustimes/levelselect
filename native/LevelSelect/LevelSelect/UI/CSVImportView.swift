@@ -24,11 +24,17 @@ struct CSVImportView: View {
     @State private var matching = false
     @State private var matchProgress = 0.0
     @State private var importError: String?
+    /// What to send when a file can't be read — see `ImportReportButton`.
+    @State private var failedImport: ImportFailureReport?
     @State private var imported: CSVImport.Applied?
     @State private var showingPicker = false
     @State private var sync = SyncStatusMonitor.shared
     /// Consoles you have a record for, to start rows on and to offer.
     @State private var owned: Set<String> = []
+    /// What a game you already have is recorded on today, so a row can say
+    /// what it's adding TO. Tim, 09-17: *"I'm not sure if that means they all
+    /// already are labeled as Mac games or if they're unlabeled."*
+    @State private var existingPlatforms: [UUID: [String]] = [:]
     /// Shown under the progress bar while IGDB asks us to slow down.
     @State private var matchStatus: String?
     /// The row being searched by hand.
@@ -136,6 +142,7 @@ struct CSVImportView: View {
                 parse = CSVImport.ParseResult(rows: preloaded, recognizedColumns: [],
                                               ignoredColumns: [], skippedLines: [])
                 owned = Set(Repository(context).liveConsoles().map(\.platform))
+                existingPlatforms = Self.platformsOfExisting(in: context)
                 candidates = preloaded.map { row in
                     var candidate = Candidate(row: row, include: row.skipReason == nil)
                     candidate.refreshPlatforms(owned: owned)
@@ -194,6 +201,10 @@ struct CSVImportView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                         .padding(.horizontal)
+                    if let failedImport {
+                        ImportReportButton(report: failedImport)
+                            .padding(.horizontal)
+                    }
                 }
             }
         }
@@ -259,7 +270,8 @@ struct CSVImportView: View {
 
             Section {
                 ForEach($candidates) { $candidate in
-                    CandidateRow(candidate: $candidate, owned: owned) {
+                    CandidateRow(candidate: $candidate, owned: owned,
+                                 already: candidate.row.existingGameID.flatMap { existingPlatforms[$0] } ?? []) {
                         searching = candidate.id
                     }
                 }
@@ -328,6 +340,7 @@ struct CSVImportView: View {
 
     private func handleFile(_ result: Result<URL, Error>) {
         importError = nil
+        failedImport = nil
         do {
             let url = try result.get()
             // Files chosen outside the sandbox need explicit access.
@@ -346,6 +359,8 @@ struct CSVImportView: View {
             let parsed = CSVImport.parse(text)
             guard !parsed.rows.isEmpty else {
                 importError = "No rows with a title were found. The file needs a column named Title, Name, or Game."
+                failedImport = ImportFailureReport(source: "CSV file", problem: importError ?? "",
+                                            fileName: url.lastPathComponent, content: text)
                 return
             }
             parse = parsed
@@ -465,10 +480,26 @@ struct CSVImportView: View {
     }
 }
 
+extension CSVImportView {
+    /// Every live game's consoles, by id.
+    @MainActor
+    static func platformsOfExisting(in context: ModelContext) -> [UUID: [String]] {
+        let games = (try? context.fetch(
+            FetchDescriptor<Game>(predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        var out: [UUID: [String]] = [:]
+        for game in games where !game.ownedPlatformNames.isEmpty {
+            out[game.id] = game.ownedPlatformNames
+        }
+        return out
+    }
+}
+
 /// One reviewable row: what the CSV said, what IGDB found, and a way to change it.
 private struct CandidateRow: View {
     @Binding var candidate: CSVImportView.Candidate
     let owned: Set<String>
+    /// The consoles this game is already recorded on, when it's one you have.
+    var already: [String] = []
     let search: () -> Void
 
     var body: some View {
@@ -498,7 +529,12 @@ private struct CandidateRow: View {
                             .foregroundStyle(.orange)
                     }
                     if candidate.row.existingGameID != nil {
-                        Text("In your library — adds")
+                        // Which consoles it has now, not only that it's here:
+                        // "adds PC" to a game already on Mac and "adds PC" to
+                        // a game on nothing are different facts.
+                        Text(already.isEmpty
+                             ? "In your library, no console yet — adds"
+                             : "In your library on \(already.map(PlatformShort.name).joined(separator: ", ")) — adds")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

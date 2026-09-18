@@ -334,6 +334,7 @@ struct ConsoleEditor: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var variant = ""
+    @State private var nickname = ""
     @State private var notes = ""
     @State private var knowsAcquired = false
     @State private var acquired = Date.now
@@ -357,8 +358,16 @@ struct ConsoleEditor: View {
                             PlatformIconView(platform: console.platform, size: 44)
                                 .frame(width: 58, height: 58)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(PlatformShort.name(console.platform))
-                                    .font(.title3.weight(.semibold))
+                                if let nick = ConsoleNickname.of(console.platform, in: [console]) {
+                                    Text(nick)
+                                        .font(.title3.weight(.semibold))
+                                    Text(PlatformShort.name(console.platform))
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text(PlatformShort.name(console.platform))
+                                        .font(.title3.weight(.semibold))
+                                }
                                 if console.platform == "PC" {
                                     Text("Windows or Linux")
                                         .font(.caption)
@@ -368,6 +377,17 @@ struct ConsoleEditor: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.vertical, 2)
+                    }
+
+                    if SchemaDeploy.build39Fields {
+                        Section {
+                            TextField("None", text: $nickname)
+                                .autocorrectionDisabled()
+                        } header: {
+                            Text("Nickname")
+                        } footer: {
+                            Text("What you call this one — shown on the console, not on its games. They stay \(PlatformShort.name(console.platform)) games.")
+                        }
                     }
 
                     if PlatformNaming.alternatives[PlatformShort.builtinName(console.platform)] != nil {
@@ -599,6 +619,7 @@ struct ConsoleEditor: View {
                 guard !loaded else { return }
                 loaded = true
                 variant = console.variant ?? ""
+                nickname = console.nickname ?? ""
                 notes = console.notes ?? ""
                 knowsAcquired = console.acquiredAt != nil
                 acquired = console.acquiredAt ?? .now
@@ -609,6 +630,7 @@ struct ConsoleEditor: View {
     private func save() {
         repo.updateConsole(console,
                            variant: variant,
+                           nickname: SchemaDeploy.build39Fields ? nickname : nil,
                            acquiredAt: .some(knowsAcquired ? acquired : nil),
                            notes: notes)
     }

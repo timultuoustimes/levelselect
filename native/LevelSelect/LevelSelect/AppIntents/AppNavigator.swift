@@ -10,7 +10,36 @@ enum LSTab: String, Hashable, CaseIterable {
     /// raw value inside whatever Shortcuts anyone has already built. Renaming
     /// the case is a readability change; renaming the raw value silently
     /// breaks a shortcut somebody wrote, months later, with no error.
-    case home, library, wishlist, journal = "stats"
+    /// `news` is build 39 (schema V7), and sits before the journal to match
+    /// the tab bar. Shown only once `SchemaDeploy.v7Fields` holds — see
+    /// `isAvailable`.
+    case home, library, wishlist, news, journal = "stats"
+    /// Universal search — the tab bar's search circle, which iOS draws only
+    /// beside four tabs (measured 09-18). See `wishlistInLibrary`.
+    case search
+
+    /// Whether this build shows the tab. News writes record types CloudKit
+    /// Production lacks until V7 is deployed there.
+    var isAvailable: Bool {
+        switch self {
+        case .news: SchemaDeploy.v7Fields
+        case .wishlist: !Self.wishlistInLibrary
+        case .search: Self.wishlistInLibrary
+        default: true
+        }
+    }
+
+    /// **Wishlist is half of Library** (09-18). Tim: *"wishlist is essentially
+    /// future library and games you hope to add to your library."* Four tabs
+    /// is also what lets universal search be the tab bar's own circle — with
+    /// five, iOS made it a sixth tab and put Journal behind "More".
+    ///
+    /// Built to reverse: false brings back the Wishlist tab and the
+    /// magnifying glass on every toolbar, and nothing else changes.
+    static let wishlistInLibrary = true
+
+    /// The tabs the menu numbers ⌘1–⌘4, in tab-bar order. Search sits apart.
+    static var numbered: [LSTab] { allCases.filter { $0 != .search && $0.isAvailable } }
 }
 
 /// Shared navigation bus that App Intents (and widget deep links) drive.
@@ -47,6 +76,9 @@ final class AppNavigator {
     /// pushing `StatusListView` onto Home's own stack keeps Home from growing
     /// a second browsing surface beside the one it just handed over.
     var pendingLibraryStatus: GameStatus?
+
+    /// Which half of Library shows — see `LSTab.wishlistInLibrary`.
+    var libraryHalf: LibraryHalf = .collection
 
     /// A game to push onto the Home stack (consumed by HomeTab).
     var pendingGameID: UUID?
@@ -108,6 +140,14 @@ final class AppNavigator {
     }
 
     func go(to tab: LSTab) {
+        // Shortcuts, widget links and "See all" still name the wishlist;
+        // it lives in Library now.
+        if tab == .wishlist && LSTab.wishlistInLibrary {
+            selectedTab = .library
+            libraryHalf = .wishlist
+            return
+        }
+        if tab == .library { libraryHalf = .collection }
         selectedTab = tab
     }
 
@@ -144,10 +184,16 @@ final class AppNavigator {
     /// From Home or Stats, which have no search, it goes to Library: that way
     /// ⌘F always means "find a game" rather than sometimes meaning nothing.
     var searchRequest = 0
+    /// Universal search, over whatever tab you're on (`SearchScreen`).
+    var searchPresented = false
 
     func requestSearch() {
+        // Library and Wishlist search within themselves; everywhere else,
+        // ⌘F opens universal search (09-18). It used to jump to Library,
+        // back when that was the only search there was.
         if selectedTab != .library && selectedTab != .wishlist {
-            selectedTab = .library
+            if LSTab.wishlistInLibrary { selectedTab = .search } else { searchPresented = true }
+            return
         }
         searchRequest += 1
     }
@@ -156,4 +202,11 @@ final class AppNavigator {
         selectedTab = .library
         clearFiltersRequest += 1
     }
+}
+
+/// The two halves of Library. See `LSTab.wishlistInLibrary`.
+enum LibraryHalf: String, CaseIterable, Identifiable, Sendable {
+    case collection, wishlist
+    var id: String { rawValue }
+    var label: String { self == .collection ? "Collection" : "Wishlist" }
 }

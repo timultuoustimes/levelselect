@@ -166,6 +166,7 @@ enum CloudKitSchemaSeeder {
         game.igdbID = 1
         game.igdbSlug = marker
         game.wikidataID = marker                       // build 37
+        game.barcodes = [marker]                       // V7 — ScanDex
         game.firstReleaseDate = now
         game.franchise = marker
         game.coverURLString = marker
@@ -268,6 +269,7 @@ enum CloudKitSchemaSeeder {
         state.notes = marker
         state.selectedVariant = marker         // V2
         state.selectedVariantUpdatedAt = .now  // build 37
+        state.valuesJSON = marker              // build 39 — RPG fields
         context.insert(state)
         state.playthrough = pt
 
@@ -497,9 +499,37 @@ enum CloudKitSchemaSeeder {
         console.legacyID = marker
         console.declinedOwnership = [Ownership.emulated.rawValue]
         console.variant = marker
+        console.nickname = marker              // build 39
         console.acquiredAt = now
         console.notes = marker
         context.insert(console)
+
+        // V7 — the news reader. Every optional set, for the reason the
+        // console block above gives: a field CloudKit never sees has no
+        // column in Production and fails to sync forever after.
+        let feed = NewsFeed(urlString: marker, title: marker)
+        feed.userID = UUID()
+        feed.deletedAt = now
+        feed.legacyID = marker
+        feed.siteURLString = marker
+        feed.folder = marker
+        feed.sortIndex = 1
+        feed.muted = true
+        feed.lastFetchedAt = now
+        feed.lastItemAt = now
+        context.insert(feed)
+
+        let article = NewsItemState(guid: marker)
+        article.userID = UUID()
+        article.deletedAt = now
+        article.legacyID = marker
+        article.feedID = feed.id
+        article.title = marker
+        article.linkString = marker
+        article.publishedAt = now
+        article.read = true
+        article.saved = true
+        context.insert(article)
 
         // The `console` side of GameImage (V6). The seeded picture below is
         // attached to the seeded console so the reference field materializes;
@@ -568,6 +598,11 @@ enum CloudKitSchemaSeeder {
             if existingTheme.platformNamesData == nil { existingTheme.platformNamesData = stamp }
             if existingTheme.homeLayoutRaw == nil { existingTheme.homeLayoutRaw = marker }
             if existingTheme.homeSystemsRaw == nil { existingTheme.homeSystemsRaw = marker }
+            // build 39 — the hero card's own color.
+            if existingTheme.heroHexLight == nil { existingTheme.heroHexLight = marker }
+            if existingTheme.heroHexDark == nil { existingTheme.heroHexDark = marker }
+            if existingTheme.suggestionPrefsRaw == nil { existingTheme.suggestionPrefsRaw = marker }
+            if existingTheme.shelfOrderRaw == nil { existingTheme.shelfOrderRaw = marker }
         // ⚠️ A NEW ThemeSettings FIELD MUST BE ADDED TO BOTH BRANCHES.
         //
         // The app creates a ThemeSettings on launch, so a seed run almost
@@ -604,6 +639,10 @@ enum CloudKitSchemaSeeder {
             theme.accentHue = seededHue                   // build 37
             theme.accentSaturation = seededHue            // build 37
             theme.paletteLinked = true                    // build 37, non-optional
+            theme.heroHexLight = marker                   // build 39
+            theme.heroHexDark = marker                    // build 39
+            theme.suggestionPrefsRaw = marker             // V7
+            theme.shelfOrderRaw = marker                  // V7
             context.insert(theme)
         }
 
@@ -641,6 +680,8 @@ enum CloudKitSchemaSeeder {
         purgeAll(GameImage.self) { $0.legacyID == marker }
         purgeAll(Memory.self) { $0.legacyID == marker }
         purgeAll(Console.self) { $0.legacyID == marker }
+        purgeAll(NewsFeed.self) { $0.legacyID == marker }
+        purgeAll(NewsItemState.self) { $0.legacyID == marker }
         purgeAll(Profile.self) { $0.appleUserIdentifier == marker }
         purgeAll(PlayerProfile.self) { $0.displayName == marker }
         purgeAll(MigrationReceipt.self) { $0.sourceDeviceID == marker }
@@ -677,6 +718,10 @@ enum CloudKitSchemaSeeder {
             if theme.backgroundHex == marker { theme.backgroundHex = nil }
             if theme.backdropIntensityRaw == marker { theme.backdropIntensityRaw = nil }
             if theme.gamePageLayoutRaw == marker { theme.gamePageLayoutRaw = nil }
+            if theme.heroHexLight == marker { theme.heroHexLight = nil }
+            if theme.heroHexDark == marker { theme.heroHexDark = nil }
+            if theme.suggestionPrefsRaw == marker { theme.suggestionPrefsRaw = nil }
+            if theme.shelfOrderRaw == marker { theme.shelfOrderRaw = nil }
             ThemePalette.refresh(from: theme)
         }
 

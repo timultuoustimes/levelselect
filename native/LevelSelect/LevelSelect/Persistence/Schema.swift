@@ -128,6 +128,23 @@ enum LevelSelectSchemaV6: VersionedSchema {
     }
 }
 
+/// **V7 — the news reader (2026-09-17).** Two record types, no relationships
+/// to anything that existed: a feed you follow, and what you did with one
+/// article. Everything else in the same promote is fields on records that
+/// already exist (`ThemeSettings.suggestionPrefsRaw`, `shelfOrderRaw`,
+/// `Game.barcodes`), which a `VersionedSchema` does not list — the V4 and
+/// build-39 precedent.
+enum LevelSelectSchemaV7: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(7, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        LevelSelectSchemaV6.models + [
+            NewsFeed.self,
+            NewsItemState.self,
+        ]
+    }
+}
+
 /// Deliberately NO `SchemaMigrationPlan`.
 ///
 /// A staged plan crashed every existing library on first launch:
@@ -154,7 +171,7 @@ enum LevelSelectMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
         [LevelSelectSchemaV1.self, LevelSelectSchemaV2.self,
          LevelSelectSchemaV3.self, LevelSelectSchemaV5.self,
-         LevelSelectSchemaV6.self]
+         LevelSelectSchemaV6.self, LevelSelectSchemaV7.self]
     }
 }
 
@@ -185,13 +202,25 @@ enum LevelSelectStore {
     /// exist in the CloudKit store at all, so they can't sync to other devices
     /// or need purging afterwards.
     @MainActor
+    static var seedStoreURL: URL {
+        URL.applicationSupportDirectory.appending(path: "seed.store")
+    }
+
+    /// See `makeContainer` — Development builds only. Reads the environment
+    /// itself rather than through `SchemaDeploy`, which the widget target
+    /// doesn't compile; a missing key reads as Production, so off.
+    static var isSeedSession: Bool {
+        let env = Bundle.main.object(forInfoDictionaryKey: "LSCloudKitEnvironment") as? String
+        return env == "Development" && UserDefaults.standard.bool(forKey: "LSSeedStore")
+    }
+
     static var demoStoreURL: URL {
         URL.applicationSupportDirectory.appending(path: "demo.store")
     }
 
     @MainActor
     static func makeContainer(inMemory: Bool = false, demo: Bool = false) -> ModelContainer {
-        let schema = Schema(versionedSchema: LevelSelectSchemaV6.self)
+        let schema = Schema(versionedSchema: LevelSelectSchemaV7.self)
         // Never use CloudKit under XCTest (the app is the test host) or in-memory.
         let underTest = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         let memory = inMemory || underTest
@@ -207,6 +236,28 @@ enum LevelSelectStore {
             let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true,
                                             cloudKitDatabase: .none)
             return try! ModelContainer(for: schema, configurations: [config])
+        }
+
+        // **A throwaway store for seeding the CloudKit schema.** Launched with
+        // `-LSSeedStore YES`, a Development build opens `seed.store` in its own
+        // Application Support and syncs THAT to Development — the real library
+        // is never opened, so Development's stale records have nothing of
+        // yours to merge into. The runbook used to be "back up the store and
+        // move it aside"; on 2026-09-17 macOS refused both the shell and the
+        // Terminal access to the group container, and moving a library by hand
+        // was always the riskiest step anyway. Ignored on a build that syncs
+        // to Production, where a second store would be the wrong library.
+        // Ahead of the demo library, which is CloudKit-free: a seed written
+        // there never reaches Development (found the first time, 09-17).
+        if isSeedSession {
+            try? FileManager.default.createDirectory(
+                at: URL.applicationSupportDirectory, withIntermediateDirectories: true)
+            let config = ModelConfiguration(schema: schema, url: seedStoreURL,
+                                            cloudKitDatabase: .automatic)
+            if let container = try? ModelContainer(for: schema, configurations: [config]) {
+                return container
+            }
+            fatalError("Couldn't open the seed store at \(seedStoreURL.path)")
         }
 
         if demo {

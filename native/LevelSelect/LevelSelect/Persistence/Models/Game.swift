@@ -35,6 +35,10 @@ final class Game {
     /// Resolved by querying Wikidata BY the IGDB id rather than by name —
     /// name matching is how the wrong game's logo got attached once already.
     var wikidataID: String?
+    /// Barcodes you've scanned for this game — a cartridge, a case, a
+    /// re-release. Several, because one game can wear several: a PAL copy and
+    /// an NTSC one are the same game to you. V7, build 39 (ScanDex).
+    var barcodes: [String] = []
     var firstReleaseDate: Date?
     /// Every date IGDB gives for this game, keyed by platform. Schema V4.
     ///

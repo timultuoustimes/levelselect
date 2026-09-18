@@ -36,11 +36,12 @@ struct WishlistTab: View {
     }
 
     private enum Pane: String, CaseIterable, Identifiable {
-        case yours, deku
+        case yours, suggested, deku
         var id: String { rawValue }
         var label: String {
             switch self {
             case .yours: "Yours"
+            case .suggested: "You Might Like"
             case .deku: "Deku Deals"
             }
         }
@@ -146,7 +147,11 @@ struct WishlistTab: View {
             // *"Glass is also not going far enough down behind the ownership
             // pills, or other top tab pills."*
                     Group {
-                        if pane == .yours { yours } else { dekuPane }
+                        switch pane {
+                        case .yours:     yours
+                        case .suggested: SuggestionsPane()
+                        case .deku:      dekuPane
+                        }
                     }
                     .safeAreaBar(edge: .top) {
                         Picker("Wishlist", selection: $pane) {
@@ -158,6 +163,7 @@ struct WishlistTab: View {
                     }
                 }
             }
+            .safeAreaBar(edge: .top) { if LSTab.wishlistInLibrary { LibraryHalfPicker() } }
             .lsBackground()
             // **Large, left, and it stays there.**
             //
@@ -187,8 +193,16 @@ struct WishlistTab: View {
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             #endif
             .toolbar {
+                if !LSTab.wishlistInLibrary {
+                    ToolbarItem { SearchButton() }
+                }
                 ToolbarItem {
                     Menu {
+                        // Sorting and view mode belong to YOUR wishlist. On
+                        // the other two panes they had nothing to act on and
+                        // sat there looking broken (Tim, 09-17); You Might
+                        // Like carries its own sort and system filter.
+                        if pane == .yours {
                         Picker("Sort", selection: $sort) {
                             ForEach(WishlistSort.allCases) { option in
                                 Label(option.label, systemImage: option.systemImage).tag(option)
@@ -212,13 +226,15 @@ struct WishlistTab: View {
                             }
                         }
                         Divider()
+                        }
                         Button {
                             openDeku(DekuLinks.home)
                         } label: {
                             Label("Browse Deku Deals", systemImage: "globe")
                         }
                     } label: {
-                        Label("Sort & View", systemImage: "arrow.up.arrow.down")
+                        Label(pane == .yours ? "Sort & View" : "More",
+                              systemImage: pane == .yours ? "arrow.up.arrow.down" : "ellipsis.circle")
                     }
                 }
                 // **Two, like every other tab.** This was four across — sort,

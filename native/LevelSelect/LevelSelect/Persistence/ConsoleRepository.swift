@@ -21,6 +21,16 @@ struct ConsoleQuestion: Identifiable, Hashable, Sendable {
     var id: String { "\(platform)|\(ownership.rawValue)" }
 }
 
+/// A console's nickname, looked up by any spelling of its platform.
+enum ConsoleNickname {
+    static func of(_ platform: String, in consoles: [Console]) -> String? {
+        let key = PlatformKey.canonical(platform)
+        guard let name = consoles.first(where: { $0.platform == key && $0.deletedAt == nil })?.nickname,
+              !name.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return name
+    }
+}
+
 extension Repository {
 
     // MARK: Reading
@@ -104,9 +114,14 @@ extension Repository {
     func updateConsole(_ console: Console,
                        ownership: [Ownership]? = nil,
                        variant: String? = nil,
+                       nickname: String? = nil,
                        acquiredAt: Date?? = nil,
                        notes: String? = nil) {
         if let ownership { console.ownership = ownership.map(\.rawValue) }
+        if let nickname {
+            let trimmed = nickname.trimmingCharacters(in: .whitespacesAndNewlines)
+            console.nickname = trimmed.isEmpty ? nil : String(trimmed.prefix(40))
+        }
         if let variant { console.variant = variant.isEmpty ? nil : variant }
         if let acquiredAt { console.acquiredAt = acquiredAt }
         if let notes { console.notes = notes.isEmpty ? nil : notes }
@@ -346,6 +361,10 @@ extension Repository {
             let folded = PlatformKey.canonical(console.platform)
             if let winner = byName[folded] {
                 if console.deletedAt == nil && winner.deletedAt != nil { winner.deletedAt = nil }
+                // A name you gave either copy survives the fold.
+                if (winner.nickname ?? "").isEmpty, let name = console.nickname, !name.isEmpty {
+                    winner.nickname = name
+                }
                 context.delete(console)
                 changed = true
                 continue

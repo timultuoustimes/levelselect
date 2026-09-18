@@ -114,3 +114,27 @@ struct CSVImportWriteTests {
         #expect(celeste["status"] as? String == GameStatus.completed.rawValue)
     }
 }
+
+/// What a review row says about a game you already have (2026-09-17).
+@MainActor
+struct ImportReviewExistingTests {
+    @Test("A row can say which consoles the game is on today, or that it's on none")
+    func platformsOfExisting() throws {
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let repo = Repository(context)
+        let onMac = repo.addGame(name: "Portal 2", status: .completed)
+        onMac.ownedPlatforms = ["Mac"]
+        let bare = repo.addGame(name: "Shatter", status: .backlog)
+        bare.ownedPlatforms = []
+        bare.platforms = []
+        let gone = repo.addGame(name: "Deleted", status: .backlog)
+        gone.ownedPlatforms = ["PC"]
+        repo.softDelete(gone)
+        try context.save()
+
+        let map = CSVImportView.platformsOfExisting(in: context)
+        #expect(map[onMac.id] == ["Mac"])
+        #expect(map[bare.id] == nil, "no console yet reads as absent, not as an empty list")
+        #expect(map[gone.id] == nil, "a deleted game isn't in your library")
+    }
+}

@@ -6,9 +6,13 @@ import SafariServices
 /// cookies so the Deku Deals sign-in sticks between visits.
 struct SafariView: UIViewControllerRepresentable {
     let url: URL
+    /// Open in Safari Reader when the page offers it. The reader's page-menu
+    /// button still switches to the full site, so nothing is out of reach.
+    var reader = false
 
     func makeUIViewController(context: Context) -> SFSafariViewController {
         let config = SFSafariViewController.Configuration()
+        config.entersReaderIfAvailable = reader
         let vc = SFSafariViewController(url: url, configuration: config)
         // (No preferredControlTintColor — deprecated in iOS 26; tinting now
         // interferes with the system's Liquid Glass background effects.)
@@ -169,3 +173,41 @@ enum DekuLinks {
         return components.url ?? home
     }
 }
+
+
+/// How News opens a story. Tim, 09-18: *"can we let users choose if clicking
+/// on a news story goes to a reader mode or straight to the website?"*
+///
+/// Reader is Safari's own, not ours: the story's text and pictures without the
+/// site around it, one tap from the full page. Pulling articles apart in the
+/// app would be republishing them (see `NewsFeed`). Safari content blockers
+/// the person has turned on apply here too, in both modes, which is the ad
+/// blocking he asked about.
+enum NewsOpening {
+    static let key = "news.openInReader"
+}
+
+extension View {
+    /// `dekuBrowser`, with News's Reader setting.
+    @ViewBuilder
+    func newsBrowser(target: Binding<DekuLinkTarget?>) -> some View {
+        #if os(iOS)
+        modifier(NewsBrowserModifier(target: target))
+        #else
+        dekuBrowser(target: target)
+        #endif
+    }
+}
+
+#if os(iOS)
+private struct NewsBrowserModifier: ViewModifier {
+    @Binding var target: DekuLinkTarget?
+    @AppStorage(NewsOpening.key) private var reader = true
+
+    func body(content: Content) -> some View {
+        content.sheet(item: $target) { link in
+            SafariView(url: link.url, reader: reader).ignoresSafeArea()
+        }
+    }
+}
+#endif

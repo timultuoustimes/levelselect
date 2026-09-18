@@ -313,3 +313,97 @@ struct RetroAchievementsSyncTests {
         #expect(generated.first?.provenance == nil)
     }
 }
+
+/// The account library backfill, points per list, and sync on open — the
+/// three "not built yet" lines from the 2026-08-19 RA design record, pulled
+/// into build 39 by Tim on 09-17.
+@MainActor
+struct RetroAchievementsBackfillTests {
+
+    private let page: [String: Any] = [
+        "Count": 4, "Total": 4,
+        "Results": [
+            ["GameID": 1, "Title": "Castlevania", "ConsoleName": "NES/Famicom",
+             "NumAwarded": 12, "MaxPossible": 74, "MostRecentAwardedDate": "2026-08-19T03:12:00Z"],
+            ["GameID": 2, "Title": "Super Metroid", "ConsoleName": "SNES/Super Famicom",
+             "NumAwarded": 0, "MaxPossible": 60],
+            ["GameID": 3, "Title": "Sonic the Hedgehog 2", "ConsoleName": "Genesis/Mega Drive",
+             "NumAwarded": 30, "MaxPossible": 30, "MostRecentAwardedDate": "2026-09-01T10:00:00Z"],
+            ["Title": "No id here", "NumAwarded": 5],
+        ],
+    ]
+
+    @Test("A completion page reads into played games, and RA's console names fold to ours")
+    func shapePlayed() throws {
+        let played = RetroAchievementsService.shapePlayed(page)
+        #expect(played.map(\.gameID) == [1, 2, 3])
+        let castlevania = try #require(played.first)
+        #expect(castlevania.awarded == 12 && castlevania.possible == 74)
+        #expect(castlevania.lastPlayed != nil)
+        #expect(played[1].lastPlayed == nil)
+
+        #expect(RetroAchievementsService.platform(forConsole: "NES/Famicom") == "NES")
+        #expect(RetroAchievementsService.platform(forConsole: "SNES/Super Famicom") == "SNES")
+        #expect(RetroAchievementsService.platform(forConsole: "Genesis/Mega Drive") == "Genesis")
+        #expect(RetroAchievementsService.platform(forConsole: "Game Boy Advance") == "GBA")
+        #expect(RetroAchievementsService.platform(forConsole: "PlayStation") == "PS1")
+        #expect(RetroAchievementsService.platform(forConsole: "Nintendo 64") == "N64")
+        #expect(RetroAchievementsService.platform(forConsole: "Events") == nil)
+        #expect(RetroAchievementsService.platform(forConsole: nil) == nil)
+    }
+
+    @Test("Rows are offered for games you earned something in, minus your wishlist")
+    func libraryRows() throws {
+        let played = RetroAchievementsService.shapePlayed(page)
+        let rows = RetroAchievementsService.libraryRows(
+            from: played,
+            existingNames: ["sonic the hedgehog 2"],
+            library: [:])
+        #expect(rows.map(\.name) == ["Castlevania"],
+                "nothing earned is not played, and a wishlist game isn't owned")
+        let row = try #require(rows.first)
+        #expect(row.platform == "NES" && row.offersPlatformChoice)
+        #expect(row.fallbackPlatform == "NES")
+        // The machine you emulate on is offered beside the original, once you
+        // have one — the console menu needs more than one choice to open.
+        #expect(row.ownedOnlyChoices.contains("Raspberry Pi"))
+        let offered = CSVImport.platformChoices(for: row, matchPlatforms: ["NES"],
+                                                owned: ["Raspberry Pi", "Switch"])
+        #expect(offered.contains("NES") && offered.contains("Raspberry Pi"))
+        #expect(offered.count > 1, "one choice shows as plain text with nothing to tap")
+        #expect(!CSVImport.platformChoices(for: row, matchPlatforms: ["NES"], owned: [])
+            .contains("Raspberry Pi"), "never offered on hardware you have no record of")
+
+        // A game you already have gets the console added instead of skipped.
+        let id = UUID()
+        let owned = RetroAchievementsService.libraryRows(
+            from: played, existingNames: ["sonic the hedgehog 2"],
+            library: [TrackerMerge.matchKey("Sonic the Hedgehog 2"): id])
+        #expect(owned.map(\.name) == ["Castlevania", "Sonic the Hedgehog 2"])
+        #expect(owned.last?.existingGameID == id)
+    }
+
+    @Test("A scored list shows what it's worth; an unscored one shows nothing")
+    func pointsPerList() throws {
+        let scored = TrackerCategoryDTO(
+            id: "achievements", name: "Achievements", categoryDescription: nil, kind: nil,
+            items: [
+                TrackerItemDTO(id: "a", name: "A", itemDescription: nil, location: nil, missable: false,
+                               hideUntilDiscovered: false, maxRank: nil, rankNames: nil, display: nil, points: 10),
+                TrackerItemDTO(id: "b", name: "B", itemDescription: nil, location: nil, missable: false,
+                               hideUntilDiscovered: false, maxRank: nil, rankNames: nil, display: nil, points: 25),
+            ])
+        let context = ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+        let done = TrackerStateRecord(itemID: "a")
+        done.completed = true
+        context.insert(done)
+        let points = try #require(TrackerSectionView.points(scored, states: ["a": done]))
+        #expect(points == (10, 35))
+
+        var unscored = scored
+        unscored.items = [TrackerItemDTO(id: "c", name: "C", itemDescription: nil, location: nil,
+                                         missable: false, hideUntilDiscovered: false, maxRank: nil,
+                                         rankNames: nil, display: nil)]
+        #expect(TrackerSectionView.points(unscored, states: [:]) == nil)
+    }
+}

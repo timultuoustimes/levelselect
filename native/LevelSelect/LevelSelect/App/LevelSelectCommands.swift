@@ -78,9 +78,9 @@ struct LevelSelectCommands: Commands {
 
             Divider()
 
-            // ⌘1–⌘4, in tab order. The same four the tab bar shows, so the
+            // ⌘1–⌘5, in tab order. The same ones the tab bar shows, so the
             // number you press matches the position you see.
-            ForEach(Array(LSTab.allCases.enumerated()), id: \.element) { index, tab in
+            ForEach(Array(LSTab.numbered.enumerated()), id: \.element) { index, tab in
                 Button(tab.menuTitle) { nav.go(to: tab) }
                     .keyboardShortcut(
                         KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
@@ -96,7 +96,9 @@ extension LSTab {
         case .home: "Home"
         case .library: "Library"
         case .wishlist: "Wishlist"
+        case .news: "News"
         case .journal: "Journal"
+        case .search: "Search"
         }
     }
 }

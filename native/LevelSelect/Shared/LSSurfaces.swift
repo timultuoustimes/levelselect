@@ -314,6 +314,17 @@ enum LSTheme {
         )
     }
 
+    /// The hero's two stops for ONE appearance — what the color editor
+    /// previews, since it draws both appearances side by side at once.
+    static func heroStops(tint: Color?, dark: Bool) -> [Color] {
+        let hue = tint?.lsHueSaturation
+        return dark
+            ? [shade(hue, brightness: 0.24, saturation: 0.55, fallback: purpleDeep.opacity(0.85)),
+               shade(hue, brightness: 0.15, saturation: 0.60, fallback: Color(red: 0.12, green: 0.08, blue: 0.22))]
+            : [shade(hue, brightness: 0.93, saturation: 0.20, fallback: purple.opacity(0.20)),
+               shade(hue, brightness: 0.89, saturation: 0.26, fallback: purple.opacity(0.08))]
+    }
+
     // MARK: Surfaces raised off the ground
     //
     // These were `.white.opacity(…)` everywhere, which is not a color so much

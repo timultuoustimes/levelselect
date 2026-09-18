@@ -126,6 +126,12 @@ struct SystemTile: View {
     var onEdit: (() -> Void)?
     var onDelete: (() -> Void)?
 
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
+
+    /// What you call this machine, when you named it. The system stays on the
+    /// line under it, so "Luffy" never hides that it's a Switch 2.
+    private var nickname: String? { ConsoleNickname.of(group.platform, in: consoles) }
+
     var body: some View {
         BouncyTap {
             onOpen(group.platform)
@@ -134,13 +140,15 @@ struct SystemTile: View {
                 PlatformIconView(platform: group.platform, size: 58)
                     .frame(maxWidth: .infinity)
                     .frame(height: 78)
-                Text(PlatformShort.name(group.platform))
+                Text(nickname ?? PlatformShort.name(group.platform))
                     .font(.caption.weight(.medium))
                     .lineLimit(2)
                     .multilineTextAlignment(.center)
-                Text(Format.gameCount(group.count))
+                Text(nickname == nil ? Format.gameCount(group.count)
+                     : "\(PlatformShort.name(group.platform)) · \(group.count)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 6)
@@ -149,7 +157,8 @@ struct SystemTile: View {
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(LSTheme.hairline))
         }
-        .accessibilityLabel("\(PlatformShort.name(group.platform)), \(Format.gameCount(group.count))")
+        .accessibilityLabel([nickname, PlatformShort.name(group.platform), Format.gameCount(group.count)]
+            .compactMap { $0 }.joined(separator: ", "))
         .contextMenu {
             if let onEdit {
                 Button { onEdit() } label: {

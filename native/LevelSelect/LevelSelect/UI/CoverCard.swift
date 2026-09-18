@@ -49,6 +49,8 @@ struct StatusCarousel: View {
     var onToggleCollapse: () -> Void = {}
     var onHide: (() -> Void)?
     var onArrange: (() -> Void)?
+    /// Your own order for this shelf's games (`ShelfOrder`, V7).
+    var onArrangeShelf: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -82,6 +84,11 @@ struct StatusCarousel: View {
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) { onHide() }
                     } label: { Label("Hide from Home", systemImage: "eye.slash") }
+                }
+                if let onArrangeShelf, games.count > 1 {
+                    Button { onArrangeShelf() } label: {
+                        Label("Arrange This Shelf…", systemImage: "line.3.horizontal")
+                    }
                 }
                 if let onArrange {
                     Button { onArrange() } label: {
@@ -212,8 +219,9 @@ struct ContinueHeroCard: View {
         .padding(14)
         // Follows the chosen background — it is the ground's hue lifted off
         // it, not a fixed purple panel sitting on someone else's color.
-        .background(LSTheme.hero(lightTint: ThemePalette.backgroundOverrideLight,
-                                 darkTint: ThemePalette.backgroundOverrideDark),
+        // Its own color when you gave it one (build 39), the ground's otherwise.
+        .background(LSTheme.hero(lightTint: ThemePalette.heroTintLight,
+                                 darkTint: ThemePalette.heroTintDark),
                     in: .rect(cornerRadius: 16))
         .overlay(
             RoundedRectangle(cornerRadius: 16)

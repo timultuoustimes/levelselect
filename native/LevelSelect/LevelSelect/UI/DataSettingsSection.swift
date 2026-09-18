@@ -39,6 +39,8 @@ struct DataSettingsSection: View {
         case csvImport
         case libraryImport
         case metadataFill
+        case replace
+        case erase
 
         var id: String {
             switch self {
@@ -46,6 +48,8 @@ struct DataSettingsSection: View {
             case .csvImport:       "csv"
             case .libraryImport:   "libraryImport"
             case .metadataFill:    "fill"
+            case .replace:         "replace"
+            case .erase:           "erase"
             }
         }
     }
@@ -121,6 +125,12 @@ struct DataSettingsSection: View {
                 Label("Import LevelSelect export", systemImage: "arrow.uturn.backward.circle")
             }
 
+            Button(role: .destructive) {
+                sheet = .replace
+            } label: {
+                Label("Replace library with backup…", systemImage: "arrow.triangle.2.circlepath")
+            }
+
 
             NavigationLink {
                 ImageStorageView()
@@ -148,6 +158,8 @@ struct DataSettingsSection: View {
                 case .csvImport:       CSVImportView().lsSheet()
                 case .libraryImport:    LibraryImportView().lsSheet()
                 case .metadataFill:    MetadataFillView().lsSheet()
+                case .replace:         LibraryStartOverView(mode: .replace).lsSheet()
+                case .erase:           LibraryStartOverView(mode: .erase).lsSheet()
                 }
             }
         } footer: {
@@ -155,7 +167,7 @@ struct DataSettingsSection: View {
             // workflows, which already explain themselves — a footer is read
             // after a row has been found, so it can't repair a wrong guess,
             // and this one ran longer than a phone screen.
-            Text("iCloud keeps your devices in sync, but it isn't a backup — the export is. It writes your library to a readable JSON file, pictures you've added included.")
+            Text("iCloud keeps your devices in sync, but it isn't a backup — the export is. It writes your library to a readable JSON file, pictures you've added included. Import adds what's missing; Replace makes your library match the backup.")
         }
     }
 
@@ -177,6 +189,8 @@ struct DataSettingsSection: View {
                 case .csvImport:       CSVImportView().lsSheet()
                 case .libraryImport:   LibraryImportView().lsSheet()
                 case .metadataFill:    MetadataFillView().lsSheet()
+                case .replace:         LibraryStartOverView(mode: .replace).lsSheet()
+                case .erase:           LibraryStartOverView(mode: .erase).lsSheet()
                 }
             }
 
@@ -210,6 +224,11 @@ struct DataSettingsSection: View {
             } label: {
                 Label("Clear all tracker progress", systemImage: "checklist.unchecked")
             }
+            Button(role: .destructive) {
+                sheet = .erase
+            } label: {
+                Label("Erase library…", systemImage: "trash.slash")
+            }
             // On a row, not the Section — same reason as the sheet above. This
             // one had not visibly misbehaved, but it is the identical shape:
             // three children, so three alerts bound to one piece of state.
@@ -227,7 +246,7 @@ struct DataSettingsSection: View {
                     .foregroundStyle(.secondary)
             }
         } footer: {
-            Text("Start fresh without deleting your games.")
+            Text("Clear sessions or progress without deleting your games, or erase the whole library to start over. Erasing saves a copy first and moves everything to Recently Deleted.")
         }
     }
 

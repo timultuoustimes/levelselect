@@ -76,6 +76,12 @@ final class Console {
     /// ask again on the next game, forever.
     var declinedOwnership: [String] = []
 
+    /// What you call this machine — "Luffy". Shown on the console itself
+    /// (its tile, its page), never on its games: a Switch's games are Switch
+    /// games whatever the Switch is called. Tim, 09-16: consoles remember what
+    /// they are at the system level; a nickname is a nickname. Build 39.
+    var nickname: String?
+
     /// "Model 1", "OLED", "modded, 2TB drive". Free text, on purpose — see
     /// the note above.
     var variant: String?

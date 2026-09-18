@@ -29,3 +29,5 @@ extension GameCollection: Syncable {}
 extension TrackerItemDetail: Syncable {}
 extension EarnedBadge: Syncable {}
 extension Console: Syncable {}
+extension NewsFeed: Syncable {}
+extension NewsItemState: Syncable {}

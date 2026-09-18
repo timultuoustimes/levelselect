@@ -27,7 +27,7 @@ enum LibraryImport {
     /// use it; a test pins that the two never drift.
     /// The newest format this build understands. **Older files are read, not
     /// refused** — see the gate in `root(of:)`.
-    nonisolated static let supportedVersion = 4
+    nonisolated static let supportedVersion = 5
 
     enum ImportError: LocalizedError {
         case notAnExport
@@ -68,7 +68,7 @@ enum LibraryImport {
 
     // MARK: Parsing
 
-    private static func root(of data: Data) throws -> [String: Any] {
+    static func root(of data: Data) throws -> [String: Any] {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { throw ImportError.malformed("not JSON") }
         guard let manifest = root["manifest"] as? [String: Any] else {
@@ -91,11 +91,11 @@ enum LibraryImport {
         return root
     }
 
-    private static func date(_ any: Any?) -> Date? {
+    nonisolated static func date(_ any: Any?) -> Date? {
         (any as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
     }
 
-    private static func uuid(_ any: Any?) -> UUID? {
+    nonisolated static func uuid(_ any: Any?) -> UUID? {
         (any as? String).flatMap(UUID.init(uuidString:))
     }
 
@@ -307,9 +307,7 @@ enum LibraryImport {
                 }
                 let detail = TrackerItemDetail(itemID: (dDict["itemID"] as? String) ?? "")
                 detail.id = dID
-                detail.note = dDict["note"] as? String
-                detail.chosenName = dDict["chosenName"] as? String
-                detail.sourceName = dDict["sourceName"] as? String
+                fillDetail(detail, dDict)
                 detail.createdAt = date(dDict["createdAt"]) ?? .now
                 detail.updatedAt = date(dDict["updatedAt"]) ?? .now
                 context.insert(detail)
@@ -447,13 +445,9 @@ enum LibraryImport {
             if existing.collections.contains(cID) {
                 outcome.skipped["collections", default: 0] += 1; continue
             }
-            let collection = GameCollection(
-                name: (cDict["name"] as? String) ?? "Collection",
-                isBundle: (cDict["isBundle"] as? Bool) ?? false,
-                sortIndex: (cDict["sortIndex"] as? Int) ?? 0)
+            let collection = GameCollection(name: "Collection")
             collection.id = cID
-            collection.notes = (cDict["notes"] as? String) ?? ""
-            collection.gameIDs = (cDict["gameIDs"] as? [String]) ?? []
+            fillCollection(collection, cDict)
             context.insert(collection)
             outcome.created["collections", default: 0] += 1
         }
@@ -473,20 +467,9 @@ enum LibraryImport {
             } else {
                 let made = Memory()
                 made.id = mID
-                made.title = (mDict["title"] as? String) ?? ""
-                made.body = mDict["body"] as? String
-                // Taken from the file, never rebuilt from `precision`: the words
-                // are the memory's own answer to "when", and the interval is what
-                // places it. Deriving either would restore a guess.
-                made.whenText = mDict["whenText"] as? String
-                made.precision = mDict["precision"] as? String
-                made.earliest = date(mDict["earliest"]) ?? .now
-                made.latest = date(mDict["latest"]) ?? made.earliest
-                made.kind = (mDict["kind"] as? String) ?? "memory"
-                made.place = mDict["place"] as? String
-                made.platform = mDict["platform"] as? String
+                made.earliest = .now
+                fillMemory(made, mDict)
                 made.createdAt = date(mDict["createdAt"]) ?? .now
-                made.companions = companions(mDict["playedWith"])
                 // A memory whose game is not in this file stays standalone rather
                 // than being dropped — it is the user's writing either way.
                 if let gID = uuid(mDict["gameID"]) { made.game = gamesByID[gID] }
@@ -532,10 +515,7 @@ enum LibraryImport {
             let made = Console(platform: key,
                                ownership: (cDict["ownership"] as? [String]) ?? [])
             if let id = uuid(cDict["id"]) { made.id = id }
-            made.declinedOwnership = (cDict["declinedOwnership"] as? [String]) ?? []
-            made.variant = cDict["variant"] as? String
-            made.notes = cDict["notes"] as? String
-            made.acquiredAt = date(cDict["acquiredAt"])
+            fillConsole(made, cDict)
             made.createdAt = date(cDict["createdAt"]) ?? .now
             context.insert(made)
             consolesByPlatform[key] = made
@@ -553,6 +533,37 @@ enum LibraryImport {
                 image.console = made
                 outcome.created["images", default: 0] += 1
             }
+        }
+
+        // v5 — the news reader. Feeds and the articles you kept, created when
+        // absent and never overwritten, like everything else here.
+        var feedsByID: [UUID: NewsFeed] = [:]
+        for feed in (try? context.fetch(FetchDescriptor<NewsFeed>())) ?? [] { feedsByID[feed.id] = feed }
+        for d in (root["newsFeeds"] as? [[String: Any]]) ?? [] {
+            guard let id = uuid(d["id"]) else { continue }
+            if feedsByID[id] != nil { outcome.skipped["feeds", default: 0] += 1; continue }
+            let feed = NewsFeed(id: id)
+            fillFeed(feed, d)
+            feed.createdAt = date(d["createdAt"]) ?? .now
+            context.insert(feed)
+            feedsByID[id] = feed
+            outcome.created["feeds", default: 0] += 1
+        }
+        var articlesByID = Set<UUID>()
+        for item in (try? context.fetch(FetchDescriptor<NewsItemState>())) ?? [] {
+            articlesByID.insert(item.id)
+        }
+        for d in (root["newsArticles"] as? [[String: Any]]) ?? [] {
+            guard let id = uuid(d["id"]), !articlesByID.contains(id) else {
+                if uuid(d["id"]) != nil { outcome.skipped["saved articles", default: 0] += 1 }
+                continue
+            }
+            let item = NewsItemState(id: id)
+            fillArticle(item, d)
+            item.createdAt = date(d["createdAt"]) ?? .now
+            context.insert(item)
+            articlesByID.insert(id)
+            outcome.created["saved articles", default: 0] += 1
         }
 
         applyProfile(root["profile"] as? [String: Any], context: context, outcome: &outcome)
@@ -583,11 +594,7 @@ enum LibraryImport {
         if let id = uuid(d["id"]) { profile.id = id }
         profile.createdAt = date(d["createdAt"]) ?? .now
         profile.updatedAt = date(d["updatedAt"]) ?? .now
-        profile.displayName = d["displayName"] as? String
-        profile.avatarData = (d["avatar"] as? String).flatMap { Data(base64Encoded: $0) }
-        profile.nameColorRaw = d["nameColor"] as? String
-        profile.useHandleAsName = (d["useHandleAsName"] as? Bool) ?? false
-        if let handles = d["handles"] as? [String: String] { profile.handles = handles }
+        fillProfile(profile, d)
         context.insert(profile)
         outcome.created["profile", default: 0] += 1
     }
@@ -599,11 +606,47 @@ enum LibraryImport {
     /// word in the file was decorative. Unlike the profile this fills the
     /// existing settings row, because there is always exactly one and a blank
     /// default is not an identity worth protecting.
-    private static func applyAppearance(
-        _ d: [String: Any]?, context: ModelContext, outcome: inout Outcome
+    static func applyAppearance(
+        _ d: [String: Any]?, context: ModelContext, outcome: inout Outcome,
+        replacing: Bool = false
     ) {
         guard let d else { return }
         let theme = ThemePalette.fetchOrCreate(in: context)
+        // A replace takes the file's blanks too: a key written as null means
+        // "not set" in the backup, and the library should match it. An add
+        // only ever fills in what the file has.
+        func text(_ key: String, _ path: ReferenceWritableKeyPath<ThemeSettings, String?>) {
+            if let v = d[key] as? String { theme[keyPath: path] = v }
+            else if replacing, d[key] is NSNull { theme[keyPath: path] = nil }
+        }
+        text("homeLayout", \.homeLayoutRaw)
+        text("homeSystems", \.homeSystemsRaw)
+        text("dismissedConsoles", \.dismissedConsolesRaw)
+        text("expandedSections", \.expandedSectionsRaw)
+        text("ownershipChips", \.ownershipChipsRaw)
+        text("suggestionPrefs", \.suggestionPrefsRaw)
+        text("shelfOrder", \.shelfOrderRaw)
+        if replacing {
+            for (key, path) in [("accentHex", \ThemeSettings.accentHex), ("backgroundHex", \.backgroundHex),
+                                ("accentHexLight", \.accentHexLight), ("accentHexDark", \.accentHexDark),
+                                ("backgroundHexLight", \.backgroundHexLight), ("backgroundHexDark", \.backgroundHexDark),
+                                ("heroHexLight", \.heroHexLight), ("heroHexDark", \.heroHexDark),
+                                ("appearance", \.appearanceRaw), ("gamePageLayout", \.gamePageLayoutRaw),
+                                ("defaultMergeMode", \.defaultMergeModeRaw),
+                                ("overlappingTimerPolicy", \.overlappingTimerPolicyRaw),
+                                ("backdropIntensity", \.backdropIntensityRaw),
+                                ("dekuWishlistURL", \.dekuWishlistURLString)]
+            where d[key] is NSNull {
+                theme[keyPath: path] = nil
+            }
+            if d["accentHue"] is NSNull { theme.accentHue = nil }
+            if d["accentSaturation"] is NSNull { theme.accentSaturation = nil }
+            if d["platformIconVariants"] is NSNull { theme.platformIconVariantsData = nil }
+            if d["savedSwatches"] is NSNull { theme.savedSwatchesData = nil }
+            if d["statusNames"] == nil { theme.statusNames = [:] }
+            if d["platformNames"] == nil { theme.platformNames = [:] }
+            if d["starNames"] == nil { theme.starNames = [] }
+        }
         if let v = d["accentHex"] as? String { theme.accentHex = v }
         if let v = d["backgroundHex"] as? String { theme.backgroundHex = v }
         if let v = d["accentHue"] as? Double { theme.accentHue = v }
@@ -612,9 +655,13 @@ enum LibraryImport {
         if let v = d["accentHexLight"] as? String { theme.accentHexLight = v }
         if let v = d["accentHexDark"] as? String { theme.accentHexDark = v }
         if let v = d["backgroundHexLight"] as? String { theme.backgroundHexLight = v }
+        if let v = d["heroHexLight"] as? String { theme.heroHexLight = v }
+        if let v = d["heroHexDark"] as? String { theme.heroHexDark = v }
         if let v = d["backgroundHexDark"] as? String { theme.backgroundHexDark = v }
         if let v = d["appearance"] as? String { theme.appearanceRaw = v }
-        if let v = d["statusColors"] as? [String: String] { theme.statusColors = v }
+        if let v = d["statusColors"] as? [String: String], !v.isEmpty || theme.statusColorsData != nil {
+            theme.statusColors = v
+        }
         if let v = d["statusNames"] as? [String: String] { theme.statusNames = v }
         // Sanitized on the way in: a backup can be older or newer than this
         // build, and a name it no longer offers must not reach a shelf.
@@ -645,12 +692,16 @@ enum LibraryImport {
     }
 
     // MARK: Record builders
+    //
+    // Each record has ONE field list, a `fill`, which both paths use: `make`
+    // builds a new record from it, and `LibraryReplace` writes it over a record
+    // the library already has. Two lists would drift, and a replace that
+    // missed a field would quietly keep the value the person meant to undo.
 
-    private static func makeGame(_ d: [String: Any], id: UUID) -> Game {
-        let game = Game(name: (d["name"] as? String) ?? "Untitled",
-                        status: GameStatus(rawValue: (d["status"] as? String) ?? "") ?? .backlog)
-        game.id = id
-        game.addedAt = date(d["addedAt"]) ?? .now
+    static func fillGame(_ game: Game, _ d: [String: Any]) {
+        if let name = d["name"] as? String { game.name = name }
+        game.status = GameStatus(rawValue: (d["status"] as? String) ?? "") ?? .backlog
+        game.addedAt = date(d["addedAt"]) ?? game.addedAt
         game.pinned = (d["pinned"] as? Bool) ?? false
         game.notes = (d["notes"] as? String) ?? ""
         game.platforms = (d["platforms"] as? [String]) ?? []
@@ -682,29 +733,57 @@ enum LibraryImport {
         game.gameModes = (d["gameModes"] as? [String]) ?? []
         game.playerPerspectives = (d["playerPerspectives"] as? [String]) ?? []
         game.trackerDisplayRaw = d["trackerDisplay"] as? String
+        if d.keys.contains("barcodes") { game.barcodes = (d["barcodes"] as? [String]) ?? [] }
+        // Written from 2026-09-17. An older file has no key, and that is not
+        // "no sections collapsed", so a missing key leaves the game's own.
+        if d.keys.contains("sectionState") { game.sectionStateRaw = d["sectionState"] as? String }
+    }
+
+    private static func makeGame(_ d: [String: Any], id: UUID) -> Game {
+        let game = Game(name: (d["name"] as? String) ?? "Untitled")
+        game.id = id
+        game.addedAt = .now
+        fillGame(game, d)
         return game
     }
 
-    private static func makeSchema(_ d: [String: Any], id: UUID) -> TrackerSchemaRecord {
-        let schema = TrackerSchemaRecord(
-            id: id,
-            schemaVersion: (d["schemaVersion"] as? Int) ?? 1,
-            source: TrackerSource(rawValue: (d["source"] as? String) ?? "") ?? .aiGenerated,
-            engine: TrackerEngine(rawValue: (d["engine"] as? String) ?? "") ?? .objective,
-            jsonData: (try? JSONSerialization.data(withJSONObject: d["data"] ?? [:])) ?? Data())
+    static func fillSchema(_ schema: TrackerSchemaRecord, _ d: [String: Any]) {
+        schema.schemaVersion = (d["schemaVersion"] as? Int) ?? 1
+        schema.source = TrackerSource(rawValue: (d["source"] as? String) ?? "") ?? .aiGenerated
+        schema.engine = TrackerEngine(rawValue: (d["engine"] as? String) ?? "") ?? .objective
+        // Only when the content differs: re-encoding reorders keys, and a
+        // rewrite of an unchanged tracker is a sync conflict waiting to happen.
+        let incoming = d["data"] ?? [:]
+        let current = try? JSONSerialization.jsonObject(with: schema.jsonData)
+        if (current as? NSObject)?.isEqual(incoming) != true {
+            schema.jsonData = (try? JSONSerialization.data(withJSONObject: incoming)) ?? Data()
+        }
         schema.generatedAt = date(d["generatedAt"])
         schema.generatedBy = d["generatedBy"] as? String
         if let sources = d["sources"], !(sources is NSNull) {
             schema.sourcesJSON = try? JSONSerialization.data(withJSONObject: sources)
+        } else {
+            schema.sourcesJSON = nil
         }
+    }
+
+    private static func makeSchema(_ d: [String: Any], id: UUID) -> TrackerSchemaRecord {
+        let schema = TrackerSchemaRecord(id: id)
+        fillSchema(schema, d)
         return schema
     }
 
-    private static func makePlaythrough(_ d: [String: Any], id: UUID) -> Playthrough {
-        let pt = Playthrough(id: id,
-                             name: (d["name"] as? String) ?? "Playthrough",
-                             progressPercent: (d["progressPercent"] as? Double) ?? 0,
-                             startedAt: date(d["startedAt"]))
+    static func fillDetail(_ detail: TrackerItemDetail, _ d: [String: Any]) {
+        detail.itemID = (d["itemID"] as? String) ?? detail.itemID
+        detail.note = d["note"] as? String
+        detail.chosenName = d["chosenName"] as? String
+        detail.sourceName = d["sourceName"] as? String
+    }
+
+    static func fillPlaythrough(_ pt: Playthrough, _ d: [String: Any]) {
+        pt.name = (d["name"] as? String) ?? "Playthrough"
+        pt.progressPercent = (d["progressPercent"] as? Double) ?? 0
+        pt.startedAt = date(d["startedAt"])
         pt.notes = d["notes"] as? String
         pt.lastPlayedAt = date(d["lastPlayedAt"])
         pt.outcomeRaw = d["outcome"] as? String
@@ -712,39 +791,51 @@ enum LibraryImport {
         // Absent in every file written before build 37, which is exactly the
         // zero this defaults to.
         pt.carriedOverSeconds = (d["carriedOverSeconds"] as? Double) ?? 0
+    }
+
+    private static func makePlaythrough(_ d: [String: Any], id: UUID) -> Playthrough {
+        let pt = Playthrough(id: id)
+        fillPlaythrough(pt, d)
         return pt
     }
 
-    private static func makeSession(_ d: [String: Any], id: UUID) -> Session {
-        let session = Session(
-            id: id,
-            startDate: date(d["startDate"]) ?? .now,
-            state: SessionState(rawValue: (d["state"] as? String) ?? "") ?? .stopped,
-            isManual: (d["isManual"] as? Bool) ?? false)
+    static func fillSession(_ session: Session, _ d: [String: Any]) {
+        session.startDate = date(d["startDate"]) ?? session.startDate
+        session.state = SessionState(rawValue: (d["state"] as? String) ?? "") ?? .stopped
+        session.isManual = (d["isManual"] as? Bool) ?? false
         session.accumulatedDuration = (d["durationSeconds"] as? Double) ?? 0
         session.endDate = date(d["endDate"])
         session.notes = d["notes"] as? String
         session.resumedAt = date(d["resumedAt"])
         session.pausedAt = date(d["pausedAt"])
         session.companions = companions(d["playedWith"])
+    }
+
+    private static func makeSession(_ d: [String: Any], id: UUID) -> Session {
+        let session = Session(id: id, startDate: date(d["startDate"]) ?? .now)
+        fillSession(session, d)
         return session
     }
 
-    private static func makeRun(_ d: [String: Any], id: UUID) -> Run {
-        let run = Run(id: id,
-                      templateID: (d["templateID"] as? String) ?? "default",
-                      startedAt: date(d["startedAt"]) ?? .now,
-                      outcome: RunOutcome(rawValue: (d["outcome"] as? String) ?? "") ?? .neutral,
-                      fieldsJSON: (try? JSONSerialization.data(withJSONObject: d["fields"] ?? [:])) ?? Data())
+    static func fillRun(_ run: Run, _ d: [String: Any]) {
+        run.templateID = (d["templateID"] as? String) ?? "default"
+        run.startedAt = date(d["startedAt"]) ?? run.startedAt
+        run.outcome = RunOutcome(rawValue: (d["outcome"] as? String) ?? "") ?? .neutral
+        run.fieldsJSON = (try? JSONSerialization.data(withJSONObject: d["fields"] ?? [:])) ?? Data()
         run.endedAt = date(d["endedAt"])
         run.notes = d["notes"] as? String
         run.companions = companions(d["playedWith"])
+    }
+
+    private static func makeRun(_ d: [String: Any], id: UUID) -> Run {
+        let run = Run(id: id, templateID: "default", startedAt: date(d["startedAt"]) ?? .now,
+                      outcome: .neutral, fieldsJSON: Data())
+        fillRun(run, d)
         return run
     }
 
-    private static func makeState(_ d: [String: Any], id: UUID) -> TrackerStateRecord {
-        let state = TrackerStateRecord(itemID: (d["itemID"] as? String) ?? "")
-        state.id = id
+    static func fillState(_ state: TrackerStateRecord, _ d: [String: Any]) {
+        state.itemID = (d["itemID"] as? String) ?? state.itemID
         state.completed = (d["completed"] as? Bool) ?? false
         state.revealed = (d["revealed"] as? Bool) ?? false
         state.count = d["count"] as? Int
@@ -754,6 +845,13 @@ enum LibraryImport {
         state.completedAt = date(d["completedAt"])
         state.selectedVariant = d["selectedVariant"] as? String
         state.selectedVariantUpdatedAt = date(d["selectedVariantUpdatedAt"])
+        state.valuesJSON = d["valuesJSON"] as? String
+    }
+
+    private static func makeState(_ d: [String: Any], id: UUID) -> TrackerStateRecord {
+        let state = TrackerStateRecord(itemID: (d["itemID"] as? String) ?? "")
+        state.id = id
+        fillState(state, d)
         return state
     }
 
@@ -765,32 +863,35 @@ enum LibraryImport {
         }
     }
 
-    private static func makeCompletion(_ d: [String: Any], id: UUID) -> CompletionEvent {
-        let event = CompletionEvent(
-            id: id,
-            date: date(d["date"]) ?? .now,
-            label: CompletionLabel(rawValue: (d["label"] as? String) ?? "") ?? .cleared,
-            customLabel: d["customLabel"] as? String)
+    static func fillCompletion(_ event: CompletionEvent, _ d: [String: Any]) {
+        event.date = date(d["date"]) ?? event.date
+        event.label = CompletionLabel(rawValue: (d["label"] as? String) ?? "") ?? .cleared
+        event.customLabel = d["customLabel"] as? String
         event.platform = d["platform"] as? String
         event.notes = d["notes"] as? String
         event.datePrecision = d["datePrecision"] as? String
         event.startedDate = date(d["startedDate"])
         event.startedPrecision = d["startedPrecision"] as? String
         event.companions = companions(d["playedWith"])
+    }
+
+    private static func makeCompletion(_ d: [String: Any], id: UUID) -> CompletionEvent {
+        let event = CompletionEvent(id: id, date: date(d["date"]) ?? .now)
+        fillCompletion(event, d)
         return event
     }
 
-    /// nil when the record carries no decodable bytes — see the call site.
-    private static func makeImage(_ d: [String: Any], id: UUID) -> GameImage? {
+    /// False when the record carries no decodable bytes — see the call site.
+    /// A picture that fails leaves the record untouched.
+    @discardableResult
+    static func fillImage(_ image: GameImage, _ d: [String: Any]) -> Bool {
         guard let encoded = d["data"] as? String,
               let bytes = Data(base64Encoded: encoded), !bytes.isEmpty
-        else { return nil }
-        let image = GameImage(
-            id: id,
-            role: ArtworkRole(rawValue: (d["role"] as? String) ?? "") ?? .gallery,
-            data: bytes)
+        else { return false }
+        image.roleRaw = (ArtworkRole(rawValue: (d["role"] as? String) ?? "") ?? .gallery).rawValue
+        image.data = bytes
         image.caption = d["caption"] as? String
-        image.addedAt = date(d["addedAt"]) ?? .now
+        image.addedAt = date(d["addedAt"]) ?? image.addedAt
         // Trust the file's dimensions when present, but never the file's byte
         // count — that is a property of the bytes we actually hold.
         image.pixelWidth = (d["pixelWidth"] as? Int) ?? 0
@@ -801,16 +902,25 @@ enum LibraryImport {
             image.pixelWidth = size.width
             image.pixelHeight = size.height
         }
+        return true
+    }
+
+    /// nil when the record carries no decodable bytes — see the call site.
+    private static func makeImage(_ d: [String: Any], id: UUID) -> GameImage? {
+        guard let encoded = d["data"] as? String,
+              let bytes = Data(base64Encoded: encoded), !bytes.isEmpty
+        else { return nil }
+        let image = GameImage(id: id, role: .gallery, data: bytes)
+        image.addedAt = .now
+        fillImage(image, d)
         return image
     }
 
-    private static func makeVideo(_ d: [String: Any], id: UUID) -> GameVideo {
-        let video = GameVideo(
-            kind: VideoKind(rawValue: (d["kind"] as? String) ?? "") ?? .video,
-            urlString: (d["url"] as? String) ?? "",
-            youtubeID: (d["youtubeID"] as? String) ?? "",
-            title: (d["title"] as? String) ?? "")
-        video.id = id
+    static func fillVideo(_ video: GameVideo, _ d: [String: Any]) {
+        video.kindRaw = (VideoKind(rawValue: (d["kind"] as? String) ?? "") ?? .video).rawValue
+        video.urlString = (d["url"] as? String) ?? ""
+        video.youtubeID = (d["youtubeID"] as? String) ?? ""
+        video.title = (d["title"] as? String) ?? ""
         video.groupName = (d["group"] as? String) ?? "Videos"
         video.orderIndex = (d["orderIndex"] as? Int) ?? 0
         video.watchedSeconds = (d["watchedSeconds"] as? Double) ?? 0
@@ -828,34 +938,113 @@ enum LibraryImport {
                  ($0["watchedSeconds"] as? Double) ?? 0]
             }
             video.partsData = try? JSONSerialization.data(withJSONObject: rows)
+        } else {
+            video.partsData = nil
         }
+    }
+
+    private static func makeVideo(_ d: [String: Any], id: UUID) -> GameVideo {
+        let video = GameVideo(kind: .video, urlString: "", youtubeID: "", title: "")
+        video.id = id
+        fillVideo(video, d)
         return video
     }
 
-    private static func makeMap(_ d: [String: Any], id: UUID) -> GameMap {
-        let map = GameMap(
-            id: id,
-            name: (d["name"] as? String) ?? "Map",
-            kind: MapKind(rawValue: (d["kind"] as? String) ?? "") ?? .other,
-            storageType: (d["storageType"] as? String) ?? "upload",
-            remoteStoragePath: (d["remoteStoragePath"] as? String) ?? "",
-            addedAt: date(d["addedAt"]) ?? .now)
+    static func fillMap(_ map: GameMap, _ d: [String: Any]) {
+        map.name = (d["name"] as? String) ?? "Map"
+        map.kind = MapKind(rawValue: (d["kind"] as? String) ?? "") ?? .other
+        map.storageType = (d["storageType"] as? String) ?? "upload"
+        map.remoteStoragePath = (d["remoteStoragePath"] as? String) ?? ""
+        map.addedAt = date(d["addedAt"]) ?? map.addedAt
         map.remoteURLString = d["remoteURL"] as? String
         map.pixelWidth = d["pixelWidth"] as? Int
         map.pixelHeight = d["pixelHeight"] as? Int
+    }
+
+    private static func makeMap(_ d: [String: Any], id: UUID) -> GameMap {
+        let map = GameMap(id: id, name: "Map", kind: .other, storageType: "upload",
+                          remoteStoragePath: "", addedAt: date(d["addedAt"]) ?? .now)
+        fillMap(map, d)
         return map
     }
 
-    private static func makeMarker(_ d: [String: Any], id: UUID) -> Marker {
-        let marker = Marker(
-            id: id,
-            normalizedX: (d["x"] as? Double) ?? 0.5,
-            normalizedY: (d["y"] as? Double) ?? 0.5,
-            category: MarkerCategory(rawValue: (d["category"] as? String) ?? "") ?? .note,
-            label: (d["label"] as? String) ?? "")
+    static func fillMarker(_ marker: Marker, _ d: [String: Any]) {
+        marker.normalizedX = (d["x"] as? Double) ?? 0.5
+        marker.normalizedY = (d["y"] as? Double) ?? 0.5
+        marker.category = MarkerCategory(rawValue: (d["category"] as? String) ?? "") ?? .note
+        marker.label = (d["label"] as? String) ?? ""
         marker.notes = d["notes"] as? String
         marker.linkedTrackerItemID = d["linkedTrackerItemID"] as? String
         marker.exploredAt = date(d["exploredAt"])
+    }
+
+    private static func makeMarker(_ d: [String: Any], id: UUID) -> Marker {
+        let marker = Marker(id: id, normalizedX: 0.5, normalizedY: 0.5, category: .note, label: "")
+        fillMarker(marker, d)
         return marker
+    }
+
+    static func fillCollection(_ collection: GameCollection, _ d: [String: Any]) {
+        collection.name = (d["name"] as? String) ?? "Collection"
+        collection.isBundle = (d["isBundle"] as? Bool) ?? false
+        collection.sortIndex = (d["sortIndex"] as? Int) ?? 0
+        collection.notes = (d["notes"] as? String) ?? ""
+        collection.gameIDs = (d["gameIDs"] as? [String]) ?? []
+        // Written from 2026-09-17; an older file leaves a smart collection's
+        // rule as it is.
+        if d.keys.contains("filterRule") { collection.filterRuleRaw = d["filterRule"] as? String }
+    }
+
+    static func fillMemory(_ made: Memory, _ d: [String: Any]) {
+        made.title = (d["title"] as? String) ?? ""
+        made.body = d["body"] as? String
+        // Taken from the file, never rebuilt from `precision`: the words
+        // are the memory's own answer to "when", and the interval is what
+        // places it. Deriving either would restore a guess.
+        made.whenText = d["whenText"] as? String
+        made.precision = d["precision"] as? String
+        made.earliest = date(d["earliest"]) ?? made.earliest
+        made.latest = date(d["latest"]) ?? made.earliest
+        made.kind = (d["kind"] as? String) ?? "memory"
+        made.place = d["place"] as? String
+        made.platform = d["platform"] as? String
+        made.companions = companions(d["playedWith"])
+    }
+
+    static func fillConsole(_ console: Console, _ d: [String: Any]) {
+        console.ownership = (d["ownership"] as? [String]) ?? []
+        console.declinedOwnership = (d["declinedOwnership"] as? [String]) ?? []
+        console.variant = d["variant"] as? String
+        console.nickname = d["nickname"] as? String
+        console.notes = d["notes"] as? String
+        console.acquiredAt = date(d["acquiredAt"])
+    }
+
+    static func fillFeed(_ feed: NewsFeed, _ d: [String: Any]) {
+        feed.urlString = (d["url"] as? String) ?? ""
+        feed.title = (d["title"] as? String) ?? ""
+        feed.siteURLString = d["siteURL"] as? String
+        feed.folder = d["folder"] as? String
+        feed.sortIndex = (d["sortIndex"] as? Int) ?? 0
+        feed.muted = (d["muted"] as? Bool) ?? false
+        feed.lastItemAt = date(d["lastItemAt"])
+    }
+
+    static func fillArticle(_ item: NewsItemState, _ d: [String: Any]) {
+        item.guid = (d["guid"] as? String) ?? item.guid
+        item.feedID = uuid(d["feedID"])
+        item.title = d["title"] as? String
+        item.linkString = d["link"] as? String
+        item.publishedAt = date(d["publishedAt"])
+        item.read = (d["read"] as? Bool) ?? false
+        item.saved = (d["saved"] as? Bool) ?? false
+    }
+
+    static func fillProfile(_ profile: PlayerProfile, _ d: [String: Any]) {
+        profile.displayName = d["displayName"] as? String
+        profile.avatarData = (d["avatar"] as? String).flatMap { Data(base64Encoded: $0) }
+        profile.nameColorRaw = d["nameColor"] as? String
+        profile.useHandleAsName = (d["useHandleAsName"] as? Bool) ?? false
+        profile.handles = (d["handles"] as? [String: String]) ?? [:]
     }
 }

@@ -278,6 +278,24 @@ final class ThemeSettings {
     /// The ground tint for dark appearance. Build 37. Falls back to `backgroundHex`.
     var backgroundHexDark: String?
 
+    /// The Continue Playing card's own tint, per appearance. Nil follows the
+    /// ground, as the card always has. Build 39 — Tim, 09-09, on finding the
+    /// card could wear its own color by accident: *"I definitely want it."*
+    /// Studios, publishers, tags and systems you follow or hide, for
+    /// suggestions (`SuggestionPrefs`). One string, because this is a handful
+    /// of names and a fifth CloudKit field per kind would be four fields for
+    /// one idea. V7, build 39.
+    var suggestionPrefsRaw: String?
+    /// Your own order inside a Home shelf, per status — the manual arrangement
+    /// the roadmap has wanted since build 38's user tests. V7, build 39.
+    var shelfOrderRaw: String?
+    var heroHexLight: String?
+    var heroHexDark: String?
+
+    func heroHex(dark: Bool) -> String? {
+        dark ? heroHexDark : heroHexLight
+    }
+
     /// The accent for the appearance actually on screen.
     ///
     /// Resolution is explicit rather than derived at render time on purpose:

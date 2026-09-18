@@ -137,3 +137,9 @@ enum RACredentials {
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
     }
 }
+
+/// Where the "sync when I open a game" preference lives, so the tracker page
+/// and Settings can't disagree about the key.
+enum RASync {
+    static let autoKey = "levelselect.raAutoSync"
+}

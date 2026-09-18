@@ -57,6 +57,7 @@ struct GameDetailView: View {
 
     // Playthrough management
     @State private var namingNewPlaythrough = false
+    @State private var askingRunFocus = false
     @State private var renamingPlaythrough = false
     @State private var playthroughName = ""
     @State private var confirmingPlaythroughDelete = false
@@ -379,6 +380,9 @@ struct GameDetailView: View {
         .sheet(isPresented: $fixingMatch) {
             FixMatchView(game: game).lsSheet()
         }
+        .sheet(isPresented: $askingRunFocus) {
+            TrackerFocusSheet(game: game, newRun: true).lsSheet()
+        }
         .sheet(isPresented: $showingPageSettings) {
             GamePageSettingsSheet().lsSheet()
         }
@@ -389,6 +393,9 @@ struct GameDetailView: View {
             TextField("Name", text: $playthroughName)
             Button("Create") {
                 repo.addPlaythrough(to: game, named: playthroughName)
+                // Tim, 09-17: one run for the story, the next for the roster,
+                // the third for every item. Asked now, while it's on your mind.
+                askingRunFocus = true
             }
             Button("Cancel", role: .cancel) {}
         } message: {

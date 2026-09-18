@@ -233,6 +233,129 @@ enum RetroAchievementsService {
             totalPoints: (root["totalPoints"] as? Int) ?? 0)
     }
 
+    // MARK: The account's library
+
+    /// One game this account has played on RetroAchievements.
+    struct PlayedGame: Sendable, Hashable, Identifiable {
+        let gameID: Int
+        let title: String
+        let consoleName: String?
+        let awarded: Int
+        let possible: Int
+        let lastPlayed: Date?
+        var id: Int { gameID }
+    }
+
+    /// Every game this account has earned anything in, newest first.
+    ///
+    /// Paged: someone who has emulated for years has hundreds, and RA caps a
+    /// page at 500. Stops at `maxPages` so a very long history can't spin
+    /// forever — the review screen is for choosing a few, not for auditing
+    /// a decade.
+    static func played(credentials: RACredentials.Value, maxPages: Int = 4) async throws -> [PlayedGame] {
+        var out: [PlayedGame] = []
+        var seen = Set<Int>()
+        for page in 0..<maxPages {
+            let root = try await callRA(
+                "API_GetUserCompletionProgress.php",
+                ["u": credentials.ulid ?? credentials.username,
+                 "c": "500", "o": String(page * 500)],
+                apiKey: credentials.apiKey)
+            let batch = shapePlayed(root)
+            for game in batch where seen.insert(game.gameID).inserted { out.append(game) }
+            let total = (root["Total"] as? NSNumber)?.intValue ?? out.count
+            if batch.isEmpty || out.count >= total { break }
+        }
+        return out
+    }
+
+    /// Pure, so tests can feed it a fixture.
+    static func shapePlayed(_ root: [String: Any]) -> [PlayedGame] {
+        let iso = ISO8601DateFormatter()
+        let rows = (root["Results"] as? [[String: Any]]) ?? []
+        return rows.compactMap { row in
+            guard let gameID = (row["GameID"] as? NSNumber)?.intValue,
+                  let title = (row["Title"] as? String)?.trimmingCharacters(in: .whitespaces),
+                  !title.isEmpty else { return nil }
+            let date = (row["MostRecentAwardedDate"] as? String)
+                .flatMap { iso.date(from: $0) ?? ServiceDates.parse($0) }
+            return PlayedGame(
+                gameID: gameID,
+                title: title,
+                consoleName: (row["ConsoleName"] as? String)?.trimmingCharacters(in: .whitespaces),
+                awarded: (row["NumAwarded"] as? NSNumber)?.intValue ?? 0,
+                possible: (row["MaxPossible"] as? NSNumber)?.intValue ?? 0,
+                lastPlayed: date)
+        }
+    }
+
+    /// RA's console name in the app's vocabulary. RA writes some machines its
+    /// own way ("NES/Famicom", "SNES/Super Famicom"); everything else goes
+    /// through the app's own fold.
+    static func platform(forConsole name: String?) -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+        switch name {
+        case "NES/Famicom": return "NES"
+        case "SNES/Super Famicom": return "SNES"
+        case "Game Boy Advance": return "GBA"
+        case "Game Boy Color": return "GBC"
+        case "Nintendo 64": return "N64"
+        case "PlayStation": return "PS1"
+        case "PlayStation 2": return "PS2"
+        case "PlayStation Portable": return "PSP"
+        case "Genesis/Mega Drive", "Mega Drive": return "Genesis"
+        case "Sega CD", "Mega-CD": return "Sega CD"
+        case "Master System": return "Master System"
+        case "PC Engine/TurboGrafx-16", "PC Engine": return "TurboGrafx-16"
+        case "Neo Geo Pocket": return "Neo Geo Pocket Color"
+        case "Events", "Hubs", "Standalone": return nil
+        default:
+            let folded = PlatformKey.canonical(name)
+            return folded.isEmpty ? nil : folded
+        }
+    }
+
+    /// Machines people emulate on, offered on a RetroAchievements row when
+    /// you have a record for one and never picked for you.
+    ///
+    /// An RA unlock means an emulator, so the machine you played on is very
+    /// often not the console the game shipped for — Tim, 09-17: *"yeah, I
+    /// played them through Recalbox."* Recalbox, RetroPie and Batocera all
+    /// fold to Raspberry Pi (`PlatformKey`), so the one name covers them.
+    static let emulationChoices = [
+        "Raspberry Pi", "PC", "Mac", "Steam Deck", "Switch", "Switch 2",
+        "Android", "iOS", "Linux",
+    ]
+
+    /// The account's games as import rows. Games with no achievements earned
+    /// are left out: RA lists a set you merely looked at, and "played" here
+    /// has to mean you actually did something.
+    ///
+    /// `library` is the games a row can add a console to, by
+    /// `TrackerMerge.matchKey`; `existingNames` are skipped outright.
+    static func libraryRows(from played: [PlayedGame], existingNames: Set<String>,
+                            library: [String: UUID] = [:]) -> [CSVImport.Row] {
+        played.enumerated().compactMap { index, game in
+            guard game.awarded > 0 else { return nil }
+            let existing = library[TrackerMerge.matchKey(game.title)]
+            guard existing != nil || !existingNames.contains(game.title.lowercased()) else { return nil }
+            let platform = platform(forConsole: game.consoleName)
+            // An emulated game is on whichever machine you emulate with, so
+            // the review offers your own alongside the original.
+            return CSVImport.Row(
+                name: game.title,
+                platform: platform,
+                platforms: platform.map { [$0] } ?? [],
+                status: nil, rating: nil, notes: nil, hoursPlayed: nil,
+                igdbID: nil, line: index + 1,
+                offersPlatformChoice: true,
+                platformChoices: platform.map { [$0] } ?? [],
+                ownedOnlyChoices: emulationChoices,
+                fallbackPlatform: platform,
+                existingGameID: existing)
+        }
+    }
+
     /// Every mastery/completion on this account, newest first.
     ///
     /// Direct to RA with the user's key, like all user-scoped calls — the

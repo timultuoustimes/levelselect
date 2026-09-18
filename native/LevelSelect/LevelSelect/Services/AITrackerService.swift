@@ -75,6 +75,11 @@ enum AITrackerService {
         /// flag is not what makes it happen — it is what lets the placeholder
         /// say what is coming, instead of promising 900 rows and yielding one.
         let counted: Bool
+        /// "roster" or "sequence" when the planner said so; the app kept only
+        /// name and size until build 39.
+        var kind: String? = nil
+        var fields: [TrackerFieldDTO] = []
+        var partySize: Int? = nil
     }
 
     /// Ask what a tracker for this game should be *divided into* — headings and
@@ -85,10 +90,9 @@ enum AITrackerService {
     /// doesn't know what to plan, and it is a better first step even for
     /// someone who does, since the shape can be corrected before anyone spends
     /// two minutes filling it in.
-    static func plan(gameName: String, igdbID: Int? = nil) async throws -> [PlannedCategory] {
-        var body: [String: Any] = ["gameName": gameName, "mode": "plan"]
-        if let igdbID { body["igdbID"] = igdbID }
-        let root = try await post(body, timeout: 75)
+    static func plan(gameName: String, igdbID: Int? = nil,
+                     shapes: [TrackerShape] = []) async throws -> [PlannedCategory] {
+        let root = try await post(planBody(gameName: gameName, igdbID: igdbID, shapes: shapes), timeout: 75)
 
         guard let plan = root["plan"] as? [String: Any],
               let raw = plan["categories"] as? [[String: Any]], !raw.isEmpty else {
@@ -98,9 +102,49 @@ enum AITrackerService {
             guard let name = (entry["name"] as? String)?
                 .trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
             let count = entry["plannedCount"] as? Int
-            return PlannedCategory(name: name, plannedCount: (count ?? 0) > 0 ? count : nil,
-                                   counted: (entry["counted"] as? Bool) ?? false)
+            return PlannedCategory(
+                name: name, plannedCount: (count ?? 0) > 0 ? count : nil,
+                counted: (entry["counted"] as? Bool) ?? false,
+                kind: entry["type"] as? String,
+                fields: (entry["fields"] as? [[String: Any]])?.compactMap(TrackerFieldDTO.init(json:)) ?? [],
+                partySize: (entry["partySize"] as? NSNumber)?.intValue)
         }
+    }
+
+    static func planBody(gameName: String, igdbID: Int?, shapes: [TrackerShape]) -> [String: Any] {
+        var body: [String: Any] = ["gameName": gameName, "mode": "plan"]
+        if let igdbID { body["igdbID"] = igdbID }
+        // What the person said this tracker is for. A server that predates
+        // the key ignores it and plans as it always did.
+        if !shapes.isEmpty { body["shapes"] = shapes.map(\.rawValue) }
+        return body
+    }
+
+    /// What a run of this game should record — loadout, score, time, the
+    /// list it fills — suggested for a tracker that already exists. `lists`
+    /// lets a field pick from one of the tracker's own lists.
+    static func suggestRunFields(gameName: String, igdbID: Int? = nil,
+                                 lists: [(id: String, name: String)]) async throws -> [RunFieldDTO] {
+        var body: [String: Any] = ["gameName": gameName, "mode": "runFields"]
+        if let igdbID { body["igdbID"] = igdbID }
+        body["lists"] = lists.prefix(30).map { ["id": $0.id, "name": $0.name] }
+        let root = try await post(body, timeout: 75)
+        let fields = runFields(from: root)
+        guard !fields.isEmpty else {
+            throw GenerationError(message: "No run fields came back. Try again.")
+        }
+        return fields
+    }
+
+    /// The fields in a `runFields` reply, read by the same parser as a
+    /// tracker's own run template.
+    static func runFields(from root: [String: Any]) -> [RunFieldDTO] {
+        guard let raw = (root["runFields"] as? [String: Any])?["fields"] as? [[String: Any]],
+              let data = try? JSONSerialization.data(withJSONObject: [
+                  "runTemplate": ["fields": raw, "outcomes": ["Won"]],
+              ])
+        else { return [] }
+        return TrackerSchemaJSON.runTemplate(from: data)?.fields ?? []
     }
 
     /// Generate the items for ONE named category.
@@ -111,6 +155,7 @@ enum AITrackerService {
     /// return an eighteen-item category.
     static func generateCategory(gameName: String, categoryName: String,
                                  expectedCount: Int? = nil, counted: Bool = false,
+                                 roster: Bool = false,
                                  igdbID: Int? = nil) async throws -> Data {
         var body: [String: Any] = [
             "gameName": gameName, "mode": "category", "categoryName": categoryName,
@@ -121,6 +166,8 @@ enum AITrackerService {
         // 700"). Sending it means the server can ASK for one counter instead of
         // inferring it from a clamped number and contradicting itself.
         if counted { body["counted"] = true }
+        // A roster asks for characters with their fields rather than a list.
+        if roster { body["categoryType"] = "roster" }
         if let igdbID { body["igdbID"] = igdbID }
         // Same ceiling as a full generation: the edge function caps at 150s,
         // and a long category can legitimately use most of it.

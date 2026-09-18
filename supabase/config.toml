@@ -28,3 +28,9 @@ verify_jwt = false
 
 [functions.steam-proxy]
 verify_jwt = false
+
+[functions.wikidata-proxy]
+verify_jwt = false
+
+[functions.scandex-proxy]
+verify_jwt = false

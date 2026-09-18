@@ -20,6 +20,15 @@ struct PlatformRoute: Hashable {
         let key = PlatformKey.canonical(platform)
         return mine.contains { PlatformKey.canonical($0) == key } && (ownership?.matches(game) ?? true)
     }
+
+    /// A console's page, split: the games you have on it, and the ones you're
+    /// waiting for on it. A wishlist game's platform is the one you'll buy it
+    /// on, so it belongs to the console — but under its own heading, not
+    /// mixed in with the shelf (and not in the card's count).
+    static func split(_ games: [Game], platform: String) -> (mine: [Game], wishlist: [Game]) {
+        let here = games.filter { $0.deletedAt == nil && matches($0, platform: platform, ownership: nil) }
+        return (here.filter { $0.status != .wishlist }, here.filter { $0.status == .wishlist })
+    }
 }
 
 /// The soft-3D console icon for a platform (falls back to a controller glyph).
@@ -84,6 +93,7 @@ struct SystemsRow: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     let groups: [(platform: String, count: Int)]
     var onOpen: (String) -> Void
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -113,7 +123,7 @@ struct SystemsRow: View {
                                 // "Other" and "SNES" into "Oth…" and "SN…" at
                                 // accessibility sizes — the shortest names the
                                 // app has, so nothing longer stood a chance.
-                                Text(PlatformShort.name(g.platform))
+                                Text(ConsoleNickname.of(g.platform, in: consoles) ?? PlatformShort.name(g.platform))
                                     .font(.caption.weight(.medium))
                                     .lineLimit(2)
                                     .multilineTextAlignment(.center)
@@ -159,6 +169,8 @@ struct PlatformGamesView: View {
     @Query(filter: #Predicate<Game> { $0.deletedAt == nil }, sort: \Game.name)
     private var allGames: [Game]
 
+    @Query(filter: #Predicate<Console> { $0.deletedAt == nil }) private var consoles: [Console]
+
     @State private var searchText = ""
     @State private var statusFilter: GameStatus?
     @State private var ownershipFilter: OwnershipFilter?
@@ -183,7 +195,17 @@ struct PlatformGamesView: View {
     /// Every game on this console, before the page's own filters — the pool
     /// the chips count against.
     private var onPlatform: [Game] {
-        allGames.filter { PlatformRoute.matches($0, platform: platform, ownership: nil) }
+        PlatformRoute.split(allGames, platform: platform).mine
+    }
+
+    /// Waiting on this console, shown after the shelf. Hidden while a status
+    /// or ownership filter is on: neither describes a game you don't have.
+    private var wishlisted: [Game] {
+        guard statusFilter == nil, ownershipFilter == nil else { return [] }
+        return sort.apply(to: PlatformRoute.split(allGames, platform: platform).wishlist.filter {
+            (tagFilter == nil || $0.userTags.contains(tagFilter!))
+                && LibrarySearch.matches($0, query: searchText)
+        })
     }
 
     private var visible: [Game] {
@@ -252,7 +274,14 @@ struct PlatformGamesView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 7) {
                     PlatformIconView(platform: platform, size: 24)
-                    Text(PlatformShort.name(platform)).font(.headline)
+                    if let nickname = ConsoleNickname.of(platform, in: consoles) {
+                        VStack(spacing: 0) {
+                            Text(nickname).font(.headline)
+                            Text(PlatformShort.name(platform)).font(.caption2).foregroundStyle(.secondary)
+                        }
+                    } else {
+                        Text(PlatformShort.name(platform)).font(.headline)
+                    }
                 }
             }
             ToolbarItem {
@@ -338,7 +367,7 @@ struct PlatformGamesView: View {
             }
         }
         .overlay {
-            if visible.isEmpty {
+            if visible.isEmpty && wishlisted.isEmpty {
                 if searchText.isEmpty {
                     // **Empty and filtered-empty are different sentences.**
                     // Until build 39 a console page could only be reached
@@ -433,11 +462,28 @@ struct PlatformGamesView: View {
                         grid(groups[i].items)
                     }
                 }
+                if !wishlisted.isEmpty {
+                    wishlistHeader
+                        .padding(.top, visible.isEmpty ? 0 : 12)
+                    grid(wishlisted)
+                }
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
         }
         .scrollIndicators(.hidden)
+    }
+
+    private var wishlistHeader: some View {
+        HStack(spacing: 8) {
+            Image(systemName: GameStatus.wishlist.systemImage)
+                .font(.subheadline)
+                .foregroundStyle(GameStatus.wishlist.color)
+                .frame(width: 26)
+            Text(GameStatus.wishlist.sectionTitle).font(.headline)
+            Text("(\(wishlisted.count))")
+                .font(.subheadline).foregroundStyle(.secondary)
+        }
     }
 
     private func grid(_ items: [Game]) -> some View {
@@ -464,25 +510,37 @@ struct PlatformGamesView: View {
     private var list: some View {
         List {
             ForEach(sort.apply(to: visible)) { game in
-                if selecting {
-                    Button { toggle(game) } label: {
-                        HStack(spacing: 12) {
-                            GameSelectionMark(on: selected.contains(game.id))
-                            GameRow(game: game)
-                        }
-                        .contentShape(.rect)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(GameSelectionRowBackground(on: selected.contains(game.id)))
-                } else {
-                    NavigationLink(value: game) { GameRow(game: game) }
-                        .listRowBackground(Color.clear)
-                        .gameContextMenu(game)
+                listRow(game)
+            }
+            if !wishlisted.isEmpty {
+                Section {
+                    ForEach(wishlisted) { game in listRow(game) }
+                } header: {
+                    wishlistHeader
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+    }
+
+    @ViewBuilder
+    private func listRow(_ game: Game) -> some View {
+        if selecting {
+            Button { toggle(game) } label: {
+                HStack(spacing: 12) {
+                    GameSelectionMark(on: selected.contains(game.id))
+                    GameRow(game: game)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .listRowBackground(GameSelectionRowBackground(on: selected.contains(game.id)))
+        } else {
+            NavigationLink(value: game) { GameRow(game: game) }
+                .listRowBackground(Color.clear)
+                .gameContextMenu(game)
+        }
     }
 
     private func toggle(_ game: Game) {

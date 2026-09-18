@@ -213,7 +213,12 @@ final class TrackerGenerationStore {
     /// (renamed, deleted, added to) before a minute of generation is spent on
     /// any of it. Categories that clash with ones already there are refused by
     /// the repository and reported as skipped rather than silently dropped.
-    func suggestCategories(for game: Game, context: ModelContext) {
+    ///
+    /// `shapes` is what the person said the tracker is for; empty lets the
+    /// planner decide. `focusing` is a playthrough that should chase the new
+    /// lists — a new run planned from "What's this run for?".
+    func suggestCategories(for game: Game, context: ModelContext,
+                           shapes: [TrackerShape] = [], focusing: Playthrough? = nil) {
         let id = game.id
         guard tasks[id] == nil else { return }
         begin(id, kind: .plan)
@@ -223,13 +228,30 @@ final class TrackerGenerationStore {
 
         tasks[id] = Task { [weak self] in
             do {
-                let proposed = try await AITrackerService.plan(gameName: name, igdbID: igdbID)
+                let proposed = try await AITrackerService.plan(gameName: name, igdbID: igdbID, shapes: shapes)
                 let repo = Repository(context)
+                let before = Set(repo.trackerCategories(for: game).map(\.id))
+                defer {
+                    // Lists planned for a run are what that run is for: they
+                    // join whatever it had chosen, or become its focus.
+                    if let focusing {
+                        let added = Set(repo.trackerCategories(for: game).map(\.id)).subtracting(before)
+                        if !added.isEmpty {
+                            repo.setFocus((repo.focus(of: focusing) ?? []).union(added), on: focusing)
+                        }
+                    }
+                }
                 var added = 0
                 for category in proposed
                 where repo.addPlannedCategory(to: game, named: category.name,
                                               plannedCount: category.plannedCount,
-                                              counted: category.counted) {
+                                              counted: category.counted,
+                                              // Rosters only while the fields
+                                              // can't yet be recorded on this
+                                              // build's iCloud environment.
+                                              kind: SchemaDeploy.build39Fields ? category.kind : nil,
+                                              fields: SchemaDeploy.build39Fields ? category.fields : [],
+                                              partySize: category.partySize) {
                     added += 1
                 }
                 let skipped = proposed.count - added
@@ -312,9 +334,12 @@ final class TrackerGenerationStore {
                       game: Game, gameName: String, igdbID: Int?,
                       context: ModelContext) async throws
         -> (outcome: Repository.TrackerMergeOutcome, filled: Bool) {
+        let roster = game.trackerSchema
+            .flatMap { TrackerSchemaJSON.categories(from: $0.jsonData) }?
+            .first { $0.id == categoryID }?.isRoster ?? false
         let jsonData = try await AITrackerService.generateCategory(
             gameName: gameName, categoryName: categoryName,
-            expectedCount: expectedCount, counted: counted, igdbID: igdbID)
+            expectedCount: expectedCount, counted: counted, roster: roster, igdbID: igdbID)
         let repo = Repository(context)
         repo.ensureDefaultPlaythrough(for: game)
         let outcome = repo.applyGeneratedSchema(

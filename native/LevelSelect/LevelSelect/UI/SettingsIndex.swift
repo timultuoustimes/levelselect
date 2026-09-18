@@ -346,17 +346,47 @@ struct DeveloperSettingsPage: View {
     @State private var seedResult: String?
     @State private var seedingDemo = false
     @State private var library = LibrarySwitcher.shared
+    @State private var confirmRepair = false
+
+    /// A `LibraryRepair` plan copied into Documents from the Mac.
+    private static var repairPlanURL: URL? {
+        let url = URL.documentsDirectory.appending(path: "repair-plan.json")
+        return FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) ? url : nil
+    }
 
     var body: some View {
         SettingsPage(title: "Developer",
                      icon: "hammer",
-                     blurb: "Debug builds only. Seeding writes to whichever CloudKit container this build is signed for — check before you tap.") {
+                     blurb: SchemaDeploy.syncsToProduction
+                        ? "Debug build, syncing to Production."
+                        : "Debug build, syncing to Development — seeding writes there.") {
         Section {
+            // **Never on a Production build.** The device builds are Debug
+            // too (the gate installs Debug signed for Production), so this page
+            // shows on them — and a seed there writes fields Production doesn't
+            // have into your real library. Tim nearly tapped it, 09-17.
+            if SchemaDeploy.syncsToProduction {
+                Label("This build syncs to Production, so seeding is off. Install a Development build to seed.",
+                      systemImage: "exclamationmark.shield")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            } else if LevelSelectStore.isSeedSession {
+                Label("Seed store open — your library isn't loaded, so seeding can't touch it.",
+                      systemImage: "checkmark.shield")
+                    .font(.callout)
+                    .foregroundStyle(.green)
+            } else {
+                Label("Your real library is open on Development. Relaunch with -LSSeedStore YES to seed into a throwaway store instead.",
+                      systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
             Button {
                 seedResult = CloudKitSchemaSeeder.seed(context: context)
             } label: {
                 Label("Seed CloudKit schema", systemImage: "cloud.bolt")
             }
+            .disabled(SchemaDeploy.syncsToProduction)
             Button(role: .destructive) {
                 seedResult = CloudKitSchemaSeeder.purge(context: context)
             } label: {
@@ -371,6 +401,33 @@ struct DeveloperSettingsPage: View {
             Text("Developer — CloudKit schema")
         } footer: {
             Text("Writes one hidden, fully-populated record of every model so the Development schema gains every field. Seed → wait for Synced → Deploy Schema Changes to Production in CloudKit Console → Purge.")
+        }
+
+        if let planURL = Self.repairPlanURL {
+            Section {
+                Button(role: .destructive) {
+                    confirmRepair = true
+                } label: {
+                    Label("Repair library from plan", systemImage: "bandage")
+                }
+                .confirmationDialog("Repair the library?", isPresented: $confirmRepair) {
+                    Button("Repair", role: .destructive) {
+                        do {
+                            let data = try Data(contentsOf: planURL)
+                            seedResult = try LibraryRepair.apply(plan: data, context: context).summary
+                            try? FileManager.default.removeItem(at: planURL)
+                        } catch {
+                            seedResult = error.localizedDescription
+                        }
+                    }
+                } message: {
+                    Text("Applies repair-plan.json from this app's Documents. It hides the records it names and puts the named fields back, and every device syncs the result.")
+                }
+            } header: {
+                Text("Developer — repair")
+            } footer: {
+                Text("Shown only while a repair plan is in Documents. The plan is removed once applied.")
+            }
         }
 
         Section {

@@ -72,10 +72,12 @@ struct SchemaFreezeTests {
         #expect(LevelSelectSchemaV3.versionIdentifier == Schema.Version(3, 0, 0))
         #expect(LevelSelectSchemaV5.versionIdentifier == Schema.Version(5, 0, 0))
         #expect(LevelSelectSchemaV6.versionIdentifier == Schema.Version(6, 0, 0))
-        // Five, not six: V4 added per-platform release dates as a FIELD on
+        #expect(LevelSelectSchemaV7.versionIdentifier == Schema.Version(7, 0, 0))
+        // Six, not seven: V4 added per-platform release dates as a FIELD on
         // Game and no new model, and a VersionedSchema lists models. The gap
         // in the numbering is the record being accurate rather than tidy.
-        #expect(LevelSelectMigrationPlan.schemas.count == 5,
+        // (Build 39's first promote added fields only, for the same reason.)
+        #expect(LevelSelectMigrationPlan.schemas.count == 6,
                 "Adding a version? Record it here too — this list is the written history of the shape.")
     }
 
@@ -155,7 +157,10 @@ struct SchemaFreezeTests {
             // `declinedOwnership` is how "no, I don't own the hardware" is
             // remembered, so the question is asked once; without it the app
             // would ask again on the next game forever.
-            "Console: acquiredAt,createdAt,declinedOwnership,deletedAt,id,images,legacyID,notes,ownership,platform,revision,updatedAt,userID,variant",
+            // nickname added 2026-09-17 build 39 — what you call the machine,
+            // shown on the console and never on its games. Seed-and-promote
+            // before any build that writes it ships.
+            "Console: acquiredAt,createdAt,declinedOwnership,deletedAt,id,images,legacyID,nickname,notes,ownership,platform,revision,updatedAt,userID,variant",
             "EarnedBadge: badgeID,createdAt,deletedAt,detailJSON,earnedAt,gameID,id,legacyID,revision,updatedAt,userID",
             // backdropURLString/logoURLString/images added 2026-08-28 build 32
             // (artwork roles + user-added images). platformReleasesData added
@@ -165,7 +170,9 @@ struct SchemaFreezeTests {
             // wikidataID added 2026-09-07 build 37, AHEAD of the feature: every
             // Wikidata piece on the roadmap needs the QID as its bridge, and a
             // field a build early is cheaper than a second promote cycle.
-            "Game: addedAt,backdropURLString,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,memories,name,notes,ownedPlatforms,ownership,pinned,platformReleasesData,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,sectionStateRaw,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos,wikidataID",
+            // barcodes added 2026-09-17 build 39 (V7, ScanDex): several,
+            // because a PAL copy and an NTSC one are one game to you.
+            "Game: addedAt,backdropURLString,barcodes,completionEvents,coverImageID,coverOverrideURLString,coverURLString,createdAt,currentPlaythroughID,deletedAt,developers,firstReleaseDate,franchise,gameModes,genres,id,igdbID,igdbSlug,images,legacyID,logoURLString,maps,memories,name,notes,ownedPlatforms,ownership,pinned,platformReleasesData,platforms,playerPerspectives,playthroughs,publishers,rating,review,revision,sectionStateRaw,showItemHintsOverride,status,summary,themes,trackerDisplayRaw,trackerItemDetails,trackerSchema,updatedAt,userID,userTags,videos,wikidataID",
             "GameCollection: createdAt,deletedAt,filterRuleRaw,gameIDs,id,isBundle,legacyID,name,notes,revision,sortIndex,updatedAt,userID",
             // memory added 2026-09-02 build 36 (V5): a photo can belong to
             // a memory instead of a game. Reused rather than given its own
@@ -188,6 +195,13 @@ struct SchemaFreezeTests {
             // case no single precision can describe.
             "Memory: body,createdAt,dayKnownRaw,deletedAt,earliest,game,id,images,kind,latest,legacyID,place,platform,playedWithData,precision,revision,title,updatedAt,userID,whenText",
             "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
+            // V7, 2026-09-17 build 39 — the news reader. A feed is a URL and
+            // what to call it; nothing of anyone's writing is stored, because
+            // keeping article bodies is republishing them.
+            "NewsFeed: createdAt,deletedAt,folder,id,lastFetchedAt,lastItemAt,legacyID,muted,revision,siteURLString,sortIndex,title,updatedAt,urlString,userID",
+            // Only articles you touched: read four of five thousand and this
+            // is four records.
+            "NewsItemState: createdAt,deletedAt,feedID,guid,id,legacyID,linkString,publishedAt,read,revision,saved,title,updatedAt,userID",
             // PlayerProfile added 2026-08-29 build 33 — the person the shelf
             // belongs to. A NEW record type rather than reusing `Profile`,
             // which is dead code carrying `appleUserIdentifier` and `email`
@@ -244,12 +258,17 @@ struct SchemaFreezeTests {
             // id added 2026-09-07 build 37: a SYNCED tie-break for the singleton
             // fold. Without it two devices could keep different duplicate rows
             // and delete each other's winner.
-            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,dismissedConsolesRaw,expandedSectionsRaw,gamePageLayoutRaw,homeLayoutRaw,homeSystemsRaw,id,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,updatedAt",
+            // heroHexLight/heroHexDark added 2026-09-17 build 39 — the
+            // Continue Playing card's own color, per appearance.
+            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,dismissedConsolesRaw,expandedSectionsRaw,gamePageLayoutRaw,heroHexDark,heroHexLight,homeLayoutRaw,homeSystemsRaw,id,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,shelfOrderRaw,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,suggestionPrefsRaw,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
-            "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,selectedVariantUpdatedAt,updatedAt,userID",
+            // valuesJSON added 2026-09-17 build 39 — RPG rosters: per-item
+            // fields (class, level, party) and status, each with its own time
+            // (TrackerFieldValues). Seed-and-promote before it ships.
+            "TrackerStateRecord: completed,completedAt,count,createdAt,deletedAt,id,itemID,legacyID,notes,playthrough,rank,revealed,revision,selectedVariant,selectedVariantUpdatedAt,updatedAt,userID,valuesJSON",
         ]
-        #expect(Self.fingerprint(LevelSelectSchemaV6.self) == expected,
-                "Schema V6 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
+        #expect(Self.fingerprint(LevelSelectSchemaV7.self) == expected,
+                "Schema V7 changed. Intentional? Update this list AND promote the CloudKit schema (CloudKitSchemaSeeder) before shipping a build that writes the new field.")
     }
 }

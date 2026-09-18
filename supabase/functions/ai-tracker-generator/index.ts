@@ -33,7 +33,24 @@ const MAX_CATEGORY_NAME = 80;
 // ask it what a tracker for a game should even contain, and filling one part of
 // a big game meant generating all of it and discarding the rest — Breath of the
 // Wild timed out doing that for a single 18-item category.
-const ALLOWED_MODES = new Set(['auto', 'paste', 'url', 'plan', 'category']);
+// 'runFields' suggests what a run records (loadout, score, the list it fills)
+// for a game that already has a tracker.
+const ALLOWED_MODES = new Set(['auto', 'paste', 'url', 'plan', 'category', 'runFields']);
+
+// The shapes a person can ask a plan to stay inside. The app offers them by
+// genre; the instruction for each is here so the wording lives in one place.
+const SHAPES: Record<string, string> = {
+  story: 'the main story only: chapters, levels or main quests in order as one "sequence" category, plus the major bosses if the game has them. Nothing optional.',
+  checklist: 'a plain checklist: the few sets a typical player cares about, as ordinary checklists. No rosters, no sequences, nothing counted.',
+  roster: 'party building: a "roster" category for the recruitable characters (with fields and party size) and the supports or bonds between them if the game has them.',
+  completionist: 'everything the game counts toward 100%: every collectible set, side quest line, upgrade and ending.',
+  collectibles: 'the collectible sets only.',
+  unlocks: 'what a roguelike unlocks between runs: characters, weapons, upgrades, bosses beaten and endings. No run-by-run content.',
+  runs: 'a small tracker for a roguelike played for its runs: the bosses and endings, kept short, since the runs themselves are logged separately.',
+  seasonal: 'a life sim: the collections (fish, bugs, crops, recipes, museum sets) and relationships, with filters for seasons and weather on the items.',
+};
+const MAX_SHAPES = 3;
+const MAX_LISTS = 30;
 
 // ─── Schema definition (embedded in system prompt) ───────────────────────────
 
@@ -56,7 +73,11 @@ Each category has a \`type\` that controls how items render:
 2. **collectibles** — countable items, often with locations. Use for: items to find, charms, upgrades, collectible sets.
 3. **leveled** — items with rank 0..maxRank. Use for: upgradeable gear, spells with tiers, skill trees.
    - Include \`maxRank\` and optionally \`rankNames\` (array of length maxRank+1, e.g. ["Not acquired", "Base", "Upgraded"]).
-4. **sequence** — ordered progression steps. Use for: endings, story arcs, quest chains.
+4. **sequence** — ordered progression steps, done in order. Use for: story chapters, questlines, endings.
+5. **roster** — one item per recruitable character (units, party members, confidants, Pokémon). Use for: who you can recruit in a party RPG or tactics game (Fire Emblem, Persona, Octopath, Xenoblade, Suikoden).
+   - Include \`fields\`: up to 4 of \`{ id, name, type: "text"|"number"|"choice"|"toggle", options? }\` for what a player records about each character in THEIR playthrough — typically Class (choice, with the game's class names as options when you know them), Level (number), and In party (toggle, id "party"). Never stats, growth rates or calculations.
+   - Include \`partySize\` when the game limits how many can be deployed at once.
+   - Missable recruits: \`missable: true\`, and \`requires\` / \`locksOut\` when a route decides who joins.
 
 ## Item fields
 
@@ -69,13 +90,17 @@ Each item in a category can have:
 - missable (boolean) — true if permanently lockable
 - hideUntilDiscovered (boolean) — true for spoiler items (show as "???" until revealed)
 - tags (string[]) — for DLC grouping, categories
+- filters (string[]) — only for life sims and seasonal games (Stardew Valley, Animal Crossing, Story of Seasons): the player-facing conditions an item depends on, as short Title Case words the player filters by — seasons ("Spring"), weather ("Rain"), time of day ("Night"), place types ("Ocean"). Omit "All"/"Any".
 - maxRank, rankNames — for leveled items only
 - metadata (object) — freeform game-specific extras (costs, stats, etc.)
 
 ## Run template (optional, for roguelikes)
 
 If the game has a run-based structure (roguelikes, roguelites, arcade modes):
-- fields: array of { id, label, type: "text"|"select"|"number", options?: string[] }
+- fields: array of { id, label, type: "text"|"select"|"multi"|"number"|"time"|"list", options?: string[], phase?: "start"|"end", best?: "high"|"low" }
+  - "select": one pick before the run (weapon, character, deck). "multi": several picks.
+  - "number" / "time": a score, a floor reached, a clear time (seconds). Use phase "end" and set best ("high" for scores, "low" for times).
+  - "list": what the run picks up while it's live — boons, relics, jokers — with options when the set is known.
 - outcomes: array of strings like ["victory", "death", "abandoned"]
 
 ## Spoiler policy
@@ -110,6 +135,47 @@ If the game has a run-based structure (roguelikes, roguelites, arcade modes):
 
 // ─── Tool definition for structured output ───────────────────────────────────
 
+// What a roster's characters record per playthrough. Four kinds, matching the
+// app's `TrackerFieldDTO.Kind`; anything else is dropped by `cleanFields`.
+const ROSTER_FIELDS_SCHEMA = {
+  type: 'array',
+  description: 'Roster only: up to 4 things a player records about each character in their own playthrough (Class, Level, In party). No stats.',
+  items: {
+    type: 'object',
+    required: ['id', 'name', 'type'],
+    properties: {
+      id:      { type: 'string', description: 'kebab-case; use "party" for the in-party toggle' },
+      name:    { type: 'string' },
+      type:    { type: 'string', enum: ['text', 'number', 'choice', 'multi', 'toggle'] },
+      options: { type: 'array', items: { type: 'string' } },
+      max:     { type: 'number', description: 'multi only: how many can be picked at once (2 skills, 4 moves)' },
+    },
+  },
+};
+
+const FIELD_KINDS = new Set(['text', 'number', 'choice', 'multi', 'toggle']);
+
+function cleanFields(raw: unknown): Array<Record<string, unknown>> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const out = raw
+    .filter((f) => f && typeof f.id === 'string' && typeof f.name === 'string' && FIELD_KINDS.has(f.type))
+    .map((f) => ({
+      id: String(f.id).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^[-_]+/, '').slice(0, 40),
+      name: String(f.name).trim().slice(0, 40),
+      type: f.type,
+      ...((f.type === 'choice' || f.type === 'multi') && Array.isArray(f.options)
+        ? { options: f.options.filter((o: unknown) => typeof o === 'string').map((o: string) => o.slice(0, 40)).slice(0, 60) }
+        : {}),
+      ...(f.type === 'multi' && Number.isFinite(f.max) && Number(f.max) > 0
+        ? { max: Math.min(20, Math.round(Number(f.max))) }
+        : {}),
+    }))
+    .filter((f) => f.id && f.name && !seen.has(f.id) && seen.add(f.id))
+    .slice(0, 4);
+  return out.length ? out : undefined;
+}
+
 const TRACKER_TOOL = {
   name: 'generate_tracker_data',
   description: 'Generate complete structured tracker data for a game. Call this tool exactly once with the full tracker data.',
@@ -127,8 +193,10 @@ const TRACKER_TOOL = {
             id:          { type: 'string', description: 'Stable kebab-case identifier' },
             name:        { type: 'string', description: 'Display name' },
             description: { type: 'string' },
-            type:        { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence'] },
+            type:        { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence', 'roster'] },
             tags:        { type: 'array', items: { type: 'string' } },
+            fields:      ROSTER_FIELDS_SCHEMA,
+            partySize:   { type: 'number', description: 'For a roster: how many can be deployed at once.' },
             items: {
               type: 'array',
               items: {
@@ -143,6 +211,7 @@ const TRACKER_TOOL = {
                   missable:            { type: 'boolean' },
                   hideUntilDiscovered: { type: 'boolean' },
                   tags:                { type: 'array', items: { type: 'string' } },
+                  filters:             { type: 'array', items: { type: 'string' }, description: 'Life sims only: seasons, weather, time of day, place types the player filters by.' },
                   maxRank:             { type: 'number' },
                   rankNames:           { type: 'array', items: { type: 'string' } },
                   countTarget:         { type: 'number', description: 'For a set tracked as a running total rather than individual rows (e.g. 900 Korok Seeds): the target count.' },
@@ -164,8 +233,10 @@ const TRACKER_TOOL = {
               properties: {
                 id:      { type: 'string' },
                 label:   { type: 'string' },
-                type:    { type: 'string', enum: ['text', 'select', 'number'] },
+                type:    { type: 'string', enum: ['text', 'select', 'multi', 'number', 'time', 'list'] },
                 options: { type: 'array', items: { type: 'string' } },
+                phase:   { type: 'string', enum: ['start', 'end'] },
+                best:    { type: 'string', enum: ['high', 'low'] },
               },
             },
           },
@@ -204,8 +275,10 @@ const PLAN_TOOL = {
               type: 'number',
               description: 'Approximate number of items. Best known figure; an estimate is fine.',
             },
-            type: { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence'] },
+            type: { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence', 'roster'] },
             description: { type: 'string', description: 'One short line on what belongs in it.' },
+            fields: ROSTER_FIELDS_SCHEMA,
+            partySize: { type: 'number', description: 'For a roster: how many can be deployed at once.' },
             counted: {
               type: 'boolean',
               description: 'True when this set is far too large to list individually (roughly 150+) and is better tracked as a running total.',
@@ -232,8 +305,10 @@ const CATEGORY_TOOL = {
         properties: {
           name:        { type: 'string', description: 'Echo the requested category name back exactly.' },
           description: { type: 'string' },
-          type:        { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence'] },
+          type:        { type: 'string', enum: ['checklist', 'collectibles', 'leveled', 'sequence', 'roster'] },
           items:       TRACKER_TOOL.input_schema.properties.categories.items.properties.items,
+          fields:      ROSTER_FIELDS_SCHEMA,
+          partySize:   { type: 'number' },
         },
       },
     },
@@ -339,7 +414,7 @@ function buildUserMessage(
 }
 
 function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | null,
-                          qualifier = '', context = ''): string {
+                          qualifier = '', context = '', shapes: string[] = []): string {
   const parts: string[] = [
     `What should a completion tracker for "${gameName}"${qualifier} be divided into?${context}`,
   ];
@@ -357,8 +432,94 @@ function buildPlanMessage(gameName: string, igdbData: Record<string, unknown> | 
     'Order them by how central they are to finishing the game.',
     'Skip anything that is not really trackable progress (difficulty settings, general tips).',
     'If the game genuinely has one flat list and no sub-structure, say so with a single category.',
+    shapes.length
+      ? ''
+      : 'For a party RPG or tactics game, include a "roster" category for the recruitable characters, with its fields and party size, and use "sequence" for the story chapters.',
+  ].join(' '));
+  if (shapes.length) {
+    // The person chose how big this tracker should be. Staying inside it is
+    // the point: someone who asked for the story should not get 14 lists.
+    parts.push('\nThe player chose what this tracker is for. Plan ONLY this, and nothing beyond it:');
+    for (const shape of shapes) parts.push(`- ${SHAPES[shape]}`);
+  }
+  return parts.join('\n');
+}
+
+function buildRunFieldsMessage(gameName: string, igdbData: Record<string, unknown> | null,
+                               qualifier = '', context = '',
+                               lists: Array<{ id: string; name: string }> = []): string {
+  const parts: string[] = [
+    `What should a player record about each run of "${gameName}"${qualifier}?${context}`,
+  ];
+  if (igdbData?.genres) parts.push(`Genres: ${(igdbData.genres as string[]).join(', ')}`);
+  if (lists.length) {
+    parts.push('\nThe tracker already has these lists (id: name). When a field picks from one of them, set optionsFrom to its id instead of copying the names:');
+    for (const list of lists) parts.push(`- ${list.id}: ${list.name}`);
+  }
+  parts.push([
+    '\nSuggest 2 to 6 fields, the ones this game\'s players actually track:',
+    'the loadout chosen before a run (select, or multi for several picks),',
+    'what the run picks up while it is live (list — boons, relics, jokers),',
+    'and what the run reached (number for a score, depth, heat or ascension; time for a clear time), recorded at the end with best set.',
+    'Use the names the game uses. Give options when the set is known and short (under 60); otherwise leave them out.',
+    'Also suggest the outcomes a run can end with, in the game\'s own words.',
   ].join(' '));
   return parts.join('\n');
+}
+
+const RUN_FIELD_KINDS = new Set(['text', 'select', 'multi', 'number', 'time', 'list']);
+
+const RUN_FIELDS_TOOL = {
+  name: 'suggest_run_fields',
+  description: 'Suggest what a player records about each run of this game. Call this tool exactly once.',
+  input_schema: {
+    type: 'object',
+    required: ['fields'],
+    properties: {
+      fields: {
+        type: 'array',
+        items: {
+          type: 'object',
+          required: ['id', 'label', 'type'],
+          properties: {
+            id:          { type: 'string', description: 'kebab-case' },
+            label:       { type: 'string' },
+            type:        { type: 'string', enum: [...RUN_FIELD_KINDS] },
+            options:     { type: 'array', items: { type: 'string' } },
+            optionsFrom: { type: 'string', description: 'The id of a tracker list the choices come from.' },
+            phase:       { type: 'string', enum: ['start', 'end'] },
+            best:        { type: 'string', enum: ['high', 'low'] },
+          },
+        },
+      },
+      outcomes: { type: 'array', items: { type: 'string' } },
+    },
+  },
+};
+
+function cleanRunFields(raw: unknown, listIDs: Set<string>): Array<Record<string, unknown>> {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw
+    .filter((f) => f && typeof f.id === 'string' && typeof f.label === 'string' && RUN_FIELD_KINDS.has(f.type))
+    .map((f) => {
+      const numeric = f.type === 'number' || f.type === 'time';
+      const picks = f.type === 'select' || f.type === 'multi' || f.type === 'list';
+      const from = typeof f.optionsFrom === 'string' && listIDs.has(f.optionsFrom) ? f.optionsFrom : undefined;
+      return {
+        id: String(f.id).trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^[-_]+/, '').slice(0, 40),
+        label: String(f.label).trim().slice(0, 40),
+        type: f.type,
+        ...(picks && from ? { optionsFrom: from } : {}),
+        ...(picks && !from && Array.isArray(f.options)
+          ? { options: f.options.filter((o: unknown) => typeof o === 'string').map((o: string) => o.slice(0, 40)).slice(0, 60) }
+          : {}),
+        ...(f.type !== 'list' && f.phase === 'end' ? { phase: 'end' } : {}),
+        ...(numeric && (f.best === 'high' || f.best === 'low') ? { best: f.best } : {}),
+      };
+    })
+    .filter((f) => f.id && f.label && !seen.has(f.id) && seen.add(f.id))
+    .slice(0, 8);
 }
 
 function buildCategoryMessage(
@@ -370,10 +531,14 @@ function buildCategoryMessage(
   qualifier = '',
   counted = false,
   context = '',
+  roster = false,
 ): string {
   const parts: string[] = [
     `Generate ONLY the "${categoryName}" category of a completion tracker for "${gameName}"${qualifier}.${context}`,
   ];
+  if (roster) {
+    parts.push('This is a ROSTER: one item per recruitable character, type "roster", with missable and requires/locksOut where a route decides who joins. Include fields (Class as a choice with the game\'s class names, Level as a number, In party as a toggle with id "party") and partySize if the game limits deployment. Record-keeping only — no stats or growth rates.');
+  }
   // A counted set is decided at the PLAN step and the placeholder has already
   // promised the user a counter. Asking for both "roughly 400 items" and "150+
   // means return one countTarget item" is a contradiction, and the answer came
@@ -554,6 +719,39 @@ serve(async (req: Request) => {
     // asking.
     const context = identityContext(identity);
 
+    // Shapes the person chose, from the fixed list only.
+    const shapes: string[] = Array.isArray(body?.shapes)
+      ? [...new Set((body.shapes as unknown[]).filter((x): x is string => typeof x === 'string' && x in SHAPES))]
+          .slice(0, MAX_SHAPES)
+      : [];
+
+    // ── runFields: what a run records, for a tracker that has runs.
+    if (mode === 'runFields') {
+      const lists: Array<{ id: string; name: string }> = Array.isArray(body?.lists)
+        ? (body.lists as Array<Record<string, unknown>>)
+            .filter((l) => typeof l?.id === 'string' && typeof l?.name === 'string')
+            .slice(0, MAX_LISTS)
+            .map((l) => ({ id: String(l.id).slice(0, 80), name: String(l.name).slice(0, MAX_CATEGORY_NAME) }))
+        : [];
+      const res = await callClaude(apiKey, {
+        model: 'claude-sonnet-4-6',
+        max_tokens: PLAN_MAX_TOKENS,
+        tools: [RUN_FIELDS_TOOL],
+        toolName: 'suggest_run_fields',
+        userMessage: buildRunFieldsMessage(gameName, igdbData || null, qualifier, context, lists),
+      });
+      if ('error' in res) return res.error;
+      const fields = cleanRunFields(res.input?.fields, new Set(lists.map((l) => l.id)));
+      if (fields.length === 0) {
+        return jsonResponse({ error: "Couldn't suggest run fields for that game." }, 422);
+      }
+      const outcomes = Array.isArray(res.input?.outcomes)
+        ? (res.input.outcomes as unknown[]).filter((o): o is string => typeof o === 'string' && !!o.trim())
+            .map((o) => o.trim().slice(0, 30)).slice(0, 6)
+        : [];
+      return jsonResponse({ runFields: { fields, outcomes }, usage: res.usage });
+    }
+
     // ── plan: the shape only, no items. One small call, no web search: this
     // has to come back in seconds or it is no better than generating.
     if (mode === 'plan') {
@@ -562,7 +760,7 @@ serve(async (req: Request) => {
         max_tokens: PLAN_MAX_TOKENS,
         tools: [PLAN_TOOL],
         toolName: 'plan_tracker_categories',
-        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier, context),
+        userMessage: buildPlanMessage(gameName, igdbData || null, qualifier, context, shapes),
       });
       if ('error' in planRes) return planRes.error;
 
@@ -576,6 +774,11 @@ serve(async (req: Request) => {
           type: typeof c.type === 'string' ? c.type : 'checklist',
           description: typeof c.description === 'string' ? c.description : undefined,
           counted: c.counted === true,
+          ...(c.type === 'roster' ? {
+            fields: cleanFields(c.fields),
+            partySize: Number.isFinite(c.partySize) && Number(c.partySize) > 0
+              ? Math.min(99, Math.round(Number(c.partySize))) : undefined,
+          } : {}),
         }));
 
       if (categories.length === 0) {
@@ -638,7 +841,8 @@ serve(async (req: Request) => {
           : [CATEGORY_TOOL],
         toolName: 'generate_tracker_category',
         userMessage: buildCategoryMessage(
-          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted, context),
+          gameName, categoryName, expectedCount, igdbData || null, guideUrl, qualifier, counted, context,
+          body?.categoryType === 'roster'),
       });
       if ('error' in catRes) return catRes.error;
 
@@ -668,6 +872,11 @@ serve(async (req: Request) => {
           name: categoryName,
           type: typeof category.type === 'string' ? category.type : 'checklist',
           ...(category.description ? { description: category.description } : {}),
+          ...(category.type === 'roster' ? {
+            fields: cleanFields(category.fields),
+            partySize: Number.isFinite(category.partySize) && Number(category.partySize) > 0
+              ? Math.min(99, Math.round(Number(category.partySize))) : undefined,
+          } : {}),
           items,
         }],
         runs: [],

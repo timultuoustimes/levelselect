@@ -124,6 +124,9 @@ struct JournalTab: View {
             // moving or vanishing is part of why the lenses read as one
             // screen's filter rather than three ways of looking.
             .toolbar {
+                if !LSTab.wishlistInLibrary {
+                    ToolbarItem(placement: .primaryAction) { SearchButton() }
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button { addingMemory = true } label: {
                         Label("Add a memory", systemImage: "plus")

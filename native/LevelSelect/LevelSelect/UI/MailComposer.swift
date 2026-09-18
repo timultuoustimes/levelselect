@@ -79,6 +79,10 @@ struct MailComposeSheet: UIViewControllerRepresentable {
     let to: String
     let subject: String
     let body: String
+    /// A file to attach — the sheet an import couldn't read. In-app only:
+    /// the `mailto:` path can't carry one, so callers put what matters in the
+    /// body too.
+    var attachment: (data: Data, mimeType: String, fileName: String)? = nil
     /// True only for `.sent`. Cancel and save-as-draft both report false, so a
     /// caller can avoid claiming a question was answered when it wasn't.
     var onFinish: (Bool) -> Void
@@ -89,6 +93,10 @@ struct MailComposeSheet: UIViewControllerRepresentable {
         controller.setToRecipients([to])
         controller.setSubject(subject)
         controller.setMessageBody(body, isHTML: false)
+        if let attachment {
+            controller.addAttachmentData(attachment.data, mimeType: attachment.mimeType,
+                                         fileName: attachment.fileName)
+        }
         return controller
     }
 

@@ -1011,7 +1011,7 @@ struct StatsCards: View {
 
     private func monthlyRollup(sessions: [Session], months: [Date]) -> [MonthRow] {
         let cal = Calendar.current
-        let events = games.flatMap { $0.completionEvents ?? [] }
+        let events = games.flatMap { $0.completionEvents ?? [] }.filter { $0.deletedAt == nil }
         let fmt = Date.FormatStyle().month(.abbreviated)
         return months.map { start in
             let end = cal.date(byAdding: .month, value: 1, to: start) ?? start
@@ -1121,10 +1121,17 @@ struct CompletionYearRoute: Hashable {
 /// in 2026?", which a bare count in a card can't give.
 struct CompletionYearView: View {
     let year: Int
-    @Query private var allGames: [Game]
+    /// Live games only. A deleted game's finishes stay with it in Recently
+    /// Deleted; listing them here opened a game the library no longer had,
+    /// and made this list longer than the count that led to it.
+    @Query(filter: #Predicate<Game> { $0.deletedAt == nil }) private var allGames: [Game]
 
     private var rows: [(event: CompletionEvent, game: Game)] {
-        allGames.flatMap { game in
+        Self.rows(in: allGames, year: year)
+    }
+
+    static func rows(in games: [Game], year: Int) -> [(event: CompletionEvent, game: Game)] {
+        games.filter { $0.deletedAt == nil }.flatMap { game in
             (game.completionEvents ?? [])
                 .filter { $0.deletedAt == nil
                     && Calendar.current.component(.year, from: $0.date) == year }

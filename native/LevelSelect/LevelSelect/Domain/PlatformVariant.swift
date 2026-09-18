@@ -76,7 +76,7 @@ enum PlatformVariant {
             Variant(key: "imac-g3", label: "iMac G3",
                     detail: "Bondi Blue, 1998", asset: "variant-mac-imac-g3", year: 1998),
             Variant(key: "powerbook", label: "PowerBook 540c",
-                    detail: "Dark grey, 1994", asset: "variant-mac-powerbook", year: 1994),
+                    detail: "Dark gray, 1994", asset: "variant-mac-powerbook", year: 1994),
             Variant(key: "lc", label: "Macintosh LC III",
                     detail: "Pizza box, 1993", asset: "variant-mac-lc", year: 1993),
             Variant(key: "compact", label: "Macintosh",
