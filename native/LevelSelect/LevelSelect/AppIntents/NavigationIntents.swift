@@ -4,13 +4,16 @@ import SwiftData
 /// A top-level section of the app, for the "Open …" shortcuts.
 enum LSSection: String, AppEnum {
     /// Raw values are the Shortcuts identifiers — see `LSTab`.
-    case home, library, wishlist, journal = "stats"
+    /// `news` and `search` added in build 39 (09-18); the wishlist opens
+    /// Library's Wishlist half now (`AppNavigator.go`).
+    case home, library, wishlist, news, search, journal = "stats"
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation {
         TypeDisplayRepresentation(name: "Section")
     }
     static var caseDisplayRepresentations: [LSSection: DisplayRepresentation] {
-        [.home: "Home", .library: "Library", .wishlist: "Wishlist", .journal: "Journal"]
+        [.home: "Home", .library: "Library", .wishlist: "Wishlist", .news: "News",
+         .search: "Search", .journal: "Journal"]
     }
 
     var tab: LSTab {
@@ -18,12 +21,14 @@ enum LSSection: String, AppEnum {
         case .home: .home
         case .library: .library
         case .wishlist: .wishlist
+        case .news: .news
+        case .search: .search
         case .journal: .journal
         }
     }
 }
 
-/// Open the app to a specific section (Library / Wishlist / Stats / Home).
+/// Open the app to a section: Home, Library, Wishlist, News, Search, Journal.
 struct OpenSectionIntent: AppIntent {
     static let title: LocalizedStringResource = "Open Section"
     static let description = IntentDescription("Opens LevelSelect to a section.")

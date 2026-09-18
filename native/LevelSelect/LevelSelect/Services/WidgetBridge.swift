@@ -35,7 +35,11 @@ enum WidgetBridge {
     private static func reload() {
         #if canImport(WidgetKit)
         WidgetCenter.shared.reloadAllTimelines()
+        #if os(iOS)
+        ControlCenter.shared.reloadAllControls()
         #endif
+        #endif
+        SpotlightIndex.schedule()
     }
 
     // MARK: Build

@@ -147,6 +147,11 @@ final class AppNavigator {
             libraryHalf = .wishlist
             return
         }
+        // Search is a tab only beside four tabs; otherwise it's the cover.
+        if tab == .search && !LSTab.search.isAvailable {
+            searchPresented = true
+            return
+        }
         if tab == .library { libraryHalf = .collection }
         selectedTab = tab
     }

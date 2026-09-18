@@ -644,6 +644,19 @@ struct Build34LibraryTests {
         nav.go(to: .home)
     }
 
+    /// Siri and Shortcuts' Open Section reaches News and Search (09-18), and
+    /// its Wishlist lands on Library's Wishlist half.
+    @Test func openSectionReachesEverySection() {
+        let nav = AppNavigator.shared
+        #expect(LSSection.news.tab == .news)
+        #expect(LSSection.search.tab == .search)
+        nav.go(to: LSSection.wishlist.tab)
+        #expect(nav.selectedTab == .library && nav.libraryHalf == .wishlist)
+        nav.go(to: LSSection.search.tab)
+        #expect(nav.selectedTab == .search)
+        nav.go(to: .home)
+    }
+
     @Test func theTabsAreInTheOrderTheMenuNumbersThem() {
         // News (build 39) sits before the journal, as on the tab bar.
         #expect(LSTab.allCases == [.home, .library, .wishlist, .news, .journal, .search])

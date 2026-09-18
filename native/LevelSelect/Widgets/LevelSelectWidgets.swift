@@ -27,6 +27,7 @@ struct LevelSelectWidgets: WidgetBundle {
         WeekGaugeLockWidget()
         StreakLockWidget()
         SessionLiveActivity()
+        PlaySessionControl()
     }
 }
 

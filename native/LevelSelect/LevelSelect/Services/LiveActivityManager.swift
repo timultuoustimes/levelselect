@@ -43,6 +43,23 @@ enum SessionIntentHandler {
         WidgetBridge.refresh()
     }
 
+    /// The Play Session control. On: a session for the game you were last
+    /// playing (the one Continue Playing shows). Off: stop whatever is running.
+    static func setPlaying(_ on: Bool) {
+        let ctx = LevelSelectStore.shared.mainContext
+        let repo = Repository(ctx)
+        let live = ((try? ctx.fetch(FetchDescriptor<Session>())) ?? [])
+            .filter { $0.deletedAt == nil && $0.state != .stopped }
+        if on {
+            guard live.isEmpty, let id = WidgetSnapshot.load()?.gameID else { return }
+            startSession(gameIDString: id)
+            return
+        }
+        for session in live { repo.stopSession(session) }
+        PersistenceMonitor.shared.commit(ctx)
+        WidgetBridge.refresh()
+    }
+
     static func togglePause(idString: String) {
         guard let session = find(idString) else { return }
         let repo = Repository(LevelSelectStore.shared.mainContext)

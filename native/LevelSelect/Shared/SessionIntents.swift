@@ -55,6 +55,28 @@ struct ToggleObjectiveIntent: LiveActivityIntent {
     }
 }
 
+/// The Control Center / Lock Screen / Action button control: on starts a
+/// session for the game you were last playing, off stops the running one.
+/// Build 39 (09-18). `LiveActivityIntent` for the same reason as the rest —
+/// `perform()` runs in the app's process, where the store is.
+struct PlaySessionControlIntent: SetValueIntent, LiveActivityIntent {
+    static let title: LocalizedStringResource = "Play Session"
+    static let description = IntentDescription("Starts a session for the game you were last playing, or stops the one that's running.")
+
+    @Parameter(title: "Playing")
+    var value: Bool
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        #if !WIDGET_EXTENSION
+        SessionIntentHandler.setPlaying(value)
+        #endif
+        return .result()
+    }
+}
+
 struct StopSessionIntent: LiveActivityIntent {
     static let title: LocalizedStringResource = "Stop Session"
     static let description = IntentDescription("Stops the running play session.")
