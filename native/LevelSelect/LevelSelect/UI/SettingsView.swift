@@ -28,6 +28,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // The rows carry the theme here too, as they do on every page
+                // (`SettingsPage`). Without it the index's cards were the
+                // system's: tinted at the medium detent, flat gray once the
+                // sheet grew — Tim, iOS 26.5 simulator, 09-18. The wordmark
+                // row's own clear background still wins.
+                Group {
                 Section {
                     // Live type rather than the baked lockup PNG: stays crisp
                     // at any size and follows the user's accent color.
@@ -163,7 +169,8 @@ struct SettingsView: View {
                     }
                 }
                 #endif
-
+                }
+                .listRowBackground(LSTheme.cardFill)
             }
             // This screen is mostly one-and-two-row sections, and the default
             // gap between them is sized for sections with more in them. At
