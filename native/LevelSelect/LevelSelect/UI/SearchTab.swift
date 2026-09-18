@@ -91,6 +91,11 @@ struct SearchScreen: View {
             if inTab && tab == .search { fieldFocused = true }
         }
         .onChange(of: AppNavigator.shared.pendingSearchTerm) { _, _ in takePendingTerm() }
+        // Opening anything from results is what makes a search worth
+        // remembering. This used to be a tap gesture on each game row, and on
+        // iOS 27 that gesture swallowed the row's own navigation: tapping
+        // Super Metroid in results did nothing (simulator, 09-18).
+        .onChange(of: path.count) { old, new in if new > old, !trimmed.isEmpty { remember() } }
         .task(id: "\(trimmed)|\(scope.rawValue)|\(index.version)") { await search() }
         .sheet(item: $adding) { target in
             AddGameSheet(initialSearch: target.name).lsSheet()
@@ -181,7 +186,6 @@ struct SearchScreen: View {
             Section {
                 ForEach(cap(results.games)) { game in
                     NavigationLink(value: game) { GameRow(game: game) }
-                        .simultaneousGesture(TapGesture().onEnded { remember() })
                         .listRowBackground(Color.clear)
                 }
             } header: { header("Your games", results.games.count, .games) }
