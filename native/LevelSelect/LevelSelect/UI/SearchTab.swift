@@ -330,7 +330,10 @@ struct SearchScreen: View {
         try? await Task.sleep(for: .milliseconds(320))
         guard !Task.isCancelled else { return }
         let have = Set(games.compactMap(\.igdbID))
-        let found = (try? await IGDBService.search(name: q)) ?? []
+        var found = (try? await IGDBService.search(name: q)) ?? []
+        if found.isEmpty, let joined = UniversalSearch.runTogether(q) {
+            found = (try? await IGDBService.search(name: joined)) ?? []
+        }
         guard !Task.isCancelled else { return }
         igdb = found.filter { !have.contains($0.id) }
     }

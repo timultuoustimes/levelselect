@@ -40,4 +40,12 @@ struct UniversalSearchTests {
         #expect(recent == ["Silksong", "moon pearl"])
         #expect(UniversalSearch.remember("a", in: recent) == recent)
     }
+
+    @Test func wordsSiriSplitStillFindTheGame() {
+        #expect(UniversalSearch.matches("Hollow Knight: Silksong", "silk song"))
+        #expect(UniversalSearch.matches("Starfield", "Star field"))
+        #expect(!UniversalSearch.matches("Silksong", "silk sock"))
+        #expect(UniversalSearch.runTogether("silk song") == "silksong")
+        #expect(UniversalSearch.runTogether("Silksong") == nil)
+    }
 }

@@ -31,9 +31,25 @@ enum UniversalSearch {
         let words = terms(query)
         guard !words.isEmpty else { return false }
         let hay = NewsMatch.fold(text)
-        return words.allSatisfy { word in
+        if words.allSatisfy({ word in
             word.count >= looseAfter ? hay.contains(word) : startsAWord(hay, word)
-        }
+        }) { return true }
+        // Siri hears "Silksong" as "silk song" (King Kai, 09-18), and people
+        // type "star field" or "Pokemon Za" as often as not. Several words
+        // that run together in the name still find it.
+        return words.count > 1 && squashed(hay).contains(words.joined())
+    }
+
+    /// Letters and digits only: "Hollow Knight: Silksong" → "hollowknightsilksong".
+    static func squashed(_ folded: String) -> String {
+        String(folded.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+    }
+
+    /// The query with its spaces taken out, when that's a different query —
+    /// what to ask IGDB when "silk song" as spoken finds nothing.
+    static func runTogether(_ query: String) -> String? {
+        let words = terms(query)
+        return words.count > 1 ? words.joined() : nil
     }
 
     static func terms(_ query: String) -> [String] {
