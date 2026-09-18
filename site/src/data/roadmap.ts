@@ -8,9 +8,21 @@
  */
 
 /** Shown on both surfaces, so the app can say when this was last honest. */
-export const reviewed = '11 September 2026';
+export const reviewed = '18 September 2026';
 
 export const shipped = [
+  { t: 'Game news, in its own place', build: 39,
+    d: 'A News tab of the sites you choose — all of it, your games first, by topic — plus every game coming out and what just did. Save stories for later, read them in Reader.' },
+  { t: 'One search for everything', build: 39,
+    d: 'Your games, tracker items, notes, news and releases, then games you do not have — from the search circle beside the tab bar.' },
+  { t: 'Your consoles\' libraries, brought in', build: 39,
+    d: 'Steam, PlayStation, Xbox and RetroAchievements: what you played comes in for review, matched to the right game on the console you played it on.' },
+  { t: 'Scan the box', build: 39,
+    d: 'Point the camera at a game box\'s barcode and it opens ready to add, on the right console, marked physical.' },
+  { t: 'Games you might like', build: 39,
+    d: 'Suggestions built from the games you play and rate, with the studios, publishers and series you follow first.' },
+  { t: 'Parties, runs and focus', build: 39,
+    d: 'A roster for an RPG party, runs you can compare, lists a playthrough chases — and a list that counts, does not, or counts partly.' },
   { t: 'The consoles themselves', build: 38,
     d: 'A console is something you own in its own right: how you have it, when you got it, a photograph of the actual machine — and which model the app draws, from the Funtastic N64 to a coral Switch Lite.' },
   { t: 'A color for light and another for dark', build: 38,
@@ -99,8 +111,6 @@ export const horizons = [
     items: [
       { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
-      { t: 'More ways to bring a library in', d: 'Beyond CSV.' },
-      { t: 'Game news, in its own place', d: 'A reader for releases and news you choose to follow — a separate tab, not a feed bolted onto the shelf you came to look at.' },
       { t: 'More of your own notebook', d: 'Light and dark and your own background color landed in 36. Icons, covers, and the rest of the personality a paper journal has.' },
     ],
   },

@@ -62,8 +62,12 @@ const sections = [
     a: 'Settings → Colors. Accent and background together, light and dark previewed at once.' },
   { id: 'itch',              q: 'Can I bring in my itch.io games?',
     a: 'Settings → itch.io → Connect. Games you bought or claimed arrive with their art.' },
+  { id: 'consolesimport',    q: 'Can I bring in my Steam, PlayStation or Xbox games?',
+    a: 'Settings → Steam, PlayStation or Xbox. What you have played comes in for review, matched to the right game and console.' },
   { id: 'csv',               q: 'Can I bring a library in from another app?',
     a: 'Settings → Your data → Import from CSV. Rows carrying an IGDB id match exactly, and nothing is added until you have looked.' },
+  { id: 'barcode',           q: 'Can I scan the box?',
+    a: 'Add Game → the barcode button. A box it knows goes straight to Add, on the right console, marked physical.' },
   { id: 'bulkedit',          q: 'These games are all on the wrong console',
     a: 'Library or a console page → Filter → Select Games…, then set the console or the status for all of them at once.' },
   { id: 'systemnames',       q: 'It is called a Mega Drive, not a Genesis',
@@ -84,6 +88,10 @@ const sections = [
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
     a: 'No. The button tells you what it is about to do, and a long-press changes it for one run.' },
+  { id: 'party',             q: 'I am running a party in an RPG',
+    a: 'A roster list keeps each unit’s class, level and the rest, who is in your party, and who fell.' },
+  { id: 'focus',             q: 'I am only chasing some of these lists',
+    a: 'Tracker → Choose Focus. Progress counts the lists you are chasing — and a list can count, not count, or count partly.' },
   { id: 'notes',             q: 'Where do notes and “where I left off” go?',
     a: 'Any tracker item can carry a note — press and hold the row, then Edit item.' },
   { id: 'hints',             q: 'How do I avoid spoilers?',
@@ -97,7 +105,15 @@ const sections = [
   { id: 'carriedover',       q: 'Steam says I have 42 hours in this',
     a: 'Add it as a starting total. It counts toward your time without inventing a day you played it.' },
   { id: 'releases',          q: 'When does the game I am waiting for come out?',
-    a: 'The wishlist counts down, on the date for the platform you picked — not somebody else\'s.' },
+    a: 'Your wishlist counts down, on the date for the platform you picked — not somebody else\'s.' },
+  { id: 'wishlist',          q: 'Where did the Wishlist tab go?',
+    a: 'It is half of Library now — Collection | Wishlist at the top. Same wishlist, same panes.' },
+  { id: 'suggestions',       q: 'What should I play next?',
+    a: 'Library → Wishlist → You Might Like, built from the games you rate and play, with the studios and series you follow first.' },
+  { id: 'news',              q: 'Can I follow gaming news in here?',
+    a: 'The News tab: the sites you choose, four ways, with stories you can save for later and every release coming up.' },
+  { id: 'search',            q: 'Where do I search everything at once?',
+    a: 'The magnifying glass beside the tab bar: games, tracker items, notes, news and releases, then games you do not have yet.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
     a: 'Home Screen, Lock Screen, and extra-large boards on iPad. Long-press to aim one.' },
   { id: 'shortcuts',         q: 'Can I use Siri for this?',
@@ -123,14 +139,16 @@ const sections = [
  * anyone who would rather scan it.
  */
 const moments = [
-  { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors', 'itch'] },
-  { t: 'I brought a library in',          ids: ['csv', 'bulkedit'] },
+  { t: 'I am just setting up',            ids: ['profile', 'layouts', 'colors', 'itch', 'consolesimport'] },
+  { t: 'I brought a library in',          ids: ['csv', 'barcode', 'bulkedit'] },
   { t: 'It should use my words',          ids: ['systemnames', 'ownership'] },
   { t: 'Home should look like me',        ids: ['home', 'systems', 'smartcollections'] },
   { t: 'My consoles, not just my games',  ids: ['consoles', 'whichmachine'] },
-  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'notes', 'hints', 'retroachievements', 'maps'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'party', 'focus', 'notes', 'hints', 'retroachievements', 'maps'] },
   { t: 'My playtime looks wrong',         ids: ['sessions', 'carriedover'] },
-  { t: 'I am waiting for a game',         ids: ['releases'] },
+  { t: 'I am waiting for a game',         ids: ['releases', 'wishlist'] },
+  { t: 'What should I play next?',        ids: ['suggestions', 'news'] },
+  { t: 'I am looking for something',      ids: ['search'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
   { t: 'I just finished a game',          ids: ['beaten'] },
   { t: 'I want to look back',             ids: ['journal', 'memories', 'stats'] },
@@ -270,6 +288,23 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="consolesimport" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'consolesimport')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'consolesimport')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Settings &rarr; Steam, PlayStation, or Xbox.</strong> Each reads what you have played there and brings it in for review, the way a CSV import does &mdash; nothing is added until you have looked.</p>
+    <ul>
+      <li><strong>Xbox</strong> signs in on Microsoft&rsquo;s own page. LevelSelect never sees your password.</li>
+      <li><strong>PlayStation</strong> uses the sign-in Sony&rsquo;s own app uses: paste the NPSSO code from playstation.com once. Sony doesn&rsquo;t publish this route for other apps, so it could stop working without warning.</li>
+      <li><strong>Steam</strong> reads your library with the Web API key you registered on Steam, and only answers when your profile&rsquo;s game details are public.</li>
+    </ul>
+    <p>Each row is matched to a game on IGDB. Tap the arrows to choose between the games it found &mdash; each with its box, its date on your console and what else it came out on &mdash; and the console under the row is a menu, so a game you have on the Switch and played on the 360 can say both. <strong>Console for all</strong> sets every row at once. A game you already have comes in as &ldquo;In your library &mdash; adds Xbox 360&rdquo; and only gains that console.</p>
+    <p>Every sign-in and key stays in your device&rsquo;s Keychain and talks to Sony, Microsoft or Valve directly, never through our servers. A game&rsquo;s page can also bring in its achievements or trophies as a tracker list, with what you have unlocked already ticked.</p>
+      </div>
+    </details>
+
     <details class="qa" id="csv" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'csv')!.q}</span>
@@ -279,6 +314,22 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p><strong>Settings &rarr; Your data &rarr; Import from CSV.</strong> An export from Gamery, Backloggd, a spreadsheet or anywhere else: a title column is all that is required, and platform, status, rating, hours and notes are read when they are there. Column names can vary &mdash; Title or Game or Name, Shelf or List or Status.</p>
     <p><strong>An id beats a title.</strong> A row carrying an <strong>IGDB id</strong> is matched by it, which is exact; without one, the title is looked up and anything that did not match exactly is flagged for you to check. Nothing is added until you have been through the list, and you can swap any match or keep the name you typed.</p>
     <p>A cell naming two systems &mdash; <em>Xbox,Mac</em> &mdash; makes the game yours on both. If iCloud is still bringing your library down, the import waits rather than adding a second copy of everything it is about to restore.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="barcode" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'barcode')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'barcode')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Add Game &rarr; the barcode button</strong> beside the search field, then point the camera at the back of the box. The code is read on your device and looked up on <a href="https://scandex.gamery.app">ScanDex</a>, a database of game barcodes.</p>
+    <ul>
+      <li><strong>A box ScanDex knows</strong> goes straight to the Add screen with its console chosen and <em>Physical</em> ticked.</li>
+      <li><strong>A box you have scanned before</strong> opens the game you already have.</li>
+      <li><strong>A box nobody has matched yet:</strong> find the game by name and add it as usual. LevelSelect remembers the barcode on it, and shares that match &mdash; the barcode and the game, nothing about you &mdash; with ScanDex, so the next person&rsquo;s scan works.</li>
+    </ul>
+    <p>Retro cartridges mostly predate barcodes, so search is still the way in for those.</p>
       </div>
     </details>
 
@@ -331,6 +382,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </summary>
       <div class="qa__body">
     <p>Home used to decide what came first. It is your page, so now it asks. <strong>Press and hold any shelf &rarr; Arrange Home.</strong> Drag the blocks into the order you want, switch any of them off, and bring Backlog or Finished up from Library if you want them here.</p>
+    <p><strong>Your own order on a shelf:</strong> press and hold a shelf&rsquo;s title &rarr; <em>Arrange This Shelf</em>, and drag the games. A game that joins the shelf later goes in front, so the one you just started is never buried. <em>Automatic Order</em> puts it back.</p>
     <p>This order <strong>follows you to your other devices</strong>. Which sections you closed on a game page stays with the device, because an iPad has more room; how Home is composed is about you, not the screen.</p>
 
     <h3>A collection can be a shelf</h3>
@@ -440,6 +492,35 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="party" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'party')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'party')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A list can be a <strong>roster</strong>: recruits in Fire Emblem, a Persona&rsquo;s confidants, a Pok&eacute;mon team. Each unit keeps its own fields &mdash; class, level, the emblem or ring it carries, whatever the game needs &mdash; which you can add, rename and remove yourself, and a generated tracker proposes for the game.</p>
+    <ul>
+      <li><strong>The party:</strong> mark who is in it, up to the size the game allows, and the rest stay on the bench.</li>
+      <li><strong>Who fell:</strong> in a permadeath run a unit can be marked fallen, with where it happened.</li>
+      <li><strong>Status on anything:</strong> a quest can be in progress, failed, missed or skipped, not only done or not done.</li>
+      <li><strong>Chapters in order:</strong> a story list knows which one is next.</li>
+    </ul>
+    <p>When you <strong>plan</strong> a tracker, it asks what the tracker is for &mdash; for an RPG, story only, a simple checklist, party and roster, or everything for 100% &mdash; and plans the lists that shape needs.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="focus" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'focus')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'focus')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Tracker &rarr; Choose Focus.</strong> Pick the lists this playthrough is chasing. The rest fold into one &ldquo;lists not in focus&rdquo; row, and progress counts only what you chose. Starting a new playthrough asks <em>What&rsquo;s this run for?</em> so a second run can chase something different from the first.</p>
+    <p>Any list can also <strong>count</strong> (the default), <strong>not count</strong> &mdash; a reference list of every sword in the game &mdash; or give <strong>partial credit</strong>. And a list can be <strong>remembered across playthroughs</strong>, so an encyclopedia you fill over three runs doesn&rsquo;t start empty each time.</p>
+    <p>For games you replay in runs, <strong>Run Fields</strong> records what each attempt was &mdash; numbers, times, choices, and lists filled during the run &mdash; with your personal bests marked, and a list can tick itself from your run history. Life sims get a filter row for season, weather or biome across every list.</p>
+      </div>
+    </details>
+
     <details class="qa" id="notes" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'notes')!.q}</span>
@@ -474,6 +555,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <div class="qa__body">
     <p>For retro games, LevelSelect can install the <strong>real, authored achievement list</strong> from <a href="https://retroachievements.org">RetroAchievements</a> instead of generating an approximation — point values, missable flags, and each achievement's own badge art, in color once you've earned it and RA's grayed version while you haven't.</p>
     <p>Connect your account in Settings and imported sets arrive <strong>already ticked</strong> with what you've earned, and a sync can only ever add — the app knows RA has no idea you played the cartridge on real hardware last week. The Journal&rsquo;s charts gain a wall of your mastered and completed sets, gold-bordered only for hardcore mastery, because that distinction is RA's and the app keeps it. Your API key goes from your device to RetroAchievements directly — it never touches our servers, and it stays in the Keychain on each device.</p>
+    <p><strong>Settings &rarr; RetroAchievements &rarr; Import my RetroAchievements library</strong> brings in every game you have played there for review, on the console you choose. A scored list shows its points in the header &mdash; &ldquo;12/74 pts&rdquo; &mdash; and opening a game with a set checks for new unlocks on its own, at most every few hours.</p>
     <p>Doors out are everywhere the set is: the set's page on RA from the tracker, and your own profile from RetroAchievements settings.</p>
       </div>
     </details>
@@ -528,10 +610,63 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>Dates are shown only as precisely as they were announced. A game known only as &ldquo;2027&rdquo; says 2027, and never invents a day to count down to.</p>
 
     <h3>The calendar</h3>
-    <p><strong>Wishlist &rarr; Release calendar.</strong> Month by month, and it keeps the games with <em>no</em> announced date in their own group at the end &mdash; a calendar that quietly dropped half your wishlist would be lying about what you are waiting for.</p>
+    <p><strong>Library &rarr; Wishlist &rarr; Release calendar.</strong> Month by month, and it keeps the games with <em>no</em> announced date in their own group at the end &mdash; a calendar that quietly dropped half your wishlist would be lying about what you are waiting for.</p>
 
     <h3>Being told</h3>
     <p><strong>Settings &rarr; Notifications &rarr; &ldquo;Tell me when a game arrives.&rdquo;</strong> Off until you ask for it, then on the day, or a day, three days, or a week before &mdash; always at 9am. A release is a calendar date rather than a moment, so firing <em>at</em> it would wake you in the small hours for a game that is not out where you are yet. <strong>Break through silent mode and Focus</strong> is one switch covering these and the still-playing reminder.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="wishlist" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'wishlist')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'wishlist')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>It moved into Library. At the top of Library, <strong>Collection | Wishlist</strong> switches between the games you have and the ones you are waiting for. The Wishlist half is the same as before: <em>Yours</em>, <em>You Might Like</em> and <em>Deku Deals</em>, the countdowns and the release calendar.</p>
+    <p>A wishlist game is already a game in your library with the Wishlist status &mdash; buying it is a status change, not a re-entry &mdash; so the two halves belong together. It also made room for search to sit beside the tab bar. Shortcuts and widgets that open the Wishlist still land there.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="suggestions" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'suggestions')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'suggestions')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Library &rarr; Wishlist &rarr; You Might Like.</strong> It reads up to twenty of your games &mdash; the ones you rated highly, are playing or finished &mdash; and shows games that resemble them and that you don&rsquo;t have: in the series you play, from the studios behind them, and games players compare them to. Each row says which of your games it came from.</p>
+    <p><strong>What you&rsquo;re into</strong> lets you follow or hide studios, publishers, tags and systems. Followed ones come first and the rest still appear, lightly scattered; hidden ones never do. It syncs across your devices.</p>
+    <p>A game page does the same for one game: more from its series and its studio that you don&rsquo;t have, and more from the people credited on it &mdash; &ldquo;Also scored by Michiru Yamane&rdquo;.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="news" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'news')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'news')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>The <strong>News</strong> tab reads the gaming sites you choose, in four views:</p>
+    <ul>
+      <li><strong>All</strong> &mdash; every story, newest first, with a line where you left off.</li>
+      <li><strong>For You</strong> &mdash; news about the games you are playing and waiting for first, then the rest ranked by your systems. It reorders; it never hides.</li>
+      <li><strong>Topics</strong> &mdash; rails for reviews, your systems, retro, Mac and more.</li>
+      <li><strong>New &amp; Upcoming</strong> &mdash; every game coming out in the next six months on the systems you choose, ports included, and what came out in the last two weeks. Tap one for its dates on every platform, trailers and the news about it.</li>
+    </ul>
+    <p>Seven sites start switched on. <strong>Feeds</strong> (the antenna) switches them on and off, browses more, adds any site by its address, and imports an OPML file from another reader. The bookmark on any story saves it for later, and your saved stories sync.</p>
+    <p><strong>Open stories in</strong> chooses Safari&rsquo;s Reader &mdash; the story without the site around it, one tap from the full page &mdash; or the website. Safari ad blockers you have turned on work there too.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="search" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'search')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'search')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>The <strong>magnifying glass beside the tab bar</strong> searches everything at once. Tap it and the tab bar becomes the search field; the tab you came from waits in the small circle on the left.</p>
+    <p>Results come grouped &mdash; <strong>your games</strong>, <strong>tracker items</strong> across every tracker (&ldquo;which game had the Moon Pearl&rdquo;), <strong>journal</strong> notes and memories showing the line that matched, <strong>news and releases</strong> &mdash; and last, games from IGDB you don&rsquo;t have, one tap from Add. The chips along the top narrow it to one kind. Before you type, it shows what you searched recently and the games you are playing.</p>
+    <p>Library and the Wishlist keep their own search for filtering what is on screen. On a Mac, &#8984;F opens this search from any tab without one of its own.</p>
       </div>
     </details>
 
@@ -629,6 +764,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
     <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, and collections — each record with its stable id — plus your appearance settings as a single preferences block.</p>
     <p><strong>And it comes back:</strong> Import LevelSelect export (same screen) reads the file and restores whatever your library is missing — never touching what's already there, so an old export merges safely onto a current library, and importing twice changes nothing. One honest caveat remains: map images are saved as links rather than embedded. Alongside it, Recently Deleted holds everything you delete until <em>you</em> decide otherwise — restore with a tap, or use the app's only permanent delete, which lives there and nowhere else.</p>
+    <p><strong>Replace Library with Backup</strong> makes your library match an export exactly &mdash; everything in the file comes back as it was, and anything the file doesn&rsquo;t have goes to Recently Deleted. <strong>Erase Library</strong> moves every game, collection, memory and console to Recently Deleted. Both show you what will change, ask you to type a word to confirm, and save a safety copy first to Files &rarr; LevelSelect &rarr; Safety Copies.</p>
     <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and what's in the export is genuinely yours to take.</p>
 
     <p class="callout" style="margin-top:2.5rem">Something missing or wrong here? <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or send feedback through TestFlight.</p>

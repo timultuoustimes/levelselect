@@ -5,7 +5,7 @@ import Base from '../../layouts/Base.astro';
 <main class="wrap">
 <article class="doc">
     <h1>Privacy Policy</h1>
-    <p class="stamp">Last updated 16 September 2026</p>
+    <p class="stamp">Last updated 18 September 2026</p>
 
     <div class="callout">
       <p>LevelSelect has no accounts, no ads, no analytics, and no tracking. Your library is stored on your device and synced to your own private iCloud database. The developer cannot read it.</p>
@@ -27,11 +27,17 @@ import Base from '../../layouts/Base.astro';
           <tr><td>Steam achievement lists</td><td>A game name you search for, or a Steam app id</td><td>Our proxy &rarr; Steam, to find a game and fetch its published achievement list. Sent with <strong>our</strong> API key, not yours &mdash; these say nothing about who you are</td></tr>
           <tr><td>Steam game matching</td><td>The Steam app ids of games you import from Steam or look up achievements for &mdash; numbers that identify games in Steam's store</td><td>Our proxy &rarr; IGDB, to find which game each one is. Sent with no Steam key and no SteamID, the same way a CSV import sends the titles in your file</td></tr>
           <tr><td>Import matching</td><td>The names of games you import from Xbox, PlayStation, itch.io or a CSV file, and any title you search for while reviewing them</td><td>Our proxy &rarr; IGDB, to match each one to its game, cover and release date. Sent without your sign-in for any of those services and without saying where the names came from</td></tr>
+          <tr><td>Suggestions &amp; releases</td><td>The IGDB ids of games in your library, their series and studio names, and any studios or publishers you follow; for upcoming releases, only the range of dates</td><td>Our proxy &rarr; IGDB, to find games like yours, more from a series or studio, and what is coming out. Nothing about who you are</td></tr>
+          <tr><td>Game credits</td><td>The IGDB id of a game whose page you open</td><td>Our proxy &rarr; Wikidata, to find the people credited on it and what else they made</td></tr>
+          <tr><td>Barcode lookup</td><td>The number on a game box you scan. If ScanDex didn't know it and you then choose the game yourself, that barcode with the game and console you chose</td><td>Our proxy &rarr; ScanDex, to find which game the box is &mdash; and, in the second case, to add the match so the next scan works. The camera image never leaves your device; only the number does</td></tr>
           <tr><td>Map search <em>(planned)</em></td><td>The game's name and an optional wiki page URL</td><td>Our finder &rarr; Anthropic's Claude with web search</td></tr>
         </tbody>
       </table>
     </div>
     <p>Separately, and entirely from your device: your <strong>public</strong> Deku Deals wishlist is fetched if you configure one, cover art loads from IGDB's and SteamGridDB's image servers, and YouTube titles and thumbnails load for links you add.</p>
+
+    <h2>News</h2>
+    <p>The News tab fetches each site's feed <strong>directly from that site</strong>, and for a story whose feed sends no picture, the story's own page, to read the picture it names. These are ordinary requests with nothing of ours attached &mdash; no install identifier, no LevelSelect key &mdash; so a site learns only that its feed was read. Opening a story is an ordinary visit in Safari's in-app view (or Reader). The feeds you follow and the stories you save sync through your own iCloud; the stories themselves are cached on your device and never stored with us.</p>
 
     <h2>Your RetroAchievements account, and why its key skips our servers</h2>
     <p>Connecting a RetroAchievements account is optional. If you do, your username and Web API key are stored in your device's <strong>Keychain</strong> and sent <strong>straight from your device to retroachievements.org</strong> to read what you've earned. They never pass through our backend, and they deliberately don't sync between your devices — you enter them on each one, or not at all. Removing them in Settings deletes them.</p>
