@@ -349,7 +349,7 @@ struct ConsoleEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 // The app's own card fill, so the rows keep the theme at any
                 // detent — see `SettingsPage` for why the system's gray drains.
                 Group {

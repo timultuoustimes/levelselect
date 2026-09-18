@@ -189,5 +189,8 @@ struct LSForm<Content: View>: View {
         Form {
             content.listRowBackground(LSTheme.cardFill)
         }
+        // The ground too, so a sheet that only swaps `Form` for `LSForm` is
+        // themed whole — the Mac's profile sheet was gray on gray (09-18).
+        .lsFormStyle()
     }
 }

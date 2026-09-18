@@ -527,8 +527,13 @@ struct VideoListView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 TextField("Paste a YouTube video or playlist URL…", text: $newURL)
-                    .textFieldStyle(.roundedBorder)
+                    // Themed, not `.roundedBorder`: in dark mode that drew a
+                    // solid black box on the purple pane (Tim, iPad, 09-18).
+                    .textFieldStyle(.plain)
                     .font(.caption)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(LSTheme.cardFill, in: .rect(cornerRadius: 10))
                     #if !os(macOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

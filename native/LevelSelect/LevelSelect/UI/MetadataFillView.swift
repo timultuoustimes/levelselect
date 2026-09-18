@@ -34,7 +34,7 @@ struct MetadataFillView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 if let result {
                     resultSection(result)
                 } else {

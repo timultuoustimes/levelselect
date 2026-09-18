@@ -186,7 +186,7 @@ struct NameMapSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     if let image = PlatformImage(data: pending.data) {
                         image.resizable().scaledToFit()

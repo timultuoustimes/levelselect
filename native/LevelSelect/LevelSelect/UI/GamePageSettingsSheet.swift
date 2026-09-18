@@ -19,7 +19,7 @@ struct GamePageSettingsSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 AppearanceSettingsSection(scope: .gamePages)
                 AppearanceSettingsSection(scope: .trackers)
             }

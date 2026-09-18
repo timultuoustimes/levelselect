@@ -222,7 +222,7 @@ struct PinStylePicker: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     HStack {
                         Spacer()

@@ -293,7 +293,7 @@ struct NewsAddFeedView: View {
     @State private var problem: String?
 
     var body: some View {
-        Form {
+        LSForm {
             Section {
                 TextField("nintendolife.com", text: $typed)
                     #if os(iOS)

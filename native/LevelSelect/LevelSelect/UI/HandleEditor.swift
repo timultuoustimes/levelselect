@@ -38,7 +38,7 @@ struct HandleEditor: View {
     }
 
     var body: some View {
-        Form {
+        LSForm {
             Section {
                 TextField("Your handle", text: $text)
                     .autocorrectionDisabled()

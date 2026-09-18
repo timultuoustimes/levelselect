@@ -16,7 +16,7 @@ struct SaveSmartCollectionSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     TextField("Name", text: $name)
                     FlowLayout(spacing: 6) {

@@ -62,7 +62,7 @@ struct MarkerCard: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            LSForm {
                 Section {
                     if let item = linkedItem {
                         LabeledContent("Tracker item") {
