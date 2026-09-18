@@ -122,5 +122,10 @@ enum SpotlightIndex {
         let index = CSSearchableIndex.default()
         try? await index.deleteAppEntities(ofType: GameEntity.self)
         try? await index.indexAppEntities(entities)
+        // Siri only matches "Open Mina the Hollower in LevelSelect" against
+        // names it has been told. It never had been: the phrases existed since
+        // build 13, and every one naming a game fell through to a web search
+        // (Tim, King Kai, 09-18).
+        LevelSelectShortcuts.updateAppShortcutParameters()
     }
 }

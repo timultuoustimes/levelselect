@@ -68,6 +68,46 @@ struct OpenGameIntent: AppIntent {
     }
 }
 
+/// The same page, as the system's own "open this" action (09-18). Siri on
+/// iOS 27 didn't match the "Open \(game) in LevelSelect" phrase on King Kai,
+/// though a hand-made shortcut with the same intent worked; this is what the
+/// system reaches for when you say "open Hades" or tap a game in Spotlight.
+/// Hidden from Shortcuts, where `OpenGameIntent` already is — renaming that
+/// one's parameter to `target` would break shortcuts people have built.
+struct OpenGameTargetIntent: OpenIntent {
+    static let title: LocalizedStringResource = "Open Game Page"
+    static let isDiscoverable = false
+
+    @Parameter(title: "Game")
+    var target: GameEntity
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        if let id = UUID(uuidString: target.id) {
+            AppNavigator.shared.open(gameID: id)
+        }
+        return .result()
+    }
+}
+
+/// "Search LevelSelect for Silksong" — the system search action (09-18,
+/// pulled forward from build 40 when Siri answered "I can't search within
+/// the LevelSelect app"). Lands in universal search with the words typed.
+@AppIntent(schema: .system.search)
+struct SearchLevelSelectIntent: ShowInAppSearchResultsIntent {
+    static let searchScopes: [StringSearchScope] = [.general]
+
+    var criteria: StringSearchCriteria
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        AppNavigator.shared.search(criteria.term)
+        return .result()
+    }
+}
+
 /// Open the game you're currently playing (or most recently played).
 struct ContinuePlayingIntent: AppIntent {
     static let title: LocalizedStringResource = "Continue Playing"

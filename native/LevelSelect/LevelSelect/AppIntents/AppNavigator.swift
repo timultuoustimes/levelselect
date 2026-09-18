@@ -191,6 +191,14 @@ final class AppNavigator {
     var searchRequest = 0
     /// Universal search, over whatever tab you're on (`SearchScreen`).
     var searchPresented = false
+    /// Words for universal search to start with — Siri's "search LevelSelect
+    /// for …". `SearchScreen` takes them and clears this.
+    var pendingSearchTerm: String?
+
+    func search(_ term: String) {
+        pendingSearchTerm = term
+        go(to: .search)
+    }
 
     func requestSearch() {
         // Library and Wishlist search within themselves; everywhere else,

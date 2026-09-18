@@ -43,6 +43,12 @@ struct SearchScreen: View {
     }
 
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
+    private func takePendingTerm() {
+        guard let term = AppNavigator.shared.pendingSearchTerm else { return }
+        AppNavigator.shared.pendingSearchTerm = nil
+        query = term
+    }
+
     private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
 
     var body: some View {
@@ -72,7 +78,11 @@ struct SearchScreen: View {
             .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
         }
         .task(id: games.count) { index = SearchIndex.build(games: games, context: context) }
-        .onAppear { if !inTab { fieldFocused = true } }
+        .onAppear {
+            if !inTab { fieldFocused = true }
+            takePendingTerm()
+        }
+        .onChange(of: AppNavigator.shared.pendingSearchTerm) { _, _ in takePendingTerm() }
         .task(id: "\(trimmed)|\(scope.rawValue)|\(index.version)") { await search() }
         .sheet(item: $adding) { target in
             AddGameSheet(initialSearch: target.name).lsSheet()

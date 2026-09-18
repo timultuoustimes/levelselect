@@ -47,6 +47,24 @@ struct LevelSelectShortcuts: AppShortcutsProvider {
             systemImageName: "heart.fill"
         )
         AppShortcut(
+            intent: OpenSectionIntent(.news),
+            phrases: [
+                "Open \(.applicationName) news",
+                "Show my \(.applicationName) news",
+            ],
+            shortTitle: "News",
+            systemImageName: "newspaper.fill"
+        )
+        AppShortcut(
+            intent: SearchLevelSelectIntent(),
+            phrases: [
+                "Search \(.applicationName)",
+                "Search in \(.applicationName)",
+            ],
+            shortTitle: "Search",
+            systemImageName: "magnifyingglass"
+        )
+        AppShortcut(
             intent: OpenGameIntent(),
             phrases: [
                 "Open \(\.$game) in \(.applicationName)",
