@@ -2,7 +2,12 @@
 import Base from '../../layouts/Base.astro';
 import { getCollection, render } from 'astro:content';
 
-const entries = (await getCollection('changelog', ({ data }) => !data.draft))
+// Drafts show in Netlify deploy previews, marked, so a build's notes can be
+// read on the preview before they're published — and never on the live site,
+// which is the only place CONTEXT is "production". The RSS feed and the app's
+// feed.json keep hiding drafts everywhere.
+const showDrafts = process.env.CONTEXT === 'deploy-preview' || process.env.CONTEXT === 'branch-deploy';
+const entries = (await getCollection('changelog', ({ data }) => showDrafts || !data.draft))
   .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 
 const rendered = await Promise.all(
@@ -53,6 +58,7 @@ const fmt = (d: Date) =>
             <span class="release__title">{entry.data.title}</span>
             <span class="release__meta">
               <span class="release__version">{entry.data.version}</span>
+              {entry.data.draft && <span class="release__version" style="color:#FF9F0A">Draft — preview only</span>}
               <time datetime={entry.data.date.toISOString()}>{fmt(entry.data.date)}</time>
             </span>
           </span>

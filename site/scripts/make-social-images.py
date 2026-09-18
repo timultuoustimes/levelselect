@@ -45,8 +45,9 @@ MUTED       = (153, 144, 184)
 # Build 36 renamed the fourth tab and gave the app the Journal, so the
 # build-33 capture showed a tab bar that no longer exists — on the one image
 # that represents the app everywhere it is linked.
-PHONE_SHOT = "iphone-36-home-profile.webp"
-IPAD_SHOT  = "ipad-01-split-tracker.webp"
+# Build 39: News replaced Wishlist in the tab bar and search got its circle.
+PHONE_SHOT = "iphone-39-home.webp"
+IPAD_SHOT  = "ipad-39-split-tracker.webp"
 
 PIXEL = str(PUB / "assets" / "PressStart2P-Regular.ttf")
 SANS  = "/System/Library/Fonts/SFNS.ttf"
