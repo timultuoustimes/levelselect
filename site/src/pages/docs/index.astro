@@ -697,12 +697,13 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <div class="qa__body">
     <p>Every game in your library is a real entity in the Shortcuts app, Siri, and Spotlight — not just the app itself, each <em>game</em>. That means:</p>
     <ul>
-      <li><strong>"Play Hollow Knight in LevelSelect"</strong> starts a timed session for that game — from Siri, without opening anything. "Open <em>game</em> in LevelSelect" jumps to its page.</li>
-      <li><strong>"Continue playing in LevelSelect"</strong> resumes whatever you were last playing. <em>Open Section</em> goes straight to Home, Library, the Wishlist, News, Search or the Journal.</li>
+      <li><strong>"Open Hollow Knight in LevelSelect"</strong> jumps to that game's page. <strong>"Start a session for Hollow Knight in LevelSelect"</strong> starts a timed session for it without opening anything. Siri has to hear the name as it's written; when it doesn't, you land in search, usually with the game at the top.</li>
+      <li><strong>"Search LevelSelect for Silksong"</strong> opens search with the words filled in.</li>
+      <li><strong>"Continue playing in LevelSelect"</strong> opens the game you're playing. <em>Open Section</em> goes straight to Home, Library, the Wishlist, News, Search or the Journal.</li>
       <li><strong>Spotlight finds your games</strong> by name, with a line of detail &mdash; &ldquo;Switch &middot; Playing &middot; 12h&rdquo; &mdash; and tapping one opens it. The same details (platform, status, hours played, rating, last played) are what Shortcuts&rsquo; <em>Use Model</em> action can read, so you can ask it about your own library.</li>
       <li><strong>Build your own automations.</strong> Because sessions are Shortcuts actions, you can wire them to anything the Shortcuts app can see: an NFC tag stuck to the console that starts a session when you tap your phone on it, a Focus that opens your library, a bedtime automation that reminds you a timer's still running.</li>
     </ul>
-    <p>Nothing to set up — the shortcuts register themselves when the app is installed. Open the Shortcuts app and search LevelSelect to see the full set.</p>
+    <p>The shortcuts register themselves when the app is installed, and every game gets its own <em>Open Game</em> and <em>Start Session</em> tile on LevelSelect's page in the Shortcuts app. <strong>If Siri doesn't answer</strong>, open that page, tap &#9432; and turn on Siri &mdash; it can be off without anything saying so. <em>Settings &rarr; Siri &amp; Shortcuts</em> in the app lists what to say and links straight to that page.</p>
       </div>
     </details>
 
