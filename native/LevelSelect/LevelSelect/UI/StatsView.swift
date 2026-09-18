@@ -744,7 +744,9 @@ struct StatsCards: View {
                 Label("By System", systemImage: "gamecontroller.fill")
                     .font(.headline)
                 StatsPie(slices: PieSlice.palette(for: Array(platformCounts.prefix(10))),
-                         centerTitle: "Systems",
+                         // The total is games, not systems: "Systems 26"
+                         // over seven slices read as a miscount (09-18).
+                         centerTitle: "Games",
                          total: platformCounts.reduce(0) { $0 + $1.1 })
             }
         }
