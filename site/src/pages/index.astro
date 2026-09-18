@@ -56,19 +56,19 @@ const systems = [
    a single still of it is just a spinner. */
 const steps = [
   {
-    img: 'iphone-36-generating-categories.webp',
+    img: 'iphone-39-disco-planned.webp',
     cap: 'Ask what the game is made of.',
-    alt: 'Disco Elysium\u2019s page in LevelSelect \u2014 its logo, Paused on PC, 12 hours 48 minutes played \u2014 with "Working out the shape of this game" running underneath, a progress bar, and a Stop button.',
+    alt: 'Disco Elysium\u2019s tracker planned for 100 percent: seven categories \u2014 Thoughts, Tasks, Checks, Dialogues and more \u2014 each marked Planned with its own Generate button.',
   },
   {
-    img: 'iphone-36-generating-one-category.webp',
+    img: 'iphone-39-disco-generating.webp',
     cap: 'Fill one category. Leave the rest planned.',
-    alt: '"Looking for a guide to Achievements \u2014 one category only, so this is quicker than a full tracker" running above Quests, Thoughts, Skill Checks and Dialogues, each still marked Planned with its own Generate button.',
+    alt: '"Looking for a guide to Tasks \u2014 one category only, so this is quicker than a full tracker" running above Quests, Thoughts, Skill Checks and Dialogues, each still marked Planned with its own Generate button.',
   },
   {
-    img: 'iphone-36-generated-achievements.webp',
+    img: 'iphone-39-disco-tasks.webp',
     cap: 'Come back for the next one whenever.',
-    alt: 'The finished achievements list \u2014 Superstar Cop, Baddest Of the Bad Cops, Cause a Shitstorm \u2014 each with what it asks of you, and a warning that some can be permanently missed.',
+    alt: 'The finished Tasks list \u2014 The Hanged Man, Find Your Gun, Call Your Precinct \u2014 each with where it happens, two already ticked.',
   },
 ];
 ---
@@ -99,13 +99,44 @@ const steps = [
        portrait screenshot under the hero read as a poster, not a product,
        and the platform badge above claims more than a phone. -->
   <div class="wrap showcase">
-    <Reveal class="composite composite--hero">
-      <img class="c-ipad" src="/assets/shots/ipad-01-split-tracker.webp" width="1600" height="1226"
-           alt="LevelSelect on iPad: the Hollow Knight game page, key art running the width of the screen, beside its tracker panel in landscape split view." />
-      <img class="c-phone" src="/assets/shots/iphone-36-home-profile.webp" width="686" height="1400"
-           alt="LevelSelect home screen on iPhone: a profile at the top \u2014 Memoji, the handle timultuoustimes, and the services it is used on \u2014 over a backdrop made from this week\u2019s game covers, with 5 playing, 8 hours 35 minutes this week and 266 hours total; Hollow Knight sits in Continue Playing, left off at Grubsong, and the tabs along the bottom read Home, Library, Wishlist and Journal." />
+    <Reveal class="composite composite--hero composite--trio">
+      <img class="c-mac" src="/assets/shots/mac-39-home.webp" width="1600" height="1055"
+           alt="LevelSelect on the Mac: the same Home in a window — the profile over this week’s covers, Continue Playing, a row of systems and the Now Playing shelf, with Home, Library, News, Journal and search along the top." />
+      <img class="c-ipad" src="/assets/shots/ipad-39-split-tracker.webp" width="1600" height="1227"
+           alt="LevelSelect on iPad in landscape: the Hollow Knight game page, its key art and logo across the top, beside its tracker — Main Bosses and Charms, some ticked, one marked missable, one still hidden." />
+      <img class="c-phone" src="/assets/shots/iphone-39-home.webp" width="686" height="1400"
+           alt="LevelSelect home on iPhone: a Memoji and the handle timultuoustimes over this week’s covers, 5 playing, 8 hours 35 minutes this week and 266 hours total, Hollow Knight in Continue Playing, and the tabs Home, Library, News and Journal with search beside them." />
     </Reveal>
   </div>
+
+  <!-- Build 39: the two new ways in. -->
+  <section class="wrap story" id="news">
+    <Reveal class="story__text">
+      <h2>News about the games you have</h2>
+      <p class="lede">A <strong>News</strong> tab of the sites you choose, with the stories about games in your library pulled to the top and the ones on your wishlist marked. Read one in reader mode without leaving the app, or save it for later.</p>
+      <p class="lede"><strong>New &amp; Upcoming</strong> is every game coming out on the systems you pick, the next one counted down in days — and the ones that just came out, so a release you missed doesn’t stay missed.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="right">
+      <img class="c-front" src="/assets/shots/iphone-39-news.webp" width="686" height="1400" loading="lazy"
+           alt="The News tab: For You selected, About your games leading with a story about a game on your wishlist, then Picked for you with a four-days countdown to a wishlisted release." />
+      <img class="c-back" src="/assets/shots/iphone-39-upcoming.webp" width="686" height="1400" loading="lazy"
+           alt="New &amp; Upcoming: Up next with covers counting down — Today, 4 days, 6 days — then Just out, each dated and marked with the systems it came to." />
+    </Reveal>
+  </section>
+
+  <section class="wrap story story--flip" id="search">
+    <Reveal class="story__text">
+      <h2>One search for everything</h2>
+      <p class="lede">Search sits in its own circle beside the tab bar. One field finds your games, every item on every tracker, the line in a note where you wrote it, news stories and upcoming releases — then games you don’t have, one tap from Add.</p>
+      <p class="lede">And the <strong>Wishlist</strong> moved in with the Library: one tab, two halves, because a wishlist is just the games you’re hoping to own.</p>
+    </Reveal>
+    <Reveal class="composite composite--pair" from="left">
+      <img class="c-front" src="/assets/shots/iphone-39-search.webp" width="686" height="1400" loading="lazy"
+           alt="Search for “hollow”: Hollow Knight in your games, a tracker item, news and releases — The Hollow Home, Hollow Stories: Lockdown — and IGDB results to add." />
+      <img class="c-back" src="/assets/shots/iphone-39-wishlist.webp" width="686" height="1400" loading="lazy"
+           alt="Library with Wishlist selected: Coming soon with covers and dates — Graveyard Keeper II, Control Resonant, The Legend of Zelda: Ocarina of Time — then No date yet." />
+    </Reveal>
+  </section>
 
   <!-- The build-32 header is the app's biggest visual change and it had no
        section — it was a cameo in the hero, which the front door needed back.
@@ -119,9 +150,9 @@ const steps = [
       <p class="lede">And four ways to arrange it. <strong>Showcase</strong> leads with the art, <strong>Classic</strong> keeps the plain original, <strong>Cover</strong> puts the box first, and <strong>Compact</strong> is nearly all list. Pick the one that suits how you read a page.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
-      <img class="c-front" src="/assets/shots/iphone-36-layout-showcase.webp" width="686" height="1400" loading="lazy"
+      <img class="c-front" src="/assets/shots/iphone-39-layout-showcase.webp" width="686" height="1400" loading="lazy"
            alt="The Hollow Knight game page in the Showcase layout: its own key art filling the header, the cover above the game’s logo where a title would be, five stars, Now Playing on Switch, and a row reading 44 hours 37 minutes played across 17 sessions." />
-      <img class="c-back" src="/assets/shots/iphone-36-layout-classic.webp" width="686" height="1400" loading="lazy"
+      <img class="c-back" src="/assets/shots/iphone-39-layout-classic.webp" width="686" height="1400" loading="lazy"
            alt="The same game arranged as Classic: the cover beside its details rather than under the art, Now Playing on Switch, five stars, and the Sessions list open beneath with a Start Session button." />
     </Reveal>
   </section>
@@ -133,10 +164,10 @@ const steps = [
       <p class="lede">Every tracker says where it came from, so you always know whether a number is the game's or a guess.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="right">
-      <img class="c-front" src="/assets/shots/iphone-36-super-metroid-achievements.webp" width="686" height="1400" loading="lazy"
+      <img class="c-front" src="/assets/shots/iphone-39-super-metroid-achievements.webp" width="686" height="1400" loading="lazy"
            alt="Super Metroid\u2019s imported RetroAchievements set: 36 of 69 earned, 197 of 656 points, a RetroAchievements badge naming the source, a warning about permanently missable entries, and each achievement with its own icon, name and requirement." />
-      <img class="c-back" src="/assets/shots/iphone-36-tracker-hidden-missable.webp" width="686" height="1400" loading="lazy"
-           alt="A Disco Elysium tracker in use: entries flagged as permanently missable, and several still reading \u201cHidden \u2014 tap circle to reveal\u201d so the list does not spoil what is coming." />
+      <img class="c-back" src="/assets/shots/iphone-39-disco-tasks.webp" width="686" height="1400" loading="lazy"
+           alt="Disco Elysium\u2019s Tasks list under its logo: The Hanged Man and Find Your Gun ticked, then Find Your Badge, Call Your Precinct and The Missing Persons Case, each with where in Martinaise it happens." />
     </Reveal>
   </section>
 
@@ -152,8 +183,8 @@ const steps = [
       <p class="lede">And it reaches back further than the app does. A <strong>memory</strong> is something that happened before you had this: when, who you were with, and pictures. How well you know the date is a choice — an exact day, a month, a year, or not sure at all. <em>“Christmas 1995 or 1996”</em> is a real answer, and that is exactly how it is shown.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
-      <img class="c-front" src="/assets/shots/iphone-36-journal-timeline-memories.webp" width="686" height="1400" loading="lazy"
-           alt="The Journal timeline on iPhone: Stardew Valley sessions from last week, then First time playing Halo 2 dated Friday 12 November 2004 with three screenshots and the note \u201cMultiplayer with Kumar, Eric, Omar and Kevin\u201d, then Got my Sega Genesis dated Tuesday 24 December 1996." />
+      <img class="c-front" src="/assets/shots/iphone-39-journal-timeline.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal timeline on iPhone: today and yesterday\u2019s sessions of Hades and Hollow Knight, each a single row for the day, then earlier in the week. " />
       <img class="c-back" src="/assets/shots/iphone-36-memory-photos.webp" width="686" height="1400" loading="lazy"
            alt="A single memory opened: three photographs, one large above two smaller, over the title First time playing Halo 2, the date 13 November 2004, and the console it was played on." />
     </Reveal>
@@ -169,10 +200,10 @@ const steps = [
       <p class="lede">The charts are here too, as the third view. Hours by game, what you finished, which systems you actually reach for — only what your own sessions can prove.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="right">
-      <img class="c-front" src="/assets/shots/iphone-36-journal-calendar-year.webp" width="686" height="1400" loading="lazy"
+      <img class="c-front" src="/assets/shots/iphone-39-journal-calendar.webp" width="686" height="1400" loading="lazy"
            alt="The Journal calendar showing a whole year as twelve small months, each day a square shaded by how much was played, with a row of years along the top and 2026 selected." />
-      <img class="c-back" src="/assets/shots/iphone-36-journal-charts.webp" width="686" height="1400" loading="lazy"
-           alt="The Journal\u2019s charts view: 26 games, 266 hours 36 minutes played, 106 sessions, 12 percent finished, recent play, hours by month and a streak grid." />
+      <img class="c-back" src="/assets/shots/iphone-39-journal-pies.webp" width="686" height="1400" loading="lazy"
+           alt="The Journal\u2019s charts as rings: 26 games by status \u2014 5 playing, 3 paused, 12 on the wishlist, 3 completed \u2014 and the same 26 by system, Switch first. " />
     </Reveal>
   </section>
 
@@ -185,10 +216,10 @@ const steps = [
       <p class="lede">And the background is yours. Accent and background sit on one screen, so you see a button against the ground you are choosing while you choose it. The app keeps its own contrast, so no choice can make text vanish.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
-      <img class="c-front" src="/assets/shots/iphone-36-light-home.webp" width="686" height="1400" loading="lazy"
-           alt="LevelSelect home in light mode: a warm cream background, the profile and week\u2019s totals across the top, and Continue Playing showing BioShock Remastered." />
-      <img class="c-back" src="/assets/shots/iphone-36-light-game-page.webp" width="686" height="1400" loading="lazy"
-           alt="A game page in light mode: Clair Obscur Expedition 33 with its key art across the top, five stars, and its session and tracker sections on a light ground." />
+      <img class="c-front" src="/assets/shots/iphone-39-light-home.webp" width="686" height="1400" loading="lazy"
+           alt="LevelSelect home in light mode: a pale lilac ground, the profile and the week\u2019s totals across the top, Hollow Knight in Continue Playing and the systems below. " />
+      <img class="c-back" src="/assets/shots/iphone-39-light-game-page.webp" width="686" height="1400" loading="lazy"
+           alt="Clair Obscur: Expedition 33 in light mode: its key art faded behind the cover, Now Playing on PS5 with five stars, 24 hours 54 minutes over 10 sessions, and a Start Session button. " />
     </Reveal>
   </section>
 
@@ -214,7 +245,7 @@ const steps = [
     <Reveal class="story__text">
       <h2>Start a session without opening the app</h2>
       <p class="lede">The Live Activity keeps counting on your Lock Screen while you play, and nudges you if you forget to stop it. Widgets put the timer, the week, and your next objective on the Home Screen — and you can tick that objective off without going anywhere.</p>
-      <p class="lede"><b>Your games are Shortcuts too.</b> Say <i>"Play Hollow Knight in LevelSelect"</i> and it starts timing. Every game in your library is available to Siri, Spotlight and the Shortcuts app by name, so you can wire it into whatever you already use — an NFC tag on the console, a Focus, a scene.</p>
+      <p class="lede"><b>Your games are Shortcuts too.</b> Say <i>"Start a session for Hollow Knight in LevelSelect"</i> and it starts timing. Every game in your library is available to Siri, Spotlight and the Shortcuts app by name, so you can wire it into whatever you already use — an NFC tag on the console, a Focus, a scene.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
       <img class="c-front" src="/assets/shots/iphone-05-lock-screen-live-activity.webp" width="686" height="1400" loading="lazy"
@@ -237,8 +268,8 @@ const steps = [
       <p class="lede">The game's own page carries the rest: its trailers and screenshots, playable without leaving the app, and every platform it is coming to with its own date beside it.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="left">
-      <img class="c-front" src="/assets/shots/iphone-36-platform-dates-trailers.webp" width="686" height="1400" loading="lazy"
-           alt="Onimusha: Way of the Sword in LevelSelect: its trailers and screenshots above Game Info, where every platform is listed with its own date \u2014 Switch 2, PC, PlayStation 5 and Xbox Series all 4 September 2026, each reading Tomorrow \u2014 and PlayStation 5 carries a MINE badge for the one you chose." />
+      <img class="c-front" src="/assets/shots/iphone-39-release-dates.webp" width="686" height="1400" loading="lazy"
+           alt="Control Resonant\u2019s Game Info in LevelSelect: every platform with its own date \u2014 Mac, PC, PS5 and Xbox Series on 24 September, each in 6 days \u2014 and Mac marked MINE. " />
       <img class="c-back" src="/assets/shots/iphone-36-release-widgets.webp" width="686" height="1400" loading="lazy"
            alt="Two LevelSelect widgets on the Home Screen: a Release Calendar list reading Onimusha tomorrow and two more in two weeks, and a September month grid with each game\u2019s cover sitting on the day it arrives." />
     </Reveal>
@@ -247,7 +278,14 @@ const steps = [
   <section class="wrap" id="stage">
     <Reveal>
       <h2>Play, check, and follow a guide at once</h2>
-      <p class="lede">On iPad and Mac the game page slides aside to make room. This is the real layout — try it:</p>
+      <p class="lede">On iPad and Mac the game page slides aside to make room: the tracker, a guide playing, and the map, all at once.</p>
+    </Reveal>
+    <Reveal class="stage-shot">
+      <img src="/assets/shots/ipad-39-stage.webp" width="1600" height="1227" loading="lazy"
+           alt="Hollow Knight on iPad with three panes: its tracker under the game\u2019s logo on the left, a King\u2019s Pass guide video playing top right, and the Forgotten Crossroads map below it." />
+    </Reveal>
+    <Reveal>
+      <p class="lede">This is the real layout — try it:</p>
     </Reveal>
     <Reveal>
       <StageDemo />
@@ -284,9 +322,9 @@ const steps = [
       <p class="lede">And a cartridge you still own, played on a handheld that isn't the original hardware, is <b>Physical and Emulated at once</b> — the shelf below sorts by the console it came out on, with emulators ranked last.</p>
     </Reveal>
     <Reveal class="composite composite--pair" from="right">
-      <img class="c-front" src="/assets/shots/iphone-36-super-metroid-header.webp" width="686" height="1400" loading="lazy"
+      <img class="c-front" src="/assets/shots/iphone-39-super-metroid-header.webp" width="686" height="1400" loading="lazy"
            alt="Super Metroid in LevelSelect: its own logo over key art, marked Completed on SNES, five stars, owned Emulated, a RetroAchievements badge, and a Beaten entry reading \u201cBeat the game \u00b7 SNES \u00b7 2022\u201d." />
-      <img class="c-back" src="/assets/shots/iphone-36-sonic-header.webp" width="686" height="1400" loading="lazy"
+      <img class="c-back" src="/assets/shots/iphone-39-sonic-header.webp" width="686" height="1400" loading="lazy"
            alt="Sonic the Hedgehog 2 on Genesis, its logo across the header art, marked Old Favorite and owned Physical and Emulated at once, beaten twice across 4 hours 42 minutes." />
     </Reveal>
   </section>
