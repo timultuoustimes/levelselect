@@ -30,15 +30,20 @@ struct SiriShortcutsSettingsPage: View {
             }
 
             Section {
-                #if os(iOS)
-                ShortcutsLink()
-                    .shortcutsLinkStyle(.automaticOutline)
-                    .frame(maxWidth: .infinity)
-                    .listRowBackground(Color.clear)
-                #endif
-                Text("LevelSelect's page in the Shortcuts app has an Open Game and a Start Session tile for each of your games. Use one as it is, or add it to a shortcut of your own and give it any name you like to say.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                // One row, so the button and what it opens share a card. As
+                // two rows with the button's cleared, the card started under
+                // the button and read as a stray gray slab (King Kai, 09-18).
+                VStack(spacing: 14) {
+                    #if os(iOS)
+                    ShortcutsLink()
+                        .shortcutsLinkStyle(.automaticOutline)
+                    #endif
+                    Text("LevelSelect's page in the Shortcuts app has an Open Game and a Start Session tile for each of your games. Use one as it is, or add it to a shortcut of your own and give it any name you like to say.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 6)
             } header: {
                 Text("Shortcuts")
             }
