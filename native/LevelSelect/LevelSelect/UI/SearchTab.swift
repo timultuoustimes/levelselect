@@ -78,7 +78,7 @@ struct SearchScreen: View {
                 }
             }
             .onSubmit(of: .search) { remember() }
-            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .gamePageDestinations()
         }
         .task(id: games.count) { index = SearchIndex.build(games: games, context: context) }
         .onAppear {
@@ -505,5 +505,23 @@ struct LibraryHalfPicker: View {
         .pickerStyle(.segmented)
         .padding(.horizontal)
         .padding(.bottom, 6)
+    }
+}
+
+extension View {
+    /// What a game page links onward to — its tracker, a genre or studio, its
+    /// system, a collection. Every tab that can show a game page has to
+    /// register these on its own stack; Search and News (build 39) only
+    /// registered `Game`, so a tracker's Open, a genre chip or a system chip
+    /// on a page reached from them did nothing (simulator, 09-18).
+    func gamePageDestinations() -> some View {
+        self
+            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .navigationDestination(for: GameFacet.self) { FacetGamesView(facet: $0) }
+            .navigationDestination(for: PlatformRoute.self) {
+                PlatformGamesView(platform: $0.platform, ownership: $0.ownership)
+            }
+            .navigationDestination(for: TrackerRoute.self) { TrackerPageView(game: $0.game) }
+            .navigationDestination(for: CollectionRoute.self) { CollectionRouteView(route: $0) }
     }
 }

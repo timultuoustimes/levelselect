@@ -174,7 +174,7 @@ struct NewsTab: View {
                                   stories: stories.filter { topic.matches($0, group: env.feedGroups[$0.feedID]) },
                                   env: env)
             }
-            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .gamePageDestinations()
             .navigationDestination(for: NewsForYou.GameGroup.self) { group in
                 NewsStoryListView(title: group.name, stories: group.stories, env: env)
             }

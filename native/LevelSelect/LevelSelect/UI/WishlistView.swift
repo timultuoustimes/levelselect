@@ -180,7 +180,7 @@ struct WishlistTab: View {
             // height, because that row exists for the toolbar anyway.
             .navigationTitle("Wishlist")
             .toolbarTitleDisplayMode(.inlineLarge)
-            .navigationDestination(for: Game.self) { GameDetailView(game: $0) }
+            .gamePageDestinations()
             // Pushed, not presented: it is another way of reading the same
             // wishlist, and tapping a game from it should lead onward to that
             // game the way every other list here does.
