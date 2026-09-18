@@ -36,7 +36,10 @@ struct SearchScreen: View {
 
     private var searchPlacement: SearchFieldPlacement {
         #if os(iOS)
-        inTab ? .automatic : .navigationBarDrawer(displayMode: .always)
+        // Always showing, tab or cover. `.automatic` in the tab tucked the
+        // field away under the title until you pulled down — tapping Search
+        // gave you recents and no field (King Kai, 09-18).
+        .navigationBarDrawer(displayMode: .always)
         #else
         .automatic
         #endif
@@ -79,8 +82,13 @@ struct SearchScreen: View {
         }
         .task(id: games.count) { index = SearchIndex.build(games: games, context: context) }
         .onAppear {
-            if !inTab { fieldFocused = true }
+            fieldFocused = true
             takePendingTerm()
+        }
+        // The tab stays alive after the first visit, so onAppear alone would
+        // focus the field once. Every tap on Search is a request to type.
+        .onChange(of: AppNavigator.shared.selectedTab) { _, tab in
+            if inTab && tab == .search { fieldFocused = true }
         }
         .onChange(of: AppNavigator.shared.pendingSearchTerm) { _, _ in takePendingTerm() }
         .task(id: "\(trimmed)|\(scope.rawValue)|\(index.version)") { await search() }
