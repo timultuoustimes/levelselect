@@ -110,6 +110,7 @@ export const horizons = [
     color: '#BF5AF2',
     items: [
       { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
+      { t: 'Commissioned artwork', d: 'The console icons and the genie are placeholders today. We would like them drawn by an artist.' },
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
       { t: 'More of your own notebook', d: 'Light and dark and your own background color landed in 36. Icons, covers, and the rest of the personality a paper journal has.' },
     ],
