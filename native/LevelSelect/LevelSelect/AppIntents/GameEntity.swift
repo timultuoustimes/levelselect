@@ -71,9 +71,14 @@ struct GameEntityQuery: EntityQuery, EntityStringQuery {
     @MainActor
     func suggestedEntities() async throws -> [GameEntity] {
         // Most recently active first, so the picker leads with what you play.
+        // This list is also every name Siri can hear in "Open … in
+        // LevelSelect" (`updateAppShortcutParameters`). At 50, King Kai's
+        // list led with a fresh import — Lone Survivor, Thunder Force IV —
+        // and Hades wasn't on it (09-18). Apple caps an app's spoken phrases
+        // near a thousand; 250 names across the three game phrases fits.
         fetchGames()
             .sorted { key($0) > key($1) }
-            .prefix(50)
+            .prefix(250)
             .map(Self.entity)
     }
 
