@@ -155,6 +155,11 @@ struct TrackerPageView: View {
     @State private var viewingMap: MapViewerTarget?
     /// The name has scrolled away with the header, so the bar shows it.
     @State private var titleInBar = false
+    /// The wordmark found automatically, as the game page finds it. Without
+    /// this the tracker only drew a logo someone had picked, so every game
+    /// whose page showed a fetched one got its name in text here (Tim, Disco
+    /// Elysium on King Kai, 09-18).
+    @State private var fetchedLogo: URL?
     /// Measured, not assumed: a logo's height depends on its shape.
     @State private var headerHeight: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -274,6 +279,7 @@ struct TrackerPageView: View {
         // Reconcile first: this page can be reached without passing through
         // GameDetailView (Home's tracker route), and it reads exactly the
         // rows a sync race duplicates.
+        .task(id: game.id) { fetchedLogo = await LogoArt.url(for: game) }
         .task {
             let repo = Repository(context)
             repo.reconcile(game)
@@ -341,7 +347,9 @@ struct TrackerPageView: View {
     /// leaves room for one; otherwise the name is drawn as text.
     private var headerLogo: ResolvedArtwork {
         guard ThemePalette.showGameLogos, !typeSize.isAccessibilitySize else { return .none }
-        return game.resolvedArtwork(.logo)
+        let chosen = game.resolvedArtwork(.logo)
+        if !chosen.isEmpty { return chosen }
+        return fetchedLogo.map { .remote($0) } ?? .none
     }
 
     /// The game's logo, large, or its name — the head of the tracker.

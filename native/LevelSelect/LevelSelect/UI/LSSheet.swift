@@ -66,11 +66,22 @@ extension View {
     /// **Guarded, deliberately.** On iOS a `Form` inside a `NavigationStack`
     /// is already inset-grouped, and asking for `.grouped` there risks
     /// flattening the inset cards on a platform this is not trying to change.
+    ///
+    /// **The theme's ground and cards, on every platform** (09-18). Left to
+    /// the system, a sheet's Form was flat gray cards on black — Plan a
+    /// Tracker read as a different app beside the purple page behind it
+    /// (Tim, King Kai). Same treatment `SettingsPage` gives its rows.
     func lsFormStyle() -> some View {
         #if os(macOS)
         return formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(LSTheme.liveSheetGround)
+            .listRowBackground(LSTheme.cardFill)
         #else
         return self
+            .scrollContentBackground(.hidden)
+            .background(LSTheme.liveSheetGround)
+            .listRowBackground(LSTheme.cardFill)
         #endif
     }
 }
