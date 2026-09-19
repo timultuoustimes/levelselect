@@ -1,0 +1,304 @@
+import Foundation
+import SwiftData
+
+/// A game in the library (legacy `library[]`).
+/// CloudKit-compatible: no unique constraints, every property optional or
+/// inline-defaulted, relationships optional/defaulted.
+@Model
+final class Game {
+    // Sync metadata
+    var id: UUID = UUID()
+    var userID: UUID?
+    var createdAt: Date = Date.now
+    var updatedAt: Date = Date.now
+    var revision: Int = 0
+    var deletedAt: Date?
+    var legacyID: String?
+
+    // Identity & metadata
+    var name: String = ""
+    var summary: String?
+    var notes: String = ""
+    var igdbID: Int?
+    var igdbSlug: String?
+    /// The Wikidata entity for this game — a Q-number, e.g. "Q1339021".
+    ///
+    /// **Shipped ahead of the feature, deliberately.** Every Wikidata thing
+    /// the roadmap wants — real person credits, cross-checking release dates
+    /// against a second source, series relationships — needs the QID as its
+    /// bridge, and IGDB stays the identity source: this is enrichment hung off
+    /// `igdbID`, so if Wikidata ever goes away a field breaks and the library
+    /// does not. An unused optional costs nothing and a schema version costs a
+    /// promote cycle, which is the same reasoning that shipped `backgroundHex`
+    /// a build before the light theme used it.
+    ///
+    /// Resolved by querying Wikidata BY the IGDB id rather than by name —
+    /// name matching is how the wrong game's logo got attached once already.
+    var wikidataID: String?
+    var firstReleaseDate: Date?
+    /// Every date IGDB gives for this game, keyed by platform. Schema V4.
+    ///
+    /// `firstReleaseDate` holds ONE answer, and a game out on PC and coming
+    /// to Switch 2 has two true ones — a single field cannot say that, and
+    /// picking a winner is what made the app's date depend on a platform the
+    /// user may never have chosen.
+    ///
+    /// JSON in a `Data` blob, like `ThemeSettings.statusColorsData`: the shape
+    /// is a map from platform name to a date and a precision, and storing it
+    /// as one field means a game with releases on six platforms costs one
+    /// CloudKit column rather than a related record per platform.
+    ///
+    /// `firstReleaseDate` stays and stays authoritative for the shelf, the
+    /// countdown and the widgets — this is the fuller answer behind it, not a
+    /// replacement. Optional because every game written before V4 has none.
+    var platformReleasesData: Data?
+    var franchise: String?
+    var coverURLString: String?
+    var coverImageID: String?
+    /// A cover the user chose in place of the fetched one (their own image, a
+    /// different official release, community art). Schema V2 — the art the
+    /// box had when THEY owned it is part of the memory. Wins over
+    /// `coverURLString` wherever a cover is drawn — read `displayCoverURLString`,
+    /// never `coverURLString`, when rendering.
+    ///
+    /// Since V3 this is an `ArtworkPointer`: still a plain http(s) URL in the
+    /// usual case, but it may instead name a local `GameImage`.
+    var coverOverrideURLString: String?
+
+    // MARK: Artwork roles (Schema V3)
+    //
+    // One pointer per role, each an `ArtworkPointer` — a remote URL or a
+    // local image reference. Nil means "fall back", and every fallback is
+    // defined by `ArtworkRole.fallbackNote`.
+
+    /// The header wordmark. Nil renders the game's name as text, which is
+    /// also what happens at accessibility type sizes regardless.
+    var logoURLString: String?
+    /// The band behind the header. Nil falls back to the cover, blurred.
+    var backdropURLString: String?
+
+    /// The cover to DRAW: the user's choice when they've made one, the
+    /// fetched art otherwise. Fetch/refresh paths keep writing
+    /// `coverURLString`, so Fix Match and the fill pass can never overwrite a
+    /// chosen cover.
+    ///
+    /// Returns nil for a LOCAL chosen cover — bytes have no URL. Grid-shaped
+    /// surfaces should read `resolvedArtwork(.cover)` instead; this stays for
+    /// the many call sites that only ever want a URL, and for the widget
+    /// bridge, which can't carry a SwiftData object across the process line.
+    var displayCoverURLString: String? {
+        if let remote = ArtworkPointer.remoteURL(coverOverrideURLString) {
+            return remote.absoluteString
+        }
+        // A local override deliberately does NOT fall through to the fetched
+        // cover: the user picked a picture, and quietly showing a different
+        // one because this accessor can't express theirs would be a lie.
+        if ArtworkPointer.localID(coverOverrideURLString) != nil { return nil }
+        return coverURLString
+    }
+
+    /// The pointer for a role, or nil when nothing is chosen.
+    func pointer(for role: ArtworkRole) -> String? {
+        switch role {
+        case .cover:    coverOverrideURLString
+        case .logo:     logoURLString
+        case .backdrop: backdropURLString
+        case .gallery:  nil
+        }
+    }
+
+    func setPointer(_ pointer: String?, for role: ArtworkRole) {
+        switch role {
+        case .cover:    coverOverrideURLString = pointer
+        case .logo:     logoURLString = pointer
+        case .backdrop: backdropURLString = pointer
+        case .gallery:  break   // a pile, not a slot
+        }
+    }
+
+    /// What actually fills a role right now, including its fallback.
+    ///
+    /// The ONE place this question is answered. Every render site calls here
+    /// rather than reasoning about pointers, so a change to a fallback rule
+    /// lands everywhere at once.
+    func resolvedArtwork(_ role: ArtworkRole) -> ResolvedArtwork {
+        let pointer = pointer(for: role)
+        if let localID = ArtworkPointer.localID(pointer),
+           let image = liveImages.first(where: { $0.id == localID }),
+           let data = image.data {
+            return .local(data)
+        }
+        if let remote = ArtworkPointer.remoteURL(pointer) {
+            return .remote(remote)
+        }
+        switch role {
+        case .cover:
+            return coverURLString.flatMap(URL.init(string:)).map { .remote($0) } ?? .none
+        case .backdrop:
+            // Falls back to whatever the cover resolves to, blurred by the
+            // view. Recursion is safe: `.cover` never falls back to a role.
+            return resolvedArtwork(.cover)
+        case .logo, .gallery:
+            // A logo has no image fallback ON PURPOSE — the name in text is
+            // the fallback, and that belongs to the view.
+            return .none
+        }
+    }
+
+    /// Have you finished this game — **whatever it says now**.
+    ///
+    /// Status is where a game *currently sits*; finishing is something that
+    /// *happened*, and the two stopped agreeing the moment `oldFavorite`
+    /// existed. Sonic 2 is beaten and will be beaten again; filing it under
+    /// Old Favorite must not un-beat it, and counting `status == .completed`
+    /// did exactly that — the finished percentage fell when a game moved.
+    ///
+    /// A completion event is the real record, so it wins. The status is kept
+    /// as a fallback because plenty of games were marked Completed before
+    /// there was any event to record: 13 of Tim's 21 on the day this shipped.
+    var isFinished: Bool {
+        if (completionEvents ?? []).contains(where: { $0.deletedAt == nil }) { return true }
+        return status == .completed
+    }
+
+    /// Images that haven't been soft-deleted, newest first.
+    var liveImages: [GameImage] {
+        (images ?? []).filter { $0.deletedAt == nil }
+            .sorted { $0.addedAt > $1.addedAt }
+    }
+
+    func liveImages(role: ArtworkRole) -> [GameImage] {
+        liveImages.filter { $0.role == role }
+    }
+
+    // User state
+    var status: GameStatus = GameStatus.backlog
+    var pinned: Bool = false
+    var rating: Int?          // consolidated game-level (1–5)
+    var review: String?
+    var addedAt: Date = Date.now
+    var currentPlaythroughID: UUID?
+    /// Per-game tracker display override; nil = follow the library default.
+    var trackerDisplayRaw: String?
+    /// Overrides the library-wide "Show item hints" for this game alone.
+    /// Nil follows the global setting — blind for the game you're savouring,
+    /// hints on everywhere else.
+    var showItemHintsOverride: Bool?
+
+    // Value metadata arrays
+    /// Every platform this game was released on — IGDB's availability list.
+    /// NOT a statement about you; see `ownedPlatforms`.
+    var platforms: [String] = []
+    /// The platforms YOU own it on. Schema V3.
+    ///
+    /// Until this existed, ownership was encoded as **position zero** of
+    /// `platforms`, which meant exactly one console could be yours. Owning
+    /// Hades on both Switch and PC was unrepresentable — there is one index
+    /// zero — and buying a second copy silently moved the game rather than
+    /// adding to it.
+    ///
+    /// Optional because every game written before V3 has none. `nil` means
+    /// "never recorded", and `ownedPlatformNames` reads position zero for
+    /// those, which is precisely what the app meant at the time. Nothing
+    /// migrates on write; the fallback IS the migration.
+    var ownedPlatforms: [String]?
+    /// How the game is owned (raw `Ownership` values; multi-select).
+    var ownership: [String] = []
+    /// **Sections this game disagrees with the default about.**
+    ///
+    /// `"about:1,media:0"` — only the ones you have actually toggled here, so
+    /// changing the library-wide default still moves every game you never
+    /// touched. Synced, because closing Connections on a game you know inside
+    /// out should be true on the iPad too.
+    var sectionStateRaw: String?
+
+    var userTags: [String] = []
+    var genres: [String] = []
+    var themes: [String] = []
+    var gameModes: [String] = []
+    var playerPerspectives: [String] = []
+    var developers: [String] = []
+    var publishers: [String] = []
+
+    /// The platforms you own this game on, for every era of the data.
+    ///
+    /// Pre-V3 games have no `ownedPlatforms`, and position zero of `platforms`
+    /// is what the app meant by "mine" then — so that is the fallback. Reading
+    /// through here means no caller has to know which era a game is from, and
+    /// nothing has to be rewritten on disk to make old rows correct.
+    var ownedPlatformNames: [String] {
+        if let owned = ownedPlatforms, !owned.isEmpty { return owned }
+        return platforms.first.map { [$0] } ?? []
+    }
+
+    /// One platform, for the places that can only show one — a row's subtitle,
+    /// a badge. The first you own, which for pre-V3 data is position zero.
+    var primaryOwnedPlatform: String? { ownedPlatformNames.first }
+
+    /// The platform you actually said you have this on, or nil.
+    ///
+    /// `primaryOwnedPlatform` GUESSES — it falls back to the first platform
+    /// IGDB lists when you own none, which is right for drawing an icon and
+    /// wrong for storing a release date. A wishlist game is owned nowhere, so
+    /// that guess was picking an arbitrary platform's release entry; when that
+    /// entry was quarter- or year-precise the app stored 1 January and filed a
+    /// dated game under "No date yet" while another platform had the day.
+    var chosenPlatform: String? {
+        guard let owned = ownedPlatforms, let first = owned.first, !first.isEmpty else { return nil }
+        return first
+    }
+
+    // Relationships — all optional (CloudKit requires optional relationships).
+    @Relationship(deleteRule: .cascade, inverse: \Playthrough.game)
+    var playthroughs: [Playthrough]?
+    @Relationship(deleteRule: .cascade, inverse: \CompletionEvent.game)
+    var completionEvents: [CompletionEvent]?
+    @Relationship(deleteRule: .cascade, inverse: \GameMap.game)
+    var maps: [GameMap]?
+    @Relationship(deleteRule: .cascade, inverse: \TrackerSchemaRecord.game)
+    var trackerSchema: TrackerSchemaRecord?
+    @Relationship(deleteRule: .cascade, inverse: \GameVideo.game)
+    var videos: [GameVideo]?
+    /// The user's own notes and renames for this game's tracker items, kept
+    /// OUT of the schema blob so they merge per item instead of whole. See
+    /// TrackerItemDetail. Schema V2.
+    @Relationship(deleteRule: .cascade, inverse: \TrackerItemDetail.game)
+    var trackerItemDetails: [TrackerItemDetail]?
+    /// Images the user added. Schema V3. Cascade so a permanent delete takes
+    /// the bytes with it. A SOFT delete stamps only the game — its images
+    /// stay untouched and come back with it, which is why Recently Deleted
+    /// restores a game with its pictures rather than holes.
+    @Relationship(deleteRule: .cascade, inverse: \GameImage.game)
+    var images: [GameImage]?
+    /// Memories that mention this game. Schema V5.
+    ///
+    /// **Nullify, not cascade** — and the difference is the whole point of the
+    /// model. "Traded this away in 2004" is a thing that happened to *you*;
+    /// removing the game from your library must not delete your memory of
+    /// owning it. A memory is allowed to have no game, so losing the link
+    /// leaves a valid record rather than a broken one.
+    ///
+    /// It exists at all because CloudKit refuses to load a store where any
+    /// relationship lacks an inverse — `Memory.game` on its own took the
+    /// container down at launch.
+    @Relationship(deleteRule: .nullify, inverse: \Memory.game)
+    var memories: [Memory]?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        status: GameStatus = .backlog,
+        notes: String = "",
+        addedAt: Date = .now,
+        pinned: Bool = false
+    ) {
+        self.id = id
+        self.createdAt = .now
+        self.updatedAt = .now
+        self.name = name
+        self.notes = notes
+        self.status = status
+        self.pinned = pinned
+        self.addedAt = addedAt
+    }
+}

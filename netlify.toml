@@ -1,30 +1,49 @@
+# Netlify config for the LevelSelect marketing site.
+#
+# This file lives at the REPO ROOT deliberately: Netlify reads netlify.toml
+# from the base directory, and settings here take precedence over the site's
+# UI settings, so the deploy config is versioned rather than living only in
+# someone's dashboard.
+#
+# `base = "site"` is load-bearing. The repo root still carries the retired web
+# app's package.json (which builds with vite), and without a base Netlify
+# would install and run THAT instead of the Astro site. Pointing the base at
+# site/ means npm install and npm run build both happen there.
+# NOTE: with `base` set, every other path here is resolved RELATIVE TO IT.
+# `publish = "site/dist"` therefore became `site/site/dist` and the first
+# deploy failed with "Deploy directory does not exist" — the build itself was
+# fine. It is "dist", not "site/dist".
 [build]
+  base = "site"
   command = "npm run build"
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  NODE_VERSION = "22"
 
-# SPA fallback: every unknown path serves index.html so client-side
-# routing (and PWA navigation) works.
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
 
-# Long-cache hashed build assets
+# Fonts and images are stable; the HTML is not.
+#
+# ⚠️ This rule used to cover style.css too, because the stylesheet lived in
+# /assets/ alongside the fonts. "immutable" for a year is a promise the file
+# will never change, which was false for the one file in there that changes
+# every time the design does — CSS edits were invisible to anyone who had
+# visited before. The stylesheet now goes through Astro's build and lands in
+# /_astro/ under a content hash, so this folder is genuinely only stable files.
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Never cache the HTML shell or the manifest, so PWA updates propagate
+# Astro's hashed output. The filename changes whenever the content does, so
+# immutable is exactly right here — a new build produces a new URL.
 [[headers]]
-  for = "/index.html"
+  for = "/_astro/*"
   [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
-
-[[headers]]
-  for = "/manifest.json"
-  [headers.values]
-    Cache-Control = "public, max-age=0, must-revalidate"
+    Cache-Control = "public, max-age=31536000, immutable"

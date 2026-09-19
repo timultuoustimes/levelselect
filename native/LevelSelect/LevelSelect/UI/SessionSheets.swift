@@ -1,0 +1,186 @@
+import SwiftUI
+import SwiftData
+
+/// "When did you stop?" — ends a runaway session at a user-chosen time.
+struct EndSessionSheet: View {
+    let session: Session
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+    @State private var stopTime: Date
+    @State private var note = ""
+
+    /// The earliest pickable stop: the current segment's real boundary — the
+    /// last resume for a running session, the pause itself for a paused one,
+    /// never the original start (with pauses in between, start + threshold
+    /// could suggest a stop that predates play this session recorded). The
+    /// min(.now) clamp matters: a session synced from a device whose clock is
+    /// ahead can carry an anchor in this device's FUTURE, and an unclamped
+    /// anchor makes the DatePicker's range backwards — an invalid
+    /// ClosedRange — and its default stop a time that hasn't happened.
+    private static func earliestStop(for session: Session) -> Date {
+        min(.now, session.resumedAt ?? session.pausedAt ?? session.startDate)
+    }
+
+    init(session: Session) {
+        self.session = session
+        let anchor = Self.earliestStop(for: session)
+        // A paused session already stopped accruing AT its pause — that IS
+        // when the user stopped, so suggest it exactly; anchor + threshold
+        // would invent a stop hours after they put the game down.
+        let suggested = session.state == .paused
+            ? anchor
+            : min(.now, anchor.addingTimeInterval(StaleSessionGuard.threshold))
+        _stopTime = State(initialValue: suggested)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    LabeledContent("Game", value: session.playthrough?.game?.name ?? "—")
+                    LabeledContent("Started") {
+                        Text(session.startDate, format: .dateTime.month().day().hour().minute())
+                    }
+                }
+                Section("When did you stop?") {
+                    DatePicker("Stopped at", selection: $stopTime,
+                               in: Self.earliestStop(for: session) ... .now)
+                    LabeledContent("Records") {
+                        // The same calculation the save performs, so the
+                        // preview can't promise a number the write won't honor.
+                        Text(Format.duration(session.elapsed(asOf: stopTime)))
+                            .foregroundStyle(LSTheme.accent)
+                    }
+                }
+
+                // **Asked here rather than after.**
+                //
+                // `SessionNotePrompt` deliberately only asks about a session
+                // that ended in the last fifteen minutes, so it never asks
+                // about your back catalog. Ending a stale session backdates
+                // `endDate` by hours, which put it outside that window every
+                // time — so the one path where the app is already interrupting
+                // you was the one path that never asked what happened. Tim:
+                // *"It should also ask 'what happened' if I don't just
+                // outright cancel/delete the session."*
+                //
+                // Inline rather than a second alert afterwards: you are
+                // already in a sheet answering a question about this session,
+                // and one screen beats two.
+                Section {
+                    TextField("One line is plenty", text: $note, axis: .vertical)
+                        .lineLimit(1...4)
+                } header: {
+                    Text("What happened?")
+                } footer: {
+                    Text("Optional, and it lands in your Journal with the session.")
+                }
+            }
+            .navigationTitle("End Session")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("End") {
+                        let repo = Repository(context)
+                        repo.endStaleSession(session, stoppedAt: stopTime)
+                        // Through the notes-only path, which is what the
+                        // post-session prompt uses: `updateSession` would
+                        // recompute the duration and undo the stop time just
+                        // chosen above.
+                        if let text = note.journalText {
+                            repo.setSessionNotes(session, text)
+                        }
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .lsSheet([.medium])
+    }
+}
+
+/// Edit or delete a completed session (date, duration via end time, notes).
+struct EditSessionSheet: View {
+    let session: Session
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var start: Date
+    @State private var end: Date
+    @State private var notes: String
+    @State private var confirmingDelete = false
+
+    init(session: Session) {
+        self.session = session
+        _start = State(initialValue: session.startDate)
+        // NOT `session.endDate` — see `Session.editableEnd`. The stored end
+        // is when the clock stopped, which for a paused or stale-ended
+        // session is much later than what was played.
+        _end = State(initialValue: session.editableEnd)
+        _notes = State(initialValue: session.notes ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Time") {
+                    DatePicker("Started", selection: $start)
+                    DatePicker("Ended", selection: $end, in: start...)
+                    LabeledContent("Duration") {
+                        Text(Format.duration(end.timeIntervalSince(start)))
+                            .foregroundStyle(LSTheme.accent)
+                    }
+                }
+                Section("Notes") {
+                    TextField("Optional", text: $notes, axis: .vertical)
+                        .lineLimit(2...)
+                }
+                Section {
+                    Button("Delete Session", role: .destructive) {
+                        confirmingDelete = true
+                    }
+                    // Attached to the BUTTON, not to the Form.
+                    //
+                    // On the Form, iOS 26 anchored the popover to the Form's
+                    // first item — so "Delete this session?" appeared as a
+                    // callout pointing at the Started date field, half over
+                    // the toolbar, nowhere near the control that raised it.
+                    // Anchored here it comes from the button you pressed.
+                    //
+                    // On the Button and not the Section: a presentation
+                    // modifier on a Section becomes one per child (see the
+                    // OverlappingTimerGuard notes), which is its own bug.
+                    .confirmationDialog("Delete this session?", isPresented: $confirmingDelete,
+                                        titleVisibility: .visible) {
+                        Button("Delete", role: .destructive) {
+                            Repository(context).deleteSession(session)
+                            dismiss()
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    }
+                }
+            }
+            .navigationTitle("Edit Session")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Repository(context).updateSession(session, start: start, end: end,
+                                                          notes: notes)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}

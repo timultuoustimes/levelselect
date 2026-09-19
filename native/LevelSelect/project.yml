@@ -1,0 +1,266 @@
+name: LevelSelect
+# Marks the generated project as already reviewed by this Xcode version, so
+# Xcode stops offering "Update to recommended settings" (which xcodegen would
+# overwrite on the next generate anyway). Bump when adopting a new Xcode.
+attributes:
+  LastUpgradeCheck: "2660"
+options:
+  bundleIdPrefix: com.timultuoustimes
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    # Bumped per TestFlight build, in the repo rather than in the Organizer,
+    # so the number a device reports and the number git blames agree.
+    CURRENT_PROJECT_VERSION: "37"
+    DEVELOPMENT_TEAM: "GYDB3WFZB2"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    CODE_SIGN_STYLE: Automatic
+    PROVISIONING_PROFILE_SPECIFIER: ""
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
+    INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.utilities"
+    INFOPLIST_KEY_NSSupportsLiveActivities: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+targets:
+  LevelSelect:
+    type: application
+    supportedDestinations: [iOS, iPadOS, macOS]
+    entitlements:
+      path: LevelSelect/LevelSelect.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
+        com.apple.developer.icloud-services: [CloudKit]
+        aps-environment: $(LS_APS_ENV)
+        com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
+        # A six-hour runaway timer is inflating real data while it rings, so
+        # the stale-session reminder is sent Time Sensitive (see
+        # NotificationManager) and needs the matching entitlement to break
+        # through silent mode/Focus. MUST live here: the .entitlements file
+        # is GENERATED from this block and gitignored, so hand-edits to it
+        # survive only until the next `xcodegen generate`.
+        com.apple.developer.usernotifications.time-sensitive: true
+        # Which CloudKit environment a DEVELOPMENT-signed build talks to.
+        # Base is Development (see LS_CK_ENV below); the Release config forces
+        # Production, so archives/TestFlight/App Store always ship Production.
+        # Override it to test the real Production data path from a Debug build:
+        #   xcodebuild ... LS_CK_ENV=Production
+        com.apple.developer.icloud-container-environment: $(LS_CK_ENV)
+    # LS_APP_KEY comes from the gitignored Secrets.xcconfig (this repo is
+    # PUBLIC). See Secrets.example.xcconfig for how to create it. Absent or
+    # empty simply means the app sends no app-key header — which the edge
+    # functions tolerate until their LS_APP_SECRET is set.
+    configFiles:
+      Debug: Secrets.xcconfig
+      Release: Secrets.xcconfig
+    # Explicit UILaunchScreen (stacked lockup on the navy brand color) replaces
+    # the generated blank launch screen. Merged with INFOPLIST_KEY_* settings.
+    info:
+      path: LevelSelect/Info.plist
+      properties:
+        # Read at runtime by EdgeFunctions.appKey.
+        LSAppKey: $(LS_APP_KEY)
+        # itch.io OAuth client id, read by ItchService.clientID. Public by
+        # design in the implicit flow — it names the app, it authorises
+        # nothing on its own — but it lives beside the app key so a build
+        # without it simply hides the feature rather than failing.
+        LSItchClientID: $(LS_ITCH_CLIENT_ID)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+        # Standard HTTPS only — skips the export-compliance question on
+        # every TestFlight upload.
+        ITSAppUsesNonExemptEncryption: false
+        # All four orientations (App Store validation requires them for
+        # iPad multitasking support).
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # CloudKit sync pushes (silent remote notifications) — lets the app
+        # pull changes in the background instead of only on foreground.
+        UIBackgroundModes:
+          - remote-notification
+        # Deep-link scheme the widgets use (levelselect://game/<id>).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.timultuoustimes.levelselect
+            CFBundleURLSchemes: [levelselect]
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect
+        # CloudKit + push environments. Base = Development so everyday
+        # dev-signed builds never touch the real synced library; the Release
+        # config below forces Production, which is what archives/TestFlight/
+        # App Store must use. Override on the command line
+        # (LS_CK_ENV=Production) to point a DEBUG build at Production.
+        LS_CK_ENV: Development
+        LS_APS_ENV: development
+      configs:
+        # Tim's one-time migration from the web app is a developer tool, not a
+        # product feature: the personal export and the Settings actions that
+        # read it exist in Debug only. Release builds — every TestFlight and
+        # App Store build — ship neither.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEV_TOOLS"
+        Release:
+          # Drops legacy-import.json from the Copy Resources phase.
+          EXCLUDED_SOURCE_FILE_NAMES: "legacy-import.json"
+          # Distribution builds MUST use the Production CloudKit container and
+          # production APNs — a shipped build pointing at Development would
+          # sync into the wrong zone and silently see no data.
+          LS_CK_ENV: Production
+          LS_APS_ENV: production
+    sources:
+      - path: LevelSelect
+        excludes:
+          - "**/.DS_Store"
+      - path: Shared
+      # legacy-import.json under Resources/ is auto-routed to the resources
+      # build phase by xcodegen (non-code file type), then excluded from
+      # Release by EXCLUDED_SOURCE_FILE_NAMES above.
+    dependencies:
+      - target: LevelSelectWidgets
+        embed: true
+        destinationFilters: [iOS]
+      - target: LevelSelectWatch
+        embed: true
+        destinationFilters: [iOS]
+
+  LevelSelectWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "26.0"
+    entitlements:
+      path: Watch/LevelSelectWatch.entitlements
+      properties:
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.timultuoustimes.levelselect]
+        com.apple.developer.icloud-services: [CloudKit]
+    # Reuse the phone's data layer — same models, schema, store, Repository —
+    # so the watch syncs the same iCloud data. Watch-only stubs (in Watch/)
+    # satisfy Repository's iOS-only side effects.
+    sources:
+      - path: LevelSelect/Persistence/Models
+      - path: LevelSelect/Persistence/Schema.swift
+      # LevelSelectStore.shared resolves through this (Foundation+SwiftData
+      # only, no UI). The watch never switches libraries — the demo flag is
+      # device-local and gated to Debug — so it always comes up on the real
+      # store, which is the only behaviour that makes sense there.
+      - path: LevelSelect/Persistence/LibrarySwitcher.swift
+      - path: LevelSelect/Persistence/Repository.swift
+      - path: LevelSelect/Persistence/Syncable.swift
+      - path: LevelSelect/Persistence/DeviceIdentity.swift
+      # Repository records every session's parent here; the watch creates
+      # sessions too, so it needs the same ledger.
+      - path: LevelSelect/Persistence/SessionParentLedger.swift
+      # Repository persists through the monitor (Foundation+SwiftData only,
+      # no UI) — the watch surfaces failures via the same shared state.
+      - path: LevelSelect/Persistence/PersistenceMonitor.swift
+      - path: LevelSelect/Domain
+      # Domain's date rules delegate here, and the watch compiles Domain.
+      # Foundation only — the rest of Shared/ imports WidgetKit and has no
+      # business on a watch, so this is the one file rather than the folder.
+      - path: Shared/ReleaseCountdown.swift
+      # The watch reads ThemeSettings directly and needs to turn its stored
+      # hex strings into Colors. See WatchTheme.
+      - path: Shared/ColorHex.swift
+      # Foundation-only value types Repository references (no UI).
+      - path: LevelSelect/Services/IGDBService.swift
+      - path: LevelSelect/Services/YouTubeService.swift
+      # IGDBService's edge-function headers. The watch generates its Info.plist
+      # without LSAppKey, so appKey is nil here — harmless, since the watch
+      # makes no edge-function calls of its own.
+      - path: LevelSelect/Services/EdgeFunctions.swift
+      # Repository.useBuiltinSchema references this (Foundation+SwiftData
+      # only, no UI). The watch app doesn't bundle builtin-trackers.json, so
+      # lookups just come back empty there — harmless, same fallback path as
+      # a corrupt/missing bundle resource on the phone.
+      - path: LevelSelect/Services/BuiltinTrackers.swift
+      # Repository.addImage downscales through this (Foundation + ImageIO
+      # only, no UI). The watch never adds an image itself, but it shares
+      # Repository wholesale, so it has to be able to compile the call.
+      - path: LevelSelect/Services/ImageIngest.swift
+      - path: Watch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect.watchkitapp
+        INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.timultuoustimes.levelselect
+        INFOPLIST_KEY_WKApplication: YES
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+
+  LevelSelectWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "26.0"
+    entitlements:
+      path: Widgets/LevelSelectWidgets.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.timultuoustimes.levelselect]
+    sources:
+      - path: Widgets
+      - path: Shared
+      # The console-icon imagesets, so a "Switch 2" launcher shows the actual
+      # claymorphic hardware instead of a generic controller glyph. Brings
+      # the whole catalog (harmless duplicates like the app icon set).
+      - path: LevelSelect/Assets.xcassets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.timultuoustimes.levelselect.widgets
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: LevelSelect
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) WIDGET_EXTENSION"
+        SKIP_INSTALL: YES
+    info:
+      path: Widgets/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+
+  LevelSelectTests:
+    type: bundle.unit-test
+    # macOS AND iOS. It was macOS-only for thirty-seven builds, which is how a
+    # suite of 800+ green tests could sit beside a platform-specific break —
+    # Codex named enabling this "the prerequisite for preventing another
+    # platform-specific build/UI regression".
+    #
+    # The only thing that made it macOS-only was the host path: a Mac app keeps
+    # its binary in Contents/MacOS, an iOS app at the bundle root. Both spelled
+    # out per-SDK rather than one guess that works on one platform.
+    supportedDestinations: [macOS, iOS]
+    sources:
+      - path: Tests
+    dependencies:
+      - target: LevelSelect
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        "TEST_HOST[sdk=macosx*]": "$(BUILT_PRODUCTS_DIR)/LevelSelect.app/Contents/MacOS/LevelSelect"
+        "TEST_HOST[sdk=iphoneos*]": "$(BUILT_PRODUCTS_DIR)/LevelSelect.app/LevelSelect"
+        "TEST_HOST[sdk=iphonesimulator*]": "$(BUILT_PRODUCTS_DIR)/LevelSelect.app/LevelSelect"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+      configs:
+        # Mirror the app target so tests can cover the developer-only code
+        # (legacy importer, CloudKit schema seeder) that Release compiles out.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEV_TOOLS"
+
+schemes:
+  LevelSelect:
+    build:
+      targets:
+        LevelSelect: all
+        LevelSelectTests: [test]
+    test:
+      targets:
+        - LevelSelectTests

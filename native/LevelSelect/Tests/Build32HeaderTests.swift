@@ -1,0 +1,572 @@
+import Testing
+import Foundation
+import SwiftData
+@testable import LevelSelect
+
+/// Build 32 — the game page header, and the menu vocabulary the 2026-08-28
+/// audit found had drifted apart.
+@MainActor
+struct Build32HeaderTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    // MARK: Header stats
+
+    /// The regression that started this: the page could only ever show the
+    /// ACTIVE playthrough's time, so a second playthrough made the number on
+    /// screen smaller than the truth.
+    @Test func playtimeCountsEveryPlaythroughNotJustTheActiveOne() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Hades", status: .playing)
+
+        let first = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.logManualSession(on: first, duration: 3600)
+        let second = repo.addPlaythrough(to: game, named: "Second run")
+        _ = repo.logManualSession(on: second, duration: 1800)
+        repo.setActivePlaythrough(second, for: game)
+
+        // The active playthrough alone would report 1800.
+        #expect(game.activePlaythrough?.totalPlaytime().rounded() == 1800)
+        #expect(game.lifetimePlaytime().rounded() == 5400)
+        #expect(game.lifetimeSessionCount == 2)
+    }
+
+    /// A deleted playthrough's time leaves with it — the total is what you
+    /// still have, not what you ever had.
+    @Test func deletedPlaythroughsDropOutOfTheTotal() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Celeste", status: .playing)
+
+        let keep = repo.ensureDefaultPlaythrough(for: game)
+        _ = repo.logManualSession(on: keep, duration: 600)
+        let scrap = repo.addPlaythrough(to: game, named: "Mistake")
+        _ = repo.logManualSession(on: scrap, duration: 9000)
+        repo.deletePlaythrough(scrap, from: game)
+
+        #expect(game.lifetimePlaytime().rounded() == 600)
+        #expect(game.lifetimeSessionCount == 1)
+    }
+
+    @Test func beatenCountIgnoresDeletedRecords() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Outer Wilds", status: .completed)
+        repo.addCompletion(to: game, date: .now, precision: "day")
+        repo.addCompletion(to: game, date: .now, precision: "day")
+        #expect(game.liveCompletionEvents.count == 2)
+
+        if let first = game.liveCompletionEvents.first {
+            repo.removeCompletion(first)
+        }
+        #expect(game.liveCompletionEvents.count == 1)
+    }
+
+    /// A game nobody has timed reports zero rather than crashing on an empty
+    /// relationship — the common case for a library that's logged, not played.
+    @Test func anUntouchedGameReportsZeroForEverything() {
+        let context = makeContext()
+        let repo = Repository(context)
+        let game = repo.addGame(name: "Pitfall!", status: .backlog)
+        #expect(game.lifetimePlaytime() == 0)
+        #expect(game.lifetimeSessionCount == 0)
+        #expect(game.lifetimeRunCount == 0)
+        #expect(game.liveCompletionEvents.isEmpty)
+    }
+
+    // MARK: Status vocabulary
+
+    /// The audit's finding #4: the game menu said "Playing / Queued /
+    /// Ongoing" in raw enum order while every other surface said "Now Playing
+    /// / Up Next / Always Around". `label` was `rawValue.capitalized`; it is
+    /// now the one public vocabulary.
+    @Test func statusLabelIsTheShelfVocabularyEverywhere() {
+        #expect(GameStatus.playing.label == "Now Playing")
+        #expect(GameStatus.queued.label == "Up Next")
+        #expect(GameStatus.ongoing.label == "Always Around")
+        for status in GameStatus.allCases {
+            #expect(status.label == status.sectionTitle)
+        }
+    }
+
+    /// Menus iterate `displayOrder`, so it has to cover the enum — a status
+    /// missing from it would be unreachable from every menu at once.
+    @Test func displayOrderCoversEveryStatusExactlyOnce() {
+        #expect(Set(GameStatus.displayOrder) == Set(GameStatus.allCases))
+        #expect(GameStatus.displayOrder.count == GameStatus.allCases.count)
+    }
+}
+
+/// Build 33 — the game page header became a choice rather than a decree.
+@MainActor
+struct GamePageLayoutTests {
+
+    @Test func defaultsToShowcaseWhenNothingIsStored() {
+        let theme = ThemeSettings()
+        #expect(theme.gamePageLayoutRaw == nil)
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .showcase)
+    }
+
+    @Test func aStoredChoiceIsHonoured() {
+        let theme = ThemeSettings()
+        theme.gamePageLayoutRaw = GamePageLayout.classic.rawValue
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .classic)
+    }
+
+    /// An OLD build writing a value this one has never heard of, or a value
+    /// corrupted in transit, must not blank the page — it falls back to the
+    /// default the same way `ThemePageBackground` does.
+    @Test func anUnknownStoredValueFallsBackRatherThanFailing() {
+        let theme = ThemeSettings()
+        theme.gamePageLayoutRaw = "somethingNewer"
+        ThemePalette.refresh(from: theme)
+        #expect(ThemePalette.gamePageLayout == .showcase)
+    }
+
+    /// The seeder writes a marker into every optional so CloudKit creates the
+    /// field; purge puts it back to nil. A marker left behind would otherwise
+    /// silently become the user's stored preference.
+    @Test func theSeedMarkerIsNotAValidLayout() {
+        #expect(GamePageLayout(rawValue: "levelselect-schema-seed") == nil)
+    }
+
+    @Test func everyLayoutSaysWhatItIsAndWhatItDoes() {
+        for layout in GamePageLayout.allCases {
+            #expect(!layout.label.isEmpty)
+            // The blurb exists because "Showcase" and "Classic" name nothing.
+            #expect(layout.blurb.count > 20)
+        }
+    }
+}
+
+/// Build 33 — the profile. Home is plural, and what unites a plural page is
+/// whose it is.
+@MainActor
+struct PlayerProfileTests {
+
+    /// Tim's rule: "it shouldn't list the same thing 4 times if they use the
+    /// handle across all of them."
+    @Test func oneHandleAcrossServicesIsOneRow() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "timultuoustimes",
+            GamerService.xbox.rawValue: "timultuoustimes",
+            GamerService.playstation.rawValue: "timultuoustimes",
+            GamerService.nintendo.rawValue: "TimM",
+        ]
+        let rows = p.groupedHandles
+        #expect(rows.count == 2)
+
+        let shared = try! #require(rows.first { $0.handle == "timultuoustimes" })
+        #expect(shared.services.count == 3)
+        #expect(Set(shared.services) == [.builtin(.steam), .builtin(.xbox), .builtin(.playstation)])
+
+        let solo = try! #require(rows.first { $0.handle == "TimM" })
+        #expect(solo.services == [.builtin(.nintendo)])
+    }
+
+    /// "There shouldn't be blank spaces if they don't put any." A service
+    /// someone left empty is absent, not a row with nothing in it.
+    @Test func blankHandlesAreDroppedEntirely() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "someone",
+            GamerService.xbox.rawValue: "",
+            GamerService.gog.rawValue: "   ",
+        ]
+        #expect(p.handles.count == 1)
+        #expect(p.groupedHandles.count == 1)
+        #expect(p.groupedHandles.first?.services == [.builtin(.steam)])
+    }
+
+    /// A profile nobody has filled in stores nothing at all, rather than an
+    /// empty JSON object that would sync and read as "set to nothing".
+    @Test func anEmptyProfileStoresNothing() {
+        let p = PlayerProfile()
+        #expect(p.handlesData == nil)
+        p.handles = [GamerService.itch.rawValue: "x"]
+        #expect(p.handlesData != nil)
+        p.handles = [:]
+        #expect(p.handlesData == nil)
+    }
+
+    /// Rows come back in a stable order, so the profile doesn't reshuffle
+    /// itself between launches — dictionary iteration order would.
+    @Test func rowOrderIsStable() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.discord.rawValue: "z",
+            GamerService.nintendo.rawValue: "a",
+            GamerService.steam.rawValue: "m",
+        ]
+        let first = p.groupedHandles.map(\.handle)
+        #expect(first == p.groupedHandles.map(\.handle))
+        // Nintendo sorts before Steam before Discord.
+        #expect(first == ["a", "m", "z"])
+    }
+
+    /// The seed marker must not survive as a real handle after a purge.
+    @Test func seedMarkerIsNotAPlausibleHandle() {
+        let p = PlayerProfile()
+        p.handles = [GamerService.steam.rawValue: "levelselect-schema-seed"]
+        // Nothing validates handle CONTENT — this test exists to pin that the
+        // purge matches on displayName, not on handles, so a marker handle
+        // can't be stranded by a rename of the marker constant.
+        #expect(p.displayName == nil)
+    }
+}
+
+@Suite("Header handle display")
+struct HeaderHandleTests {
+
+    /// The header shows one handle, and it must be the one that is most
+    /// yours — the name across three services, not whichever happened to sort
+    /// first. Tim's real profile is a Discord-vs-everything-else shape.
+    @Test func theMostUsedHandleLeads() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "sameName",
+            GamerService.xbox.rawValue: "sameName",
+            GamerService.playstation.rawValue: "sameName",
+            GamerService.discord.rawValue: "otherName",
+        ]
+        let ranked = p.groupedHandles.sorted { $0.services.count > $1.services.count }
+        #expect(ranked.first?.handle == "sameName")
+        #expect(ranked.first?.services.count == 3)
+        #expect(ranked.count == 2)      // the header shows "+1"
+    }
+
+    /// A near-miss typo is NOT the same handle, and the app must not pretend
+    /// it is — two rows here is correct behavior on bad data, and the fix
+    /// belongs in the editor, not in a fuzzy match.
+    @Test func aTypoIsADifferentHandle() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.nintendo.rawValue: "timultuoustimes",
+            GamerService.steam.rawValue: "timtultuoustimes",
+        ]
+        #expect(p.groupedHandles.count == 2)
+    }
+}
+
+@Suite("Custom services")
+struct CustomServiceTests {
+
+    /// A service the app never heard of has to survive a round trip through
+    /// the same JSON blob as the built-ins — that is the whole reason custom
+    /// services cost no schema change.
+    @Test func aNamedServiceRoundTrips() {
+        let p = PlayerProfile()
+        p.handles = [
+            GamerService.steam.rawValue: "timultuoustimes",
+            HandleService.custom("Apple Arcade").key: "timultuoustimes",
+        ]
+        let groups = p.groupedHandles
+        #expect(groups.count == 1)                     // one handle, two services
+        #expect(groups.first?.services.count == 2)
+        #expect(groups.first?.services.map(\.label).contains("Apple Arcade") == true)
+    }
+
+    /// Built-ins keep their BARE raw value as the storage key. If that ever
+    /// changed, every profile already in iCloud would lose its handles.
+    @Test func builtinKeysAreUnprefixed() {
+        #expect(HandleService.builtin(.steam).key == "steam")
+        #expect(HandleService(key: "steam") == .builtin(.steam))
+        #expect(HandleService(key: "custom:Apple Arcade") == .custom("Apple Arcade"))
+        #expect(HandleService(key: "custom:") == nil)
+        #expect(HandleService(key: "nonsense") == nil)
+    }
+
+    /// One handle across every built-in service is the case that should stop
+    /// offering "add another" — there is nothing left to assign.
+    @Test func oneHandleCanCoverEverything() {
+        let p = PlayerProfile()
+        var map: [String: String] = [:]
+        for service in GamerService.allCases { map[service.rawValue] = "sameName" }
+        p.handles = map
+        #expect(p.groupedHandles.count == 1)
+        #expect(p.groupedHandles.first?.services.count == GamerService.allCases.count)
+    }
+}
+
+@Suite("Player summary")
+@MainActor
+struct PlayerSummaryTests {
+
+    /// A real in-memory container, because `PlayerSummary` reads relationships
+    /// and the app now treats a context-less model as dead — which is correct
+    /// for production, where every Game comes from a @Query, and means these
+    /// tests have to stop building loose objects.
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    private func makeGame(_ name: String, status: GameStatus,
+                          sessions: [(Date, TimeInterval)],
+                          in context: ModelContext) -> Game {
+        let game = Game(name: name)
+        context.insert(game)
+        game.status = status
+        let pt = Playthrough()
+        pt.game = game
+        context.insert(pt)
+        pt.sessions = sessions.map { start, seconds in
+            let s = Session()
+            context.insert(s)
+            s.startDate = start
+            s.endDate = start.addingTimeInterval(seconds)
+            s.accumulatedDuration = seconds
+            s.state = .stopped
+            s.playthrough = pt
+            return s
+        }
+        game.playthroughs = [pt]
+        return game
+    }
+
+    /// The three numbers are the whole point of the band, so each has to be
+    /// right on its own: playing counts games, this week counts a window,
+    /// total counts everything.
+    @Test func countsPlayingAndSplitsTimeByWindow() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-2 * 24 * 3600)
+        let old = now.addingTimeInterval(-40 * 24 * 3600)
+
+        let ctx = makeContext()
+        let games = [
+            makeGame("A", status: .playing, sessions: [(recent, 3600)], in: ctx),
+            makeGame("B", status: .playing, sessions: [(old, 7200)], in: ctx),
+            makeGame("C", status: .backlog, sessions: [], in: ctx),
+        ]
+        let s = PlayerSummary.make(from: games, now: now)
+
+        #expect(s.playing == 2)
+        #expect(s.weekSeconds == 3600)
+        #expect(s.totalSeconds == 3600 + 7200)
+    }
+
+    /// The floor moved from three to two on 2026-08-31, and this test moved
+    /// with it. The old rule said two tilted covers read as a layout bug; the
+    /// real week that settled it was Tim's — one game played, one finished,
+    /// and a header that showed only the first. Half a week is worse than two
+    /// covers. **One** game is the fallback case now.
+    @Test func aWeekWithOneGameFallsBackToItsArt() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let ctx = makeContext()
+        let game = makeGame("A", status: .playing, sessions: [(recent, 600)], in: ctx)
+        game.coverURLString = "https://example.com/a.jpg"
+
+        let s = PlayerSummary.make(from: [game], now: now)
+        #expect(s.recentCovers.count == 1)
+        #expect(!s.usesRibbon)
+        #expect(s.fallbackBackdrop == .remote(URL(string: "https://example.com/a.jpg")!))
+    }
+
+    /// And two now makes a ribbon.
+    @Test func twoGamesInAWeekMakeARibbon() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let recent = now.addingTimeInterval(-1 * 24 * 3600)
+        let ctx = makeContext()
+        let games = [
+            makeGame("A", status: .playing, sessions: [(recent, 600)], in: ctx),
+            makeGame("B", status: .paused, sessions: [(recent, 600)], in: ctx),
+        ]
+        games[0].coverURLString = "https://example.com/a.jpg"
+        games[1].coverURLString = "https://example.com/b.jpg"
+
+        let s = PlayerSummary.make(from: games, now: now)
+        #expect(s.recentCovers.count == 2)
+        #expect(s.usesRibbon)
+    }
+
+    @Test func aBusyWeekUsesTheRibbonMostRecentFirst() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let games = (0..<4).map { i -> Game in
+            let g = makeGame("G\(i)", status: .playing,
+                             sessions: [(now.addingTimeInterval(-Double(i) * 3600), 600)],
+                             in: ctx)
+            g.coverURLString = "https://example.com/\(i).jpg"
+            return g
+        }
+        let s = PlayerSummary.make(from: games, now: now)
+        #expect(s.usesRibbon)
+        // G0 played most recently, so its cover leads.
+        #expect(s.recentCovers.first == .remote(URL(string: "https://example.com/0.jpg")!))
+        #expect(s.recentCovers.last == .remote(URL(string: "https://example.com/3.jpg")!))
+    }
+
+    /// Someone with no sessions at all still has a header; it just has nothing
+    /// to draw behind them, which must not crash or show an empty ribbon.
+    @Test func noPlayHistoryIsSafe() {
+        let s = PlayerSummary.make(from: [makeGame("A", status: .backlog, sessions: [], in: makeContext())])
+        #expect(s.playing == 0)
+        #expect(s.totalSeconds == 0)
+        #expect(!s.usesRibbon)
+        #expect(s.fallbackBackdrop == nil)
+    }
+}
+
+@Suite("Profile name color")
+@MainActor
+struct ProfileNameColorTests {
+
+    /// Three states in one string, and the modes must round-trip — a mode that
+    /// misreads its own stored value silently resets someone's choice.
+    @Test func modesRoundTrip() {
+        #expect(ProfileNameColor.mode(of: ProfileNameColor.plain) == .plain)
+        #expect(ProfileNameColor.mode(of: ProfileNameColor.accent) == .accent)
+        #expect(ProfileNameColor.mode(of: "#F5A34D") == .custom)
+    }
+
+    /// "Accent" must FOLLOW the accent rather than freeze a copy of it — that
+    /// is the whole difference between it and picking the same color by hand.
+    @Test func accentModeTracksTheLiveAccent() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let warm = ProfileNameColor.resolve(ProfileNameColor.accent)
+
+        settings.accentHex = "#4D9BFF"
+        ThemePalette.refresh(from: settings)
+        let cool = ProfileNameColor.resolve(ProfileNameColor.accent)
+
+        #expect(warm != cool)
+        ThemePalette.refresh(from: nil)
+    }
+
+    /// A stored hex must NOT move when the accent changes.
+    @Test func customModeStaysPut() {
+        let settings = ThemeSettings()
+        settings.accentHex = "#F5A34D"
+        ThemePalette.refresh(from: settings)
+        let before = ProfileNameColor.resolve("#4D9BFF")
+
+        settings.accentHex = "#3FD07A"
+        ThemePalette.refresh(from: settings)
+        let after = ProfileNameColor.resolve("#4D9BFF")
+
+        #expect(before == after)
+        ThemePalette.refresh(from: nil)
+    }
+
+    /// Garbage in storage falls back rather than rendering an invisible name.
+    @Test func nonsenseFallsBack() {
+        // Falls back to the app's own ink, not to body text — Default stopped
+        // being `.primary` when torch became the default name colour.
+        #expect(ProfileNameColor.resolve("not a color") == LSTheme.wordmark)
+    }
+}
+
+extension PlayerSummaryTests {
+    /// The fallback has to pick a game that HAS art, not merely the first one
+    /// being played. Taking the first playing game left the header blank for
+    /// anyone whose current game was added by hand — while a shelf full of
+    /// covers sat directly underneath it.
+    @Test func theFallbackSkipsGamesWithNoArt() {
+        let ctx = makeContext()
+        let bare = Game(name: "Hand-added")
+        ctx.insert(bare)
+        bare.status = .playing
+
+        let withArt = Game(name: "Has a cover")
+        ctx.insert(withArt)
+        withArt.status = .playing
+        withArt.coverURLString = "https://example.com/cover.jpg"
+
+        let s = PlayerSummary.make(from: [bare, withArt])
+        #expect(s.fallbackBackdrop == .remote(URL(string: "https://example.com/cover.jpg")!))
+    }
+
+    /// And a backdrop beats a cover when both exist — a cover in a wide band
+    /// is a portrait stretched sideways.
+    @Test func aBackdropBeatsACover() {
+        let ctx = makeContext()
+        let g = Game(name: "Both")
+        ctx.insert(g)
+        g.status = .playing
+        g.coverURLString = "https://example.com/cover.jpg"
+        g.backdropURLString = "https://example.com/backdrop.jpg"
+        #expect(PlayerSummary.make(from: [g]).fallbackBackdrop == .remote(URL(string: "https://example.com/backdrop.jpg")!))
+    }
+}
+
+@Suite("Session history")
+@MainActor
+struct SessionHistoryTests {
+
+    private func makeContext() -> ModelContext {
+        ModelContext(LevelSelectStore.makeContainer(inMemory: true))
+    }
+
+    /// Sessions on the given days, all in one playthrough.
+    private func sessions(_ days: [Int], in context: ModelContext,
+                          from anchor: Date) -> [Session] {
+        let game = Game(name: "Long one")
+        context.insert(game)
+        let pt = Playthrough()
+        context.insert(pt)
+        pt.game = game
+        let made = days.map { day -> Session in
+            let s = Session()
+            context.insert(s)
+            s.startDate = anchor.addingTimeInterval(-Double(day) * 86_400)
+            s.endDate = s.startDate.addingTimeInterval(3600)
+            s.accumulatedDuration = 3600
+            s.state = .stopped
+            s.playthrough = pt
+            return s
+        }
+        pt.sessions = made
+        return made
+    }
+
+    /// A 63-hour game is the case this screen exists for: five rows on the
+    /// game page, and everything older unreachable until now.
+    @Test func groupsByMonthNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)   // mid-Jan 2027
+        let ctx = makeContext()
+        // Today, last month, and three months back.
+        let made = sessions([0, 40, 100], in: ctx, from: anchor)
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 3)
+        // Newest month leads, and the dates descend.
+        #expect(months[0].start > months[1].start)
+        #expect(months[1].start > months[2].start)
+    }
+
+    /// Sessions in the same month collapse into one section, and the section
+    /// carries that month's total — the question a month grouping invites.
+    @Test func oneSectionPerMonthWithItsOwnTotal() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([0, 1, 2], in: ctx, from: anchor)   // same month
+        let months = SessionMonth.group(made)
+
+        #expect(months.count == 1)
+        #expect(months[0].sessions.count == 3)
+        #expect(months[0].total == 3 * 3600)
+    }
+
+    /// Within a month, newest first — the query sorts, but grouping must not
+    /// undo it, and `Dictionary(grouping:)` gives no order guarantee.
+    @Test func sessionsInsideAMonthStayNewestFirst() {
+        let anchor = Date(timeIntervalSince1970: 1_800_000_000)
+        let ctx = makeContext()
+        let made = sessions([5, 1, 3], in: ctx, from: anchor)
+        let inside = SessionMonth.group(made)[0].sessions
+        #expect(inside[0].startDate > inside[1].startDate)
+        #expect(inside[1].startDate > inside[2].startDate)
+    }
+
+    @Test func noSessionsIsNoMonths() {
+        #expect(SessionMonth.group([]).isEmpty)
+    }
+}

@@ -1,0 +1,105 @@
+---
+/**
+ * The gloss sweep the app puts on cover art (`CoverThumb`'s top-left
+ * highlight), as a wrapper you can put round any image.
+ *
+ * Pure CSS — no JavaScript ships for this. The sweep runs on hover on a
+ * pointer device, and once on entry for touch, because a hover-only effect is
+ * invisible on a phone.
+ */
+interface Props {
+  /** Adds a slow idle sweep as well as the hover one. */
+  idle?: boolean;
+  class?: string;
+}
+const { idle = false, class: className = '' } = Astro.props;
+---
+<div class:list={['shine', className, { 'shine--idle': idle }]}>
+  <slot />
+</div>
+
+<style>
+  .shine {
+    position: relative;
+    overflow: hidden;
+    border-radius: inherit;
+    isolation: isolate;
+  }
+
+  /* Static top-left gloss — the same shape the app draws on a cover. */
+  .shine::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 28%,
+      rgba(255, 255, 255, 0) 55%
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* The travelling highlight. */
+  .shine::after {
+    content: '';
+    position: absolute;
+    top: -60%;
+    bottom: -60%;
+    width: 42%;
+    left: -60%;
+    background: linear-gradient(
+      100deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.34) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    transform: rotate(14deg);
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  @media (hover: hover) {
+    .shine:hover::after {
+      /* 0.85s — the app's cover shine duration. */
+      animation: sweep 850ms ease-out;
+    }
+  }
+
+  /* Touch devices get one sweep on arrival instead of nothing at all. */
+  @media (hover: none) {
+    .shine::after {
+      animation: sweep 850ms ease-out 400ms;
+    }
+  }
+
+  .shine--idle::after {
+    /* The sweep itself is 0.85s — the app's cover-shine duration — and then it
+       WAITS. 6.6s is the LivePulse *interval*, not the length of the sweep;
+       stretching one sweep across the whole 6.6s made it crawl. 0.85/6.6 is
+       ~13% of the cycle, so the highlight travels at the right speed and the
+       rest of the cycle is stillness.  */
+    animation: sweep-idle 6.6s ease-out infinite;
+  }
+
+  @keyframes sweep-idle {
+    0%   { left: -60%; }
+    13%  { left: 120%; }
+    100% { left: 120%; }
+  }
+
+  @keyframes sweep {
+    from { left: -60%; }
+    to { left: 120%; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shine::after,
+    .shine:hover::after,
+    .shine--idle::after {
+      animation: none;
+      opacity: 0;
+    }
+  }
+</style>
