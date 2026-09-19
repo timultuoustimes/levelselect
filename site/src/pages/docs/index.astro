@@ -8,7 +8,7 @@ import Base from '../../layouts/Base.astro';
 const steps = [
   {
     t: 'Add your first game',
-    d: 'Search for it and the cover, platform and details come with it. Got a library elsewhere? Settings → Your data → Import from CSV brings the lot in at once.',
+    d: 'Search for it and the cover, platform and details come with it. Got a library elsewhere? Settings → Import & Export → Import from CSV brings the lot in at once.',
     time: '1 min',
   },
   {
@@ -65,7 +65,7 @@ const sections = [
   { id: 'consolesimport',    q: 'Can I bring in my Steam, PlayStation or Xbox games?',
     a: 'Settings → Steam, PlayStation or Xbox. What you have played comes in for review, matched to the right game and console.' },
   { id: 'csv',               q: 'Can I bring a library in from another app?',
-    a: 'Settings → Your data → Import from CSV. Rows carrying an IGDB id match exactly, and nothing is added until you have looked.' },
+    a: 'Settings → Import & Export → Import from CSV. Rows carrying an IGDB id match exactly, and nothing is added until you have looked.' },
   { id: 'barcode',           q: 'Can I scan the box?',
     a: 'Add Game → the barcode button. A box it knows goes straight to Add, on the right console, marked physical.' },
   { id: 'bulkedit',          q: 'These games are all on the wrong console',
@@ -127,7 +127,7 @@ const sections = [
   { id: 'stats',             q: 'What do the charts show?',
     a: 'Journal → Charts. Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
   { id: 'data',              q: 'How do I get my data out?',
-    a: 'Settings → Your data → Export library writes a readable JSON file of everything.' },
+    a: 'Settings → Import & Export → Export library writes a readable JSON file of everything.' },
 ];
 
 /**
@@ -311,7 +311,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'csv')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p><strong>Settings &rarr; Your data &rarr; Import from CSV.</strong> An export from Gamery, Backloggd, a spreadsheet or anywhere else: a title column is all that is required, and platform, status, rating, hours and notes are read when they are there. Column names can vary &mdash; Title or Game or Name, Shelf or List or Status.</p>
+    <p><strong>Settings &rarr; Import &amp; Export &rarr; Import from CSV.</strong> An export from Gamery, Backloggd, a spreadsheet or anywhere else: a title column is all that is required, and platform, status, rating, hours and notes are read when they are there. Column names can vary &mdash; Title or Game or Name, Shelf or List or Status.</p>
     <p><strong>An id beats a title.</strong> A row carrying an <strong>IGDB id</strong> is matched by it, which is exact; without one, the title is looked up and anything that did not match exactly is flagged for you to check. Nothing is added until you have been through the list, and you can swap any match or keep the name you typed.</p>
     <p>A cell naming two systems &mdash; <em>Xbox,Mac</em> &mdash; makes the game yours on both. If iCloud is still bringing your library down, the import waits rather than adding a second copy of everything it is about to restore.</p>
       </div>
@@ -764,7 +764,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
         <span class="qa__a">{sections.find((x) => x.id === 'data')!.a}</span>
       </summary>
       <div class="qa__body">
-    <p><strong>Settings &rarr; Your data &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
+    <p><strong>Settings &rarr; Import &amp; Export &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
     <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, and collections — each record with its stable id — plus your appearance settings as a single preferences block.</p>
     <p><strong>And it comes back:</strong> Import LevelSelect export (same screen) reads the file and restores whatever your library is missing — never touching what's already there, so an old export merges safely onto a current library, and importing twice changes nothing. One honest caveat remains: map images are saved as links rather than embedded. Alongside it, Recently Deleted holds everything you delete until <em>you</em> decide otherwise — restore with a tap, or use the app's only permanent delete, which lives there and nowhere else.</p>
     <p><strong>Replace Library with Backup</strong> makes your library match an export exactly &mdash; everything in the file comes back as it was, and anything the file doesn&rsquo;t have goes to Recently Deleted. <strong>Erase Library</strong> moves every game, collection, memory and console to Recently Deleted. Both show you what will change, ask you to type a word to confirm, and save a safety copy first to Files &rarr; LevelSelect &rarr; Safety Copies.</p>
