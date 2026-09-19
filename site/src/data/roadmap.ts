@@ -100,6 +100,7 @@ export const horizons = [
     color: '#0A84FF',
     items: [
       { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
+      { t: 'Trackers that fit the game', d: 'A checklist suits a Metroidvania. Other games need a count, a time, a rank or a score. Trackers will learn the shape of the game they are for.' },
       { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
     ],
   },
