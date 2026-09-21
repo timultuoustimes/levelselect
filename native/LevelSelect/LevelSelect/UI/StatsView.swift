@@ -205,6 +205,10 @@ struct StatsCards: View {
                     // any library that has finished nothing yet — the page
                     // announcing a section it does not have.
                     let visible = cardOrder.filter { !hiddenCards.contains($0) && draws($0, top: top) }
+                    // Above the cards and outside the arrange sheet: a Replay
+                    // is an occasion rather than one more statistic, and it
+                    // draws nothing at all when there is nothing to recap.
+                    ReplayEntryCard()
                     if visible.contains(.overview) {
                         overviewCard(sessions: sessions)
                     }
