@@ -61,10 +61,18 @@ struct BadgesView: View {
         .sheet(item: $showing) { shown in
             BadgeDetailSheet(badge: shown.badge, earnedAt: shown.earnedAt)
         }
-        .task {
-            guard summaryPending, !earned.isEmpty else { return }
+        // Keyed on the count, not plain `.task`: on first appearance the
+        // query hasn't loaded yet, so a one-shot task saw an empty ledger and
+        // never celebrated (09-21).
+        .task(id: earned.count) {
+            // Read the flag rather than trusting `@AppStorage`'s cache: it is
+            // written by the awarder, which may have run before this view was
+            // made, and SwiftUI does not always see a write it did not make.
+            let defaults = UserDefaults.standard
+            guard defaults.bool(forKey: BadgeAwarder.summaryPendingKey), !earned.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(350))
             celebrate += 1
+            defaults.set(false, forKey: BadgeAwarder.summaryPendingKey)
             summaryPending = false
         }
     }

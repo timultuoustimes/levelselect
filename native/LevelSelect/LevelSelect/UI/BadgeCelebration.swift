@@ -46,8 +46,12 @@ struct BadgeToast: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(LSTheme.accent.opacity(0.35)))
+        // Opaque, like the undo toast: `cardFill` is translucent, so over a
+        // game page the words behind it read straight through (Tim, 09-21).
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(LSTheme.cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .strokeBorder(LSTheme.accent.opacity(0.35)))
         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
         .accessibilityElement(children: .combine)
     }
@@ -66,14 +70,27 @@ struct ConfettiBurst: View {
     var duration: Double = 2.2
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// **A box, not a `@State Date?`.**
+    ///
+    /// `Canvas`'s renderer closure is captured once and kept; it does not see
+    /// later values of a `@State` property the way a re-evaluated `body`
+    /// would. With the date in `@State`, every single frame read `nil`,
+    /// elapsed time was always zero, and no paper was ever drawn even though
+    /// the clock had been set (09-21). A reference the closure holds is read
+    /// fresh each frame.
+    ///
     /// Nil until a burst is asked for. `onAppear` used to set this, which
     /// meant the paper flew every time you opened the screen (Tim, 09-21).
-    @State private var startedAt: Date?
+    @State private var clock = Clock()
+
+    private final class Clock { var startedAt: Date? }
 
     private struct Piece {
         let x: Double          // 0...1 of the width
         let drift: Double      // sideways travel
-        let delay: Double
+        let delay: Double      // 0...1 of the burst
+        let speed: Double      // how much of the burst this piece takes
+        let rise: Double       // how high it is thrown
         let spin: Double
         let size: Double
         let hue: Color
@@ -83,7 +100,13 @@ struct ConfettiBurst: View {
         var generator = SeededRandom(seed: UInt64(i &* 2654435761))
         return Piece(x: generator.next(),
                      drift: generator.next() * 0.7 - 0.35,
-                     delay: generator.next() * 0.45,
+                     // **Spread, speed and height all vary.** With one shared
+                     // arc and a delay of under half a second, all 140 pieces
+                     // rose in lockstep and read as a solid coloured band
+                     // sliding up the screen rather than thrown paper (09-21).
+                     delay: generator.next() * 0.35,
+                     speed: 0.7 + generator.next() * 0.55,
+                     rise: 0.75 + generator.next() * 0.6,
                      spin: generator.next() * 8 - 4,
                      // Paper you can see from across the room: the first pass
                      // was 5-12pt and read as dust in the middle of the screen.
@@ -91,39 +114,52 @@ struct ConfettiBurst: View {
                      hue: [LSTheme.accent, .orange, .yellow, .pink, .mint, .cyan][i % 6])
     }
 
+    /// How long the burst really lasts, in multiples of `duration`: the last
+    /// piece to start, plus the time the slowest one takes to fall.
+    private static let span = pieces.map { $0.delay + $0.speed }.max() ?? 1
+
     var body: some View {
         if reduceMotion || trigger == 0 {
             EmptyView()
         } else {
             TimelineView(.animation) { timeline in
                 Canvas { context, size in
-                    let t = timeline.date.timeIntervalSince(startedAt ?? timeline.date)
-                    guard t < duration else { return }
+                    guard let started = clock.startedAt else { return }
+                    let t = timeline.date.timeIntervalSince(started)
+                    // `span`, not `duration`: a late, slow piece is still in
+                    // the air well after the nominal end, and stopping at
+                    // `duration` clipped the stragglers mid-flight.
+                    guard t < duration * Self.span else { return }
                     for piece in Self.pieces {
-                        let local = t - piece.delay
+                        let local = t - piece.delay * duration
                         guard local > 0 else { continue }
-                        let progress = local / (duration - piece.delay)
+                        let progress = local / (duration * piece.speed)
                         guard progress <= 1 else { continue }
-                        // Thrown from below the bottom edge, up over the
-                        // whole screen, then down past it — the burst should
-                        // cross the view, not hover in the middle of it.
-                        let rise = sin(min(progress, 1) * .pi) * size.height * 1.15
+                        // Thrown from below the bottom edge, up over the whole
+                        // screen, then down past it.
+                        let rise = sin(progress * .pi) * size.height * 1.15 * piece.rise
                         let y = size.height * 1.05 - rise + progress * progress * size.height * 0.85
                         let x = size.width * (piece.x + piece.drift * progress)
                         let fade = progress > 0.75 ? (1 - progress) / 0.25 : 1
-                        var rect = context
-                        rect.translateBy(x: x, y: y)
-                        rect.rotate(by: .radians(piece.spin * local))
-                        rect.opacity = fade
-                        rect.fill(Path(CGRect(x: -piece.size / 2, y: -piece.size / 2,
-                                              width: piece.size, height: piece.size * 0.6)),
-                                  with: .color(piece.hue))
+                        // `drawLayer`, not a copied context: mutating a copy of
+                        // `GraphicsContext` and filling into it draws nothing.
+                        context.drawLayer { layer in
+                            layer.opacity = fade
+                            layer.translateBy(x: x, y: y)
+                            layer.rotate(by: .radians(piece.spin * local))
+                            layer.fill(Path(CGRect(x: -piece.size / 2, y: -piece.size / 2,
+                                                   width: piece.size, height: piece.size * 0.6)),
+                                       with: .color(piece.hue))
+                        }
                     }
                 }
                 .allowsHitTesting(false)
             }
-            .onChange(of: trigger) { startedAt = .now }
-            .task { if startedAt == nil { startedAt = .now } }
+            // **Keyed on the trigger.** This view is built while the trigger
+            // is still zero, so a start time set at creation was already in
+            // the past by the time the burst appeared — every frame counted as
+            // "after the end" and no paper was ever drawn (09-21).
+            .task(id: trigger) { clock.startedAt = .now }
         }
     }
 }

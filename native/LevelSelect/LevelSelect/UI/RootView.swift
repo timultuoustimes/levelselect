@@ -170,8 +170,11 @@ struct RootView: View {
                     .transition(slideIn)
                 }
                 .zIndex(4)
-                .task(id: nav.earnedBadges.count) {
-                    try? await Task.sleep(for: .seconds(6))
+                // Eight seconds, and keyed on what is being celebrated rather
+                // than how many: a re-render mid-celebration used to restart
+                // the clock, or cut it short.
+                .task(id: nav.earnedBadges.map(\.id).joined()) {
+                    try? await Task.sleep(for: .seconds(8))
                     nav.earnedBadges = []
                 }
             }

@@ -30,6 +30,26 @@ enum BadgeAwarder {
         var wasBackfill = false
     }
 
+    /// **Debounced, off the one path every write takes.**
+    ///
+    /// Hanging this on `WidgetBridge.refresh` covered games and sessions and
+    /// missed everything widgets don't care about — writing a memory earned
+    /// nothing until something else happened (Tim, 09-21). `Repository`
+    /// commits through `persist()`, so that is where this belongs; the delay
+    /// coalesces a burst of writes (an import, a bulk edit) into one pass.
+    static func schedule(in context: ModelContext) {
+        guard !isAwarding else { return }      // our own save is not an event
+        pending?.cancel()
+        pending = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+            award(in: context)
+        }
+    }
+
+    private static var pending: Task<Void, Never>?
+    private static var isAwarding = false
+
     /// Run after anything that can move a count: a session stops, a completion
     /// is added, a tracker item is ticked, a game arrives, a console or memory
     /// is recorded. Cheap enough to call often — it is a handful of fetches
@@ -48,6 +68,8 @@ enum BadgeAwarder {
 
         let defaults = UserDefaults.standard
         let firstPass = !defaults.bool(forKey: backfilledKey)
+        isAwarding = true
+        defer { isAwarding = false }
         for id in missing {
             // **Dated from the thing that earned it, not from today.**
             // Backfilling an existing library with "now" made every badge
@@ -62,8 +84,10 @@ enum BadgeAwarder {
         // A silent backfill still deserves saying so, once, where badges live.
         if firstPass { defaults.set(true, forKey: summaryPendingKey) }
 
-        return Result(newlyEarned: firstPass ? [] : missing.compactMap(Badges.definition),
-                      wasBackfill: firstPass)
+        let earned = firstPass ? [] : missing.compactMap(Badges.definition)
+        // The toast lives on the navigator, the way a deleted game's undo does.
+        if !earned.isEmpty { AppNavigator.shared.earnedBadges += earned }
+        return Result(newlyEarned: earned, wasBackfill: firstPass)
     }
 
     /// One-time repair for badges written before dates were worked out.
