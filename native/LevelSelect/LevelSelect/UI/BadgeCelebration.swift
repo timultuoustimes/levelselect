@@ -70,6 +70,9 @@ struct ConfettiBurst: View {
     var duration: Double = 2.2
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    #endif
     /// **A box, not a `@State Date?`.**
     ///
     /// `Canvas`'s renderer closure is captured once and kept; it does not see
@@ -121,14 +124,39 @@ struct ConfettiBurst: View {
     var body: some View {
         if trigger == 0 {
             EmptyView()
-        } else if reduceMotion {
-            // **The setting means less movement, not less occasion.** Paper
-            // flying across the screen is exactly the flourish Reduce Motion
-            // is asking about, so it gets the accent washing over the screen
-            // once instead — a moment with nothing traveling in it.
-            ReduceMotionGlow(trigger: trigger)
         } else {
-            TimelineView(.animation) { timeline in
+            ZStack {
+                // **The glow is the celebration; the paper is on top of it.**
+                // It began as what Reduce Motion got instead of confetti, and
+                // Fable, watching both, called it the better idea: a warm
+                // light from the edges that matches the torches on the icon
+                // (build 40 runtime, 09-21). Tim: everyone gets it.
+                CelebrationGlow(trigger: trigger)
+                // Reduce Motion keeps the glow and loses only the paper — the
+                // setting means less movement, not less occasion.
+                if !reduceMotion { paper }
+            }
+        }
+    }
+
+    /// **Less paper on the phone.** The same 140 pieces covered a phone
+    /// densely enough to read as a wall, and spread across an iPad's four
+    /// times the area they read as a celebration (Fable, 09-21). So the count
+    /// follows the space: fifty where the screen is narrow, a hundred where
+    /// it is wide. Taken from the front of one seeded list, so a smaller
+    /// burst is the same burst, thinner — every color still in it.
+    private var pieceCount: Int {
+        #if os(iOS)
+        horizontalSizeClass == .compact ? 50 : 100
+        #else
+        100
+        #endif
+    }
+
+    @ViewBuilder
+    private var paper: some View {
+        let count = pieceCount
+        TimelineView(.animation) { timeline in
                 Canvas { context, size in
                     guard let started = clock.startedAt else { return }
                     let t = timeline.date.timeIntervalSince(started)
@@ -136,7 +164,7 @@ struct ConfettiBurst: View {
                     // the air well after the nominal end, and stopping at
                     // `duration` clipped the stragglers mid-flight.
                     guard t < duration * Self.span else { return }
-                    for piece in Self.pieces {
+                    for piece in Self.pieces.prefix(count) {
                         let local = t - piece.delay * duration
                         guard local > 0 else { continue }
                         let progress = local / (duration * piece.speed)
@@ -165,15 +193,15 @@ struct ConfettiBurst: View {
             // is still zero, so a start time set at creation was already in
             // the past by the time the burst appeared — every frame counted as
             // "after the end" and no paper was ever drawn (09-21).
-            .task(id: trigger) { clock.startedAt = .now }
-        }
+        .task(id: trigger) { clock.startedAt = .now }
     }
 }
 
-/// What a celebration looks like with Reduce Motion on: the accent gathers at
-/// the edges, holds for a moment, and goes. It fades rather than moves, which
-/// is the distinction the setting actually draws.
-private struct ReduceMotionGlow: View {
+/// **The light a badge arrives in.** The accent gathers at the edges, holds
+/// for a moment, and goes — torchlight rather than fireworks. It fades rather
+/// than moves, which is why it is also the whole celebration under Reduce
+/// Motion: the setting asks for less movement, and this has none.
+private struct CelebrationGlow: View {
     let trigger: Int
     @State private var lit = false
 
