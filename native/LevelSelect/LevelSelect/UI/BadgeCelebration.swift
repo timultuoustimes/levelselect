@@ -18,11 +18,8 @@ struct BadgeToast: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle().fill(LSTheme.accent.opacity(0.18)).frame(width: 42, height: 42)
-                Image(systemName: lead?.symbol ?? "rosette")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(LSTheme.accent)
+            if let lead {
+                EarnedBadgeArt(badge: lead, size: 46)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(badges.count == 1 ? "Badge earned" : "\(badges.count) badges earned")

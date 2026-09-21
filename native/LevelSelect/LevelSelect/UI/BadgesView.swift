@@ -71,14 +71,11 @@ private struct BadgeRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(isEarned ? LSTheme.accent.opacity(0.18) : Color.secondary.opacity(0.12))
-                    .frame(width: 44, height: 44)
-                Image(systemName: badge.symbol)
-                    .font(.title3)
-                    .foregroundStyle(isEarned ? LSTheme.accent : .secondary)
-            }
+            BadgeArt(badge: badge, size: 46)
+                // Not yet earned reads as unlit rather than absent: you can
+                // see what it looks like, which is half of wanting it.
+                .saturation(isEarned ? 1 : 0)
+                .opacity(isEarned ? 1 : 0.5)
             VStack(alignment: .leading, spacing: 2) {
                 Text(badge.title)
                     .font(.subheadline.weight(.semibold))
