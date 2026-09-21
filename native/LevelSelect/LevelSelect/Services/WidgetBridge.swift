@@ -13,6 +13,11 @@ import UIKit
 enum WidgetBridge {
     static func refresh() {
         let ctx = LevelSelectStore.shared.mainContext
+        // Badges hang off the same heartbeat as widgets: every mutation the
+        // app already reports lands here, which is exactly when a count can
+        // have moved. The awarder is a few fetches and a set difference.
+        let earned = BadgeAwarder.award(in: ctx).newlyEarned
+        if !earned.isEmpty { AppNavigator.shared.earnedBadges += earned }
         guard let result = build(context: ctx) else {
             WidgetSnapshot.clear()
             reload()

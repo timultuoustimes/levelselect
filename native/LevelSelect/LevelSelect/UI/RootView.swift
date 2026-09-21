@@ -149,6 +149,33 @@ struct RootView: View {
                 }
             }
 
+            // Badges earned a moment ago. Above the save-failure banner in
+            // the stack but below nothing else: a celebration must never sit
+            // over a message about your data.
+            if !nav.earnedBadges.isEmpty {
+                ZStack {
+                    ConfettiBurst(trigger: nav.earnedBadges.count)
+                    VStack {
+                        Spacer()
+                        BadgeToast(badges: nav.earnedBadges) {
+                            nav.earnedBadges = []
+                            nav.selectedTab = .journal
+                            nav.journalLens = "badges"
+                        } dismiss: {
+                            nav.earnedBadges = []
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, persistence.lastErrorMessage != nil ? 128 : 64)
+                    }
+                    .transition(slideIn)
+                }
+                .zIndex(4)
+                .task(id: nav.earnedBadges.count) {
+                    try? await Task.sleep(for: .seconds(6))
+                    nav.earnedBadges = []
+                }
+            }
+
             if let notice = generation.notice {
                 VStack {
                     Spacer()

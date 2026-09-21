@@ -134,6 +134,18 @@ final class AppNavigator {
     }
     var deletedGame: DeletedGame?
 
+    /// **Badges earned a moment ago, waiting to be celebrated** (build 40).
+    ///
+    /// Set by `BadgeAwarder` through `WidgetBridge.refresh`, consumed by the
+    /// root view's confetti and toast. A queue rather than one, because
+    /// finishing a tracker can land three at once — they celebrate together.
+    var earnedBadges: [Badges.Definition] = []
+
+    /// Which Journal lens to open — the badge toast's "See" lands on Badges.
+    /// A raw value rather than the enum, because `JournalTab.Lens` is a view
+    /// type and the navigator is the one place that must not import the UI.
+    var journalLens: String?
+
     func open(gameID: UUID) {
         selectedTab = .home
         pendingGameID = gameID
