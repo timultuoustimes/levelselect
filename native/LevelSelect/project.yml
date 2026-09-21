@@ -184,6 +184,10 @@ targets:
       # store, which is the only behaviour that makes sense there.
       - path: LevelSelect/Persistence/LibrarySwitcher.swift
       - path: LevelSelect/Persistence/Repository.swift
+      # Repository asks it before writing a field Production may not have —
+      # the watch writes to the same CloudKit container, so it needs the same
+      # answer rather than a guess.
+      - path: LevelSelect/Persistence/SchemaDeploy.swift
       - path: LevelSelect/Persistence/Syncable.swift
       - path: LevelSelect/Persistence/DeviceIdentity.swift
       # Repository records every session's parent here; the watch creates

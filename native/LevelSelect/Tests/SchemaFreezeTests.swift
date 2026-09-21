@@ -230,7 +230,15 @@ struct SchemaFreezeTests {
             // ⚠️ NOT YET PROMOTED TO PRODUCTION. Seed on a Development build,
             // verify CD_carriedOverSeconds appears as DOUBLE in the Console
             // diff, deploy, then purge.
-            "Playthrough: carriedOverSeconds,completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
+            // carriedOverSpansData added 2026-09-21 build 40 (V8) — which
+            // years a lump of imported playtime belongs to (CarriedOverSpan).
+            // Steam reports one lifetime total with no dates; this is the
+            // person saying roughly when, so those hours can appear in a
+            // Replay. Attribution only: carriedOverSeconds stays the total.
+            // Seed-and-promote before `SchemaDeploy.v8DeployedToProduction`
+            // flips — until it does, a Production build writes the single
+            // year to `startedAt` and leaves this alone.
+            "Playthrough: carriedOverSeconds,carriedOverSpansData,completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playedWithData,playthrough,revision,startedAt,templateID,updatedAt,userID",
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playedWithData,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",

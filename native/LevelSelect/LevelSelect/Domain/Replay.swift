@@ -95,10 +95,32 @@ struct Replay {
     var memoriesWritten = 0
     var badges: [Badges.Definition] = []
 
+    /// Imported hours somebody attributed to this period by hand.
+    ///
+    /// **Kept apart from `totalSeconds` on purpose.** Steam reports one
+    /// lifetime number with no dates; a person can say which year it was, and
+    /// that is worth having — but it is a recollection, not a record, and it
+    /// has no days in it. So it is named separately and never spread across
+    /// the calendar, where it would put squares in a heatmap that nothing
+    /// actually happened on.
+    struct Carried: Identifiable, Equatable {
+        let id: UUID
+        let name: String
+        let seconds: TimeInterval
+        /// "2022", or "2021–2023" when the hours were placed across a range.
+        /// A range says so on every year it touches, because the person said
+        /// the span, not the year.
+        let span: String
+        var isRange: Bool { span.contains("–") }
+    }
+    var carried: [Carried] = []
+    var carriedSeconds: TimeInterval { carried.reduce(0) { $0 + $1.seconds } }
+
     /// A period with nothing in it at all. Worth asking before presenting
     /// one: a recap of a month you didn't play is a reproach, not a gift.
     var isEmpty: Bool {
-        sessionCount == 0 && finished.isEmpty && added == 0 && memoriesWritten == 0
+        sessionCount == 0 && finished.isEmpty && added == 0
+            && memoriesWritten == 0 && carried.isEmpty
     }
 
     var gamesPlayedCount: Int { played.count }
@@ -174,6 +196,24 @@ struct Replay {
         replay.memoriesWritten = source.memories.filter {
             $0.deletedAt == nil && range.contains($0.createdAt)
         }.count
+
+        // Hours somebody attributed to a year by hand. Only for a span that
+        // is a whole year or contains one — a month cannot hold a claim whose
+        // finest grain is a year without pretending to know more than it does.
+        if case .year = span {
+            let year = calendar.component(.year, from: range.start)
+            for game in source.games where game.deletedAt == nil {
+                for playthrough in game.livePlaythroughs {
+                    for covering in playthrough.carriedOverSpans.covering(year)
+                    where covering.seconds > 0 {
+                        replay.carried.append(
+                            Carried(id: covering.id, name: game.name,
+                                    seconds: covering.seconds, span: covering.label))
+                    }
+                }
+            }
+            replay.carried.sort { ($0.seconds, $0.name) > ($1.seconds, $1.name) }
+        }
 
         replay.badges = source.badgeDates
             .filter { range.contains($0.value) }

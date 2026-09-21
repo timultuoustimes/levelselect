@@ -30,6 +30,18 @@ enum SchemaDeploy {
     /// he pasted listed exactly these five and nothing else.
     static let v7DeployedToProduction = true
 
+    /// `Playthrough.carriedOverSpansData` — schema V8, build 40: which years
+    /// a lump of imported playtime belongs to (`CarriedOverSpan`).
+    ///
+    /// ⚠️ Flip to true only once Tim has deployed it to Production and the
+    /// Console diff showed it. Until then the app keeps the single-year
+    /// tagging, which rides on `Playthrough.startedAt` — deployed since V1.
+    static let v8DeployedToProduction = false
+
+    static var v8Fields: Bool {
+        v8DeployedToProduction || !syncsToProduction
+    }
+
     static var v7Fields: Bool {
         v7DeployedToProduction || !syncsToProduction
     }

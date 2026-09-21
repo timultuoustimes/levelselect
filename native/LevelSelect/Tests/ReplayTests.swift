@@ -186,6 +186,174 @@ struct ReplayTests {
         #expect(abs(quarter.totalSeconds - 8 * 3600) < 1)
     }
 
+    // MARK: Carried-over time, attributed by hand
+
+    /// Steam reports one lifetime number with no dates. The person can say
+    /// which year it was — Tim, 09-21: *"I know I played cities skylines the
+    /// most in 2020-2021."*
+    @Test("Imported hours placed in a year show up in that year's replay")
+    func carriedTimeLandsInItsYear() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+
+        let hit = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                              calendar: calendar, now: date(2026, 12, 31))
+        let miss = Replay.make(.year(date(2021, 6, 1)), from: source(repo),
+                               calendar: calendar, now: date(2026, 12, 31))
+        #expect(hit.carried.map(\.name) == ["Cities: Skylines"])
+        #expect(miss.carried.isEmpty)
+    }
+
+    /// Tim, 09-21: *"I played more around 2021-2023, because I had stopped
+    /// around the release date of cities skylines 2."* A range appears whole
+    /// on every year it covers — it is not divided between them, because the
+    /// last year is a part year and nobody said how much of it there was.
+    @Test("A range shows whole on every year it covers, and is split between none")
+    func rangeShowsOnEveryYearUndivided() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans(
+            [CarriedOverSpan(seconds: 300 * 3600, fromYear: 2021, toYear: 2023)],
+            on: pt, calendar: calendar)
+
+        for year in [2021, 2022, 2023] {
+            let replay = Replay.make(.year(date(year, 6, 1)), from: source(repo),
+                                     calendar: calendar, now: date(2026, 12, 31))
+            #expect(replay.carried.count == 1)
+            #expect(abs(replay.carriedSeconds - 300 * 3600) < 1)
+            #expect(replay.carried.first?.span == "2021–2023")
+            #expect(replay.carried.first?.isRange == true)
+        }
+        let outside = Replay.make(.year(date(2024, 6, 1)), from: source(repo),
+                                  calendar: calendar, now: date(2026, 12, 31))
+        #expect(outside.carried.isEmpty)
+    }
+
+    /// The other half: somebody who does know the split says it year by year,
+    /// and each year gets its own real number.
+    @Test("Per-year spans each land in their own year")
+    func perYearSpansLandSeparately() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([
+            CarriedOverSpan(seconds: 120 * 3600, fromYear: 2021),
+            CarriedOverSpan(seconds: 150 * 3600, fromYear: 2022),
+            CarriedOverSpan(seconds: 30 * 3600, fromYear: 2023),
+        ], on: pt, calendar: calendar)
+
+        let expected = [2021: 120.0, 2022: 150.0, 2023: 30.0]
+        for (year, hours) in expected {
+            let replay = Replay.make(.year(date(year, 6, 1)), from: source(repo),
+                                     calendar: calendar, now: date(2026, 12, 31))
+            #expect(replay.carried.count == 1)
+            #expect(abs(replay.carriedSeconds - hours * 3600) < 1)
+            #expect(replay.carried.first?.isRange == false)
+        }
+    }
+
+    @Test("Hours left unplaced stay in the total and out of every year")
+    func unplacedHoursStayUnplaced() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans(
+            [CarriedOverSpan(seconds: 120 * 3600, fromYear: 2021)],
+            on: pt, calendar: calendar)
+
+        #expect(abs(pt.unattributedCarriedSeconds - 180 * 3600) < 1)
+        let replay = Replay.make(.year(date(2022, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+    }
+
+    @Test("A span given backwards is read as the range it means")
+    func backwardsRangeIsNormalised() {
+        let span = CarriedOverSpan(seconds: 3600, fromYear: 2023, toYear: 2021)
+        #expect(span.fromYear == 2021)
+        #expect(span.toYear == 2023)
+        #expect(span.label == "2021–2023")
+    }
+
+    /// It is a recollection, not a record: it must never be added to the
+    /// hours that came from real sessions.
+    @Test("Attributed hours stay out of the timed total")
+    func carriedTimeIsNotAddedToTheTotal() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+        play(repo, game, from: date(2020, 5, 5), hours: 2)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(abs(replay.totalSeconds - 2 * 3600) < 1)
+        #expect(abs(replay.carriedSeconds - 300 * 3600) < 1)
+    }
+
+    /// A year is the finest grain anybody has for these hours, so a month
+    /// must not claim them.
+    @Test("A month replay does not claim a year's attributed hours")
+    func monthDoesNotClaimCarriedTime() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+
+        let month = Replay.make(.month(date(2020, 6, 1)), from: source(repo),
+                                calendar: calendar, now: date(2026, 12, 31))
+        let quarter = Replay.make(.quarter(date(2020, 6, 1)), from: source(repo),
+                                  calendar: calendar, now: date(2026, 12, 31))
+        #expect(month.carried.isEmpty)
+        #expect(quarter.carried.isEmpty)
+    }
+
+    @Test("Taking the years back removes the hours from every replay")
+    func clearingTheSpansRemovesThem() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)],
+                                 on: pt, calendar: calendar)
+        repo.setCarriedOverSpans([], on: pt, calendar: calendar)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+        #expect(pt.carriedOverYear(calendar) == nil)
+        // The hours themselves are untouched — only the claim about when.
+        #expect(abs(pt.carriedOverSeconds - 300 * 3600) < 1)
+        #expect(abs(pt.unattributedCarriedSeconds - 300 * 3600) < 1)
+    }
+
+    /// A span with no hours in it is not a claim about anything, and must not
+    /// conjure a zero-hour line on a year.
+    @Test("A year with no hours behind it says nothing")
+    func yearWithoutHoursIsIgnored() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 0, fromYear: 2020)],
+                                 on: pt, calendar: calendar)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+        // And nothing else put anything in 2020 either — the game was added
+        // today — so the year stays empty rather than gaining a blank line.
+        #expect(replay.isEmpty)
+    }
+
     /// The library a replay describes is the one you have now: a game deleted
     /// since must not surface in last year's recap.
     @Test("A deleted game's finish is left out")

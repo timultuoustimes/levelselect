@@ -217,6 +217,9 @@ enum CloudKitSchemaSeeder {
         // build 37 — a number, so the marker cannot stand in for it. Any
         // non-zero value types the CloudKit field; the purge sets it back.
         pt.carriedOverSeconds = 1
+        // build 40 (V8) — any non-empty value types the CloudKit field; the
+        // purge sets it back.
+        pt.carriedOverSpansData = Data([0x5b, 0x5d])   // "[]"
         pt.startedAt = now
         pt.lastPlayedAt = now
         context.insert(pt)

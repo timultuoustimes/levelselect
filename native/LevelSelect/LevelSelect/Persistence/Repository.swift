@@ -1311,6 +1311,48 @@ struct Repository {
         persist()
     }
 
+    /// **The year a lump of carried-over time belongs to, or nil for "no
+    /// idea".**
+    ///
+    /// Steam and the consoles hand over a lifetime total and no dates, so
+    /// those hours sit outside every dated view in the app. This is the one
+    /// thing the person themselves knows that the API doesn't — Tim, 09-21:
+    /// *"I know I played cities skylines the most in 2020-2021."*
+    ///
+    /// Stored in `Playthrough.startedAt`, which has been deployed since V1
+    /// and read by nothing: no CloudKit field deploy to buy. It is written as
+    /// the first instant of the year and only ever READ as a year — never as
+    /// a day, because a day is precisely what nobody knows about it.
+    /// **Which years a lump of imported time belongs to** — see
+    /// `CarriedOverSpan`. One span across several years is attribution, not a
+    /// division: it appears on each of those years and is added to none of
+    /// their totals.
+    ///
+    /// Gated on V8: until the field is in Production, the single year still
+    /// rides on `startedAt`, which has been deployed since V1. Writing spans
+    /// on a Production build before the deploy would fail the whole save.
+    func setCarriedOverSpans(_ spans: [CarriedOverSpan], on pt: Playthrough,
+                             calendar: Calendar = .current) {
+        if SchemaDeploy.v8Fields {
+            pt.carriedOverSpans = spans
+        }
+        // The first span's start year also goes to `startedAt`, so a build
+        // without V8 — or a device that hasn't synced it yet — still shows
+        // and files the attribution, just without the range.
+        setCarriedOverYear(spans.first?.fromYear, on: pt, calendar: calendar)
+    }
+
+    func setCarriedOverYear(_ year: Int?, on pt: Playthrough,
+                            calendar: Calendar = .current) {
+        if let year {
+            pt.startedAt = calendar.date(from: DateComponents(year: year, month: 1, day: 1))
+        } else {
+            pt.startedAt = nil
+        }
+        touch(pt)
+        persist()
+    }
+
     func logManualSession(
         on pt: Playthrough,
         duration: TimeInterval,

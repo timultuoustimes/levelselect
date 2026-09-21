@@ -110,8 +110,11 @@ struct SessionControlsView: View {
             EditSessionSheet(session: session).lsSheet()
         }
         .sheet(isPresented: $showingCarriedOver) {
-            CarriedOverSheet(seconds: playthrough?.carriedOverSeconds ?? 0) { seconds in
-                repo.setCarriedOver(seconds, on: repo.ensureDefaultPlaythrough(for: game))
+            CarriedOverSheet(seconds: playthrough?.carriedOverSeconds ?? 0,
+                             existingSpans: playthrough?.carriedOverSpans ?? []) { seconds, spans in
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.setCarriedOver(seconds, on: pt)
+                repo.setCarriedOverSpans(spans, on: pt)
             }
             .lsSheet()
         }
@@ -146,7 +149,13 @@ struct SessionControlsView: View {
                 let carried = playthrough?.carriedOverSeconds ?? 0
                 Button { showingCarriedOver = true } label: {
                     HStack {
-                        Text(carried > 0 ? "Before tracking" : "Add time played before tracking")
+                        // The year rides in the label rather than as a second
+                        // row: it is a qualifier on this number, not a fact
+                        // of its own.
+                        let year = playthrough?.carriedOverYear()
+                        Text(carried > 0
+                             ? (year.map { "Before tracking · \($0)" } ?? "Before tracking")
+                             : "Add time played before tracking")
                             .font(.caption)
                         Spacer()
                         if carried > 0 {
@@ -363,10 +372,47 @@ struct LogSessionSheet: View {
 struct CarriedOverSheet: View {
     @Environment(\.dismiss) private var dismiss
     let seconds: TimeInterval
-    var onSave: (TimeInterval) -> Void
+    /// Which years these hours belong to, if anybody has said.
+    var existingSpans: [CarriedOverSpan] = []
+    var onSave: (TimeInterval, [CarriedOverSpan]) -> Void
 
     @State private var hours = 0
     @State private var minutes = 0
+    @State private var spans: [CarriedOverSpan] = []
+
+    /// Hours not yet placed in any year.
+    private var remaining: TimeInterval {
+        TimeInterval(hours * 3600 + minutes * 60) - spans.totalSeconds
+    }
+
+    private var spansFooter: String {
+        if spans.isEmpty {
+            return "Optional, and only as exact as you actually are. Hours you place land in those years' Replays as a line of their own — never spread across days, because nobody knows which days they were."
+        }
+        if remaining > 60 {
+            return "\(Format.duration(remaining)) isn't placed in any year yet. That's fine — it still counts toward the total."
+        }
+        if remaining < -60 {
+            return "You've placed more time than the total above. Raise the total, or take some back."
+        }
+        return "All of it is placed. A range is shown whole on each year it covers, because you said the span rather than the year."
+    }
+
+    private func yearPicker(_ label: String, _ selection: Binding<Int>) -> some View {
+        Picker(label, selection: selection) {
+            ForEach(years, id: \.self) { year in
+                Text(String(year)).tag(year)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    /// This year back to 1972 — the Odyssey. Long enough that nobody's
+    /// history falls off the end of it.
+    private var years: [Int] {
+        let thisYear = Calendar.current.component(.year, from: .now)
+        return Array((1972...thisYear).reversed())
+    }
 
     var body: some View {
         NavigationStack {
@@ -378,6 +424,45 @@ struct CarriedOverSheet: View {
                     Text("Time played before tracking")
                 } footer: {
                     Text("The number your console or storefront already knows — Steam's hours, a Switch profile's. It adds to this game's total and stays out of your session history, because it never happened on any one day. Set it to zero to remove it.")
+                }
+                // **The one thing the API can't tell us and you can.**
+                // Steam hands over a lifetime total with no dates, so these
+                // hours sit outside every dated view. Naming the years puts
+                // them back into those years' Replays — and only there,
+                // because a year is not a day and the heatmap stays honest.
+                Section {
+                    ForEach($spans) { $span in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Stepper("\(Int(span.seconds) / 3600) h",
+                                        value: Binding(
+                                            get: { Int(span.seconds) / 3600 },
+                                            set: { span.seconds = TimeInterval($0 * 3600) }),
+                                        in: 0...9_999)
+                            }
+                            HStack(spacing: 8) {
+                                yearPicker("From", $span.fromYear)
+                                yearPicker("To", $span.toYear)
+                            }
+                            if !span.isSingleYear {
+                                Text("Shown whole on each year from \(span.fromYear) to \(span.toYear), and divided between none of them.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onDelete { spans.remove(atOffsets: $0) }
+                    Button {
+                        let thisYear = Calendar.current.component(.year, from: .now)
+                        spans.append(CarriedOverSpan(
+                            seconds: max(0, remaining), fromYear: thisYear))
+                    } label: {
+                        Label("Add years", systemImage: "plus")
+                    }
+                } header: {
+                    Text("When was it?")
+                } footer: {
+                    Text(spansFooter)
                 }
             }
             .lsFormStyle()
@@ -391,7 +476,10 @@ struct CarriedOverSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(TimeInterval(hours * 3600 + minutes * 60))
+                        // Spans with no time in them are noise rather than a
+                        // claim, and are dropped on the way out.
+                        onSave(TimeInterval(hours * 3600 + minutes * 60),
+                               spans.filter { $0.seconds > 0 })
                         dismiss()
                     }
                 }
@@ -399,6 +487,7 @@ struct CarriedOverSheet: View {
             .onAppear {
                 hours = Int(seconds) / 3600
                 minutes = (Int(seconds) % 3600) / 60
+                spans = existingSpans
             }
         }
     }

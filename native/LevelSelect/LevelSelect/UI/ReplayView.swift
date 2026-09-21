@@ -27,6 +27,7 @@ struct ReplayView: View {
                         headline(replay)
                         if !replay.played.isEmpty { topGames(replay) }
                         if !replay.finished.isEmpty { finishes(replay) }
+                        if !replay.carried.isEmpty { carried(replay) }
                         if !replay.badges.isEmpty { badges(replay) }
                         footnote(replay)
                     } else {
@@ -182,6 +183,44 @@ struct ReplayView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+        }
+    }
+
+    /// Hours you told the app belonged to this year, kept visibly apart from
+    /// the timed ones — they are a recollection, not a record.
+    private func carried(_ replay: Replay) -> some View {
+        section("Also this year, from before you tracked") {
+            VStack(spacing: 8) {
+                ForEach(replay.carried) { game in
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.caption)
+                            .foregroundStyle(LSTheme.accent)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(game.name)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                            // A range names itself on every year it touches,
+                            // so nobody reads it as this year's alone.
+                            if game.isRange {
+                                Text("across \(game.span)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Text(Format.duration(game.seconds))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("Imported totals you placed in \(replay.span.title()). They aren't in the hours above, because they have no days in them — and a range is shown whole on every year it covers rather than divided between them.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
         }
     }

@@ -15,7 +15,43 @@ final class Playthrough {
     var name: String = "Playthrough"
     var notes: String?
     var progressPercent: Double = 0
+    /// **On a playthrough carrying imported hours, the year those hours
+    /// belong to** — see `Repository.setCarriedOverYear`. Written as the
+    /// first instant of a year and only ever read back as a year, because a
+    /// day is exactly what nobody knows about time a storefront reported as
+    /// one lifetime total.
     var startedAt: Date?
+
+    /// The year `startedAt` names, when it is standing in for one.
+    func carriedOverYear(_ calendar: Calendar = .current) -> Int? {
+        guard carriedOverSeconds > 0, let startedAt else { return nil }
+        return calendar.component(.year, from: startedAt)
+    }
+
+    /// **Which years the imported hours belong to** — see `CarriedOverSpan`.
+    ///
+    /// Schema V8. Attribution only: `carriedOverSeconds` remains the total,
+    /// so every existing reading of it is correct whether this is set or not.
+    var carriedOverSpansData: Data?
+
+    var carriedOverSpans: [CarriedOverSpan] {
+        get {
+            let stored = [CarriedOverSpan].decoded(carriedOverSpansData)
+            guard stored.isEmpty else { return stored }
+            // A playthrough tagged with the single year that shipped first
+            // reads as one span, so the two never disagree and nothing has to
+            // be migrated.
+            guard let year = carriedOverYear() else { return [] }
+            return [CarriedOverSpan(seconds: carriedOverSeconds, fromYear: year)]
+        }
+        set { carriedOverSpansData = newValue.encoded }
+    }
+
+    /// Hours not placed in any year — the remainder the person hasn't said
+    /// anything about. Never negative, however the spans are edited.
+    var unattributedCarriedSeconds: TimeInterval {
+        max(0, carriedOverSeconds - carriedOverSpans.totalSeconds)
+    }
     /// How this run ended, when it did — see `PlaythroughOutcome`. Nil means
     /// it's still going, which is what most runs are.
     ///
