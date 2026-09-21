@@ -17,6 +17,11 @@ enum BadgeAwarder {
 
     /// Set once the ledger has been filled from an existing library.
     private static let backfilledKey = "levelselect.badges.backfilled"
+    /// The first build wrote every backfilled badge as "now". This repairs
+    /// them once, from the same evidence the awarder now dates by.
+    private static let redatedKey = "levelselect.badges.redated.v1"
+    /// True until the Journal has acknowledged a silent backfill.
+    static let summaryPendingKey = "levelselect.badges.summaryPending"
 
     /// What a pass found, for the UI to celebrate (or not).
     struct Result {
@@ -31,24 +36,50 @@ enum BadgeAwarder {
     /// and a set difference.
     @discardableResult
     static func award(in context: ModelContext, now: Date = .now) -> Result {
-        let facts = facts(in: context, now: now)
+        let (facts, dates) = factsAndDates(in: context, now: now)
         let deserved = Badges.earned(from: facts)
         guard !deserved.isEmpty else { return Result() }
 
-        let held = Set(existing(in: context).map(\.badgeID))
+        let ledger = existing(in: context)
+        redateIfNeeded(ledger, dates: dates, context: context)
+        let held = Set(ledger.map(\.badgeID))
         let missing = deserved.filter { !held.contains($0) }
         guard !missing.isEmpty else { return Result() }
 
         let defaults = UserDefaults.standard
         let firstPass = !defaults.bool(forKey: backfilledKey)
         for id in missing {
-            context.insert(EarnedBadge(badgeID: id, earnedAt: now))
+            // **Dated from the thing that earned it, not from today.**
+            // Backfilling an existing library with "now" made every badge
+            // claim it happened this afternoon (Tim, King Kai, 09-21). The
+            // tenth completion has a date; the hundredth hour happened during
+            // a particular session. Where the evidence can't say, today is
+            // the honest answer.
+            context.insert(EarnedBadge(badgeID: id, earnedAt: dates[id] ?? now))
         }
         try? context.save()
         defaults.set(true, forKey: backfilledKey)
+        // A silent backfill still deserves saying so, once, where badges live.
+        if firstPass { defaults.set(true, forKey: summaryPendingKey) }
 
         return Result(newlyEarned: firstPass ? [] : missing.compactMap(Badges.definition),
                       wasBackfill: firstPass)
+    }
+
+    /// One-time repair for badges written before dates were worked out.
+    private static func redateIfNeeded(_ ledger: [EarnedBadge], dates: [String: Date],
+                                       context: ModelContext) {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: redatedKey), !ledger.isEmpty else { return }
+        for badge in ledger {
+            guard let real = dates[badge.badgeID],
+                  abs(real.timeIntervalSince(badge.earnedAt)) > 86_400 else { continue }
+            badge.earnedAt = real
+            badge.updatedAt = .now
+            badge.revision += 1
+        }
+        try? context.save()
+        defaults.set(true, forKey: redatedKey)
     }
 
     /// Every badge held, newest first — what the Journal reads.
@@ -60,6 +91,12 @@ enum BadgeAwarder {
     // MARK: The counts
 
     static func facts(in context: ModelContext, now: Date = .now) -> BadgeFacts {
+        factsAndDates(in: context, now: now).facts
+    }
+
+    /// The counts, and when each badge they justify was actually earned.
+    static func factsAndDates(in context: ModelContext,
+                              now: Date = .now) -> (facts: BadgeFacts, dates: [String: Date]) {
         let games = ((try? context.fetch(FetchDescriptor<Game>())) ?? []).filter { $0.deletedAt == nil }
         let completions = ((try? context.fetch(FetchDescriptor<CompletionEvent>())) ?? [])
             .filter { $0.deletedAt == nil }
@@ -102,7 +139,71 @@ enum BadgeAwarder {
             let years = Calendar.current.dateComponents([.year], from: first, to: last).year ?? 0
             f.yearsOfHistory = max(0, years)
         }
-        return f
+
+        var dates: [String: Date] = [:]
+        let completionDates = completions.map(\.date).sorted()
+        let sessionStarts = sessions.map(\.startDate).sorted()
+        let addedDates = games.map(\.addedAt).sorted()
+        let consoleDates = consoles.map(\.createdAt).sorted()
+
+        dates["first.beaten"] = completionDates.first
+        dates["first.session"] = sessionStarts.first
+        dates["first.memory"] = memories.map(\.createdAt).min()
+        dates["first.console"] = consoleDates.first
+        nth(&dates, "beaten", completionDates, [10, 25, 50, 100])
+        nth(&dates, "sessions", sessionStarts, [10, 100, 500])
+        nth(&dates, "added", addedDates, [10, 100, 500])
+        nth(&dates, "consoles", consoleDates, [1, 5, 10])
+
+        // The hour tiers happened during a session: walk them in order and
+        // note which one carried the total past each threshold.
+        var running: TimeInterval = 0
+        let byDate = sessions.sorted { $0.startDate < $1.startDate }
+        for session in byDate {
+            let before = running / 3600
+            running += session.elapsed(asOf: now)
+            let after = running / 3600
+            for n in [10, 100, 500, 1000] where before < Double(n) && after >= Double(n) {
+                dates["hours.\(n)"] = session.startDate
+            }
+        }
+
+        if let streakEnd = streakEnd(in: days, length: 7) { dates["streak.7"] = streakEnd }
+        if let streakEnd = streakEnd(in: days, length: 30) { dates["streak.30"] = streakEnd }
+        if f.beatEverySystemGame || f.completedACollection {
+            // The set was finished by its last completion.
+            dates["collection.systemBeaten"] = completionDates.last
+            dates["collection.finished"] = completionDates.last
+        }
+        if f.beatenBeforeInstall { dates["history.beforeApp"] = completionDates.first }
+        if f.hasVagueDate {
+            dates["history.vague"] = memories.filter { ($0.precision ?? "day") != "day" }
+                .map(\.createdAt).min()
+        }
+        return (f, dates.compactMapValues { $0 })
+    }
+
+    /// When the nth of something happened — the badge for "10 games beaten"
+    /// belongs on the day the tenth was.
+    private static func nth(_ dates: inout [String: Date], _ key: String,
+                            _ sorted: [Date], _ thresholds: [Int]) {
+        for n in thresholds where sorted.count >= n { dates["\(key).\(n)"] = sorted[n - 1] }
+    }
+
+    /// The last day of the first run of `length` consecutive days.
+    private static func streakEnd(in days: Set<Date>, length: Int) -> Date? {
+        let calendar = Calendar.current
+        let sorted = days.sorted()
+        var run = 1
+        for (previous, day) in zip(sorted, sorted.dropFirst()) {
+            if calendar.dateComponents([.day], from: previous, to: day).day == 1 {
+                run += 1
+                if run >= length { return day }
+            } else {
+                run = 1
+            }
+        }
+        return nil
     }
 
     // MARK: The awkward ones

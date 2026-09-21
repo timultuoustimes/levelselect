@@ -67,6 +67,36 @@ struct BadgeAwarderTests {
         #expect(BadgeAwarder.existing(in: repo.context).contains { $0.badgeID == "first.beaten" })
     }
 
+    /// Tim, King Kai, 09-21: every backfilled badge claimed it was earned
+    /// today. The tenth completion has a date; use it.
+    @Test("A backfilled badge is dated from what earned it, not from today")
+    func badgesAreBackdated() {
+        let repo = store()
+        let when = Date(timeIntervalSinceNow: -400 * 86_400)
+        let game = repo.addGame(name: "Chrono Trigger")
+        repo.addCompletion(to: game, label: .cleared, date: when)
+
+        _ = BadgeAwarder.award(in: repo.context)
+        let badge = BadgeAwarder.existing(in: repo.context).first { $0.badgeID == "first.beaten" }
+        #expect(badge != nil)
+        #expect(abs((badge?.earnedAt ?? .now).timeIntervalSince(when)) < 60)
+    }
+
+    @Test("The tenth game beaten is dated to the tenth completion")
+    func tiersUseTheirOwnDate() {
+        let repo = store()
+        var tenth = Date.now
+        for i in 1...10 {
+            let game = repo.addGame(name: "Game \(i)")
+            let date = Date(timeIntervalSinceNow: Double(-500 + i * 10) * 86_400)
+            repo.addCompletion(to: game, label: .cleared, date: date)
+            if i == 10 { tenth = date }
+        }
+        _ = BadgeAwarder.award(in: repo.context)
+        let badge = BadgeAwarder.existing(in: repo.context).first { $0.badgeID == "beaten.10" }
+        #expect(abs((badge?.earnedAt ?? .now).timeIntervalSince(tenth)) < 60)
+    }
+
     @Test("An empty library earns nothing and writes nothing")
     func emptyLibraryWritesNothing() {
         let repo = store()

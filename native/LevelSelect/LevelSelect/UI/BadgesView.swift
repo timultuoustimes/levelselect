@@ -17,6 +17,9 @@ struct BadgesView: View {
         Dictionary(earned.map { ($0.badgeID, $0.earnedAt) }, uniquingKeysWith: { a, _ in a })
     }
 
+    @AppStorage(BadgeAwarder.summaryPendingKey) private var summaryPending = false
+    @State private var celebrate = 0
+
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 18) {
@@ -39,6 +42,16 @@ struct BadgesView: View {
             .padding(.vertical, 12)
         }
         .scrollIndicators(.hidden)
+        // The backfill is deliberately silent — fourteen celebrations at once
+        // is a cannon. But it still happened, so the first visit here says so
+        // once, with the confetti it skipped (Tim, 09-21).
+        .overlay { ConfettiBurst(trigger: celebrate).allowsHitTesting(false) }
+        .task {
+            guard summaryPending, !earned.isEmpty else { return }
+            try? await Task.sleep(for: .milliseconds(350))
+            celebrate += 1
+            summaryPending = false
+        }
     }
 
     private var header: some View {
@@ -52,7 +65,9 @@ struct BadgesView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(earned.count == 1 ? "One badge earned" : "\(earned.count) badges earned")
                     .font(.title3.weight(.semibold))
-                Text("Out of \(Badges.catalogue.count). They come from your library, so the games you brought in count too.")
+                Text(summaryPending
+                     ? "Earned from the library you already had — each dated to when you did it."
+                     : "Out of \(Badges.catalogue.count). They come from your library, so the games you brought in count too.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
