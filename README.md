@@ -22,7 +22,7 @@ Native SwiftUI app for iPhone, iPad, Mac, and Apple Watch. Your library syncs pr
 | `native/LevelSelect/` | The app. SwiftUI + SwiftData, synced with CloudKit. This is the live code. |
 | `site/` | levelselect.app — Astro, deployed by Netlify. |
 | `supabase/functions/` | Edge functions: IGDB proxy, RetroAchievements proxy, AI tracker generation, map finder. |
-| `src/`, `index.html`, `vite.config.js` | **Retired.** The original React web app, kept as a feature reference — some things exist here that the native app hasn't caught up to yet. Not deployed, not maintained. See `docs/legacy-web-parity.md`. |
+| `src/data/`, `src/utils/structuredFactory.js` | What `scripts/build-builtin-trackers.mjs` reads to generate the app's built-in trackers. All that is left of the retired React web app, which came out of the repo on 2026-09-21 once the native app had caught up to it — see `docs/legacy-web-parity.md`, and `archive/main-web-app` for the last commit that still had it. |
 
 The Xcode project is generated: `project.yml` is the source of truth, and `.xcodeproj` is gitignored. Run `xcodegen generate` in `native/LevelSelect/` after adding files.
 

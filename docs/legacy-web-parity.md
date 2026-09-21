@@ -1,6 +1,8 @@
 # What the retired web app still does that the native app doesn't — nothing, as of 2026-09-21
 
-The original React web app (`src/`) is not deployed and not maintained, but it is kept in the repo because it is currently the only record of a few things the native app hasn't caught up to. This file exists so that stops being true — when the list is empty, the web app can go.
+The original React web app (`src/`) was kept in the repo because it was the only record of a few things the native app hadn't caught up to. This file existed so that would stop being true, and on **2026-09-21 it did**: the last item (bulk delete) shipped, and the web app came out. `src/data` and `src/utils/structuredFactory.js` stayed behind, because `scripts/build-builtin-trackers.mjs` generates the app's built-in trackers from them. The tag `archive/main-web-app` is the last commit that still carried the whole thing.
+
+What follows is the record of what the list held.
 
 Compiled 2026-08-22 by reading `src/components/Library.jsx` (`LibraryStats`) against `native/LevelSelect/LevelSelect/UI/StatsView.swift`. **Extended 2026-08-25** with a full sweep of `src/` against `native/` — the sections below now cover everything found, not only stats.
 
