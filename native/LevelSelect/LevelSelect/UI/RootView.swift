@@ -334,6 +334,9 @@ struct RootView: View {
         case "wishlist": nav.go(to: .wishlist)
         // Both spellings: "stats" is what every widget already baked.
         case "journal", "stats": nav.go(to: .journal)
+        case "badges":
+            nav.go(to: .journal)
+            nav.journalLens = "badges"
         case "shuffle":
             // The lock-screen die: every tap is a fresh roll, made HERE at
             // launch — a widget URL is baked per timeline entry, so rolling

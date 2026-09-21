@@ -184,6 +184,22 @@ enum WidgetBridge {
         // Matches Stats — see Game.isFinished. A ring that disagreed with
         // the page it mirrors is worse than no ring.
         let completedCount = games.filter(\.isFinished).count
+
+        // Badges, newest first. The ledger is the source — a badge earned is
+        // earned, whatever the counts behind it do later.
+        let badgeDescriptor = FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.earnedAt, order: .reverse)])
+        let allEarned: [WidgetBadge] = ((try? context.fetch(badgeDescriptor)) ?? [])
+            .compactMap { earned in
+                guard let definition = Badges.definition(earned.badgeID) else { return nil }
+                return WidgetBadge(id: definition.id, title: definition.title,
+                                   symbol: definition.symbol, earnedAt: earned.earnedAt)
+            }
+        // Forty is the tallest grid the portrait extra-large draws; the rest
+        // is weight in a file every widget reads on every timeline refresh.
+        // The count travels separately, so a cap here never miscounts.
+        let earnedBadges = Array(allEarned.prefix(40))
         let collectionDescriptor = FetchDescriptor<GameCollection>(
             predicate: #Predicate { $0.deletedAt == nil })
         // uniquingKeysWith, NEVER uniqueKeysWithValues: CloudKit sync twins
@@ -260,7 +276,7 @@ enum WidgetBridge {
         // collections and no games does not, because those are openable.
         if games.isEmpty && ownedConsoles.isEmpty && collectionRefs.isEmpty { return nil }
 
-        let snapshot = WidgetSnapshot(
+        var snapshot = WidgetSnapshot(
             gameID: game?.id.uuidString ?? "",
             gameName: game?.name ?? "",
             statusRaw: game?.status.rawValue ?? "",
@@ -316,6 +332,13 @@ enum WidgetBridge {
             statusColors: ThemePalette.statusColorHexes,
             upcoming: upcoming
         )
+        // Set after the fact, not passed in: this initializer already sits at
+        // the edge of what the type checker will solve, and three more
+        // arguments tipped it over ("unable to type-check in reasonable
+        // time"). Assignment costs it nothing.
+        snapshot.badges = earnedBadges
+        snapshot.badgesTotal = Badges.catalogue.count
+        snapshot.badgesEarnedCount = allEarned.count
         return BuildResult(snapshot: snapshot, covers: covers)
     }
 

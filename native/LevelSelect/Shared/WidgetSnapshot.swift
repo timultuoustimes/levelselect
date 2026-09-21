@@ -27,6 +27,7 @@ enum WidgetShared {
     }
     static let homeURL = URL(string: "levelselect://home")
     static let statsURL = URL(string: "levelselect://stats")
+    static let badgesURL = URL(string: "levelselect://badges")
 }
 
 /// One tracker objective, for the interactive checklist widget.
@@ -220,6 +221,17 @@ struct WidgetSnapshot: Codable, Hashable {
     /// Short platform name → console icon asset name, for launcher portals.
     var platformIcons: [String: String] = [:]
 
+    /// Badges earned, newest first, and how many there are to earn.
+    ///
+    /// Defaulted, like everything added after the first snapshot shipped: a
+    /// widget must be able to decode a file written by the previous build,
+    /// or it shows nothing until the app next happens to open.
+    var badges: [WidgetBadge] = []
+    var badgesTotal: Int = 0
+    /// How many are earned in the ledger. Separate from `badges.count`, which
+    /// is capped so the file stays small.
+    var badgesEarnedCount: Int = 0
+
     var hasActiveSession: Bool { isPlaying || isPaused }
 
     var weeklyTotalSeconds: Double { weeklySeconds.reduce(0, +) }
@@ -403,6 +415,18 @@ struct WidgetSnapshot: Codable, Hashable {
     }
 }
 
+
+/// One earned badge, flattened for the widget.
+///
+/// The symbol name travels rather than the drawing: the widget renders it in
+/// the accent exactly as the Journal does, and when there is real art the
+/// file name joins it here without anything else changing.
+struct WidgetBadge: Codable, Hashable, Identifiable {
+    var id: String
+    var title: String
+    var symbol: String
+    var earnedAt: Date
+}
 
 /// A collection the launcher widget can point at.
 struct WidgetCollectionRef: Codable, Hashable, Identifiable {
