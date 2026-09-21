@@ -412,6 +412,14 @@ struct WidgetSnapshot: Codable, Hashable {
         libraryCount = try c.decodeIfPresent(Int.self, forKey: .libraryCount) ?? 0
         collections = try c.decodeIfPresent([WidgetCollectionRef].self, forKey: .collections) ?? []
         platformIcons = try c.decodeIfPresent([String: String].self, forKey: .platformIcons) ?? [:]
+        // **This init is hand-written, so a new property is not decoded until
+        // it is named here.** A default on the property is enough for the
+        // synthesized decoder and nothing at all for this one: the badges
+        // widget read an empty list off a file with thirteen badges in it,
+        // and showed "0 badges" on a Home Screen (09-21).
+        badges = try c.decodeIfPresent([WidgetBadge].self, forKey: .badges) ?? []
+        badgesTotal = try c.decodeIfPresent(Int.self, forKey: .badgesTotal) ?? 0
+        badgesEarnedCount = try c.decodeIfPresent(Int.self, forKey: .badgesEarnedCount) ?? 0
     }
 }
 
