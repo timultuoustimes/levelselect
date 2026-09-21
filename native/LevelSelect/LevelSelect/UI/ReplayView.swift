@@ -1,5 +1,10 @@
 import SwiftUI
 import SwiftData
+#if canImport(UIKit)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// **A period of your own library, read back to you.**
 ///
@@ -7,6 +12,24 @@ import SwiftData
 /// the surface this was specced beside. A Replay is a designed artifact you
 /// open, look at, and close, which is why it is a card there rather than a
 /// fifth lens: it is an occasion, not a place you live.
+///
+/// **Rebuilt to Fable's mockup (09-21)**, which drew the three cases the
+/// runtime assessment found wrong — a month one game led, a year nothing
+/// dominated, a year with one finish and no play — and what would earn each
+/// an App Store slot:
+///
+/// - **The box art is the hero.** One game's cover full bleed when a game led
+///   the period or a finish is its story; a mosaic of the leaders when
+///   nothing did. That is what reads at thumbnail size in a store carousel,
+///   and it makes every library's year look like that library.
+/// - **The screen says its name** — "Replay", in the pixel face — instead of
+///   the bar repeating whichever chip is selected.
+/// - **The chips are pinned** under the bar and fade at the edge, so the row
+///   reads as scrollable and the span changes from anywhere on the page.
+/// - **Stats are one quiet line**, which wraps between words at the largest
+///   text sizes where three pills broke mid-syllable.
+/// - **Save as image** renders the page without its chrome. Nothing is
+///   uploaded; it is also how the store screenshot gets made.
 ///
 /// Everything on it is computed on the device from records already in the
 /// store. Nothing is sent anywhere to make it.
@@ -17,287 +40,216 @@ struct ReplayView: View {
     @State private var spans: [Replay.Span] = []
     @State private var chosen = 0
     @State private var replay: Replay?
+    @State private var games: [UUID: Game] = [:]
+    @State private var exportURL: ExportedImage?
+    @State private var exporting = false
+
+    /// A rendered page waiting for the share sheet — the file for the Mac's
+    /// save panel, the picture itself on iOS so "Save Image" puts it in Photos.
+    struct ExportedImage: Identifiable {
+        let url: URL
+        #if canImport(UIKit)
+        let image: UIImage
+        #endif
+        var id: URL { url }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    if spans.count > 1 { spanPicker }
-                    if let replay, !replay.isEmpty {
-                        headline(replay)
-                        if !replay.played.isEmpty { topGames(replay) }
-                        if !replay.finished.isEmpty { finishes(replay) }
-                        if !replay.carried.isEmpty { carried(replay) }
-                        if !replay.badges.isEmpty { badges(replay) }
-                        footnote(replay)
+                VStack(spacing: 16) {
+                    if let replay, replay.offersOwnPage || replay.span == .beforeTracking {
+                        ReplayPage(replay: replay, games: games) {
+                            // "+N" opens the whole ledger, in the Journal.
+                            dismiss()
+                            AppNavigator.shared.journalLens = "badges"
+                        }
+                        saveButton
                     } else {
                         empty
                     }
                 }
                 .padding(.horizontal)
-                .padding(.bottom, 32)
+                .padding(.top, 8)
+                // Room past the last card: on the iPad's form sheet the page
+                // ended flush with the sheet's edge and clipped it (Fable).
+                .padding(.bottom, 48)
             }
             .scrollIndicators(.hidden)
+            .safeAreaBar(edge: .top) {
+                if spans.count > 1 { chips }
+            }
             .lsBackground()
-            .navigationTitle(replay.map { $0.span.title() } ?? "Replay")
+            .toolbar {
+                ToolbarItem(placement: Self.namePlacement) {
+                    Text("Replay")
+                        .font(LSTheme.pixel(19))
+                        .foregroundStyle(LSTheme.accent)
+                        .lineLimit(1)
+                        .fixedSize()
+                        .accessibilityAddTraits(.isHeader)
+                }
+                // A name, not a control: without this iOS 26 wrapped it in a
+                // glass capsule too narrow for it, and it read "…". The Home
+                // wordmark had the same fix for the same reason.
+                #if os(iOS)
+                .sharedBackgroundVisibility(.hidden)
+                #endif
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
             #if !os(macOS)
             .navigationBarTitleDisplayMode(.inline)
             #endif
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
-            }
         }
         .task {
             spans = ReplayBuilder.availableSpans(in: context)
             rebuild()
         }
         .onChange(of: chosen) { _, _ in rebuild() }
+        .sheet(item: $exportURL) { export in
+            #if canImport(UIKit)
+            ImageShareSheet(image: export.image)
+            #else
+            ShareSheet(url: export.url)
+            #endif
+        }
+    }
+
+    private static var namePlacement: ToolbarItemPlacement {
+        #if os(iOS)
+        .topBarLeading
+        #else
+        .navigation
+        #endif
     }
 
     private func rebuild() {
+        let source = ReplayBuilder.source(in: context)
+        games = Dictionary(source.games.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         guard spans.indices.contains(chosen) else {
             replay = nil
             return
         }
-        replay = Replay.make(spans[chosen], from: ReplayBuilder.source(in: context))
+        replay = Replay.make(spans[chosen], from: source)
     }
 
-    private var spanPicker: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(Array(spans.enumerated()), id: \.offset) { index, span in
-                    let isChosen = index == chosen
-                    Text(span.title())
-                        .font(.footnote.weight(.semibold))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        // `accentFill` under `onAccent`, never `accent` under
-                        // a hardcoded black: the chosen chip has to stay
-                        // readable on every palette, light and dark.
-                        .background(isChosen ? LSTheme.accentFill : LSTheme.cardFill,
-                                    in: .capsule)
-                        .foregroundStyle(isChosen ? LSTheme.onAccent : .primary)
-                        .contentShape(.capsule)
-                        .onTapGesture { chosen = index }
-                }
-            }
-            .padding(.vertical, 2)
-        }
-        .scrollIndicators(.hidden)
-    }
+    // MARK: Chips
 
-    /// The one sentence the whole screen is for, under the one figure that
-    /// leads it — whichever is the strongest true thing the period holds (see
-    /// `Replay.lead`). It used to lead with the timed total whatever the
-    /// period had, so a year of imported hours or a single finish opened on
-    /// "0s" (Fable, build 40 runtime, 09-21).
-    private func headline(_ replay: Replay) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let lead = replay.lead {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(figure(lead))
-                        .font(LSTheme.pixel(34))
-                        .foregroundStyle(LSTheme.accent)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                    if let caption = caption(lead) {
-                        Text(caption)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+    private var chips: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(Array(spans.enumerated()), id: \.offset) { index, span in
+                        let isChosen = index == chosen
+                        Text(verbatim: span.chipTitle())
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            // `accentFill` under `onAccent`, never `accent`
+                            // under a hardcoded black: the chosen chip has to
+                            // stay readable on every palette.
+                            .background(isChosen ? LSTheme.accentFill : LSTheme.cardFill, in: .capsule)
+                            .foregroundStyle(isChosen ? LSTheme.onAccent : .secondary)
+                            .contentShape(.capsule)
+                            .onTapGesture { chosen = index }
+                            .id(index)
+                            .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
             }
-            Text(replay.sentence)
-                .font(.title3.weight(.medium))
-                .fixedSize(horizontal: false, vertical: true)
-            // Only when there were sessions: "0 days · 0 games · 0 sessions"
-            // over a year of imported hours is the page contradicting itself.
-            if replay.sessionCount > 0 {
-                // Side by side where they fit, stacked where they don't — at
-                // the largest text sizes the labels broke mid-syllable.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) { stats(replay) }
-                    VStack(alignment: .leading, spacing: 6) { stats(replay) }
-                }
+            .scrollIndicators(.hidden)
+            // Fades at the right edge so the row reads as one that scrolls.
+            .mask(LinearGradient(stops: [.init(color: .black, location: 0.84),
+                                         .init(color: .clear, location: 1)],
+                                 startPoint: .leading, endPoint: .trailing))
+            // The chosen chip stays in view — it used to scroll off, leaving
+            // only the bar to say which span you were reading (Fable, 09-21).
+            .onChange(of: chosen) { _, index in
+                withAnimation { proxy.scrollTo(index, anchor: .center) }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
+        // Its own backing, outside the fade: the bar's glass stopped at the
+        // bar, and the page scrolled visibly under the chips — "What you
+        // played" ran straight through "September".
+        .background(.bar)
     }
+
+    // MARK: Save as image
 
     @ViewBuilder
-    private func stats(_ replay: Replay) -> some View {
-        stat("\(replay.daysPlayed)", replay.daysPlayed == 1 ? "day" : "days")
-        stat("\(replay.gamesPlayedCount)", replay.gamesPlayedCount == 1 ? "game" : "games")
-        stat("\(replay.sessionCount)", replay.sessionCount == 1 ? "session" : "sessions")
-    }
-
-    private func figure(_ lead: Replay.Lead) -> String {
-        switch lead {
-        case .timed(let seconds), .placed(let seconds): Format.duration(seconds)
-        case .finished(let n), .added(let n), .remembered(let n): String(n)
-        }
-    }
-
-    private func caption(_ lead: Replay.Lead) -> String? {
-        switch lead {
-        case .timed: nil
-        case .placed: "placed here by you, from before you tracked"
-        case .finished(let n): n == 1 ? "game finished" : "games finished"
-        case .added(let n): n == 1 ? "game added" : "games added"
-        case .remembered(let n): n == 1 ? "memory written" : "memories written"
-        }
-    }
-
-    private func stat(_ value: String, _ label: String) -> some View {
-        HStack(spacing: 4) {
-            Text(value).font(.subheadline.weight(.bold).monospacedDigit())
-            Text(label).font(.caption).foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(LSTheme.accent.opacity(0.14), in: .capsule)
-    }
-
-    private func topGames(_ replay: Replay) -> some View {
-        section("What you played") {
-            let top = Array(replay.played.prefix(5))
-            let most = top.first?.seconds ?? 1
-            VStack(spacing: 10) {
-                ForEach(top) { game in
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack {
-                            Text(game.name)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Spacer(minLength: 8)
-                            Text(Format.duration(game.seconds))
-                                .font(.caption.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                        }
-                        // A bar against the period's own leader, so the shape
-                        // is of this year rather than of the library.
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(LSTheme.accentFill)
-                                .frame(width: max(3, proxy.size.width * (game.seconds / most)))
-                        }
-                        .frame(height: 6)
-                    }
+    private var saveButton: some View {
+        if let replay {
+            Button {
+                Task { await export(replay) }
+            } label: {
+                HStack(spacing: 8) {
+                    if exporting { ProgressView().controlSize(.small) }
+                    Label("Save as image", systemImage: "square.and.arrow.down")
                 }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(LSTheme.accent)
+                .frame(maxWidth: .infinity)
+                .padding(13)
+                .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
             }
+            .buttonStyle(.plain)
+            .disabled(exporting)
         }
     }
 
-    private func finishes(_ replay: Replay) -> some View {
-        section(replay.finished.count == 1 ? "What you finished"
-                                           : "What you finished — \(replay.finished.count)") {
-            VStack(spacing: 8) {
-                ForEach(replay.finished) { finish in
-                    HStack(spacing: 10) {
-                        Image(systemName: "flag.checkered")
-                            .font(.caption)
-                            .foregroundStyle(LSTheme.accent)
-                        Text(finish.name)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(finish.dateText)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
+    /// **The page, without the chips or Done, as one image.**
+    ///
+    /// `ImageRenderer` draws synchronously, and covers load through
+    /// `AsyncImage` — so rendering the live page would leave a gray box
+    /// wherever a cover goes. The covers it needs are loaded first and handed
+    /// in, and the page draws those instead.
+    @MainActor
+    private func export(_ replay: Replay) async {
+        exporting = true
+        defer { exporting = false }
+        let covers = await ReplayCovers.load(Self.coverIDs(for: replay), from: games)
+        let page = ReplayPage(replay: replay, games: games, forExport: true, openBadges: {})
+            .environment(\.replayCovers, covers)
+            .padding(16)
+            .frame(width: 390)
+            .background(LSTheme.ground(lightTint: ThemePalette.backgroundOverrideLight,
+                                       darkTint: ThemePalette.backgroundOverrideDark))
+            .environment(\.colorScheme, .dark)
+        let renderer = ImageRenderer(content: page)
+        renderer.scale = 3
+        guard let data = Self.png(from: renderer) else { return }
+        let name = "Replay \(replay.span.title()).png".replacingOccurrences(of: "/", with: "-")
+        let url = URL.temporaryDirectory.appending(path: name)
+        do {
+            try data.write(to: url, options: .atomic)
+            #if canImport(UIKit)
+            guard let image = renderer.uiImage else { return }
+            exportURL = ExportedImage(url: url, image: image)
+            #else
+            exportURL = ExportedImage(url: url)
+            #endif
+        } catch {}
     }
 
-    /// Hours you told the app belonged to this year, kept visibly apart from
-    /// the timed ones — they are a recollection, not a record.
-    private func carried(_ replay: Replay) -> some View {
-        section("Also this year, from before you tracked") {
-            VStack(spacing: 8) {
-                ForEach(replay.carried) { game in
-                    HStack(spacing: 10) {
-                        Image(systemName: "clock.arrow.circlepath")
-                            .font(.caption)
-                            .foregroundStyle(LSTheme.accent)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(game.name)
-                                .font(.subheadline.weight(.medium))
-                                .lineLimit(1)
-                            // A range names itself on every year it touches,
-                            // so nobody reads it as this year's alone.
-                            if game.isRange {
-                                Text("across \(game.span)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 8)
-                        Text(Format.duration(game.seconds))
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Text("Imported totals you placed in \(replay.span.title()). They aren't in the hours above, because they have no days in them — and a range is shown whole on every year it covers rather than divided between them.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 2)
-            }
-        }
+    private static func png(from renderer: ImageRenderer<some View>) -> Data? {
+        #if canImport(UIKit)
+        renderer.uiImage?.pngData()
+        #else
+        renderer.nsImage?.tiffRepresentation
+            .flatMap(NSBitmapImageRep.init(data:))?
+            .representation(using: .png, properties: [:])
+        #endif
     }
 
-    private func badges(_ replay: Replay) -> some View {
-        section(replay.badges.count == 1 ? "A badge you earned"
-                                         : "\(replay.badges.count) badges you earned") {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 5),
-                      spacing: 8) {
-                ForEach(replay.badges) { badge in
-                    VStack(spacing: 4) {
-                        BadgeArt(badge: badge, size: 40)
-                        Text(badge.title)
-                            .font(.system(size: 9, weight: .medium))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    /// The quieter facts, and the line about where this was made.
-    private func footnote(_ replay: Replay) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let busiest = replay.busiestDay {
-                line("Your longest day was \(busiest.day.formatted(.dateTime.month(.wide).day())) — \(Format.duration(busiest.seconds)).")
-            }
-            if replay.longestSession > 0 {
-                line("The longest single sitting was \(Format.duration(replay.longestSession)).")
-            }
-            if replay.added > 0 {
-                line("\(replay.added) game\(replay.added == 1 ? "" : "s") joined the library.")
-            }
-            if replay.memoriesWritten > 0 {
-                line("You wrote \(replay.memoriesWritten) memor\(replay.memoriesWritten == 1 ? "y" : "ies").")
-            }
-            Text("Made on this device, from your own records. Nothing left it.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .padding(.top, 6)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
-    }
-
-    private func line(_ text: String) -> some View {
-        Text(text)
-            .font(.footnote)
-            .fixedSize(horizontal: false, vertical: true)
+    /// Every cover the page can draw, so the export has them all in hand.
+    static func coverIDs(for replay: Replay) -> [UUID] {
+        var ids = replay.played.prefix(5).map(\.id)
+        ids += replay.finished.map(\.id)
+        ids += replay.carried.compactMap(\.gameID)
+        var seen = Set<UUID>()
+        return ids.filter { seen.insert($0).inserted }
     }
 
     private var empty: some View {
@@ -313,23 +265,511 @@ struct ReplayView: View {
         .padding(16)
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
     }
+}
 
-    private func section<Content: View>(_ title: String,
-                                        @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+// MARK: - The page
+
+/// The part of a Replay that is the Replay — what Save as image draws.
+private struct ReplayPage: View {
+    let replay: Replay
+    let games: [UUID: Game]
+    /// Drawn for Save as image: nothing on it can be tapped, so nothing on
+    /// it says to.
+    var forExport = false
+    var openBadges: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            hero
+            VStack(alignment: .leading, spacing: 6) {
+                Text(replay.sentence)
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                if let facts {
+                    Text(verbatim: facts)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            if !replay.played.isEmpty { played }
+            if showsFinishPanel { finishes }
+            if !replay.carried.isEmpty { carried }
+            if !replay.badges.isEmpty { badges }
+            aside
+            Text("Made on this device, from your own records. Nothing left it.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .padding(.top, 4)
+        }
+    }
+
+    // MARK: Hero
+
+    /// Which story the top of the page tells.
+    private enum Hero {
+        case cover(UUID, total: String?)
+        case mosaic([UUID], more: Int, total: String, caption: String?)
+        case figure(String, caption: String)
+    }
+
+    private var heroKind: Hero? {
+        switch replay.lead {
+        case .timed(let seconds):
+            let total = Format.duration(seconds)
+            // One game, or one game with most of it: its cover is the story.
+            if let top = replay.played.first,
+               replay.played.count == 1 || top.seconds / replay.totalSeconds >= 0.6 {
+                return .cover(top.id, total: total)
+            }
+            let ids = replay.played.map(\.id)
+            return .mosaic(Array(ids.prefix(5)), more: max(0, ids.count - 5), total: total, caption: nil)
+        case .placed(let seconds):
+            var seen = Set<UUID>()
+            let ids = replay.carried.compactMap(\.gameID).filter { seen.insert($0).inserted }
+            let caption = "from before you tracked"
+            if ids.count == 1 { return .mosaic(ids, more: 0, total: Format.duration(seconds), caption: caption) }
+            return .mosaic(Array(ids.prefix(5)), more: max(0, ids.count - 5),
+                           total: Format.duration(seconds), caption: caption)
+        case .finished:
+            // No hero zero: a period with no play gets its finish, not a total.
+            if replay.finished.count == 1 { return .cover(replay.finished[0].id, total: nil) }
+            return .mosaic(Array(replay.finished.map(\.id).prefix(5)),
+                           more: max(0, replay.finished.count - 5),
+                           total: String(replay.finished.count), caption: "games finished")
+        case .added(let n):
+            return .figure(String(n), caption: n == 1 ? "game joined your library" : "games joined your library")
+        case .remembered(let n):
+            return .figure(String(n), caption: n == 1 ? "memory written" : "memories written")
+        case .none:
+            return nil
+        }
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        switch heroKind {
+        case .cover(let id, let total):
+            ZStack(alignment: .bottomLeading) {
+                ReplayCover(id: id, game: games[id])
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 230)
+                    .clipped()
+                LinearGradient(colors: [.clear, .black.opacity(0.75)],
+                               startPoint: .center, endPoint: .bottom)
+                if let total {
+                    Text(verbatim: total)
+                        .font(LSTheme.pixel(40))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .padding(14)
+                }
+            }
+            .frame(height: 230)
+            .clipShape(.rect(cornerRadius: 18))
+            .accessibilityElement(children: .combine)
+        case .mosaic(let ids, let more, let total, let caption):
+            VStack(alignment: .leading, spacing: 10) {
+                Mosaic(ids: ids, more: more, games: games)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: total)
+                        .font(LSTheme.pixel(36))
+                        .foregroundStyle(LSTheme.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    if let caption {
+                        Text(caption).font(.footnote).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        case .figure(let number, let caption):
+            VStack(alignment: .leading, spacing: 0) {
+                Text(verbatim: number)
+                    .font(LSTheme.pixel(40))
+                    .foregroundStyle(LSTheme.accent)
+                Text(caption).font(.footnote).foregroundStyle(.secondary)
+            }
+        case .none:
+            EmptyView()
+        }
+    }
+
+    /// One quiet line under the sentence.
+    private var facts: String? {
+        if replay.sessionCount > 0 {
+            let days = replay.daysPlayed == 1 ? "1 day" : "\(replay.daysPlayed) days"
+            let gamesText = replay.gamesPlayedCount == 1 ? "1 game" : "\(replay.gamesPlayedCount) games"
+            let sessions = replay.sessionCount == 1 ? "1 session" : "\(replay.sessionCount) sessions"
+            return "\(days) · \(gamesText) · \(sessions)"
+        }
+        // A finish and no play: when, as exactly as it was recorded, and on
+        // what — "Sometime in 2015 · SNES", never "Jan 1".
+        if replay.finished.count == 1, let finish = replay.finished.first {
+            let when = finish.dateText.count == 4 ? "Sometime in \(finish.dateText)" : finish.dateText
+            return [when, finish.platform.map(PlatformShort.name)].compactMap { $0 }.joined(separator: " · ")
+        }
+        return nil
+    }
+
+    // MARK: Panels
+
+    private var played: some View {
+        panel("What you played") {
+            let top = Array(replay.played.prefix(5))
+            let most = top.first?.seconds ?? 1
+            VStack(spacing: 10) {
+                ForEach(top) { game in
+                    HStack(spacing: 10) {
+                        ReplayCover(id: game.id, game: games[game.id])
+                            .frame(width: 34, height: 46)
+                            .clipShape(.rect(cornerRadius: 5))
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(game.name)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(verbatim: Format.duration(game.seconds))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                            // Against the period's own leader, so the shape is
+                            // of this period rather than of the library.
+                            GeometryReader { proxy in
+                                Capsule()
+                                    .fill(LSTheme.accentFill)
+                                    .frame(width: max(3, proxy.size.width * (game.seconds / most)))
+                            }
+                            .frame(height: 6)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The finish panel, unless the one finish is already the hero.
+    private var showsFinishPanel: Bool {
+        !replay.finished.isEmpty && !(replay.sessionCount == 0 && replay.finished.count == 1)
+    }
+
+    private var finishes: some View {
+        panel(replay.finished.count == 1 ? "What you finished"
+                                         : "What you finished — \(replay.finished.count)") {
+            VStack(spacing: 8) {
+                ForEach(replay.finished) { finish in
+                    HStack(spacing: 10) {
+                        ReplayCover(id: finish.id, game: games[finish.id])
+                            .frame(width: 26, height: 35)
+                            .clipShape(.rect(cornerRadius: 4))
+                        Text(finish.name)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(verbatim: finish.dateText)
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Hours from before tracking. On a year's page they are the ones placed
+    /// in that year; on "Before you tracked" they are all of them.
+    private var carried: some View {
+        let isBefore = replay.span == .beforeTracking
+        return panel(isBefore ? "From before you tracked" : "Also this year, from before you tracked") {
+            VStack(spacing: 8) {
+                ForEach(replay.carried) { line in
+                    HStack(spacing: 10) {
+                        if let id = line.gameID {
+                            ReplayCover(id: id, game: games[id])
+                                .frame(width: 26, height: 35)
+                                .clipShape(.rect(cornerRadius: 4))
+                        }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(line.name)
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                            // Its years, where they were given. A range names
+                            // itself on every year it touches, so nobody reads
+                            // it as this year's alone.
+                            if isBefore || line.isRange {
+                                Text(verbatim: line.span.isEmpty ? "no years given"
+                                     : (line.isRange ? "across \(line.span)" : line.span))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer(minLength: 8)
+                        Text(verbatim: Format.duration(line.seconds))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(isBefore
+                     ? "What your storefronts reported, with the years you placed it in. None of it is in a year's play, because it has no days in it."
+                     : "Hours you placed here. They aren't in the play above, because they have no days in them.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
+            }
+        }
+    }
+
+    /// **One row, top-aligned, never growing.** Three badges and a "+N" that
+    /// opens the lens, so nothing sits lower than its neighbors and the page
+    /// doesn't lengthen with every badge earned (Fable's mockup).
+    private var badges: some View {
+        let all = replay.badges
+        let shown = all.count > 4 ? Array(all.prefix(3)) : all
+        return panel(all.count == 1 ? "A badge this \(replay.periodWord)"
+                                    : "\(all.count) badges this \(replay.periodWord)") {
+            HStack(alignment: .top, spacing: 6) {
+                ForEach(shown) { badge in
+                    VStack(spacing: 5) {
+                        BadgeArt(badge: badge, size: 48)
+                        Text(badge.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                if all.count > 4 {
+                    Button(action: openBadges) {
+                        VStack(spacing: 5) {
+                            Text(verbatim: "+\(all.count - 3)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, height: 48)
+                                .background(Circle().fill(LSTheme.cardFill))
+                            Text(forExport ? "more" : "See all")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// The quieter facts. The longest day and the longest sitting are one
+    /// line when they were the same thing — they used to be two lines that
+    /// both said 3h 25m.
+    @ViewBuilder
+    private var aside: some View {
+        let lines = asideLines
+        if !lines.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(lines, id: \.self) { line in
+                    Text(verbatim: line)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var asideLines: [String] {
+        var out: [String] = []
+        if let busiest = replay.busiestDay, replay.sessionCount > 1 {
+            let day = busiest.day.formatted(.dateTime.month(.wide).day())
+            if abs(busiest.seconds - replay.longestSession) < 60 {
+                out.append("Your longest sitting was \(Format.duration(replay.longestSession)), on \(day).")
+            } else {
+                out.append("Your longest day was \(day), at \(Format.duration(busiest.seconds)); your longest sitting, \(Format.duration(replay.longestSession)).")
+            }
+        }
+        if replay.added > 0, replay.lead != .added(replay.added) {
+            out.append(replay.added == 1 ? "A game joined the library." : "\(replay.added) games joined the library.")
+        }
+        if replay.memoriesWritten > 0, replay.lead != .remembered(replay.memoriesWritten) {
+            out.append(replay.memoriesWritten == 1 ? "You wrote a memory." : "You wrote \(replay.memoriesWritten) memories.")
+        }
+        return out
+    }
+
+    private func panel<Content: View>(_ title: String,
+                                      @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.headline)
+                .font(.subheadline.weight(.semibold))
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
+        .padding(14)
+        .background(LSTheme.cardFill, in: .rect(cornerRadius: 16))
     }
 }
 
+// MARK: - Covers
+
+/// The leaders' covers, the first one large.
+///
+/// Up to five: one tall on the left, up to four on the right, and "+N more"
+/// in the last place when there were more. Fable's mockup sized tiles by
+/// share of hours and was least sure of it — eleven near-equal games could
+/// make an ugly mosaic — so this is the fixed version it named as safe.
+private struct Mosaic: View {
+    let ids: [UUID]
+    let more: Int
+    let games: [UUID: Game]
+
+    private let height: CGFloat = 227
+    private let gap: CGFloat = 3
+
+    /// A place in the right-hand grid: a game, or the "+N more" tile.
+    private struct Slot: Hashable { let id: UUID? }
+
+    var body: some View {
+        // **Every tile framed explicitly.** Left to the stacks, each cover
+        // asserted its own aspect ratio against the space it was offered, and
+        // the right-hand tiles came out uneven — "+6 more" shorter than the
+        // Hades beside it. Measured once, then placed.
+        GeometryReader { proxy in
+            let slots = rightSlots
+            let leadWidth = slots.isEmpty ? proxy.size.width : (proxy.size.width - gap) / 2
+            let rightWidth = proxy.size.width - leadWidth - gap
+            let rows = stride(from: 0, to: slots.count, by: 2).map {
+                Array(slots[$0..<min($0 + 2, slots.count)])
+            }
+            let rowHeight = rows.isEmpty ? height
+                : (height - gap * CGFloat(rows.count - 1)) / CGFloat(rows.count)
+            HStack(spacing: gap) {
+                if let lead = ids.first {
+                    tile(lead, width: leadWidth, height: height)
+                }
+                if !rows.isEmpty {
+                    VStack(spacing: gap) {
+                        ForEach(rows, id: \.self) { row in
+                            let tileWidth = (rightWidth - gap * CGFloat(row.count - 1)) / CGFloat(row.count)
+                            HStack(spacing: gap) {
+                                ForEach(row, id: \.self) { slot in
+                                    if let id = slot.id {
+                                        tile(id, width: tileWidth, height: rowHeight)
+                                    } else {
+                                        moreTile.frame(width: tileWidth, height: rowHeight)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .clipShape(.rect(cornerRadius: 18))
+    }
+
+    /// Up to four beside the lead, the "+N more" tile taking the last place.
+    private var rightSlots: [Slot] {
+        var slots = ids.dropFirst().prefix(more > 0 ? 3 : 4).map { Slot(id: $0) }
+        if more > 0 { slots.append(Slot(id: nil)) }
+        return slots
+    }
+
+    /// Clipped at its exact size. A flexible frame takes the size of an
+    /// oversized child, so clipping there let a cover spill over the tile
+    /// below it; the size has to be the one the grid measured.
+    private func tile(_ id: UUID, width: CGFloat, height: CGFloat) -> some View {
+        ReplayCover(id: id, game: games[id])
+            .frame(width: width, height: height)
+            .clipped()
+            .overlay(alignment: .bottomLeading) {
+                ZStack(alignment: .bottomLeading) {
+                    LinearGradient(colors: [.clear, .black.opacity(0.7)],
+                                   startPoint: .center, endPoint: .bottom)
+                    Text(games[id]?.name ?? "")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .padding(8)
+                }
+            }
+    }
+
+    private var moreTile: some View {
+        Text(verbatim: "+\(more) more")
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(LSTheme.cardFill)
+    }
+}
+
+/// A game's cover — the preloaded one when the page is being saved as an
+/// image, the live one otherwise.
+private struct ReplayCover: View {
+    let id: UUID
+    let game: Game?
+    @Environment(\.replayCovers) private var covers
+
+    var body: some View {
+        if let image = covers[id] {
+            image.resizable().aspectRatio(contentMode: .fill)
+        } else if let game {
+            CoverThumb(urlString: game.displayCoverURLString,
+                       artwork: game.resolvedArtwork(.cover),
+                       name: game.name, status: game.status)
+        } else {
+            LSTheme.cardFill
+        }
+    }
+}
+
+/// Covers loaded ahead of `ImageRenderer`, which can't wait for `AsyncImage`.
+/// On the main actor because it reads `Game` models; the downloads still
+/// suspend rather than block.
+@MainActor
+enum ReplayCovers {
+    static func load(_ ids: [UUID], from games: [UUID: Game]) async -> [UUID: Image] {
+        var out: [UUID: Image] = [:]
+        for id in ids {
+            guard let game = games[id] else { continue }
+            var data: Data?
+            switch game.resolvedArtwork(.cover) {
+            case .local(let bytes): data = bytes
+            case .remote(let url): data = try? await URLSession.shared.data(from: url).0
+            case .none: break
+            }
+            #if canImport(UIKit)
+            if let data, let image = UIImage(data: data) { out[id] = Image(uiImage: image) }
+            #else
+            if let data, let image = NSImage(data: data) { out[id] = Image(nsImage: image) }
+            #endif
+        }
+        return out
+    }
+}
+
+private struct ReplayCoversKey: EnvironmentKey {
+    static let defaultValue: [UUID: Image] = [:]
+}
+
+extension EnvironmentValues {
+    var replayCovers: [UUID: Image] {
+        get { self[ReplayCoversKey.self] }
+        set { self[ReplayCoversKey.self] = newValue }
+    }
+}
+
+// MARK: - The door
+
 /// The door into a Replay, at the top of the Charts lens.
 ///
-/// It names the period and one true thing about it, so opening it is a choice
+/// It names the period and says its one sentence, so opening it is a choice
 /// rather than a gamble — and it says nothing at all when there is nothing to
 /// say, rather than offering a recap of a month you didn't play.
 struct ReplayEntryCard: View {
@@ -340,7 +780,7 @@ struct ReplayEntryCard: View {
 
     var body: some View {
         Group {
-            if let replay, !replay.isEmpty {
+            if let replay {
                 card(replay)
             } else {
                 // **A sliver, not nothing.** This card sits in a `LazyVStack`,
@@ -371,11 +811,12 @@ struct ReplayEntryCard: View {
                 }
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(replay.span.title())
+                Text(verbatim: "Replay · \(replay.span.chipTitle())")
                     .font(.headline)
-                Text("\(Format.duration(replay.totalSeconds)) across \(replay.daysPlayed) day\(replay.daysPlayed == 1 ? "" : "s")")
+                Text(replay.sentence)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             Spacer(minLength: 6)
             Image(systemName: "chevron.right")
@@ -387,7 +828,20 @@ struct ReplayEntryCard: View {
         .contentShape(.rect)
         .onTapGesture { showing = true }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Replay: \(replay.span.title())")
+        .accessibilityLabel("Replay: \(replay.span.title()). \(replay.sentence)")
         .accessibilityAddTraits(.isButton)
     }
 }
+
+#if canImport(UIKit)
+/// The share sheet for a picture rather than a file, so "Save Image" is
+/// offered and a Replay lands in Photos (which needs only the add-only
+/// permission — see `NSPhotoLibraryAddUsageDescription`).
+private struct ImageShareSheet: UIViewControllerRepresentable {
+    let image: UIImage
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [image], applicationActivities: nil)
+    }
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+#endif

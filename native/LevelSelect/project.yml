@@ -91,6 +91,9 @@ targets:
         # Which CloudKit environment this build syncs to, so the app can keep
         # fields Production hasn't been deployed with out of reach (SchemaDeploy).
         LSCloudKitEnvironment: $(LS_CK_ENV)
+        # Replay's "Save as image" (ReplayView). ADD-only: the app can put a
+        # picture in the library and can never read what is already there.
+        NSPhotoLibraryAddUsageDescription: "Save as image puts your Replay in your photo library. LevelSelect can only add pictures there, never see the ones you have."
         # The app's Documents folder shows in Files, so the safety copy taken
         # before Replace Library or Erase Library is somewhere a person can
         # find it (LibraryReplace.safetyFolder).

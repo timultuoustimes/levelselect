@@ -27,10 +27,20 @@ struct Replay {
         case month(Date)
         case quarter(Date)
         case year(Date)
+        /// **Every imported hour, on one page.** A year holding nothing but
+        /// hours carried in from Steam used to get a page of its own, and one
+        /// 5-hour range across 2018–2026 made eight empty ones (Fable, build
+        /// 40 runtime, 09-21). Those hours now live here, each with the years
+        /// you placed it in. A year that has anything else still shows its
+        /// placed hours as a line of their own.
+        case beforeTracking
 
         /// The period this span covers, in the given calendar.
         func interval(_ calendar: Calendar = .current) -> DateInterval {
             switch self {
+            case .beforeTracking:
+                // No days: nothing dated falls inside it.
+                return DateInterval(start: .distantPast, duration: 0)
             case .month(let date):
                 return calendar.dateInterval(of: .month, for: date)
                     ?? DateInterval(start: date, duration: 0)
@@ -79,6 +89,8 @@ struct Replay {
         /// renderer the game page uses (`CompletionEvent.fuzzyText`), so the
         /// two can't disagree (Fable, build 40 runtime, 09-21).
         var dateText: String = ""
+        /// The console it was finished on, when the finish says.
+        var platform: String?
     }
 
     var span: Span = .year(.now)
@@ -92,6 +104,10 @@ struct Replay {
     var longestSession: TimeInterval = 0
     /// The day with the most play, and how much — nil for a period with none.
     var busiestDay: (day: Date, seconds: TimeInterval)?
+    /// The game that filled the busiest day, and what day of the week it was
+    /// — for "One long Saturday with Hollow Knight".
+    var busiestDayGame: String?
+    var busiestWeekday: String?
 
     var played: [Played] = []
     var finished: [Finish] = []
@@ -110,6 +126,8 @@ struct Replay {
     /// actually happened on.
     struct Carried: Identifiable, Equatable {
         let id: UUID
+        /// The game the hours belong to — for its cover.
+        var gameID: UUID? = nil
         let name: String
         let seconds: TimeInterval
         /// "2022", or "2021–2023" when the hours were placed across a range.
@@ -146,12 +164,14 @@ struct Replay {
                      calendar: Calendar = .current, now: Date = .now) -> Replay {
         var replay = Replay()
         replay.span = span
+        if span == .beforeTracking { return beforeTracking(source) }
         let range = span.interval(calendar)
         replay.range = range
 
         // Sessions, each counted whole in the period it began — see `overlap`.
         var perGame: [UUID: (name: String, seconds: TimeInterval, sessions: Int)] = [:]
         var perDay: [Date: TimeInterval] = [:]
+        var perDayGame: [Date: [String: TimeInterval]] = [:]
 
         for game in source.games {
             for playthrough in game.livePlaythroughs {
@@ -172,6 +192,7 @@ struct Replay {
                     // way anyone describing their night would say it.
                     let day = calendar.startOfDay(for: session.startDate)
                     perDay[day, default: 0] += seconds
+                    perDayGame[day, default: [:]][game.name, default: 0] += seconds
                 }
             }
         }
@@ -183,6 +204,10 @@ struct Replay {
         replay.daysPlayed = perDay.count
         if let busiest = perDay.max(by: { $0.value < $1.value }) {
             replay.busiestDay = (busiest.key, busiest.value)
+            replay.busiestDayGame = perDayGame[busiest.key]?
+                .max { ($0.value, $1.key) < ($1.value, $0.key) }?.key
+            replay.busiestWeekday = busiest.key.formatted(
+                Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).weekday(.wide))
         }
 
         replay.finished = source.completions
@@ -190,7 +215,8 @@ struct Replay {
             .compactMap { event in
                 guard let game = event.game, game.deletedAt == nil else { return nil }
                 return Finish(id: game.id, name: game.name, date: event.date,
-                              label: event.labelText, dateText: event.dateText)
+                              label: event.labelText, dateText: event.dateText,
+                              platform: event.platform)
             }
             .sorted { $0.date < $1.date }
 
@@ -212,7 +238,7 @@ struct Replay {
                     for covering in playthrough.carriedOverSpans.covering(year)
                     where covering.seconds > 0 {
                         replay.carried.append(
-                            Carried(id: covering.id, name: game.name,
+                            Carried(id: covering.id, gameID: game.id, name: game.name,
                                     seconds: covering.seconds, span: covering.label))
                     }
                 }
@@ -225,6 +251,29 @@ struct Replay {
             .sorted { $0.value < $1.value }
             .compactMap { Badges.definition($0.key) }
 
+        return replay
+    }
+
+    /// Every hour carried in from before tracking, each with the years it
+    /// was placed in — and, where only part of a lump was placed, the rest
+    /// as one line with no years.
+    private static func beforeTracking(_ source: Source) -> Replay {
+        var replay = Replay()
+        replay.span = .beforeTracking
+        for game in source.games where game.deletedAt == nil {
+            for playthrough in game.livePlaythroughs where playthrough.carriedOverSeconds > 0 {
+                for span in playthrough.carriedOverSpans where span.seconds > 0 {
+                    replay.carried.append(Carried(id: span.id, gameID: game.id, name: game.name,
+                                                  seconds: span.seconds, span: span.label))
+                }
+                let loose = playthrough.unattributedCarriedSeconds
+                if loose > 0 {
+                    replay.carried.append(Carried(id: playthrough.id, gameID: game.id, name: game.name,
+                                                  seconds: loose, span: ""))
+                }
+            }
+        }
+        replay.carried.sort { ($0.seconds, $0.name) > ($1.seconds, $1.name) }
         return replay
     }
 
@@ -258,6 +307,7 @@ extension Replay.Span {
     /// What to call this period. The year is always there, because a replay
     /// is a thing you look back at.
     func title(_ calendar: Calendar = .current) -> String {
+        if self == .beforeTracking { return "Before you tracked" }
         let start = interval(calendar).start
         let year = calendar.component(.year, from: start)
         switch self {
@@ -276,7 +326,21 @@ extension Replay.Span {
         case .quarter:
             let quarter = (calendar.component(.month, from: start) - 1) / 3 + 1
             return "Q\(quarter) \(year)"
+        case .beforeTracking:
+            return "Before you tracked"
         }
+    }
+
+    /// The chip's label: "September" rather than "September 2026" for a month
+    /// in the current year, where the year is noise. Everything else as
+    /// `title`.
+    func chipTitle(_ calendar: Calendar = .current, now: Date = .now) -> String {
+        guard case .month = self else { return title(calendar) }
+        let start = interval(calendar).start
+        guard calendar.component(.year, from: start) == calendar.component(.year, from: now) else {
+            return title(calendar)
+        }
+        return start.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.wide))
     }
 }
 
@@ -309,49 +373,115 @@ extension Replay {
         return nil
     }
 
-    /// **The one sentence, written as a remark rather than a readout.**
-    ///
-    /// "Mostly" only when it is mostly: it opened "Mostly Hollow Knight" over
-    /// a quarter where Hollow Knight was 29%, and "Mostly Stardew Valley" over
-    /// a year where it was 24% (Fable, 09-21).
-    var sentence: String {
-        if let top = played.first, totalSeconds > 0 {
-            let share = top.seconds / totalSeconds
-            let opener: String
-            if played.count == 1 {
-                opener = "All \(top.name)"
-            } else if share >= 0.5 {
-                opener = "Mostly \(top.name)"
-            } else {
-                opener = "Spread across \(played.count) games, \(top.name) most of all"
-            }
-            switch finished.count {
-            case 0:
-                return opener + "."
-            case 1:
-                // "Mostly Hollow Knight, and you finished Hollow Knight" — the
-                // usual case, and saying the name twice reads like a fault.
-                return finished[0].id == top.id
-                    ? opener + ", and you finished it."
-                    : opener + ", and you finished \(finished[0].name)."
-            default:
-                return opener + ", and you finished \(finished.count) games."
-            }
+    /// **Whether this period gets a page of its own.** Anything dated —
+    /// play, a finish, a game arriving, a memory — earns one. Imported hours
+    /// alone do not: they have no days in them, and a year holding nothing
+    /// else was an empty page with a number on it. Those hours are on the
+    /// "Before you tracked" page instead (Fable's Replay mockup, 09-21).
+    var offersOwnPage: Bool {
+        sessionCount > 0 || !finished.isEmpty || added > 0 || memoriesWritten > 0
+    }
+
+    /// "year", "month", "quarter" — for "The year you finished Chrono Trigger".
+    var periodWord: String {
+        switch span {
+        case .month: "month"
+        case .quarter: "quarter"
+        case .year: "year"
+        case .beforeTracking: "time"
         }
+    }
+
+    /// **The one sentence, written as a remark rather than a readout** — and
+    /// it changes shape because the data did (Fable's Replay mockup, 09-21):
+    ///
+    /// | When | It says |
+    /// |---|---|
+    /// | One day holds 60% of it, and was long | One long Saturday with *Hollow Knight*, and not much else. |
+    /// | One game | All *Celeste*. |
+    /// | Top game is 60% or more | Mostly *Hollow Knight*. |
+    /// | Top two within 15% of each other, together most of it | *Hollow Knight* and *Hades*, about evenly. |
+    /// | Otherwise | *Eleven* games, and *Stardew Valley* more than any. |
+    /// | …plus a finish | …and you finished it. / …and you finished *Celeste*. |
+    /// | A finish and no play | The year you finished *Chrono Trigger*. |
+    ///
+    /// "Mostly" needs 60%: it said "Mostly Hollow Knight" over a quarter
+    /// where Hollow Knight was 29%. "About evenly" also needs the two to be
+    /// most of the period, or eleven games with two close at the top would be
+    /// described as a pair.
+    var sentence: String {
+        guard let top = played.first, totalSeconds > 0 else { return quietSentence }
+
+        // Who the sentence is about, if it is about one game — so a finish of
+        // that same game can be "it" rather than its name twice.
+        var subject: String?
+        var opener: String
+        var trailer = "."
+
+        if let day = busiestDay, let game = busiestDayGame, let weekday = busiestWeekday,
+           // 60%, not the mockup's "over half": at 53% the other days held
+           // nearly as much, and "not much else" was false.
+           day.seconds >= totalSeconds * 0.6, day.seconds >= 3 * 3600 {
+            opener = "One long \(weekday) with \(game)"
+            subject = game
+            trailer = ", and not much else."
+        } else if played.count == 1 {
+            opener = "All \(top.name)"
+            subject = top.name
+        } else if top.seconds / totalSeconds >= 0.6 {
+            opener = "Mostly \(top.name)"
+            subject = top.name
+        } else if let second = played.dropFirst().first,
+                  (top.seconds - second.seconds) / top.seconds <= 0.15,
+                  (top.seconds + second.seconds) / totalSeconds >= 0.6 {
+            opener = "\(top.name) and \(second.name), about evenly"
+        } else {
+            // "and" once: with a finish to follow, the first one goes, or it
+            // read "Eleven games, and Stardew Valley more than any, and you
+            // finished Hollow Knight."
+            let joiner = finished.isEmpty ? ", and " : ", "
+            opener = "\(Self.spelled(played.count, capitalized: true)) games\(joiner)\(top.name) more than any"
+        }
+
+        switch finished.count {
+        case 0:
+            return opener + trailer
+        case 1:
+            let finish = finished[0].name
+            return opener + (finish == subject ? ", and you finished it." : ", and you finished \(finish).")
+        default:
+            return opener + ", and you finished \(Self.spelled(finished.count, capitalized: false)) games."
+        }
+    }
+
+    /// A period with no play in it.
+    private var quietSentence: String {
         if !finished.isEmpty {
-            return finished.count == 1 ? "You finished \(finished[0].name)."
-                                       : "You finished \(finished.count) games."
+            return finished.count == 1
+                ? "The \(periodWord) you finished \(finished[0].name)."
+                : "The \(periodWord) you finished \(Self.spelled(finished.count, capitalized: false)) games."
         }
         if let first = carried.first {
             return carried.count == 1 ? "\(first.name), from before you tracked it."
-                                      : "\(carried.count) games, from before you tracked them."
+                                      : "\(Self.spelled(carried.count, capitalized: true)) games, from before you tracked them."
         }
         if added > 0 {
-            return added == 1 ? "A game joined your library." : "\(added) games joined your library."
+            return added == 1 ? "A game joined your library." : "\(Self.spelled(added, capitalized: true)) games joined your library."
         }
         if memoriesWritten > 0 {
-            return memoriesWritten == 1 ? "You wrote a memory." : "You wrote \(memoriesWritten) memories."
+            return memoriesWritten == 1 ? "You wrote a memory." : "You wrote \(Self.spelled(memoriesWritten, capitalized: false)) memories."
         }
         return ""
+    }
+
+    /// "Eleven games" rather than "11 games" in a sentence; digits past
+    /// ninety-nine, where the words get longer than the point.
+    static func spelled(_ n: Int, capitalized: Bool) -> String {
+        guard n < 100 else { return "\(n)" }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .spellOut
+        formatter.locale = Locale(identifier: "en_US")
+        let word = formatter.string(from: NSNumber(value: n)) ?? "\(n)"
+        return capitalized ? word.prefix(1).uppercased() + word.dropFirst() : word
     }
 }
