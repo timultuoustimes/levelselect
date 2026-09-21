@@ -119,8 +119,14 @@ struct ConfettiBurst: View {
     private static let span = pieces.map { $0.delay + $0.speed }.max() ?? 1
 
     var body: some View {
-        if reduceMotion || trigger == 0 {
+        if trigger == 0 {
             EmptyView()
+        } else if reduceMotion {
+            // **The setting means less movement, not less occasion.** Paper
+            // flying across the screen is exactly the flourish Reduce Motion
+            // is asking about, so it gets the accent washing over the screen
+            // once instead — a moment with nothing travelling in it.
+            ReduceMotionGlow(trigger: trigger)
         } else {
             TimelineView(.animation) { timeline in
                 Canvas { context, size in
@@ -161,6 +167,27 @@ struct ConfettiBurst: View {
             // "after the end" and no paper was ever drawn (09-21).
             .task(id: trigger) { clock.startedAt = .now }
         }
+    }
+}
+
+/// What a celebration looks like with Reduce Motion on: the accent gathers at
+/// the edges, holds for a moment, and goes. It fades rather than moves, which
+/// is the distinction the setting actually draws.
+private struct ReduceMotionGlow: View {
+    let trigger: Int
+    @State private var lit = false
+
+    var body: some View {
+        RadialGradient(colors: [.clear, LSTheme.accent.opacity(0.42)],
+                       center: .center, startRadius: 90, endRadius: 520)
+            .ignoresSafeArea()
+            .opacity(lit ? 1 : 0)
+            .allowsHitTesting(false)
+            .task(id: trigger) {
+                withAnimation(.easeOut(duration: 0.45)) { lit = true }
+                try? await Task.sleep(for: .seconds(1.1))
+                withAnimation(.easeIn(duration: 0.7)) { lit = false }
+            }
     }
 }
 

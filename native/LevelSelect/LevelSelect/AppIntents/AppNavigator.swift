@@ -141,6 +141,21 @@ final class AppNavigator {
     /// finishing a tracker can land three at once — they celebrate together.
     var earnedBadges: [Badges.Definition] = []
 
+    /// Holds a badge back while a sheet covers the root — see
+    /// `BadgeCelebrationQueue`.
+    /// `@ObservationIgnored` because the queue is plumbing, not state a view
+    /// reads — and because `@Observable` rewrites a plain stored property
+    /// into a computed one, which `lazy` cannot be.
+    @ObservationIgnored private lazy var badgeQueue: BadgeCelebrationQueue = {
+        BadgeCelebrationQueue { [weak self] badges in self?.earnedBadges += badges }
+    }()
+
+    /// Celebrate now, or as soon as there is a screen to celebrate on.
+    func celebrate(_ badges: [Badges.Definition]) { badgeQueue.celebrate(badges) }
+
+    func sheetOpened() { badgeQueue.sheetOpened() }
+    func sheetClosed() { badgeQueue.sheetClosed() }
+
     /// Which Journal lens to open — the badge toast's "See" lands on Badges.
     /// A raw value rather than the enum, because `JournalTab.Lens` is a view
     /// type and the navigator is the one place that must not import the UI.

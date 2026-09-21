@@ -85,8 +85,10 @@ enum BadgeAwarder {
         if firstPass { defaults.set(true, forKey: summaryPendingKey) }
 
         let earned = firstPass ? [] : missing.compactMap(Badges.definition)
-        // The toast lives on the navigator, the way a deleted game's undo does.
-        if !earned.isEmpty { AppNavigator.shared.earnedBadges += earned }
+        // The toast lives on the navigator, the way a deleted game's undo
+        // does. `celebrate` rather than a direct append: it holds the badge
+        // back if a sheet is open over the root.
+        AppNavigator.shared.celebrate(earned)
         return Result(newlyEarned: earned, wasBackfill: firstPass)
     }
 
