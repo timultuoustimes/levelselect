@@ -27,7 +27,7 @@ enum LibraryImport {
     /// use it; a test pins that the two never drift.
     /// The newest format this build understands. **Older files are read, not
     /// refused** — see the gate in `root(of:)`.
-    nonisolated static let supportedVersion = 5
+    nonisolated static let supportedVersion = 6
 
     enum ImportError: LocalizedError {
         case notAnExport
@@ -138,6 +138,10 @@ enum LibraryImport {
         /// Consoles are matched by their folded platform name, not by id —
         /// see the import below.
         var consolePlatforms = Set<String>()
+        /// Badges are matched by their badge id, like consoles by platform:
+        /// two devices that earned "Roll credits" hold two rows with one
+        /// meaning, and a restore must not add a third.
+        var badgeIDs = Set<String>()
         var trackerItemDetails = Set<UUID>()
         /// The profile is a singleton, so it is present-or-absent rather than
         /// matched by id — but the preview still has to say which.
@@ -158,6 +162,8 @@ enum LibraryImport {
             images = Set(try context.fetch(FetchDescriptor<GameImage>()).map(\.id))
             memories = Set(try context.fetch(FetchDescriptor<Memory>()).map(\.id))
             consolePlatforms = Set(try context.fetch(FetchDescriptor<Console>()).map(\.platform))
+            badgeIDs = Set(try context.fetch(FetchDescriptor<EarnedBadge>(
+                predicate: #Predicate { $0.deletedAt == nil })).map(\.badgeID))
             trackerItemDetails = Set(try context.fetch(FetchDescriptor<TrackerItemDetail>()).map(\.id))
             hasProfile = !(try context.fetch(FetchDescriptor<PlayerProfile>()).isEmpty)
         }
@@ -212,6 +218,11 @@ enum LibraryImport {
         // Consoles are the one record matched by NAME rather than id — two
         // devices that each back-filled their own library hold a Genesis with
         // two different ids and one meaning. See the import below.
+        // v6 — the badge ledger, matched by badge id.
+        for b in (root["earnedBadges"] as? [[String: Any]]) ?? [] {
+            let id = (b["badgeID"] as? String) ?? ""
+            if existing.badgeIDs.contains(id) { onSkip("badges") } else { onCreate("badges") }
+        }
         for c in (root["consoles"] as? [[String: Any]]) ?? [] {
             let key = (c["platform"] as? String).map(PlatformKey.canonical) ?? ""
             if existing.consolePlatforms.contains(key) { onSkip("consoles") }
@@ -535,6 +546,28 @@ enum LibraryImport {
             }
         }
 
+        // v6 — the badge ledger. Created when the badge is absent, matched by
+        // badge id rather than row id, and never overwritten.
+        //
+        // **Inserted before the awarder next runs, so nothing celebrates.**
+        // The awarder diffs what the library deserves against the ledger;
+        // these rows land in the ledger first, so a restored badge reads as
+        // already earned — on the date it was actually earned — rather than
+        // as fourteen new ones at once.
+        var ledger = existing.badgeIDs
+        for d in (root["earnedBadges"] as? [[String: Any]]) ?? [] {
+            guard let badgeID = d["badgeID"] as? String, !badgeID.isEmpty else { continue }
+            if ledger.contains(badgeID) { outcome.skipped["badges", default: 0] += 1; continue }
+            let badge = EarnedBadge(
+                badgeID: badgeID,
+                earnedAt: date(d["earnedAt"]) ?? .now,
+                gameID: uuid(d["gameID"]),
+                detailJSON: (d["detail"] as? String).flatMap { $0.data(using: .utf8) })
+            context.insert(badge)
+            ledger.insert(badgeID)
+            outcome.created["badges", default: 0] += 1
+        }
+
         // v5 — the news reader. Feeds and the articles you kept, created when
         // absent and never overwritten, like everything else here.
         var feedsByID: [UUID: NewsFeed] = [:]
@@ -626,6 +659,9 @@ enum LibraryImport {
         text("ownershipChips", \.ownershipChipsRaw)
         text("suggestionPrefs", \.suggestionPrefsRaw)
         text("shelfOrder", \.shelfOrderRaw)
+        // v6. Gated like every V8 write: a Production build that predates the
+        // deploy must not write a field CloudKit doesn't have.
+        if SchemaDeploy.v8Fields { text("nameFont", \.nameFontRaw) }
         if replacing {
             for (key, path) in [("accentHex", \ThemeSettings.accentHex), ("backgroundHex", \.backgroundHex),
                                 ("accentHexLight", \.accentHexLight), ("accentHexDark", \.accentHexDark),
@@ -760,8 +796,13 @@ enum LibraryImport {
         }
         schema.generatedAt = date(d["generatedAt"])
         schema.generatedBy = d["generatedBy"] as? String
-        if let sources = d["sources"], !(sources is NSNull) {
-            schema.sourcesJSON = try? JSONSerialization.data(withJSONObject: sources)
+        // Through the same filter as generation, so a backup — from any build,
+        // or edited by hand — can only ever restore a type and a URL. Pasted
+        // text never reaches the store by this door either (Tim, 09-21).
+        if let sources = d["sources"], !(sources is NSNull),
+           let wrapped = try? JSONSerialization.data(withJSONObject: ["sources": sources]) {
+            let kept = TrackerProvenance.fromSchemaPayload(wrapped)
+            schema.sourcesJSON = kept.isEmpty ? nil : try? JSONEncoder().encode(kept)
         } else {
             schema.sourcesJSON = nil
         }
@@ -791,6 +832,16 @@ enum LibraryImport {
         // Absent in every file written before build 37, which is exactly the
         // zero this defaults to.
         pt.carriedOverSeconds = (d["carriedOverSeconds"] as? Double) ?? 0
+        // v6 — which years those hours belong to. Absent means "not said",
+        // which is also what a v5 file means, so it clears on a refill.
+        if SchemaDeploy.v8Fields {
+            let spans = ((d["carriedOverSpans"] as? [[String: Any]]) ?? []).compactMap { s -> CarriedOverSpan? in
+                guard let from = s["fromYear"] as? Int else { return nil }
+                return CarriedOverSpan(seconds: (s["seconds"] as? Double) ?? 0,
+                                       fromYear: from, toYear: s["toYear"] as? Int)
+            }
+            pt.carriedOverSpans = spans
+        }
     }
 
     private static func makePlaythrough(_ d: [String: Any], id: UUID) -> Playthrough {
@@ -873,6 +924,10 @@ enum LibraryImport {
         event.startedDate = date(d["startedDate"])
         event.startedPrecision = d["startedPrecision"] as? String
         event.companions = companions(d["playedWith"])
+        // v6. Written only when on, so its absence is "off".
+        if SchemaDeploy.v8Fields {
+            event.anniversaryReminder = (d["anniversaryReminder"] as? Bool) ?? false
+        }
     }
 
     private static func makeCompletion(_ d: [String: Any], id: UUID) -> CompletionEvent {
@@ -1009,6 +1064,10 @@ enum LibraryImport {
         made.place = d["place"] as? String
         made.platform = d["platform"] as? String
         made.companions = companions(d["playedWith"])
+        // v6. Written only when on, so its absence is "off".
+        if SchemaDeploy.v8Fields {
+            made.anniversaryReminder = (d["anniversaryReminder"] as? Bool) ?? false
+        }
     }
 
     static func fillConsole(_ console: Console, _ d: [String: Any]) {

@@ -19,7 +19,14 @@ enum BadgeAwarder {
     private static let backfilledKey = "levelselect.badges.backfilled"
     /// The first build wrote every backfilled badge as "now". This repairs
     /// them once, from the same evidence the awarder now dates by.
-    private static let redatedKey = "levelselect.badges.redated.v1"
+    ///
+    /// **v2 (09-21).** v1 ran with five rules that had no date at all — first
+    /// tracker, every week counted, the return, and both history spans — plus
+    /// beaten tiers dated by raw completions and collection badges dated to
+    /// the latest finish anywhere. Those badges were written as "today" and v1
+    /// left them there. A new key runs the repair once more with the fixed
+    /// dates; a badge whose evidence is gone has no date and is left alone.
+    private static let redatedKey = "levelselect.badges.redated.v2"
     /// True until the Journal has acknowledged a silent backfill.
     static let summaryPendingKey = "levelselect.badges.summaryPending"
 
@@ -145,23 +152,40 @@ enum BadgeAwarder {
             total + game.livePlaythroughs.reduce(0) { $0 + $1.totalPlaytime(asOf: now) }
         } / 3600
 
+        // **Every rule below answers "when", and the fact is whether it has
+        // an answer.** These were Booleans, and each threw away the date that
+        // made it true — so five badges were deserved with no date to put on
+        // them and fell back to *today* (Codex, build 40, 09-21). Deriving the
+        // fact from the date means a badge can no longer be earned without
+        // one.
+        let firstBeaten = firstBeatenDates(completions)
+        let trackerDate = firstTrackerFinished(games)
         f.trackersFinished = games.filter { isTrackerFinished($0) }.count
 
         let days = playDays(sessions)
         f.longestStreakDays = longestStreak(in: days)
-        f.hadMonthWithEveryWeek = hasMonthWithEveryWeek(days)
-        f.returnedAfterSixMonths = returnedAfterGap(sessions, months: 6)
+        let everyWeekDate = firstMonthWithEveryWeek(days)
+        f.hadMonthWithEveryWeek = everyWeekDate != nil
+        let returnDate = firstReturnAfterGap(sessions, months: 6)
+        f.returnedAfterSixMonths = returnDate != nil
 
-        f.beatEverySystemGame = beatEverySystemGame(games, completions: completions)
-        f.completedACollection = completedACollection(context, completions: completions)
+        let systemDate = firstSystemBeaten(games, firstBeaten: firstBeaten)
+        f.beatEverySystemGame = systemDate != nil
+        let collectionDate = firstCollectionFinished(context, firstBeaten: firstBeaten)
+        f.completedACollection = collectionDate != nil
 
-        let dated = completions.map(\.date) + memories.map(\.earliest)
         if let earliestPlay = sessions.map(\.startDate).min(),
            completions.contains(where: { $0.date < earliestPlay }) {
             f.beatenBeforeInstall = true
         }
         f.hasVagueDate = memories.contains { ($0.precision ?? "day") != "day" }
-        if let first = dated.min(), let last = dated.max() {
+
+        // History spans everything dated — sessions included, as the rule
+        // says. They were left out, so a library timed across six years with
+        // one memory had "no history".
+        let dated = (completions.map(\.date) + memories.map(\.earliest)
+                     + sessions.map(\.startDate)).sorted()
+        if let first = dated.first, let last = dated.last {
             let years = Calendar.current.dateComponents([.year], from: first, to: last).year ?? 0
             f.yearsOfHistory = max(0, years)
         }
@@ -176,16 +200,33 @@ enum BadgeAwarder {
         dates["first.session"] = sessionStarts.first
         dates["first.memory"] = memories.map(\.createdAt).min()
         dates["first.console"] = consoleDates.first
-        nth(&dates, "beaten", completionDates, [10, 25, 50, 100])
+        dates["first.tracker"] = trackerDate
+        // **Distinct games, not completion events.** The count is of games
+        // beaten, so the tenth is the tenth *game* — a replay of one you had
+        // already beaten used to move the date earlier.
+        nth(&dates, "beaten", firstBeaten.values.sorted(), [10, 25, 50, 100])
         nth(&dates, "sessions", sessionStarts, [10, 100, 500])
         nth(&dates, "added", addedDates, [10, 100, 500])
         nth(&dates, "consoles", consoleDates, [1, 5, 10])
 
         // The hour tiers happened during a session: walk them in order and
         // note which one carried the total past each threshold.
-        var running: TimeInterval = 0
-        let byDate = sessions.sorted { $0.startDate < $1.startDate }
-        for session in byDate {
+        //
+        // **Imported hours count as played before tracking began** — that is
+        // what they are. So the walk starts from them, and a threshold they
+        // cross on their own is dated to the earliest thing the library
+        // knows, since those hours were already behind you by then. The count
+        // included them and the dating didn't, so an imported-only badge was
+        // dated today.
+        let carried = games.reduce(0) { total, game in
+            total + game.livePlaythroughs.reduce(0) { $0 + $1.carriedOverSeconds }
+        }
+        let earliestKnown = [sessionStarts.first, addedDates.first].compactMap { $0 }.min()
+        for n in [10, 100, 500, 1000] where carried / 3600 >= Double(n) {
+            dates["hours.\(n)"] = earliestKnown
+        }
+        var running = carried
+        for session in sessions.sorted(by: { $0.startDate < $1.startDate }) {
             let before = running / 3600
             running += session.elapsed(asOf: now)
             let after = running / 3600
@@ -196,15 +237,24 @@ enum BadgeAwarder {
 
         if let streakEnd = streakEnd(in: days, length: 7) { dates["streak.7"] = streakEnd }
         if let streakEnd = streakEnd(in: days, length: 30) { dates["streak.30"] = streakEnd }
-        if f.beatEverySystemGame || f.completedACollection {
-            // The set was finished by its last completion.
-            dates["collection.systemBeaten"] = completionDates.last
-            dates["collection.finished"] = completionDates.last
-        }
+        dates["habit.everyWeek"] = everyWeekDate
+        dates["habit.return"] = returnDate
+        dates["collection.systemBeaten"] = systemDate
+        dates["collection.finished"] = collectionDate
         if f.beatenBeforeInstall { dates["history.beforeApp"] = completionDates.first }
         if f.hasVagueDate {
             dates["history.vague"] = memories.filter { ($0.precision ?? "day") != "day" }
                 .map(\.createdAt).min()
+        }
+        // N years of history happened on the first dated thing at least N
+        // years after the earliest one. A year-grain memory sits on 1 January,
+        // which is the grain it was given — the date is no more exact than the
+        // memory, and no less.
+        if let first = dated.first {
+            for n in [5, 10] {
+                guard let threshold = Calendar.current.date(byAdding: .year, value: n, to: first) else { continue }
+                dates["historyYears.\(n)"] = dated.first { $0 >= threshold }
+            }
         }
         return (f, dates.compactMapValues { $0 })
     }
@@ -262,53 +312,98 @@ enum BadgeAwarder {
         return best
     }
 
-    /// A calendar month in which every week that the month touches had play.
-    private static func hasMonthWithEveryWeek(_ days: Set<Date>) -> Bool {
+    /// The day each game was first beaten — one per game, however many times
+    /// it was finished since.
+    private static func firstBeatenDates(_ completions: [CompletionEvent]) -> [UUID: Date] {
+        var out: [UUID: Date] = [:]
+        for event in completions {
+            guard let id = event.game?.id else { continue }
+            out[id] = min(out[id] ?? event.date, event.date)
+        }
+        return out
+    }
+
+    /// When the first tracker reached 100%: the last tick on the earliest
+    /// finished playthrough.
+    private static func firstTrackerFinished(_ games: [Game]) -> Date? {
+        games.flatMap(\.livePlaythroughs)
+            .filter { $0.progressPercent >= 100 }
+            .compactMap { pt -> Date? in
+                let ticks = (pt.trackerStates ?? [])
+                    .filter { $0.deletedAt == nil && $0.completed }
+                    .map(\.tickedAt)
+                return ticks.max() ?? pt.lastPlayedAt
+            }
+            .min()
+    }
+
+    /// A calendar month in which every week the month touches had play — and
+    /// the day the first such month was completed: when its last missing
+    /// week got its first session.
+    private static func firstMonthWithEveryWeek(_ days: Set<Date>) -> Date? {
         let calendar = Calendar.current
         let byMonth = Dictionary(grouping: days) { calendar.dateInterval(of: .month, for: $0)?.start ?? $0 }
-        return byMonth.contains { month, played in
-            guard let interval = calendar.dateInterval(of: .month, for: month) else { return false }
+        return byMonth.compactMap { month, played -> Date? in
+            guard let interval = calendar.dateInterval(of: .month, for: month) else { return nil }
             var weeks: Set<Date> = []
             var cursor = interval.start
             while cursor < interval.end {
                 if let week = calendar.dateInterval(of: .weekOfYear, for: cursor)?.start { weeks.insert(week) }
                 cursor = calendar.date(byAdding: .day, value: 1, to: cursor) ?? interval.end
             }
-            let playedWeeks = Set(played.compactMap { calendar.dateInterval(of: .weekOfYear, for: $0)?.start })
-            return !weeks.isEmpty && weeks.isSubset(of: playedWeeks)
+            var firstInWeek: [Date: Date] = [:]
+            for day in played {
+                guard let week = calendar.dateInterval(of: .weekOfYear, for: day)?.start else { continue }
+                firstInWeek[week] = min(firstInWeek[week] ?? day, day)
+            }
+            guard !weeks.isEmpty, weeks.isSubset(of: Set(firstInWeek.keys)) else { return nil }
+            return weeks.compactMap { firstInWeek[$0] }.max()
         }
+        .min()
     }
 
-    /// One game, put down for six months or more, and picked up again.
-    private static func returnedAfterGap(_ sessions: [Session], months: Int) -> Bool {
+    /// One game, put down for six months or more, and picked up again — dated
+    /// to the first session that picked it up.
+    private static func firstReturnAfterGap(_ sessions: [Session], months: Int) -> Date? {
         let calendar = Calendar.current
         let byGame = Dictionary(grouping: sessions) { $0.playthrough?.game?.id }
-        return byGame.contains { _, sessions in
+        return byGame.values.compactMap { sessions -> Date? in
             let dates = sessions.map(\.startDate).sorted()
-            return zip(dates, dates.dropFirst()).contains { previous, next in
+            return zip(dates, dates.dropFirst()).first { previous, next in
                 (calendar.dateComponents([.month], from: previous, to: next).month ?? 0) >= months
-            }
+            }?.1
         }
+        .min()
     }
 
-    /// Every game you own on one system, beaten — and at least three of them,
-    /// so a console with one game on it isn't an achievement.
-    private static func beatEverySystemGame(_ games: [Game], completions: [CompletionEvent]) -> Bool {
-        let beaten = Set(completions.compactMap { $0.game?.id })
+    /// Every game you own on one system, beaten — at least three, so a console
+    /// with one game on it isn't an achievement. Dated to when the first such
+    /// system's last game fell, not to the latest finish anywhere.
+    private static func firstSystemBeaten(_ games: [Game], firstBeaten: [UUID: Date]) -> Date? {
         let owned = games.filter { !($0.ownedPlatforms ?? []).isEmpty }
         let bySystem = Dictionary(grouping: owned) { PlatformKey.canonical(($0.ownedPlatforms ?? []).first ?? "") }
-        return bySystem.contains { _, games in
-            games.count >= 3 && games.allSatisfy { beaten.contains($0.id) }
+        return bySystem.values.compactMap { games -> Date? in
+            guard games.count >= 3 else { return nil }
+            let dates = games.map { firstBeaten[$0.id] }
+            guard dates.allSatisfy({ $0 != nil }) else { return nil }
+            return dates.compactMap { $0 }.max()
         }
+        .min()
     }
 
-    private static func completedACollection(_ context: ModelContext, completions: [CompletionEvent]) -> Bool {
-        let beaten = Set(completions.compactMap { $0.game?.id })
+    /// A collection of two or more, every game in it beaten — dated to when
+    /// the first such collection's last game fell.
+    private static func firstCollectionFinished(_ context: ModelContext,
+                                                firstBeaten: [UUID: Date]) -> Date? {
         let collections = ((try? context.fetch(FetchDescriptor<GameCollection>())) ?? [])
             .filter { $0.deletedAt == nil }
-        return collections.contains { (collection: GameCollection) in
+        return collections.compactMap { (collection: GameCollection) -> Date? in
             let members = collection.gameIDs.compactMap(UUID.init(uuidString:))
-            return members.count >= 2 && members.allSatisfy { beaten.contains($0) }
+            guard members.count >= 2 else { return nil }
+            let dates = members.map { firstBeaten[$0] }
+            guard dates.allSatisfy({ $0 != nil }) else { return nil }
+            return dates.compactMap { $0 }.max()
         }
+        .min()
     }
 }

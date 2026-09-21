@@ -144,7 +144,7 @@ struct Replay {
         let range = span.interval(calendar)
         replay.range = range
 
-        // Sessions, clipped to the period.
+        // Sessions, each counted whole in the period it began — see `overlap`.
         var perGame: [UUID: (name: String, seconds: TimeInterval, sessions: Int)] = [:]
         var perDay: [Date: TimeInterval] = [:]
 
@@ -165,7 +165,7 @@ struct Replay {
                     // Filed under the day it STARTED. A session that runs
                     // past midnight belongs to the evening you began it, the
                     // way anyone describing their night would say it.
-                    let day = calendar.startOfDay(for: max(session.startDate, range.start))
+                    let day = calendar.startOfDay(for: session.startDate)
                     perDay[day, default: 0] += seconds
                 }
             }
@@ -223,26 +223,29 @@ struct Replay {
         return replay
     }
 
-    /// How much of a session falls inside the period.
+    /// How much of a session this period gets: **all of it, if it began
+    /// here, and none of it otherwise.**
     ///
-    /// Clipped rather than counted whole: a session begun on New Year's Eve
-    /// and stopped after midnight is not four hours of January, and a replay
-    /// that claimed it would disagree with the year beside it. A session
-    /// still running is measured up to `now`.
+    /// This used to clip a session to the period by wall clock, so a session
+    /// begun at 22:00 on New Year's Eve split two and two between the years.
+    /// That was only right for a session played straight through, and the
+    /// store cannot tell which ones were. A paused session has no end date, so
+    /// its old time was spread from its start to *now* and leaked into every
+    /// later month; a resumed one had its earlier segments smeared across the
+    /// gap between them; and an edited one whose end preceded its start came
+    /// back as zero despite a valid duration. Codex, build 40 static
+    /// assessment, 2026-09-21.
+    ///
+    /// Attributing the whole session to the day it started is what Charts'
+    /// By Month already does, so the two can no longer disagree, and it uses
+    /// `elapsed` — the session's own authority on how long it lasted — without
+    /// pretending to know where inside that span the play fell. Exact
+    /// boundaries would need play segments stored as they happen: a schema
+    /// change, and one Tim chose not to make (09-21).
     private static func overlap(_ session: Session, with range: DateInterval,
                                 now: Date) -> TimeInterval {
-        let end = session.endDate ?? now
-        guard end > session.startDate else { return 0 }
-        let played = DateInterval(start: session.startDate, end: end)
-        guard let shared = played.intersection(with: range) else { return 0 }
-
-        // A paused or edited session's own elapsed time is the authority on
-        // how long it lasted; the wall-clock span can be much longer. Scale
-        // the elapsed time by how much of the span falls in the period, which
-        // is exact for a whole session and fair for a clipped one.
-        let elapsed = session.elapsed(asOf: now)
-        guard played.duration > 0 else { return 0 }
-        return elapsed * (shared.duration / played.duration)
+        guard range.contains(session.startDate) else { return 0 }
+        return max(0, session.elapsed(asOf: now))
     }
 }
 

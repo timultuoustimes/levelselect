@@ -25,8 +25,11 @@ import SwiftData
 /// - Every write is stamped now, so this is the newest edit on every device.
 /// - A copy of the library as it was is written first (`safetyCopy`).
 ///
-/// Badges are left alone: backups don't carry them, and they are earned from
-/// the library rather than entered.
+/// Badges follow the backup when it has them (v6 onward) and are left alone
+/// when it doesn't — see `replaceLedger`. They used to be left alone always,
+/// on the grounds that they are "earned from the library rather than entered".
+/// That was wrong: a badge is written once and outlives the data that earned
+/// it, so it is authored state and belongs in the backup (Codex, 09-21).
 @MainActor
 enum LibraryReplace {
 
@@ -158,6 +161,7 @@ enum LibraryReplace {
             repo.stopSession(session, at: now)
         }
         removals.tombstone(at: now)
+        replaceLedger(root: root, context: context, now: now)
 
         var appearance = LibraryImport.Outcome()
         LibraryImport.applyAppearance(root["appearance"] as? [String: Any], context: context,
@@ -174,6 +178,42 @@ enum LibraryReplace {
         }
         try context.save()
         return out
+    }
+
+    /// **Make the badge ledger match the backup — but only a backup that has
+    /// one.**
+    ///
+    /// A v6 file carries the ledger, so it is replaced like everything else:
+    /// the import has already created what was missing, this sets each badge
+    /// to the date the backup records and tombstones any the backup doesn't
+    /// have.
+    ///
+    /// **A file with no `earnedBadges` key leaves the ledger alone.** That is
+    /// every backup made before 2026-09-21. Treating "absent from the file"
+    /// as "remove" there would mean restoring any older backup wiped every
+    /// badge you had — the opposite of what a backup is for.
+    static func replaceLedger(root: [String: Any], context: ModelContext, now: Date) {
+        guard let fileBadges = root["earnedBadges"] as? [[String: Any]] else { return }
+        var fileDates: [String: Date] = [:]
+        for d in fileBadges {
+            guard let id = d["badgeID"] as? String, !id.isEmpty else { continue }
+            fileDates[id] = LibraryImport.date(d["earnedAt"]) ?? fileDates[id]
+        }
+        let live = (try? context.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))) ?? []
+        for badge in live {
+            if let date = fileDates[badge.badgeID] {
+                if badge.earnedAt != date {
+                    badge.earnedAt = date
+                    badge.updatedAt = now
+                    badge.revision += 1
+                }
+            } else {
+                badge.deletedAt = now
+                badge.updatedAt = now
+                badge.revision += 1
+            }
+        }
     }
 
     private static func overwrite(root: [String: Any], library: Library, now: Date) {

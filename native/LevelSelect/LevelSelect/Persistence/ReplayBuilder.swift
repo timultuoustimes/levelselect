@@ -50,10 +50,26 @@ enum ReplayBuilder {
             }
         }
 
+        // **Everything a replay can show, not just what arrived when.** This
+        // looked only at when games were added, finished and remembered — so
+        // a game added this year with sessions in 2020, or Steam hours placed
+        // in 2020, made a 2020 replay that `make` would happily build and
+        // this list would never offer (Codex, build 40, 09-21).
+        let sessionStarts = source.games
+            .flatMap(\.livePlaythroughs)
+            .flatMap { ($0.sessions ?? []).filter { $0.deletedAt == nil } }
+            .map(\.startDate)
+        let placedYears = source.games
+            .flatMap(\.livePlaythroughs)
+            .flatMap(\.carriedOverSpans)
+            .compactMap { calendar.date(from: DateComponents(year: $0.fromYear, month: 1, day: 1)) }
         let earliest = [
             source.games.map(\.addedAt).min(),
             source.completions.map(\.date).min(),
             source.memories.map(\.createdAt).min(),
+            sessionStarts.min(),
+            placedYears.min(),
+            source.badgeDates.values.min(),
         ].compactMap { $0 }.min() ?? now
 
         let firstYear = calendar.component(.year, from: earliest)

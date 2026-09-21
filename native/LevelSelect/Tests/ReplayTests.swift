@@ -81,22 +81,57 @@ struct ReplayTests {
         #expect(replay.played.map(\.name) == ["Hollow Knight"])
     }
 
-    /// A session begun on New Year's Eve and stopped after midnight is not
-    /// four hours of January.
-    @Test("A session straddling the boundary is split, not double-counted")
-    func straddlingSessionIsClipped() {
+    /// **Whole, to the year it began.** A session begun at 22:00 on New Year's
+    /// Eve counts entirely toward the old year — which is what Charts' By
+    /// Month does, so the two can never disagree. It used to be split two and
+    /// two by wall clock, which was only right for a session played straight
+    /// through (Tim chose start-date attribution, 09-21).
+    @Test("A session straddling the boundary counts whole toward the year it began")
+    func straddlingSessionCountsWhereItBegan() {
         let repo = store()
         let game = repo.addGame(name: "Celeste")
-        // 22:00 on 31 December, four hours long: two in each year.
         play(repo, game, from: date(2025, 12, 31, 22), hours: 4)
 
         let old = Replay.make(.year(date(2025, 6, 1)), from: source(repo),
                               calendar: calendar, now: date(2026, 12, 31))
         let new = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
                               calendar: calendar, now: date(2026, 12, 31))
-        #expect(abs(old.totalSeconds - 2 * 3600) < 60)
-        #expect(abs(new.totalSeconds - 2 * 3600) < 60)
-        #expect(abs((old.totalSeconds + new.totalSeconds) - 4 * 3600) < 60)
+        #expect(abs(old.totalSeconds - 4 * 3600) < 1)
+        #expect(new.totalSeconds == 0)
+        #expect(new.sessionCount == 0)
+    }
+
+    /// Codex's case: a paused session has no end date, so the old clipping
+    /// measured it to *now* and spread its time into every later month.
+    @Test("A paused session stays in the month it began")
+    func pausedSessionDoesNotLeakForward() {
+        let repo = store()
+        let game = repo.addGame(name: "Tunic")
+        let session = play(repo, game, from: date(2026, 3, 10), hours: 2)
+        session.endDate = nil
+        session.state = .paused
+        session.pausedAt = date(2026, 3, 10, 14)
+
+        let march = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                calendar: calendar, now: date(2026, 9, 1))
+        let later = Replay.make(.month(date(2026, 6, 15)), from: source(repo),
+                                calendar: calendar, now: date(2026, 9, 1))
+        #expect(abs(march.totalSeconds - 2 * 3600) < 1)
+        #expect(later.totalSeconds == 0)
+    }
+
+    /// An edited session whose end came before its start still has a valid
+    /// duration; the old clipping returned zero for it.
+    @Test("A session with a reversed end still counts its real duration")
+    func reversedEndStillCounts() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")
+        let session = play(repo, game, from: date(2026, 3, 10, 20), hours: 3)
+        session.endDate = date(2026, 3, 10, 18)   // edited before the start
+
+        let replay = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 9, 1))
+        #expect(abs(replay.totalSeconds - 3 * 3600) < 1)
     }
 
     @Test("Games are ranked by how much of the period they had")
@@ -352,6 +387,36 @@ struct ReplayTests {
         // And nothing else put anything in 2020 either — the game was added
         // today — so the year stays empty rather than gaining a blank line.
         #expect(replay.isEmpty)
+    }
+
+    // MARK: Which years are offered
+
+    /// A game added this year with a 2020 session made a 2020 replay that
+    /// `make` would build and the year list never offered (Codex, 09-21).
+    @Test("A year with only sessions in it is offered")
+    func sessionOnlyYearIsOffered() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")   // added today
+        play(repo, game, from: date(2020, 5, 5), hours: 3)
+        let years = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                 now: date(2026, 9, 21))
+            .map { $0.title(calendar) }
+        #expect(years.contains("2020"))
+    }
+
+    @Test("A year with only placed Steam hours in it is offered")
+    func placedHoursYearIsOffered() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2021, toYear: 2023)],
+                                 on: pt, calendar: calendar)
+        let years = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                 now: date(2026, 9, 21))
+            .map { $0.title(calendar) }
+        #expect(years.contains("2021") && years.contains("2022") && years.contains("2023"))
+        #expect(!years.contains("2020"))
     }
 
     /// The library a replay describes is the one you have now: a game deleted

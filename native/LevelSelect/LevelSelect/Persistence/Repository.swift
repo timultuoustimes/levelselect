@@ -1808,7 +1808,8 @@ struct Repository {
     /// the user's Personal Goals across regeneration.
     func setGeneratedSchema(for game: Game, jsonData: Data,
                             source: TrackerSource = .aiGenerated,
-                            attribution: String? = "claude") {
+                            attribution: String? = "claude",
+                            provenance: [TrackerProvenance] = []) {
         // Generated ids are untrusted input, not a valid key set — duplicate
         // item ids share one state record (ticking either row ticks both).
         // Sanitize at the boundary so no install path accepts them raw.
@@ -1826,10 +1827,24 @@ struct Repository {
         schema.source = source
         schema.generatedAt = .now
         schema.generatedBy = attribution
+        recordProvenance(on: schema, from: jsonData, adding: provenance)
         touch(schema)
         touch(game)
         recomputeProgress(game)
         persist()
+    }
+
+    /// **Where the items came from, kept where the record says it keeps
+    /// them.** The generator has always sent a `sources` list inside the
+    /// schema it returns; nothing lifted it into `sourcesJSON`, so every
+    /// tracker was silent about its origin (Codex, 09-21). Descriptors and
+    /// links only — see `TrackerProvenance` for why a paste records that it
+    /// was pasted and nothing of what.
+    private func recordProvenance(on schema: TrackerSchemaRecord, from jsonData: Data,
+                                  adding explicit: [TrackerProvenance]) {
+        let incoming = TrackerProvenance.fromSchemaPayload(jsonData) + explicit
+        guard !incoming.isEmpty else { return }
+        schema.sourcesJSON = TrackerProvenance.merged(existing: schema.sourcesJSON, adding: incoming)
     }
 
     /// What actually happened when a generated schema was folded in — the
@@ -2199,7 +2214,8 @@ struct Repository {
     func applyGeneratedSchema(for game: Game, jsonData: Data,
                               mode: TrackerMergeMode,
                               source: TrackerSource = .aiGenerated,
-                              attribution: String? = "claude") -> TrackerMergeOutcome {
+                              attribution: String? = "claude",
+                              provenance: [TrackerProvenance] = []) -> TrackerMergeOutcome {
         // The ONE ingest boundary: first generation, Replace, Add-to-existing
         // and Add-new-category all pass through here, so sanitizing the
         // payload once covers every mode — the previous seen-set fix deduped
@@ -2212,10 +2228,14 @@ struct Repository {
         guard let existing = game.trackerSchema else {
             // Nothing to merge into — first generation is just an install.
             setGeneratedSchema(for: game, jsonData: jsonData,
-                               source: source, attribution: attribution)
+                               source: source, attribution: attribution,
+                               provenance: provenance)
             let cats = TrackerSchemaJSON.categories(from: jsonData)
             return TrackerMergeOutcome(added: cats.flatMap(\.items).count)
         }
+        // Merging into a tracker that already exists: what it was built from
+        // grows, so a guide and then a paste are both remembered.
+        recordProvenance(on: existing, from: jsonData, adding: provenance)
 
         let states = allTrackerStates(for: game)
         let progressIDs = progressItemIDs(for: game)
@@ -3538,8 +3558,40 @@ struct Repository {
         return rows.count - 1
     }
 
+    /// **Fold badge sync twins into one row per badge.**
+    ///
+    /// Two offline devices can each earn "Roll credits" and each write a row
+    /// with its own id. The Journal and Replay already collapse them by badge
+    /// id; the widget did not, and counted both (Codex, build 40, 09-21).
+    /// Folding them here means nothing downstream has to remember to.
+    ///
+    /// The survivor is the earliest by `(earnedAt, id)` — a total order, so
+    /// every device picks the SAME row and none tombstones the one another
+    /// kept. The earliest date wins because a badge was earned the first time
+    /// it was earned. The rest are tombstoned rather than deleted, so the
+    /// removal itself syncs.
+    @discardableResult
+    func reconcileBadges(at date: Date = .now) -> Int {
+        let live = ((try? context.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))) ?? [])
+        var folded = 0
+        for (_, rows) in Dictionary(grouping: live, by: \.badgeID) where rows.count > 1 {
+            let ordered = rows.sorted {
+                ($0.earnedAt, $0.id.uuidString) < ($1.earnedAt, $1.id.uuidString)
+            }
+            for loser in ordered.dropFirst() {
+                loser.deletedAt = date
+                loser.updatedAt = date
+                loser.revision += 1
+                folded += 1
+            }
+        }
+        return folded
+    }
+
     func reconcileLibrary(at date: Date = .now) {
         reconcileSingletons(at: date)
+        reconcileBadges(at: date)
         repairDetachedSessionsFromLedger()
         var seen = Set<UUID>()
         for session in unstoppedSessions() {

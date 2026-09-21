@@ -281,7 +281,18 @@ struct StatsCards: View {
     /// two across, which also stops "266h 36m" wrapping mid-figure the way it
     /// did in a four-across strip on a phone.
     private func overviewCard(sessions: [Session]) -> some View {
-        let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() })
+        // **Lifetime, imported hours included** — the same thing "Played"
+        // means on a game page (`Playthrough.totalPlaytime`) and in Most
+        // Played below. This tile summed sessions only, so for anyone who
+        // brought Steam hours in, the page's headline and its own leaderboard
+        // disagreed with no word to say why (Codex, build 40, 09-21).
+        //
+        // The dated cards further down stay sessions-only, and that is not a
+        // contradiction: imported time has no days in it to put on a chart.
+        let carried = games.reduce(0) { total, game in
+            total + game.livePlaythroughs.reduce(0) { $0 + $1.carriedOverSeconds }
+        }
+        let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() } + carried)
         return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
             GridRow {
                 statTile("gamecontroller.fill", "\(games.count)", "Games")

@@ -306,8 +306,129 @@ struct LibraryBackupContractTests {
     /// you follow and an article you kept exist ONLY as those records, so an
     /// older build reading a v5 file would restore a library quietly missing
     /// both.
+    // MARK: v6 — schema V8's fields and the badge ledger
+
+    /// Codex, build 40 static assessment: all four V8 fields were added to
+    /// the model and to none of export, import or this file.
+    @Test func v8FieldsSurvive() throws {
+        let source = emptyStore()
+        let repo = Repository(source)
+        let game = repo.addGame(name: S.gameName)
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2021, toYear: 2023)], on: pt)
+        repo.addCompletion(to: game, label: .cleared, date: .now)
+        let finish = try #require(game.completionEvents?.first)
+        finish.anniversaryReminder = true
+        let memory = Memory(title: "The first night", earliest: .now, precision: "day")
+        memory.anniversaryReminder = true
+        source.insert(memory)
+        let theme = ThemeSettings()
+        theme.nameFontRaw = "rounded"
+        source.insert(theme)
+        try source.save()
+
+        let restored = try roundTrip(source)
+        let pts = try restored.fetch(FetchDescriptor<Playthrough>())
+        let steam = try #require(pts.first { $0.name == "Steam" })
+        #expect(steam.carriedOverSpans.map(\.label) == ["2021–2023"])
+        #expect(try restored.fetch(FetchDescriptor<CompletionEvent>()).first?.anniversaryReminder == true)
+        #expect(try restored.fetch(FetchDescriptor<Memory>()).first?.anniversaryReminder == true)
+        let restoredTheme = try restored.fetch(FetchDescriptor<ThemeSettings>(
+            sortBy: [SortDescriptor(\.createdAt)])).first
+        #expect(restoredTheme?.nameFontRaw == "rounded")
+    }
+
+    /// **The case the ledger exists for.** Earn a badge, then remove what
+    /// earned it: the badge stays in this library, and it must stay in the
+    /// restored one too. Backfill cannot rebuild it, because the data behind
+    /// it is gone — so the file is the only place it survives.
+    @Test func aBadgeSurvivesEvenWhenWhatEarnedItIsGone() throws {
+        let source = emptyStore()
+        let earned = Date(timeIntervalSince1970: 1_600_000_000)   // Sep 2020
+        source.insert(EarnedBadge(badgeID: "first.beaten", earnedAt: earned))
+        try source.save()   // no game, no completion: nothing left to earn it
+
+        let restored = try roundTrip(source)
+        let badges = try restored.fetch(FetchDescriptor<EarnedBadge>())
+        let badge = try #require(badges.first { $0.badgeID == "first.beaten" },
+                                 "the ledger did not survive the round trip")
+        #expect(abs(badge.earnedAt.timeIntervalSince(earned)) < 1)
+    }
+
+    /// Sync twins are two rows with one badge id. The file carries one, with
+    /// the earlier date, and a restore does not create a second.
+    @Test func badgeTwinsExportAsOneAndRestoreAsOne() throws {
+        let source = emptyStore()
+        let early = Date(timeIntervalSince1970: 1_600_000_000)
+        source.insert(EarnedBadge(badgeID: "streak.7", earnedAt: early.addingTimeInterval(86_400)))
+        source.insert(EarnedBadge(badgeID: "streak.7", earnedAt: early))
+        try source.save()
+
+        let data = try LibraryExport.makeJSON(context: source)
+        let root = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rows = try #require(root["earnedBadges"] as? [[String: Any]])
+        #expect(rows.count == 1)
+
+        let target = emptyStore()
+        _ = try LibraryImport.apply(data: data, context: target)
+        _ = try LibraryImport.apply(data: data, context: target)   // idempotent
+        let restored = try target.fetch(FetchDescriptor<EarnedBadge>())
+        #expect(restored.count == 1)
+        #expect(abs((restored.first?.earnedAt ?? .now).timeIntervalSince(early)) < 1)
+    }
+
+    /// The manifest's own honesty check has to count the ledger, or every v6
+    /// import would warn that the file holds fewer records than it claims.
+    @Test func aV6ManifestAgreesWithItsOwnFile() throws {
+        let source = emptyStore()
+        _ = Repository(source).addGame(name: S.gameName)
+        source.insert(EarnedBadge(badgeID: "first.beaten", earnedAt: .now))
+        try source.save()
+        let data = try LibraryExport.makeJSON(context: source)
+        let preview = try LibraryImport.preview(data: data, context: emptyStore())
+        #expect(preview.problems.isEmpty, Comment(rawValue: preview.problems.joined(separator: "; ")))
+        #expect(preview.creates["badges"] == 1)
+    }
+
+    /// Replace makes the ledger match a v6 backup — and **leaves it alone for
+    /// an older one**, which has no ledger at all. Treating "absent from the
+    /// file" as "remove" there would wipe every badge you had.
+    @Test func replaceFollowsAV6LedgerAndLeavesItAloneForAnOlderFile() throws {
+        let backupSource = emptyStore()
+        let backupDate = Date(timeIntervalSince1970: 1_600_000_000)
+        backupSource.insert(EarnedBadge(badgeID: "first.beaten", earnedAt: backupDate))
+        try backupSource.save()
+        let v6 = try LibraryExport.makeJSON(context: backupSource)
+
+        // A library with a different date for the same badge, and one the
+        // backup doesn't have.
+        let library = emptyStore()
+        library.insert(EarnedBadge(badgeID: "first.beaten", earnedAt: .now))
+        library.insert(EarnedBadge(badgeID: "streak.7", earnedAt: .now))
+        try library.save()
+        _ = try LibraryReplace.apply(data: v6, context: library)
+        let afterV6 = try library.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))
+        #expect(afterV6.map(\.badgeID) == ["first.beaten"])
+        #expect(abs((afterV6.first?.earnedAt ?? .now).timeIntervalSince(backupDate)) < 1)
+
+        // The same backup with its ledger removed stands in for any file made
+        // before v6. The library's badges must come through untouched.
+        var root = try #require(try JSONSerialization.jsonObject(with: v6) as? [String: Any])
+        root.removeValue(forKey: "earnedBadges")
+        let older = try JSONSerialization.data(withJSONObject: root)
+        let kept = emptyStore()
+        kept.insert(EarnedBadge(badgeID: "streak.30", earnedAt: .now))
+        try kept.save()
+        _ = try LibraryReplace.apply(data: older, context: kept)
+        let afterOlder = try kept.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))
+        #expect(afterOlder.map(\.badgeID) == ["streak.30"])
+    }
+
     @Test func formatVersionIsCurrentAndImporterAcceptsOlderFiles() throws {
-        #expect(LibraryExport.formatVersion == 5)
+        #expect(LibraryExport.formatVersion == 6)
         #expect(LibraryImport.supportedVersion == LibraryExport.formatVersion)
 
         // An older file still restores: accept older, refuse newer.

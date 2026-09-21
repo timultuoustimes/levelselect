@@ -190,7 +190,17 @@ enum WidgetBridge {
         let badgeDescriptor = FetchDescriptor<EarnedBadge>(
             predicate: #Predicate { $0.deletedAt == nil },
             sortBy: [SortDescriptor(\.earnedAt, order: .reverse)])
-        let allEarned: [WidgetBadge] = ((try? context.fetch(badgeDescriptor)) ?? [])
+        // **One per badge.** Sync twins are two rows with one badge id, and
+        // this counted both — the widget said 14 where the Journal said 13
+        // (Codex, build 40, 09-21). `reconcileBadges` folds them on
+        // foreground; this holds until it has, keeping the earliest date as
+        // the Journal and Replay do.
+        let earliestRows = Dictionary(
+            grouping: (try? context.fetch(badgeDescriptor)) ?? [], by: \.badgeID)
+            .compactMapValues { $0.min { $0.earnedAt < $1.earnedAt } }
+            .values
+            .sorted { $0.earnedAt > $1.earnedAt }
+        let allEarned: [WidgetBadge] = earliestRows
             .compactMap { earned in
                 guard let definition = Badges.definition(earned.badgeID) else { return nil }
                 return WidgetBadge(id: definition.id, title: definition.title,

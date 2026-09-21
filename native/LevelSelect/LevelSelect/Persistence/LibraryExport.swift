@@ -34,7 +34,13 @@ enum LibraryExport {
     /// are records that exist nowhere else: unfollow a feed on one device and
     /// restore from a v4 file and they are simply gone. Barcodes and the
     /// suggestion preferences ride in the same version.
-    static let formatVersion = 5
+    /// **v6 (2026-09-21).** The badge ledger, and the four fields schema V8
+    /// added: which years imported playtime belongs to, the name font, and
+    /// the two anniversary switches. Codex's build 40 static assessment found
+    /// all five missing — the ledger on the stated grounds that badges are
+    /// earned rather than entered, which is exactly the assumption the ledger
+    /// exists to reject.
+    static let formatVersion = 6
 
     struct Manifest: Codable {
         var formatVersion: Int
@@ -62,6 +68,9 @@ enum LibraryExport {
         /// the size it is, without decoding anything.
         var images: Int
         var imageBytes: Int
+        /// The badge ledger. New in v6, and optional so a v5 manifest — which
+        /// has no such key — still decodes.
+        var earnedBadges: Int?
         /// Sum of every record count above — a cheap integrity check that an
         /// importer (or a person) can verify without parsing the whole file.
         var totalRecords: Int
@@ -276,6 +285,16 @@ enum LibraryExport {
                 if pt.carriedOverSeconds > 0 {
                     p["carriedOverSeconds"] = pt.carriedOverSeconds
                 }
+                // v6 — which years those hours belong to. The stored spans,
+                // not the computed ones: a single-year tag written before V8
+                // lives in `startedAt`, which is already exported above, and
+                // reads back as a one-year span on its own.
+                let spans = [CarriedOverSpan].decoded(pt.carriedOverSpansData)
+                if !spans.isEmpty {
+                    p["carriedOverSpans"] = spans.map { span -> [String: Any] in
+                        ["seconds": span.seconds, "fromYear": span.fromYear, "toYear": span.toYear]
+                    }
+                }
                 playthroughObjects.append(p)
             }
             dict["playthroughs"] = playthroughObjects
@@ -293,6 +312,9 @@ enum LibraryExport {
                 c["startedPrecision"] = event.startedPrecision
                 c["playthroughID"] = event.playthrough?.id.uuidString
                 c["playedWith"] = event.companions.map { ["name": $0.name, "handle": $0.handle] }
+                // v6. Written only when on: off is the default for every
+                // finish, and the file needn't say so thousands of times.
+                if event.anniversaryReminder { c["anniversaryReminder"] = true }
                 return c
             }
 
@@ -472,6 +494,8 @@ enum LibraryExport {
                 m["place"] = memory.place
                 m["platform"] = memory.platform
                 m["gameID"] = memory.game?.id.uuidString
+                // v6. Only when on, like a finish's.
+                if memory.anniversaryReminder { m["anniversaryReminder"] = true }
                 if !memory.companions.isEmpty {
                     m["playedWith"] = memory.companions.map {
                         ["name": $0.name, "handle": $0.handle]
@@ -521,7 +545,7 @@ enum LibraryExport {
             + counts.maps + counts.markers + counts.images + collectionObjects.count
             + memoryObjects.count + counts.trackerItemDetails
 
-        let manifest = Manifest(
+        var manifest = Manifest(
             formatVersion: formatVersion,
             exportedAt: .now,
             appVersion: appVersionString,
@@ -581,7 +605,36 @@ enum LibraryExport {
             return a
         }
 
+        // v6 — the badge ledger. **Authored state, not derived state.** A badge
+        // is written once and outlives the data that earned it: undo the
+        // completion and the badge stays. So a backup that left the ledger out
+        // — which v5 did, on the reasoning that badges are "earned from the
+        // library rather than entered" — lost every badge whose source data
+        // had changed since, the moment it was restored onto a fresh store.
+        // Codex, build 40 static assessment, 2026-09-21.
+        //
+        // One row per badge, earliest date winning: CloudKit sync twins are
+        // two rows with one badge id, and the file needn't carry both.
+        let earnedRows = ((try? context.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))) ?? [])
+        let earliestByBadge = Dictionary(grouping: earnedRows, by: \.badgeID)
+            .compactMapValues { $0.min { $0.earnedAt < $1.earnedAt } }
+        let badgeObjects: [[String: Any]] = earliestByBadge.values
+            .sorted { ($0.earnedAt, $0.badgeID) < ($1.earnedAt, $1.badgeID) }
+            .map { badge in
+                var b: [String: Any] = [
+                    "badgeID": badge.badgeID,
+                    "earnedAt": iso(badge.earnedAt),
+                ]
+                b["gameID"] = badge.gameID?.uuidString
+                b["detail"] = badge.detailJSON.flatMap { String(data: $0, encoding: .utf8) }
+                return b
+            }
+        manifest.earnedBadges = badgeObjects.count
+        manifest.totalRecords += badgeObjects.count
+
         var root: [String: Any] = [
+            "earnedBadges": badgeObjects,
             "manifest": try manifestDictionary(manifest),
             "games": gameObjects,
             "collections": collectionObjects,
@@ -654,6 +707,8 @@ enum LibraryExport {
                 "backdropIntensity": theme.backdropIntensityRaw as Any,
                 "showItemHints": theme.showItemHints,
                 "showGameLogos": theme.showGameLogos,
+                // v6 — the face for your name and the big numbers.
+                "nameFont": theme.nameFontRaw as Any,
                 "dekuWishlistURL": theme.dekuWishlistURLString as Any,
                 "platformIconVariants": theme.platformIconVariantsData?.base64EncodedString() as Any,
                 "savedSwatches": theme.savedSwatchesData?.base64EncodedString() as Any,
