@@ -37,9 +37,13 @@ struct BadgeArt: View {
                     .offset(x: tilt.width * size * 0.02, y: tilt.height * size * 0.02)
                     .shadow(color: .black.opacity(0.35), radius: size * 0.03,
                             x: -tilt.width * size * 0.015, y: -tilt.height * size * 0.015 + size * 0.01)
+                // At rest the highlight sits where it was drawn — it is part
+                // of the badge's own shading. A sweep drives it across and
+                // back; it never parks off the plate (Tim, 09-21: "no
+                // highlight animation on it").
                 layer("highlight")
-                    .offset(x: (sweep * 2 - 1) * size * 0.9)
-                    .opacity(sweep > 0 ? 0.9 : 0.35)
+                    .offset(x: sweepOffset)
+                    .opacity(sweep > 0 && sweep < 1 ? 1 : 0.55)
                     .blendMode(.screen)
                     .mask(Circle().padding(size * 0.04))
             } else {
@@ -51,6 +55,13 @@ struct BadgeArt: View {
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+
+    /// 0 and 1 both mean "at rest, where it was drawn"; the middle of the
+    /// animation is what carries it across the face.
+    private var sweepOffset: CGFloat {
+        guard sweep > 0, sweep < 1 else { return 0 }
+        return CGFloat(sin(sweep * .pi * 2)) * size * 0.75
     }
 
     private func layer(_ name: String) -> some View {

@@ -82,11 +82,14 @@ private struct BadgeRow: View {
     let badge: Badges.Definition
     let earnedAt: Date?
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep: Double = 0
+
     private var isEarned: Bool { earnedAt != nil }
 
     var body: some View {
         HStack(spacing: 12) {
-            BadgeArt(badge: badge, size: 46)
+            BadgeArt(badge: badge, size: 46, sweep: sweep)
                 // Not yet earned reads as unlit rather than absent: you can
                 // see what it looks like, which is half of wanting it.
                 .saturation(isEarned ? 1 : 0)
@@ -110,6 +113,14 @@ private struct BadgeRow: View {
         .padding(12)
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 14))
         .opacity(isEarned ? 1 : 0.65)
+        // Tap one and the light crosses it. A badge you earned is worth
+        // picking up and turning over.
+        .contentShape(.rect)
+        .onTapGesture {
+            guard isEarned, !reduceMotion else { return }
+            sweep = 0
+            withAnimation(.easeInOut(duration: 0.9)) { sweep = 1 }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isEarned
                             ? "\(badge.title), earned. \(badge.earnedBy)"

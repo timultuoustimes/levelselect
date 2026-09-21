@@ -60,12 +60,15 @@ struct BadgeToast: View {
 /// layout system walks every frame, and this is a decoration that must not
 /// cost the screen underneath anything.
 struct ConfettiBurst: View {
-    /// Restarts the burst when it changes.
+    /// Restarts the burst when it changes. Zero means nothing has happened
+    /// yet, so nothing is drawn — the view can sit in an overlay all day.
     let trigger: Int
-    var duration: Double = 1.6
+    var duration: Double = 2.2
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var startedAt = Date.now
+    /// Nil until a burst is asked for. `onAppear` used to set this, which
+    /// meant the paper flew every time you opened the screen (Tim, 09-21).
+    @State private var startedAt: Date?
 
     private struct Piece {
         let x: Double          // 0...1 of the width
@@ -76,32 +79,36 @@ struct ConfettiBurst: View {
         let hue: Color
     }
 
-    private static let pieces: [Piece] = (0..<90).map { i in
+    private static let pieces: [Piece] = (0..<140).map { i in
         var generator = SeededRandom(seed: UInt64(i &* 2654435761))
         return Piece(x: generator.next(),
-                     drift: generator.next() * 0.5 - 0.25,
-                     delay: generator.next() * 0.35,
+                     drift: generator.next() * 0.7 - 0.35,
+                     delay: generator.next() * 0.45,
                      spin: generator.next() * 8 - 4,
-                     size: 5 + generator.next() * 7,
+                     // Paper you can see from across the room: the first pass
+                     // was 5-12pt and read as dust in the middle of the screen.
+                     size: 14 + generator.next() * 16,
                      hue: [LSTheme.accent, .orange, .yellow, .pink, .mint, .cyan][i % 6])
     }
 
     var body: some View {
-        if reduceMotion {
+        if reduceMotion || trigger == 0 {
             EmptyView()
         } else {
             TimelineView(.animation) { timeline in
                 Canvas { context, size in
-                    let t = timeline.date.timeIntervalSince(startedAt)
+                    let t = timeline.date.timeIntervalSince(startedAt ?? timeline.date)
                     guard t < duration else { return }
                     for piece in Self.pieces {
                         let local = t - piece.delay
                         guard local > 0 else { continue }
                         let progress = local / (duration - piece.delay)
                         guard progress <= 1 else { continue }
-                        // Up, then down — a throw, not a fall.
-                        let rise = sin(min(progress, 1) * .pi) * size.height * 0.45
-                        let y = size.height * 0.62 - rise + progress * progress * size.height * 0.5
+                        // Thrown from below the bottom edge, up over the
+                        // whole screen, then down past it — the burst should
+                        // cross the view, not hover in the middle of it.
+                        let rise = sin(min(progress, 1) * .pi) * size.height * 1.15
+                        let y = size.height * 1.05 - rise + progress * progress * size.height * 0.85
                         let x = size.width * (piece.x + piece.drift * progress)
                         let fade = progress > 0.75 ? (1 - progress) / 0.25 : 1
                         var rect = context
@@ -116,7 +123,7 @@ struct ConfettiBurst: View {
                 .allowsHitTesting(false)
             }
             .onChange(of: trigger) { startedAt = .now }
-            .onAppear { startedAt = .now }
+            .task { if startedAt == nil { startedAt = .now } }
         }
     }
 }
