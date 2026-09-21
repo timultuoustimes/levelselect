@@ -1,4 +1,9 @@
 import Foundation
+#if os(iOS)
+import UIKit
+#elseif os(macOS)
+import AppKit
+#endif
 
 /// The app's four top-level tabs.
 enum LSTab: String, Hashable, CaseIterable {
@@ -147,8 +152,30 @@ final class AppNavigator {
     /// reads — and because `@Observable` rewrites a plain stored property
     /// into a computed one, which `lazy` cannot be.
     @ObservationIgnored private lazy var badgeQueue: BadgeCelebrationQueue = {
-        BadgeCelebrationQueue { [weak self] badges in self?.earnedBadges += badges }
+        BadgeCelebrationQueue(isCovered: { AppNavigator.somethingIsPresented() }) { [weak self] badges in
+            self?.earnedBadges += badges
+        }
     }()
+
+    /// **Is anything presented over the root right now?** A sheet, an alert,
+    /// a confirmation dialog, a full-screen cover — on iOS every one of them
+    /// is a view controller presented from the window's root, so one question
+    /// covers them all without anything at the call sites. The toast and the
+    /// confetti live at the root, so any of these hides them.
+    static func somethingIsPresented() -> Bool {
+        #if os(iOS)
+        let windows = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+        let root = (windows.first(where: \.isKeyWindow) ?? windows.first)?.rootViewController
+        return root?.presentedViewController != nil
+        #elseif os(macOS)
+        if NSApp.modalWindow != nil { return true }
+        return (NSApp.keyWindow ?? NSApp.mainWindow)?.attachedSheet != nil
+        #else
+        return false
+        #endif
+    }
 
     /// Celebrate now, or as soon as there is a screen to celebrate on.
     func celebrate(_ badges: [Badges.Definition]) { badgeQueue.celebrate(badges) }

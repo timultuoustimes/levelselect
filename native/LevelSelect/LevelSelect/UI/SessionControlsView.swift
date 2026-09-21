@@ -152,10 +152,18 @@ struct SessionControlsView: View {
                         // The year rides in the label rather than as a second
                         // row: it is a qualifier on this number, not a fact
                         // of its own.
-                        let year = playthrough?.carriedOverYear()
-                        Text(carried > 0
-                             ? (year.map { "Before tracking · \($0)" } ?? "Before tracking")
+                        //
+                        // The spans, not the single year: a 2021–2023 range
+                        // read as "2021" here. And `String`, never a bare
+                        // `Int`, inside the label — interpolated into a
+                        // `Text` literal an Int becomes a localized number
+                        // and the year read "2,018" (Fable, build 40, 09-21).
+                        let years = (playthrough?.carriedOverSpans ?? []).map(\.label)
+                        Text(verbatim: carried > 0
+                             ? (years.isEmpty ? "Before tracking"
+                                              : "Before tracking · " + years.joined(separator: ", "))
                              : "Add time played before tracking")
+                            .lineLimit(1)
                             .font(.caption)
                         Spacer()
                         if carried > 0 {
@@ -420,7 +428,7 @@ struct CarriedOverSheet: View {
         NavigationStack {
             LSForm {
                 Section {
-                    Stepper("\(hours) h", value: $hours, in: 0...9_999)
+                    HoursField(hours: $hours)
                     Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
                 } header: {
                     Text("Time played before tracking")
@@ -435,19 +443,15 @@ struct CarriedOverSheet: View {
                 Section {
                     ForEach($spans) { $span in
                         VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Stepper("\(Int(span.seconds) / 3600) h",
-                                        value: Binding(
-                                            get: { Int(span.seconds) / 3600 },
-                                            set: { span.seconds = TimeInterval($0 * 3600) }),
-                                        in: 0...9_999)
-                            }
+                            HoursField(hours: Binding(
+                                get: { Int(span.seconds) / 3600 },
+                                set: { span.seconds = TimeInterval($0 * 3600) }))
                             HStack(spacing: 8) {
                                 yearPicker("From", $span.fromYear)
                                 yearPicker("To", $span.toYear)
                             }
                             if !span.isSingleYear {
-                                Text("Shown whole on each year from \(span.fromYear) to \(span.toYear), and divided between none of them.")
+                                Text(verbatim: "Appears in full in each year's Replay from \(String(span.fromYear)) to \(String(span.toYear)), rather than split between them.")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -491,6 +495,40 @@ struct CarriedOverSheet: View {
                 minutes = (Int(seconds) % 3600) / 60
                 spans = existingSpans
             }
+        }
+    }
+}
+
+
+/// **Hours you can type, as well as step.**
+///
+/// A stepper alone made a real Steam figure unenterable: Fable held "+" for
+/// three seconds and reached 5 hours, which puts Cities: Skylines' 7,491 more
+/// than an hour of pressing away (build 40 runtime, 09-21). The number is the
+/// field; the stepper stays beside it for nudging a small one.
+///
+/// Clamped rather than rejected, so pasting "12,000" into a field capped at
+/// 99,999 simply works and a negative can't happen.
+private struct HoursField: View {
+    @Binding var hours: Int
+    var range: ClosedRange<Int> = 0...99_999
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("0", value: Binding(
+                get: { hours },
+                set: { hours = min(max($0, range.lowerBound), range.upperBound) }),
+                      format: .number)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+                .fixedSize()
+                .accessibilityLabel("Hours")
+            Text("h")
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Stepper("Hours", value: $hours, in: range)
+                .labelsHidden()
         }
     }
 }

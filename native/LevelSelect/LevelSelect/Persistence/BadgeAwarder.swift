@@ -141,9 +141,12 @@ enum BadgeAwarder {
         f.consoles = consoles.count
         f.memories = memories.count
 
-        // A game is beaten if it carries a completion, whatever its status now
-        // — the ledger's own rule, applied to the count that feeds it.
-        f.gamesBeaten = Set(completions.compactMap { $0.game?.id }).count
+        // **Beaten means what Charts means by it: `Game.isFinished`** — a
+        // finish on record, or a status of Completed. This counted finish
+        // records only, so a game you marked Completed without logging a
+        // finish showed in Charts' "Beaten" and earned nothing here; Fable saw
+        // Charts say 12% while "Roll credits" sat unearned (build 40, 09-21).
+        f.gamesBeaten = games.filter(\.isFinished).count
 
         let sessions = games.flatMap { $0.livePlaythroughs.flatMap { ($0.sessions ?? []) } }
             .filter { $0.deletedAt == nil }
@@ -158,7 +161,7 @@ enum BadgeAwarder {
         // them and fell back to *today* (Codex, build 40, 09-21). Deriving the
         // fact from the date means a badge can no longer be earned without
         // one.
-        let firstBeaten = firstBeatenDates(completions)
+        let firstBeaten = firstBeatenDates(completions, games: games)
         let trackerDate = firstTrackerFinished(games)
         f.trackersFinished = games.filter { isTrackerFinished($0) }.count
 
@@ -196,7 +199,7 @@ enum BadgeAwarder {
         let addedDates = games.map(\.addedAt).sorted()
         let consoleDates = consoles.map(\.createdAt).sorted()
 
-        dates["first.beaten"] = completionDates.first
+        dates["first.beaten"] = firstBeaten.values.min()
         dates["first.session"] = sessionStarts.first
         dates["first.memory"] = memories.map(\.createdAt).min()
         dates["first.console"] = consoleDates.first
@@ -314,11 +317,20 @@ enum BadgeAwarder {
 
     /// The day each game was first beaten — one per game, however many times
     /// it was finished since.
-    private static func firstBeatenDates(_ completions: [CompletionEvent]) -> [UUID: Date] {
+    ///
+    /// A game finished by status alone has no finish on record, so it has no
+    /// date of its own. The nearest evidence is the last time it was played —
+    /// you finished it no later than that — and failing that, the day it
+    /// arrived, which is when a library imported already-finished learned it.
+    private static func firstBeatenDates(_ completions: [CompletionEvent],
+                                         games: [Game]) -> [UUID: Date] {
         var out: [UUID: Date] = [:]
         for event in completions {
-            guard let id = event.game?.id else { continue }
-            out[id] = min(out[id] ?? event.date, event.date)
+            guard let game = event.game, game.deletedAt == nil else { continue }
+            out[game.id] = min(out[game.id] ?? event.date, event.date)
+        }
+        for game in games where game.isFinished && out[game.id] == nil {
+            out[game.id] = game.livePlaythroughs.compactMap(\.lastPlayedAt).max() ?? game.addedAt
         }
         return out
     }

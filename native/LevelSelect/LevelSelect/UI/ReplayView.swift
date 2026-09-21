@@ -86,19 +86,39 @@ struct ReplayView: View {
         .scrollIndicators(.hidden)
     }
 
-    /// The one sentence the whole screen is for.
+    /// The one sentence the whole screen is for, under the one figure that
+    /// leads it — whichever is the strongest true thing the period holds (see
+    /// `Replay.lead`). It used to lead with the timed total whatever the
+    /// period had, so a year of imported hours or a single finish opened on
+    /// "0s" (Fable, build 40 runtime, 09-21).
     private func headline(_ replay: Replay) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(Format.duration(replay.totalSeconds))
-                .font(LSTheme.pixel(34))
-                .foregroundStyle(LSTheme.accent)
-            Text(sentence(replay))
+            if let lead = replay.lead {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(figure(lead))
+                        .font(LSTheme.pixel(34))
+                        .foregroundStyle(LSTheme.accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    if let caption = caption(lead) {
+                        Text(caption)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Text(replay.sentence)
                 .font(.title3.weight(.medium))
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
-                stat("\(replay.daysPlayed)", replay.daysPlayed == 1 ? "day" : "days")
-                stat("\(replay.gamesPlayedCount)", replay.gamesPlayedCount == 1 ? "game" : "games")
-                stat("\(replay.sessionCount)", replay.sessionCount == 1 ? "session" : "sessions")
+            // Only when there were sessions: "0 days · 0 games · 0 sessions"
+            // over a year of imported hours is the page contradicting itself.
+            if replay.sessionCount > 0 {
+                // Side by side where they fit, stacked where they don't — at
+                // the largest text sizes the labels broke mid-syllable.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 10) { stats(replay) }
+                    VStack(alignment: .leading, spacing: 6) { stats(replay) }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -106,23 +126,28 @@ struct ReplayView: View {
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 18))
     }
 
-    /// Written as a remark rather than a readout — the numbers are above it.
-    private func sentence(_ replay: Replay) -> String {
-        guard let lead = replay.played.first else {
-            return "You kept the record even where you didn't play."
+    @ViewBuilder
+    private func stats(_ replay: Replay) -> some View {
+        stat("\(replay.daysPlayed)", replay.daysPlayed == 1 ? "day" : "days")
+        stat("\(replay.gamesPlayedCount)", replay.gamesPlayedCount == 1 ? "game" : "games")
+        stat("\(replay.sessionCount)", replay.sessionCount == 1 ? "session" : "sessions")
+    }
+
+    private func figure(_ lead: Replay.Lead) -> String {
+        switch lead {
+        case .timed(let seconds), .placed(let seconds): Format.duration(seconds)
+        case .finished(let n), .added(let n), .remembered(let n): String(n)
         }
-        if replay.finished.count >= 2 {
-            return "Mostly \(lead.name), and you finished \(replay.finished.count) games."
+    }
+
+    private func caption(_ lead: Replay.Lead) -> String? {
+        switch lead {
+        case .timed: nil
+        case .placed: "placed here by you, from before you tracked"
+        case .finished(let n): n == 1 ? "game finished" : "games finished"
+        case .added(let n): n == 1 ? "game added" : "games added"
+        case .remembered(let n): n == 1 ? "memory written" : "memories written"
         }
-        if let finish = replay.finished.first {
-            // "Mostly Hollow Knight, and you finished Hollow Knight" — the
-            // usual case, since the game you played most is very often the
-            // one you finished, and saying the name twice reads like a fault.
-            return finish.id == lead.id
-                ? "Mostly \(lead.name), and you finished it."
-                : "Mostly \(lead.name), and you finished \(finish.name)."
-        }
-        return "Mostly \(lead.name)."
     }
 
     private func stat(_ value: String, _ label: String) -> some View {
@@ -178,7 +203,7 @@ struct ReplayView: View {
                             .font(.subheadline.weight(.medium))
                             .lineLimit(1)
                         Spacer(minLength: 8)
-                        Text(finish.date, format: .dateTime.month(.abbreviated).day())
+                        Text(finish.dateText)
                             .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
@@ -309,6 +334,7 @@ struct ReplayView: View {
 /// say, rather than offering a recap of a month you didn't play.
 struct ReplayEntryCard: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var replay: Replay?
     @State private var showing = false
 
@@ -334,11 +360,15 @@ struct ReplayEntryCard: View {
 
     private func card(_ replay: Replay) -> some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(LSTheme.accent.opacity(0.16)).frame(width: 46, height: 46)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(LSTheme.accent)
+            // Decoration, so it steps aside at the largest sizes: beside it,
+            // "September 2026" had room only to hyphenate (Fable, 09-21).
+            if !typeSize.isAccessibilitySize {
+                ZStack {
+                    Circle().fill(LSTheme.accent.opacity(0.16)).frame(width: 46, height: 46)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(LSTheme.accent)
+                }
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(replay.span.title())

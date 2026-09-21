@@ -14,9 +14,14 @@ struct BadgeCelebrationQueueTests {
         var ids: [String] { released.map(\.id) }
     }
 
-    private func make() -> (BadgeCelebrationQueue, Spy) {
+    /// Stands in for the window: true while something the sheet count can't
+    /// see — an alert — is over the root.
+    private final class Cover { var up = false }
+
+    private func make(cover: Cover = Cover()) -> (BadgeCelebrationQueue, Spy) {
         let spy = Spy()
-        let queue = BadgeCelebrationQueue(settle: .milliseconds(1)) { spy.released += $0 }
+        let queue = BadgeCelebrationQueue(settle: .milliseconds(1), pollInterval: .milliseconds(1),
+                                          isCovered: { cover.up }) { spy.released += $0 }
         return (queue, spy)
     }
 
@@ -84,6 +89,42 @@ struct BadgeCelebrationQueueTests {
         queue.sheetClosed()
         await letItSettle()
         #expect(spy.released.isEmpty)
+    }
+
+    /// Fable, build 40 runtime: a five-badge toast lived and expired under
+    /// an alert on both devices. Stopping a session asks "What happened?" in
+    /// an alert — the case this queue exists for — and an alert announces
+    /// neither its arrival nor its departure.
+    @Test("A badge earned under an alert waits for the alert to go")
+    func waitsForAnAlert() async {
+        let cover = Cover()
+        let (queue, spy) = make(cover: cover)
+        cover.up = true
+        queue.celebrate([aBadge])
+        await letItSettle()
+        #expect(spy.released.isEmpty)
+
+        cover.up = false          // dismissed; nothing tells the queue
+        await letItSettle()
+        #expect(spy.ids == [aBadge.id])
+    }
+
+    /// A sheet closing over an alert must not release while the alert is
+    /// still up.
+    @Test("Closing a sheet doesn't release while an alert is still over the root")
+    func sheetClosingUnderAnAlertWaits() async {
+        let cover = Cover()
+        let (queue, spy) = make(cover: cover)
+        queue.sheetOpened()
+        cover.up = true
+        queue.celebrate([aBadge])
+        queue.sheetClosed()
+        await letItSettle()
+        #expect(spy.released.isEmpty)
+
+        cover.up = false
+        await letItSettle()
+        #expect(spy.ids == [aBadge.id])
     }
 
     @Test("An empty award is not a celebration")

@@ -164,6 +164,11 @@ struct RootView: View {
                         } dismiss: {
                             nav.earnedBadges = []
                         }
+                        // Capped and centered. On the iPad it ran the full
+                        // 860 points, which put "See" as far from the badge's
+                        // name as the screen allows (Fable, build 40, 09-21).
+                        // A toast reads as one thing when it is one width.
+                        .frame(maxWidth: 520)
                         .padding(.horizontal)
                         .padding(.bottom, persistence.lastErrorMessage != nil ? 128 : 64)
                     }

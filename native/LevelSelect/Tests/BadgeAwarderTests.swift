@@ -228,6 +228,29 @@ struct BadgeAwarderTests {
         #expect(near(dated(repo, "hours.10"), first))
     }
 
+    /// Charts counts a game marked Completed as beaten; badges didn't, so the
+    /// two disagreed (Fable, build 40 runtime, 09-21).
+    @Test("A game finished by status alone counts as beaten, like Charts")
+    func statusFinishCounts() {
+        let repo = store()
+        let game = repo.addGame(name: "Celeste", status: .completed)
+        #expect(game.isFinished)
+        #expect(BadgeAwarder.facts(in: repo.context).gamesBeaten == 1)
+        _ = BadgeAwarder.award(in: repo.context)
+        #expect(BadgeAwarder.existing(in: repo.context).contains { $0.badgeID == "first.beaten" })
+    }
+
+    /// With no finish on record, it is dated to the last time it was played.
+    @Test("A status-only finish is dated to when it was last played")
+    func statusFinishIsDated() {
+        let repo = store()
+        let game = repo.addGame(name: "Celeste", status: .completed)
+        let last = day(40)
+        play(repo, game, on: last)
+        game.activePlaythrough?.lastPlayedAt = last
+        #expect(near(dated(repo, "first.beaten"), last))
+    }
+
     // MARK: Sync twins
 
     /// Two offline devices each earned the same badge. One row survives —

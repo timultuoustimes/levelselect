@@ -389,7 +389,86 @@ struct ReplayTests {
         #expect(replay.isEmpty)
     }
 
+    // MARK: The headline — Fable, build 40 runtime
+
+    @Test("'Mostly' only when it is mostly")
+    func mostlyNeedsAMajority() {
+        let repo = store()
+        let a = repo.addGame(name: "Stardew Valley")
+        let b = repo.addGame(name: "Hollow Knight")
+        let c = repo.addGame(name: "Outer Wilds")
+        play(repo, a, from: date(2026, 3, 1), hours: 3)
+        play(repo, b, from: date(2026, 3, 2), hours: 2)
+        play(repo, c, from: date(2026, 3, 3), hours: 2)
+        let spread = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(spread.sentence == "Spread across 3 games, Stardew Valley most of all.")
+
+        play(repo, a, from: date(2026, 4, 1), hours: 10)
+        let mostly = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(mostly.sentence == "Mostly Stardew Valley.")
+    }
+
+    /// A single-finish year said "you didn't play" directly above the finish.
+    @Test("A year with only a finish leads with the finish")
+    func finishOnlyYearLeadsWithTheFinish() {
+        let repo = store()
+        let game = repo.addGame(name: "Chrono Trigger")
+        repo.addCompletion(to: game, label: .cleared, date: date(2015, 6, 1))
+        let replay = Replay.make(.year(date(2015, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.lead == .finished(1))
+        #expect(replay.sentence == "You finished Chrono Trigger.")
+        #expect(!replay.sentence.contains("didn't play"))
+    }
+
+    /// A year holding only imported hours opened on "0s".
+    @Test("A year with only placed hours leads with those hours, not zero")
+    func placedOnlyYearLeadsWithThem() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2022)],
+                                 on: pt, calendar: calendar)
+        let replay = Replay.make(.year(date(2022, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.lead == .placed(300 * 3600))
+        #expect(replay.sentence == "Cities: Skylines, from before you tracked it.")
+    }
+
+    /// A finish recorded as "just the year" is "2015", never "Jan 1".
+    @Test("A finish keeps the precision it was recorded with")
+    func finishKeepsItsPrecision() {
+        let repo = store()
+        let game = repo.addGame(name: "Chrono Trigger")
+        repo.addCompletion(to: game, label: .cleared, date: date(2015, 6, 15))
+        let event = try? #require(game.completionEvents?.first)
+        event?.datePrecision = "year"
+        let replay = Replay.make(.year(date(2015, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        let text = replay.finished.first?.dateText ?? ""
+        #expect(!text.contains("Jan"))
+        #expect(text.contains("2015"))
+    }
+
     // MARK: Which years are offered
+
+    /// On the 1st, the month just finished — the one a monthly recap is for —
+    /// used to disappear, and the new month was empty.
+    @Test("Last month is still offered on the first of the next")
+    func lastMonthSurvivesTheFirst() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")
+        play(repo, game, from: date(2026, 9, 12), hours: 3)
+        let titles = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                  now: date(2026, 10, 1, 9))
+            .map { $0.title(calendar) }
+        #expect(titles.contains("September 2026"))
+        #expect(!titles.contains("October 2026"))   // nothing in it yet
+        #expect(titles.contains("Q3 2026"))
+    }
 
     /// A game added this year with a 2020 session made a 2020 replay that
     /// `make` would build and the year list never offered (Codex, 09-21).

@@ -293,15 +293,30 @@ struct StatsCards: View {
             total + game.livePlaythroughs.reduce(0) { $0 + $1.carriedOverSeconds }
         }
         let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() } + carried)
-        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            GridRow {
-                statTile("gamecontroller.fill", "\(games.count)", "Games")
-                statTile("clock.fill", played, "Played")
-            }
-            GridRow {
-                statTile("timer", "\(sessions.count)", "Sessions")
-                // Completed share of the library — the web's headline number.
-                statTile("flag.checkered", "\(Int((completionRate * 100).rounded()))%", "Beaten")
+        let beaten = "\(Int((completionRate * 100).rounded()))%"
+        return Group {
+            // One column at the largest text sizes. Two across left each tile
+            // half a phone, and even shrunk to 60% "266h 36m" read "266h 3…"
+            // (Fable, build 40 runtime, 09-21) — the headline figure cut off.
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 10) {
+                    statTile("gamecontroller.fill", "\(games.count)", "Games")
+                    statTile("clock.fill", played, "Played")
+                    statTile("timer", "\(sessions.count)", "Sessions")
+                    statTile("flag.checkered", beaten, "Beaten")
+                }
+            } else {
+                Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+                    GridRow {
+                        statTile("gamecontroller.fill", "\(games.count)", "Games")
+                        statTile("clock.fill", played, "Played")
+                    }
+                    GridRow {
+                        statTile("timer", "\(sessions.count)", "Sessions")
+                        // Completed share of the library — the web's headline number.
+                        statTile("flag.checkered", beaten, "Beaten")
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)

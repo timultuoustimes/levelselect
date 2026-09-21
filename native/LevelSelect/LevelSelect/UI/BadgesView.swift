@@ -18,6 +18,7 @@ struct BadgesView: View {
     }
 
     @AppStorage(BadgeAwarder.summaryPendingKey) private var summaryPending = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     @State private var celebrate = 0
     @State private var showing: ShownBadge?
 
@@ -77,14 +78,27 @@ struct BadgesView: View {
         }
     }
 
+    /// **Side by side, until the text is too big to share a line.** At the
+    /// largest sizes the copy beside the disc was crammed into a seven-line
+    /// column that filled the first screen, and the count outgrew its disc
+    /// (Fable, build 40 runtime, 09-21). Stacked there instead, with the disc
+    /// sized to the number it holds.
     private var header: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle().fill(LSTheme.accent.opacity(0.16)).frame(width: 54, height: 54)
-                Text("\(earned.count)")
-                    .font(LSTheme.pixel(20))
-                    .foregroundStyle(LSTheme.accent)
-            }
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 14))
+        return layout {
+            Text(verbatim: "\(earned.count)")
+                .font(LSTheme.pixel(20))
+                .foregroundStyle(LSTheme.accent)
+                // Capped: the pixel face draws past the bounds it reports, so
+                // at the largest sizes the digits spilled out of any disc
+                // padding could make. A count in a badge needn't grow with
+                // body text — the copy beside it does.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .padding(14)
+                .frame(minWidth: 54, minHeight: 54)
+                .background(Circle().fill(LSTheme.accent.opacity(0.16)))
             VStack(alignment: .leading, spacing: 2) {
                 Text(earned.count == 1 ? "One badge earned" : "\(earned.count) badges earned")
                     .font(.title3.weight(.semibold))
@@ -108,6 +122,7 @@ private struct BadgeRow: View {
     var open: () -> Void = {}
 
     private var isEarned: Bool { earnedAt != nil }
+    @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         HStack(spacing: 12) {
@@ -123,13 +138,16 @@ private struct BadgeRow: View {
                 Text(badge.earnedBy)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // Under the text at the largest sizes. Trailing, it took the
+                // row's width from the title and squeezed "Something to play
+                // it on" into a column a word wide (Fable, 09-21).
+                if typeSize.isAccessibilitySize, let earnedAt {
+                    dateText(earnedAt)
+                }
             }
             Spacer(minLength: 6)
-            if let earnedAt {
-                Text(earnedAt, format: .dateTime.month(.abbreviated).day().year())
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+            if !typeSize.isAccessibilitySize, let earnedAt {
+                dateText(earnedAt)
             }
         }
         .padding(12)
@@ -143,6 +161,13 @@ private struct BadgeRow: View {
         .accessibilityLabel(isEarned
                             ? "\(badge.title), earned. \(badge.earnedBy)"
                             : "\(badge.title), not yet earned. \(badge.earnedBy)")
+    }
+
+    private func dateText(_ date: Date) -> some View {
+        Text(date, format: .dateTime.month(.abbreviated).day().year())
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
     }
 }
 

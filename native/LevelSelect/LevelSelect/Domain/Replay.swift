@@ -74,6 +74,11 @@ struct Replay {
         /// The label you gave it — "Cleared", "100%" — rather than a verdict
         /// of the app's own.
         let label: String
+        /// The date as precisely as it was recorded, and no more: a finish
+        /// logged as "just the year" is "2015", never "Jan 1". The same
+        /// renderer the game page uses (`CompletionEvent.fuzzyText`), so the
+        /// two can't disagree (Fable, build 40 runtime, 09-21).
+        var dateText: String = ""
     }
 
     var span: Span = .year(.now)
@@ -185,7 +190,7 @@ struct Replay {
             .compactMap { event in
                 guard let game = event.game, game.deletedAt == nil else { return nil }
                 return Finish(id: game.id, name: game.name, date: event.date,
-                              label: event.labelText)
+                              label: event.labelText, dateText: event.dateText)
             }
             .sorted { $0.date < $1.date }
 
@@ -272,5 +277,81 @@ extension Replay.Span {
             let quarter = (calendar.component(.month, from: start) - 1) / 3 + 1
             return "Q\(quarter) \(year)"
         }
+    }
+}
+
+// MARK: - The headline
+
+extension Replay {
+    /// **What leads the recap: the strongest true thing the period holds.**
+    ///
+    /// The hero was always the timed total, so a year holding only imported
+    /// hours opened on "0s", and a year with a single finish opened on "0s"
+    /// with "You kept the record even where you didn't play" directly above
+    /// the finish (Fable, build 40 runtime, 09-21). A period is led by what it
+    /// actually has.
+    enum Lead: Equatable {
+        /// Hours measured by sessions.
+        case timed(TimeInterval)
+        /// Imported hours the person placed in this period.
+        case placed(TimeInterval)
+        case finished(Int)
+        case added(Int)
+        case remembered(Int)
+    }
+
+    var lead: Lead? {
+        if totalSeconds > 0 { return .timed(totalSeconds) }
+        if carriedSeconds > 0 { return .placed(carriedSeconds) }
+        if !finished.isEmpty { return .finished(finished.count) }
+        if added > 0 { return .added(added) }
+        if memoriesWritten > 0 { return .remembered(memoriesWritten) }
+        return nil
+    }
+
+    /// **The one sentence, written as a remark rather than a readout.**
+    ///
+    /// "Mostly" only when it is mostly: it opened "Mostly Hollow Knight" over
+    /// a quarter where Hollow Knight was 29%, and "Mostly Stardew Valley" over
+    /// a year where it was 24% (Fable, 09-21).
+    var sentence: String {
+        if let top = played.first, totalSeconds > 0 {
+            let share = top.seconds / totalSeconds
+            let opener: String
+            if played.count == 1 {
+                opener = "All \(top.name)"
+            } else if share >= 0.5 {
+                opener = "Mostly \(top.name)"
+            } else {
+                opener = "Spread across \(played.count) games, \(top.name) most of all"
+            }
+            switch finished.count {
+            case 0:
+                return opener + "."
+            case 1:
+                // "Mostly Hollow Knight, and you finished Hollow Knight" — the
+                // usual case, and saying the name twice reads like a fault.
+                return finished[0].id == top.id
+                    ? opener + ", and you finished it."
+                    : opener + ", and you finished \(finished[0].name)."
+            default:
+                return opener + ", and you finished \(finished.count) games."
+            }
+        }
+        if !finished.isEmpty {
+            return finished.count == 1 ? "You finished \(finished[0].name)."
+                                       : "You finished \(finished.count) games."
+        }
+        if let first = carried.first {
+            return carried.count == 1 ? "\(first.name), from before you tracked it."
+                                      : "\(carried.count) games, from before you tracked them."
+        }
+        if added > 0 {
+            return added == 1 ? "A game joined your library." : "\(added) games joined your library."
+        }
+        if memoriesWritten > 0 {
+            return memoriesWritten == 1 ? "You wrote a memory." : "You wrote \(memoriesWritten) memories."
+        }
+        return ""
     }
 }

@@ -42,9 +42,16 @@ enum ReplayBuilder {
         let source = source(in: context)
         var spans: [Replay.Span] = []
 
-        // This month and this quarter lead when they have anything, then
-        // every year back to the earliest thing recorded.
-        for span in [Replay.Span.month(now), .quarter(now)] {
+        // This month and last, this quarter and last, when they have anything
+        // — then every year back to the earliest thing recorded.
+        //
+        // **Last month too.** Only the current month was offered, so on the
+        // 1st the month you had just finished — the one a monthly recap is
+        // *for* — disappeared, and the new one was empty (Fable, build 40
+        // runtime, 09-21). The same for quarters.
+        let lastMonth = calendar.date(byAdding: .month, value: -1, to: now) ?? now
+        let lastQuarter = calendar.date(byAdding: .month, value: -3, to: now) ?? now
+        for span in [Replay.Span.month(now), .month(lastMonth), .quarter(now), .quarter(lastQuarter)] {
             if !Replay.make(span, from: source, calendar: calendar, now: now).isEmpty {
                 spans.append(span)
             }
