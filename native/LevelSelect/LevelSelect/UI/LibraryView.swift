@@ -1165,6 +1165,7 @@ struct GameSelectionBar: View {
     let visible: [Game]
     let done: () -> Void
     @Environment(\.modelContext) private var context
+    @State private var confirmingDelete = false
 
     private var selectedGames: [Game] { all.filter { selected.contains($0.id) } }
     private var allVisibleSelected: Bool {
@@ -1200,10 +1201,47 @@ struct GameSelectionBar: View {
                 Label("Set Status", systemImage: "flag")
             }
             .disabled(selected.isEmpty)
+            // The web app could delete a selection and this could not, which
+            // left an import you regretted to be undone one game at a time
+            // (`docs/legacy-web-parity.md`, closed 09-21).
+            Button(role: .destructive) {
+                confirmingDelete = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(selected.isEmpty)
         }
         .padding(.horizontal)
         .padding(.vertical, 10)
         .background(.bar)
+        .confirmationDialog(deleteTitle, isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button(selected.count == 1 ? "Delete Game" : "Delete \(selected.count) Games",
+                   role: .destructive) { deleteSelected() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("They move to Recently Deleted in Settings, with their sessions and progress. You can put them back for 30 days.")
+        }
+    }
+
+    private var deleteTitle: String {
+        let games = selectedGames
+        if let only = games.first, games.count == 1 { return "Delete \u{201C}\(only.name)\u{201D}?" }
+        return "Delete \(games.count) games?"
+    }
+
+    /// Deleted together, and undone together — the toast puts the whole
+    /// selection back rather than the last game of it.
+    private func deleteSelected() {
+        let games = selectedGames
+        guard let first = games.first else { return }
+        let undo = AppNavigator.DeletedGame(
+            id: first.id,
+            name: games.count == 1 ? first.name : "\(games.count) games",
+            alsoDeleted: games.dropFirst().map(\.id))
+        let repo = Repository(context)
+        for game in games { repo.softDelete(game) }
+        AppNavigator.shared.deletedGame = undo
+        done()
     }
 
     /// Your consoles first — the likely answer — then everything else.

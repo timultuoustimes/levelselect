@@ -1,4 +1,4 @@
-# What the retired web app still does that the native app doesn't
+# What the retired web app still does that the native app doesn't — nothing, as of 2026-09-21
 
 The original React web app (`src/`) is not deployed and not maintained, but it is kept in the repo because it is currently the only record of a few things the native app hasn't caught up to. This file exists so that stops being true — when the list is empty, the web app can go.
 
@@ -72,9 +72,13 @@ Native has the run engine (start/log/end, outcomes, history, per-template fields
 
 Both are logged as a background task (fix pickers first — analytics over free text fragments on typos).
 
-## Bulk editing
+## Bulk editing ✅ CLOSED 2026-09-21
 
-Web library select mode: multi-select with **bulk status change, bulk platform assignment, bulk delete** (`Library.jsx:1232-1240,1703`). Native has none (single-game context menus only). This was "Delay: bulk editing" in the conversion plan and then never resurfaced on any list — it is recorded here so the omission is visible.
+Web library select mode: multi-select with **bulk status change, bulk platform assignment, bulk delete** (`Library.jsx:1232-1240,1703`).
+
+Status and console shipped in build 38 (`GameSelectionBar`); **delete** shipped 2026-09-21 in the same bar — a confirmation naming the count, a soft delete into Recently Deleted, and one Undo toast that restores the whole batch rather than the last game of it (`AppNavigator.DeletedGame.alsoDeleted`). Tests: `Build40BulkDeleteTests`.
+
+**With this the parity list is empty**: stats moved into the Journal's charts (build 36 onward), maps shipped in builds 38–39 beyond what the web app had, run analytics and setup pickers closed 2026-08-25. What remains is the build-time dependency below, not a feature.
 
 ## Stats
 

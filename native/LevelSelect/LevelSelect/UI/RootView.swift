@@ -130,7 +130,8 @@ struct RootView: View {
                 VStack {
                     Spacer()
                     UndoDeleteToast(deleted: deleted) {
-                        Repository(context).restoreGame(id: deleted.id)
+                        let repo = Repository(context)
+                        for id in deleted.allIDs { _ = repo.restoreGame(id: id) }
                         nav.deletedGame = nil
                     } dismiss: {
                         nav.deletedGame = nil

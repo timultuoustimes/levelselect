@@ -126,6 +126,11 @@ final class AppNavigator {
     struct DeletedGame: Identifiable {
         let id: UUID
         let name: String
+        /// The rest of a batch deleted together (Library's select mode,
+        /// 09-21). Undo puts back all of them, because a selection is one
+        /// action to the person who made it.
+        var alsoDeleted: [UUID] = []
+        var allIDs: [UUID] { [id] + alsoDeleted }
     }
     var deletedGame: DeletedGame?
 
