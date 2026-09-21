@@ -386,7 +386,9 @@ struct CarriedOverSheet: View {
     }
 
     private var spansFooter: String {
-        if spans.isEmpty {
+        // Nothing to place yet: "all of it is placed" is true of zero and
+        // reads like a boast about nothing.
+        if spans.isEmpty || TimeInterval(hours * 3600 + minutes * 60) == 0 {
             return "Optional, and only as exact as you actually are. Hours you place land in those years' Replays as a line of their own — never spread across days, because nobody knows which days they were."
         }
         if remaining > 60 {
