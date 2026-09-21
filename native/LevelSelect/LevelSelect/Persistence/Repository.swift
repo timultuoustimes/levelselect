@@ -26,6 +26,14 @@ struct Repository {
     /// the retry banner via PersistenceMonitor instead of vanishing.
     func persist() {
         PersistenceMonitor.shared.commit(context)
+        // Every write lands here, which makes it the honest place to ask
+        // whether anything was just earned. Debounced inside.
+        //
+        // Phone and Mac only: the watch compiles this file but has no badges
+        // (and no screen to celebrate on), so it has no awarder.
+        #if os(iOS) || os(macOS)
+        BadgeAwarder.schedule(in: context)
+        #endif
     }
 
     /// Route a direct model edit through the repository's invariants.

@@ -111,7 +111,7 @@ struct TrackerListImportView: View {
             // table below, where they can be read before anything is kept.
             HStack(spacing: 8) {
                 TextField("Or paste a Google Sheets link", text: $link)
-                    .textFieldStyle(.roundedBorder)
+                    .lsField()
                     .font(.caption)
                     #if !os(macOS)
                     .keyboardType(.URL)
