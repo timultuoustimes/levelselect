@@ -19,6 +19,15 @@ struct BadgesView: View {
 
     @AppStorage(BadgeAwarder.summaryPendingKey) private var summaryPending = false
     @State private var celebrate = 0
+    @State private var showing: ShownBadge?
+
+    /// The sheet's subject. `Badges.Definition` is `Identifiable` by its id,
+    /// but the sheet also needs when it was earned.
+    struct ShownBadge: Identifiable {
+        let badge: Badges.Definition
+        let earnedAt: Date?
+        var id: String { badge.id }
+    }
 
     var body: some View {
         ScrollView {
@@ -31,9 +40,12 @@ struct BadgesView: View {
                             Text(family.label)
                                 .font(.headline)
                                 .padding(.horizontal)
-                            ForEach(rows) { badge in
-                                BadgeRow(badge: badge, earnedAt: earnedIDs[badge.id])
-                                    .padding(.horizontal)
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { index, badge in
+                                BadgeRow(badge: badge, earnedAt: earnedIDs[badge.id],
+                                         phase: Double(index) * 0.17) {
+                                    showing = ShownBadge(badge: badge, earnedAt: earnedIDs[badge.id])
+                                }
+                                .padding(.horizontal)
                             }
                         }
                     }
@@ -46,6 +58,9 @@ struct BadgesView: View {
         // is a cannon. But it still happened, so the first visit here says so
         // once, with the confetti it skipped (Tim, 09-21).
         .overlay { ConfettiBurst(trigger: celebrate).allowsHitTesting(false) }
+        .sheet(item: $showing) { shown in
+            BadgeDetailSheet(badge: shown.badge, earnedAt: shown.earnedAt)
+        }
         .task {
             guard summaryPending, !earned.isEmpty else { return }
             try? await Task.sleep(for: .milliseconds(350))
@@ -81,15 +96,14 @@ struct BadgesView: View {
 private struct BadgeRow: View {
     let badge: Badges.Definition
     let earnedAt: Date?
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var sweep: Double = 0
+    var phase: Double = 0
+    var open: () -> Void = {}
 
     private var isEarned: Bool { earnedAt != nil }
 
     var body: some View {
         HStack(spacing: 12) {
-            BadgeArt(badge: badge, size: 46, sweep: sweep)
+            BadgeArt(badge: badge, size: 46, shimmers: isEarned, phase: phase)
                 // Not yet earned reads as unlit rather than absent: you can
                 // see what it looks like, which is half of wanting it.
                 .saturation(isEarned ? 1 : 0)
@@ -113,17 +127,73 @@ private struct BadgeRow: View {
         .padding(12)
         .background(LSTheme.cardFill, in: .rect(cornerRadius: 14))
         .opacity(isEarned ? 1 : 0.65)
-        // Tap one and the light crosses it. A badge you earned is worth
-        // picking up and turning over.
+        // Tap one and it opens big enough to look at. A badge you earned is
+        // worth picking up and turning over.
         .contentShape(.rect)
-        .onTapGesture {
-            guard isEarned, !reduceMotion else { return }
-            sweep = 0
-            withAnimation(.easeInOut(duration: 0.9)) { sweep = 1 }
-        }
+        .onTapGesture { open() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(isEarned
                             ? "\(badge.title), earned. \(badge.earnedBy)"
                             : "\(badge.title), not yet earned. \(badge.earnedBy)")
+    }
+}
+
+/// **The badge, big.**
+///
+/// The list is a ledger; this is the object. Large art with the light moving
+/// across it, its name, what earned it, and when — or, if you haven't earned
+/// it yet, what it would take.
+private struct BadgeDetailSheet: View {
+    let badge: Badges.Definition
+    let earnedAt: Date?
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 22) {
+                Spacer(minLength: 8)
+                BadgeArt(badge: badge, size: 220, shimmers: true)
+                    .saturation(earnedAt == nil ? 0 : 1)
+                    .opacity(earnedAt == nil ? 0.6 : 1)
+                    .shadow(color: .black.opacity(0.4), radius: 22, y: 10)
+                VStack(spacing: 8) {
+                    Text(badge.title)
+                        .font(.title2.weight(.bold))
+                        .multilineTextAlignment(.center)
+                    Text(badge.earnedBy)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                    if let earnedAt {
+                        Label {
+                            Text(earnedAt, format: .dateTime.month(.wide).day().year())
+                        } icon: {
+                            Image(systemName: "checkmark.seal.fill")
+                        }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(LSTheme.accent)
+                        .padding(.top, 4)
+                    } else {
+                        Text("Not earned yet")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                    }
+                }
+                .padding(.horizontal, 28)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+            .lsBackground()
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+            }
+            .navigationTitle(Badges.Family.allCases.first { $0 == badge.family }?.label ?? "Badge")
+            #if !os(macOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+        }
+        .lsSheet([.medium, .large])
     }
 }

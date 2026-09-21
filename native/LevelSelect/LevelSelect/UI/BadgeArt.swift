@@ -16,6 +16,12 @@ struct BadgeArt: View {
     var size: CGFloat = 96
     /// 0 at rest. Driven to 1 to sweep the highlight across — the earn moment.
     var sweep: Double = 0
+    /// Keep the light moving, the way a cover catches it as you scroll past.
+    /// Every badge on a list does this; one badge, alone and still, reads as
+    /// a sticker (Tim, 09-21).
+    var shimmers: Bool = false
+    /// Staggers the loop so a list doesn't flash in unison.
+    var phase: Double = 0
     /// How far the emblem lifts off the plate, -1...1 on each axis.
     var tilt: CGSize = .zero
 
@@ -30,6 +36,26 @@ struct BadgeArt: View {
     }
 
     var body: some View {
+        Group {
+            if shimmers && !reduceMotion {
+                TimelineView(.animation) { timeline in
+                    // One pass every six seconds, most of it spent off the
+                    // plate: a slow catch of light, not a strobe.
+                    let t = timeline.date.timeIntervalSinceReferenceDate / 6 + phase
+                    stack(sweep: max(sweep, t - floor(t)))
+                }
+            } else {
+                stack(sweep: sweep)
+            }
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @ViewBuilder
+    private func stack(sweep: Double) -> some View {
         ZStack {
             if hasArt {
                 layer("plate")
@@ -42,7 +68,7 @@ struct BadgeArt: View {
                 // back; it never parks off the plate (Tim, 09-21: "no
                 // highlight animation on it").
                 layer("highlight")
-                    .offset(x: sweepOffset)
+                    .offset(x: sweepOffset(sweep))
                     .opacity(sweep > 0 && sweep < 1 ? 1 : 0.55)
                     .blendMode(.screen)
                     .mask(Circle().padding(size * 0.04))
@@ -53,13 +79,11 @@ struct BadgeArt: View {
                     .foregroundStyle(LSTheme.accent)
             }
         }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
     }
 
     /// 0 and 1 both mean "at rest, where it was drawn"; the middle of the
     /// animation is what carries it across the face.
-    private var sweepOffset: CGFloat {
+    private func sweepOffset(_ sweep: Double) -> CGFloat {
         guard sweep > 0, sweep < 1 else { return 0 }
         return CGFloat(sin(sweep * .pi * 2)) * size * 0.75
     }
