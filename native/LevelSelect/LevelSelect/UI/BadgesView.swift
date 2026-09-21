@@ -4,7 +4,7 @@ import SwiftData
 /// **What you've earned, and what there is to earn.**
 ///
 /// The Journal's fourth lens. Earned badges lead, newest first; the rest
-/// follow greyed with what they ask for — the unearned half is the reason to
+/// follow grayed with what they ask for — the unearned half is the reason to
 /// open the tab twice, and it is the app saying what it notices rather than
 /// keeping a secret list.
 struct BadgesView: View {
@@ -34,7 +34,7 @@ struct BadgesView: View {
             LazyVStack(alignment: .leading, spacing: 18) {
                 header
                 ForEach(Badges.Family.allCases) { family in
-                    let rows = Badges.catalogue.filter { $0.family == family }
+                    let rows = Badges.catalog.filter { $0.family == family }
                     if !rows.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(family.label)
@@ -90,7 +90,7 @@ struct BadgesView: View {
                     .font(.title3.weight(.semibold))
                 Text(summaryPending
                      ? "Earned from the library you already had — each dated to when you did it."
-                     : "Out of \(Badges.catalogue.count). They come from your library, so the games you brought in count too.")
+                     : "Out of \(Badges.catalog.count). They come from your library, so the games you brought in count too.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -337,7 +337,7 @@ enum WidgetBridge {
         // arguments tipped it over ("unable to type-check in reasonable
         // time"). Assignment costs it nothing.
         snapshot.badges = earnedBadges
-        snapshot.badgesTotal = Badges.catalogue.count
+        snapshot.badgesTotal = Badges.catalog.count
         snapshot.badgesEarnedCount = allEarned.count
         return BuildResult(snapshot: snapshot, covers: covers)
     }

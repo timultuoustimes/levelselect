@@ -25,8 +25,8 @@ struct BadgeCelebrationQueueTests {
         try? await Task.sleep(for: .milliseconds(120))
     }
 
-    private var aBadge: Badges.Definition { Badges.catalogue[0] }
-    private var another: Badges.Definition { Badges.catalogue[1] }
+    private var aBadge: Badges.Definition { Badges.catalog[0] }
+    private var another: Badges.Definition { Badges.catalog[1] }
 
     @Test("With nothing presented, a badge celebrates straight away")
     func celebratesImmediately() {

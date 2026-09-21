@@ -4,11 +4,11 @@ import Foundation
 
 /// The badge rules, which are the whole of build 40's promise: a badge earned
 /// once is earned, and a badge not yet earned says what it wants.
-struct BadgeCatalogueTests {
+struct BadgeCatalogTests {
 
     @Test("Every badge id is unique — a duplicate would award twice or never")
     func idsAreUnique() {
-        let ids = Badges.catalogue.map(\.id)
+        let ids = Badges.catalog.map(\.id)
         #expect(Set(ids).count == ids.count)
     }
 
@@ -69,15 +69,15 @@ struct BadgeCatalogueTests {
         }
     }
 
-    @Test("Everything earned is in the catalogue, in catalogue order")
-    func earnedFollowsTheCatalogue() {
+    @Test("Everything earned is in the catalog, in catalog order")
+    func earnedFollowsTheCatalog() {
         var facts = BadgeFacts()
         facts.gamesBeaten = 100
         facts.consoles = 10
         facts.sessionsLogged = 500
         let earned = Badges.earned(from: facts)
         #expect(earned.allSatisfy { Badges.definition($0) != nil })
-        let order = Badges.catalogue.map(\.id)
+        let order = Badges.catalog.map(\.id)
         #expect(earned == order.filter(earned.contains))
     }
 }

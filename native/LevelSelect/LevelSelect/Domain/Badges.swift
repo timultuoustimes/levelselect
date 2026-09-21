@@ -2,7 +2,7 @@ import Foundation
 
 /// **What you've done, recorded once.**
 ///
-/// The catalogue and the rule for each badge, as pure evaluation over a
+/// The catalog and the rule for each badge, as pure evaluation over a
 /// snapshot of counts — no SwiftData here, so every threshold is testable
 /// without a store. `BadgeAwarder` does the writing.
 ///
@@ -44,7 +44,7 @@ enum Badges {
 
     /// Everything the app knows how to award, in the order the Journal shows
     /// it. Adding a badge is adding a row here and a line in `earned(from:)`.
-    static let catalogue: [Definition] = firsts + counts + habits + collection + history
+    static let catalog: [Definition] = firsts + counts + habits + collection + history
 
     // MARK: Firsts
 
@@ -124,12 +124,12 @@ enum Badges {
               symbol: symbol, threshold: n)
     }
 
-    static func definition(_ id: String) -> Definition? { catalogue.first { $0.id == id } }
+    static func definition(_ id: String) -> Definition? { catalog.first { $0.id == id } }
 
     /// **Everything the library justifies right now.**
     ///
     /// Returns ids, not records: the awarder decides which of these are new.
-    /// Order follows the catalogue so a first run reads top to bottom.
+    /// Order follows the catalog so a first run reads top to bottom.
     static func earned(from f: BadgeFacts) -> [String] {
         var out: Set<String> = []
         if f.sessionsLogged > 0 { out.insert("first.session") }
@@ -156,7 +156,7 @@ enum Badges {
         if f.beatenBeforeInstall { out.insert("history.beforeApp") }
         if f.hasVagueDate { out.insert("history.vague") }
 
-        return catalogue.map(\.id).filter { out.contains($0) }
+        return catalog.map(\.id).filter { out.contains($0) }
     }
 
     private static func insertTiers(_ out: inout Set<String>, _ key: String,

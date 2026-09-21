@@ -102,7 +102,7 @@ struct ConfettiBurst: View {
                      drift: generator.next() * 0.7 - 0.35,
                      // **Spread, speed and height all vary.** With one shared
                      // arc and a delay of under half a second, all 140 pieces
-                     // rose in lockstep and read as a solid coloured band
+                     // rose in lockstep and read as a solid colored band
                      // sliding up the screen rather than thrown paper (09-21).
                      delay: generator.next() * 0.35,
                      speed: 0.7 + generator.next() * 0.55,
@@ -125,7 +125,7 @@ struct ConfettiBurst: View {
             // **The setting means less movement, not less occasion.** Paper
             // flying across the screen is exactly the flourish Reduce Motion
             // is asking about, so it gets the accent washing over the screen
-            // once instead — a moment with nothing travelling in it.
+            // once instead — a moment with nothing traveling in it.
             ReduceMotionGlow(trigger: trigger)
         } else {
             TimelineView(.animation) { timeline in

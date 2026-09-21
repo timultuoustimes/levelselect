@@ -3,7 +3,7 @@ import SwiftUI
 
 /// **What you've earned, on the Home Screen.**
 ///
-/// The Journal's Badges lens, at a glance: how many of the catalogue you have
+/// The Journal's Badges lens, at a glance: how many of the catalog you have
 /// and the most recent ones. Symbols in the accent, the same as the app draws
 /// them — when there is art worth keeping, it lands here without the layout
 /// changing (spec, 09-21).

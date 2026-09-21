@@ -4,7 +4,7 @@ import SwiftData
 /// **A period of your own library, read back to you.**
 ///
 /// Not another list of numbers — the Charts lens is already that, and it is
-/// the surface this was specced beside. A Replay is a designed artefact you
+/// the surface this was specced beside. A Replay is a designed artifact you
 /// open, look at, and close, which is why it is a card there rather than a
 /// fifth lens: it is an occasion, not a place you live.
 ///
