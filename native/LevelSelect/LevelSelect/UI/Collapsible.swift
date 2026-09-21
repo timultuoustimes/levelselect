@@ -182,7 +182,7 @@ struct EditableChips: View {
                 }
             }
             TextField("Add \(title.lowercased())…", text: $newValue)
-                .textFieldStyle(.roundedBorder)
+                .lsField()
                 .font(.caption)
                 .onSubmit {
                     let value = newValue.trimmingCharacters(in: .whitespaces)

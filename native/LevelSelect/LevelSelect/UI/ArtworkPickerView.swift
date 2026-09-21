@@ -252,7 +252,7 @@ struct ArtworkPickerView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 TextField("https://…", text: $customURL)
-                    .textFieldStyle(.roundedBorder)
+                    .lsField()
                     #if !os(macOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
