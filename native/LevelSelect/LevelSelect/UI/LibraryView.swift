@@ -256,10 +256,23 @@ struct LibraryTab: View {
     ///
     /// Only when there is more than one value: a row headed "Genres (1)" is a
     /// row that answers nothing.
+    ///
+    /// **And only once there is a shelf to browse.** A three-game library got
+    /// six genre chips and seven theme chips, most of them "1", stacked above
+    /// the three covers, which pushed the games themselves toward the fold
+    /// (week-one pass, 09-22). Below a dozen you can see every game at once,
+    /// and a way to narrow them down is a way to narrow nothing.
+    /// Counted before any filter, so narrowing the shelf doesn't make the
+    /// ways of narrowing it disappear mid-browse.
+    static let facetShelvesFrom = 12
+    private var hasShelfToBrowse: Bool {
+        games.lazy.filter { $0.status != .wishlist }.count >= Self.facetShelvesFrom
+    }
+
     @ViewBuilder
     private var genreShelf: some View {
         let groups = GameFacet.groups(of: .genre, in: visible)
-        if groups.count > 1 {
+        if hasShelfToBrowse, groups.count > 1 {
             FacetShelf(title: "Genres", kind: .genre, groups: groups) { path.append($0) }
         }
     }
@@ -267,7 +280,7 @@ struct LibraryTab: View {
     @ViewBuilder
     private var themeShelf: some View {
         let groups = GameFacet.groups(of: .theme, in: visible)
-        if groups.count > 1 {
+        if hasShelfToBrowse, groups.count > 1 {
             FacetShelf(title: "Themes", kind: .theme, groups: groups) { path.append($0) }
         }
     }
