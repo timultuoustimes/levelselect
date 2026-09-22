@@ -103,7 +103,7 @@ const sections = [
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently. Stopping one asks what happened.' },
   { id: 'carriedover',       q: 'Steam says I have 42 hours in this',
-    a: 'Add it as a starting total. It counts toward your time without inventing a day you played it.' },
+    a: 'Add it as a starting total, and say which years it belongs to. It counts toward your time without inventing a day you played it.' },
   { id: 'releases',          q: 'When does the game I am waiting for come out?',
     a: 'Your wishlist counts down, on the date for the platform you picked — not somebody else\'s.' },
   { id: 'wishlist',          q: 'Where did the Wishlist tab go?',
@@ -126,6 +126,10 @@ const sections = [
     a: 'Yes — a memory, dated as vaguely as you actually remember it, with pictures.' },
   { id: 'stats',             q: 'What do the charts show?',
     a: 'Journal → Charts. Every breakdown card turns over: tap the chart icon for a donut instead of bars.' },
+  { id: 'badges',            q: 'What are badges?',
+    a: 'Thirty-two of them, earned from your library and kept for good. Journal → Badges has them all.' },
+  { id: 'replay',            q: 'Can I look back at a month or a year?',
+    a: 'Journal → Charts → Replay. A month, a quarter or a year read back to you, and a card to post.' },
   { id: 'data',              q: 'How do I get my data out?',
     a: 'Settings → Import & Export → Export library writes a readable JSON file of everything.' },
 ];
@@ -151,7 +155,7 @@ const moments = [
   { t: 'I am looking for something',      ids: ['search'] },
   { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
   { t: 'I just finished a game',          ids: ['beaten'] },
-  { t: 'I want to look back',             ids: ['journal', 'memories', 'stats'] },
+  { t: 'I want to look back',             ids: ['journal', 'memories', 'stats', 'badges', 'replay'] },
   { t: 'I want my data out',              ids: ['data'] },
 ];
 
@@ -255,6 +259,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
 
     <h3>Logos</h3>
     <p>Game pages fetch a wordmark on their own, from IGDB first and SteamGridDB after, and fall back to the game's name as text when neither has one. <strong>Settings &rarr; Use game logos</strong> turns it off if you would rather always read the name. You can still choose a specific logo per game from that game's artwork picker, and an explicit choice always wins.</p>
+    <p><strong>Console pages wear the console&rsquo;s logo too</strong> &mdash; the SNES in its red, the Genesis in its outline. A logo that would vanish on the background, like the PS5&rsquo;s black wordmark on the dark theme, is drawn in the text color instead. The logo follows the name you chose in <a href="#systemnames">System names</a>, so a Mega Drive gets the Mega Drive&rsquo;s. The same switch turns these off.</p>
       </div>
     </details>
 
@@ -583,6 +588,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <div class="qa__body">
     <p>A <strong>session</strong> is time played — start it and it counts, including on the Lock Screen and your watch. A <strong>run</strong> is one attempt at something, for roguelikes: a loadout, an outcome, and a win rate over time.</p>
     <p>They're deliberately separate. A run doesn't start a timer, and a session doesn't record a run, so your playtime never gets inflated by counting attempts. Run logging is off until you turn it on for a game — the Tracker section's <strong>Build</strong> menu, <em>Log Runs for This Game</em> — because plenty of games deserve a tracker without one. Once it's on, the Runs section carries its own controls, including switching it back off.</p>
+    <p><strong>Started one by mistake?</strong> Stop it, and if it ran for under a minute the question that follows offers <em>Discard it</em>. Any session can also be deleted from its own page.</p>
       </div>
     </details>
 
@@ -594,6 +600,8 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       <div class="qa__body">
     <p>Open the game and look under <strong>Time played</strong> for <em>Add time played before tracking</em>. Put the number your console or storefront already knows in there &mdash; Steam&rsquo;s hours, a Switch profile&rsquo;s &mdash; and it counts toward that game&rsquo;s total from then on, with your sessions adding on top of it.</p>
     <p>It is a number, not a session. It never appears in your history and it never lands on a day in the Journal, because it did not happen on one. Set it back to zero to remove it.</p>
+    <h3>Which years it belongs to</h3>
+    <p>Under <strong>When was it?</strong> in the same place, give the hours a year, or a range of years &mdash; <em>2021 to 2023</em>. You can split them too: some in one range, the rest in another. A range shows in full on each of those years&rsquo; <a href="#replay">Replays</a> rather than being divided between them, because nobody knows how it was divided, and it is never added to any year&rsquo;s dated total.</p>
       </div>
     </details>
 
@@ -679,6 +687,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>Widgets live on the Home Screen and the Lock Screen, and at extra-large sizes on iPad:</p>
     <ul>
       <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system, carrying that section's own cover art at medium and large sizes &mdash; point one at <em>Now Playing</em> and you have a shelf of what you are playing, a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
+      <li><strong>Badges:</strong> your newest badge, or a row of them, at every size &mdash; including iOS 27&rsquo;s tall extra-large on iPad and Mac.</li>
       <li><strong>Releases:</strong> <em>Coming Soon</em> is your wishlist covers with the wait printed under each; <em>Release Calendar</em> is the dates themselves &mdash; one game at small, four at medium, and at large a real month grid with covers standing where the day numbers would be.</li>
       <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
       <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
@@ -758,6 +767,30 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="badges" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'badges')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'badges')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>Recognition for what you have actually done, in five families: <strong>firsts</strong> (your first timed session, your first memory), <strong>milestones</strong> (ten games beaten, a hundred hours), <strong>habits</strong> (a week of play in a row, every week of a month), <strong>collections</strong> (every game you own on one system, beaten) and <strong>history</strong> (dating something you finished before you had the app).</p>
+    <p><strong>Earned once, kept for good.</strong> A badge stays even if you later delete what earned it &mdash; it records something you did, not a live count. It is dated from the thing that earned it, not the day the app noticed, so the first time you open a build with badges, the library you already have earns its share quietly, each one dated to when you did it.</p>
+    <p>After that, a new badge arrives with a glow, a little confetti, and a note at the bottom of the screen; it waits for any sheet or alert to close first. With Reduce Motion on, just the glow. <strong>Journal &rarr; Badges</strong> shows every badge, earned or not, with what each one asks; tap one to see it big.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="replay" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'replay')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'replay')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Journal &rarr; Charts</strong>, at the top. Pick this month or last, this quarter or last, or any year you have something in, and Replay reads it back to you: a sentence that changes with what the period held &mdash; <em>Mostly Hollow Knight</em>, <em>Hades and Celeste, about evenly</em> &mdash; the box art of what you played most, what you finished, the badges you earned, and your longest sitting.</p>
+    <p><strong>Before you tracked</strong> is its own page: the hours Steam, PlayStation or Xbox reported, with the <a href="#carriedover">years you placed them in</a>.</p>
+    <p><strong>Save as image</strong> makes a card for posting: the box art, the one line worth saying, the console, and where LevelSelect lives. It is made on your device from your own records, like everything else here.</p>
+      </div>
+    </details>
+
     <details class="qa" id="data" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'data')!.q}</span>
@@ -765,7 +798,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </summary>
       <div class="qa__body">
     <p><strong>Settings &rarr; Import &amp; Export &rarr; Export library</strong> writes a readable JSON file covering games, playthroughs, sessions, runs, tracker progress and collections, with a manifest of counts at the top.</p>
-    <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, and collections — each record with its stable id — plus your appearance settings as a single preferences block.</p>
+    <p>It carries your library's content: games and their metadata, playthroughs, sessions, runs, tracker schemas and progress, your notes, maps and their markers, videos with per-part playlist positions, collections, and the badges you have earned with their dates — each record with its stable id — plus your appearance settings as a single preferences block.</p>
     <p><strong>And it comes back:</strong> Import LevelSelect export (same screen) reads the file and restores whatever your library is missing — never touching what's already there, so an old export merges safely onto a current library, and importing twice changes nothing. One honest caveat remains: map images are saved as links rather than embedded. Alongside it, Recently Deleted holds everything you delete until <em>you</em> decide otherwise — restore with a tap, or use the app's only permanent delete, which lives there and nowhere else.</p>
     <p><strong>Replace Library with Backup</strong> makes your library match an export exactly &mdash; everything in the file comes back as it was, and anything the file doesn&rsquo;t have goes to Recently Deleted. <strong>Erase Library</strong> moves every game, collection, memory and console to Recently Deleted. Both show you what will change, ask you to type a word to confirm, and save a safety copy first to Files &rarr; LevelSelect &rarr; Safety Copies.</p>
     <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and what's in the export is genuinely yours to take.</p>
