@@ -337,8 +337,8 @@ struct LogSessionSheet: View {
         NavigationStack {
             LSForm {
                 Section("Duration") {
-                    Stepper("\(hours) h", value: $hours, in: 0...100)
-                    Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
+                    DurationField(value: $hours, unit: "h", range: 0...100, accessibilityName: "Hours")
+                    DurationField(value: $minutes, unit: "m", range: 0...59, step: 5, accessibilityName: "Minutes")
                 }
                 Section("When") {
                     DatePicker("Date", selection: $date)
@@ -429,7 +429,7 @@ struct CarriedOverSheet: View {
             LSForm {
                 Section {
                     HoursField(hours: $hours)
-                    Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
+                    DurationField(value: $minutes, unit: "m", range: 0...59, step: 5, accessibilityName: "Minutes")
                 } header: {
                     Text("Time played before tracking")
                 } footer: {
@@ -509,26 +509,45 @@ struct CarriedOverSheet: View {
 ///
 /// Clamped rather than rejected, so pasting "12,000" into a field capped at
 /// 99,999 simply works and a negative can't happen.
-private struct HoursField: View {
-    @Binding var hours: Int
-    var range: ClosedRange<Int> = 0...99_999
+/// **A number you can type, with the stepper beside it.**
+///
+/// Durations were steppers alone — minutes in fives — so 45 minutes was
+/// nine taps and 47 wasn't reachable at all. Typing is the fast path; the
+/// stepper stays for nudging. Clamped to its range either way.
+struct DurationField: View {
+    @Binding var value: Int
+    /// "h" or "m", drawn after the number.
+    var unit: String
+    var range: ClosedRange<Int>
+    var step: Int = 1
+    var accessibilityName: String
 
     var body: some View {
         HStack(spacing: 6) {
             TextField("0", value: Binding(
-                get: { hours },
-                set: { hours = min(max($0, range.lowerBound), range.upperBound) }),
+                get: { value },
+                set: { value = min(max($0, range.lowerBound), range.upperBound) }),
                       format: .number)
                 #if os(iOS)
                 .keyboardType(.numberPad)
                 #endif
                 .fixedSize()
-                .accessibilityLabel("Hours")
-            Text("h")
+                .accessibilityLabel(accessibilityName)
+            Text(unit)
                 .foregroundStyle(.secondary)
             Spacer(minLength: 8)
-            Stepper("Hours", value: $hours, in: range)
+            Stepper(accessibilityName, value: $value, in: range, step: step)
                 .labelsHidden()
         }
+    }
+}
+
+/// Hours, up to a lifetime's worth.
+private struct HoursField: View {
+    @Binding var hours: Int
+    var range: ClosedRange<Int> = 0...99_999
+
+    var body: some View {
+        DurationField(value: $hours, unit: "h", range: range, accessibilityName: "Hours")
     }
 }
