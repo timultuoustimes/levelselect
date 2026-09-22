@@ -14,7 +14,9 @@ enum Format {
         let s = max(0, Int(t))
         let h = s / 3600, m = (s % 3600) / 60, sec = s % 60
         if h > 0 { return "\(h)h \(m)m" }
-        if m > 0 { return "\(m)m \(sec)s" }
+        // No trailing "0s": a 42-minute session read "42m 0s" beside
+        // "2h 12m" in the Timeline (week-one pass, 09-22).
+        if m > 0 { return sec > 0 ? "\(m)m \(sec)s" : "\(m)m" }
         return "\(sec)s"
     }
 

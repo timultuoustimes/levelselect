@@ -184,6 +184,32 @@ enum WidgetBridge {
         // Matches Stats — see Game.isFinished. A ring that disagreed with
         // the page it mirrors is worse than no ring.
         let completedCount = games.filter(\.isFinished).count
+
+        // Badges, newest first. The ledger is the source — a badge earned is
+        // earned, whatever the counts behind it do later.
+        let badgeDescriptor = FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil },
+            sortBy: [SortDescriptor(\.earnedAt, order: .reverse)])
+        // **One per badge.** Sync twins are two rows with one badge id, and
+        // this counted both — the widget said 14 where the Journal said 13
+        // (Codex, build 40, 09-21). `reconcileBadges` folds them on
+        // foreground; this holds until it has, keeping the earliest date as
+        // the Journal and Replay do.
+        let earliestRows = Dictionary(
+            grouping: (try? context.fetch(badgeDescriptor)) ?? [], by: \.badgeID)
+            .compactMapValues { $0.min { $0.earnedAt < $1.earnedAt } }
+            .values
+            .sorted { $0.earnedAt > $1.earnedAt }
+        let allEarned: [WidgetBadge] = earliestRows
+            .compactMap { earned in
+                guard let definition = Badges.definition(earned.badgeID) else { return nil }
+                return WidgetBadge(id: definition.id, title: definition.title,
+                                   symbol: definition.symbol, earnedAt: earned.earnedAt)
+            }
+        // Forty is the tallest grid the portrait extra-large draws; the rest
+        // is weight in a file every widget reads on every timeline refresh.
+        // The count travels separately, so a cap here never miscounts.
+        let earnedBadges = Array(allEarned.prefix(40))
         let collectionDescriptor = FetchDescriptor<GameCollection>(
             predicate: #Predicate { $0.deletedAt == nil })
         // uniquingKeysWith, NEVER uniqueKeysWithValues: CloudKit sync twins
@@ -260,7 +286,7 @@ enum WidgetBridge {
         // collections and no games does not, because those are openable.
         if games.isEmpty && ownedConsoles.isEmpty && collectionRefs.isEmpty { return nil }
 
-        let snapshot = WidgetSnapshot(
+        var snapshot = WidgetSnapshot(
             gameID: game?.id.uuidString ?? "",
             gameName: game?.name ?? "",
             statusRaw: game?.status.rawValue ?? "",
@@ -316,6 +342,13 @@ enum WidgetBridge {
             statusColors: ThemePalette.statusColorHexes,
             upcoming: upcoming
         )
+        // Set after the fact, not passed in: this initializer already sits at
+        // the edge of what the type checker will solve, and three more
+        // arguments tipped it over ("unable to type-check in reasonable
+        // time"). Assignment costs it nothing.
+        snapshot.badges = earnedBadges
+        snapshot.badgesTotal = Badges.catalog.count
+        snapshot.badgesEarnedCount = allEarned.count
         return BuildResult(snapshot: snapshot, covers: covers)
     }
 

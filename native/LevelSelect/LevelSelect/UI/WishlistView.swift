@@ -610,7 +610,7 @@ struct WishlistTab: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                 TextField("dekudeals.com/wishlist/…", text: $urlInput)
-                    .textFieldStyle(.roundedBorder)
+                    .lsField()
                     #if !os(macOS)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()

@@ -15,6 +15,7 @@ struct LevelSelectWidgets: WidgetBundle {
         WeekStatWidget()
         RunTrackerWidget()
         HeatmapWidget()
+        BadgesWidget()
         BeatenShareWidget()
         LauncherWidget()
         ReleasesWidget()

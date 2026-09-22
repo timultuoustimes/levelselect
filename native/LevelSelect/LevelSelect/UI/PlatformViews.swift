@@ -272,14 +272,23 @@ struct PlatformGamesView: View {
                                     prompt: "Search this console"))
         .toolbar {
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 7) {
-                    PlatformIconView(platform: platform, size: 24)
-                    if let nickname = ConsoleNickname.of(platform, in: consoles) {
-                        VStack(spacing: 0) {
-                            Text(nickname).font(.headline)
-                            Text(PlatformShort.name(platform)).font(.caption2).foregroundStyle(.secondary)
-                        }
-                    } else {
+                // **The console's logo is its name here** (09-18), the way a
+                // game page wears its wordmark. The small machine icon went:
+                // the card under the bar draws the machine at half the width.
+                // Consoles with no logo keep the icon beside their name.
+                if let nickname = ConsoleNickname.of(platform, in: consoles) {
+                    VStack(spacing: 1) {
+                        Text(nickname).font(.headline)
+                        ConsoleLogoTitle(platform: platform, maxWidth: 110, maxHeight: 13,
+                                         font: .caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if ConsoleLogo.entry(console: PlatformShort.builtinName(platform),
+                                            shown: PlatformShort.name(platform)) != nil {
+                    ConsoleLogoTitle(platform: platform)
+                } else {
+                    HStack(spacing: 7) {
+                        PlatformIconView(platform: platform, size: 24)
                         Text(PlatformShort.name(platform)).font(.headline)
                     }
                 }

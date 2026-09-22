@@ -1915,7 +1915,7 @@ struct GameDetailView: View {
     private var notesField: some View {
         TextField("Where you left off, thoughts, …", text: $game.notes, axis: .vertical)
             .lineLimit(3...)
-            .textFieldStyle(.roundedBorder)
+            .lsField()
     }
 
     // MARK: Game Info
@@ -2147,7 +2147,7 @@ struct GameDetailView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption).foregroundStyle(.secondary)
             TextField(label, text: text)
-                .textFieldStyle(.roundedBorder)
+                .lsField()
                 .font(.subheadline)
         }
     }
@@ -2360,7 +2360,7 @@ struct GameDetailView: View {
                 }
             }
             TextField("Add a tag…", text: $newTag)
-                .textFieldStyle(.roundedBorder)
+                .lsField()
                 .onSubmit { addTag(newTag) }
             // Suggest from the library's own vocabulary as you type. This is
             // what keeps `roguelike` from fragmenting into `rogue-like` and
@@ -2486,7 +2486,7 @@ struct GameDetailView: View {
                 set: { game.review = $0.isEmpty ? nil : $0 }
             ), axis: .vertical)
             .lineLimit(3...)
-            .textFieldStyle(.roundedBorder)
+            .lsField()
         }
     }
 }

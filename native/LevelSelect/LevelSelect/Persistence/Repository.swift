@@ -26,6 +26,14 @@ struct Repository {
     /// the retry banner via PersistenceMonitor instead of vanishing.
     func persist() {
         PersistenceMonitor.shared.commit(context)
+        // Every write lands here, which makes it the honest place to ask
+        // whether anything was just earned. Debounced inside.
+        //
+        // Phone and Mac only: the watch compiles this file but has no badges
+        // (and no screen to celebrate on), so it has no awarder.
+        #if os(iOS) || os(macOS)
+        BadgeAwarder.schedule(in: context)
+        #endif
     }
 
     /// Route a direct model edit through the repository's invariants.
@@ -1303,6 +1311,48 @@ struct Repository {
         persist()
     }
 
+    /// **The year a lump of carried-over time belongs to, or nil for "no
+    /// idea".**
+    ///
+    /// Steam and the consoles hand over a lifetime total and no dates, so
+    /// those hours sit outside every dated view in the app. This is the one
+    /// thing the person themselves knows that the API doesn't — Tim, 09-21:
+    /// *"I know I played cities skylines the most in 2020-2021."*
+    ///
+    /// Stored in `Playthrough.startedAt`, which has been deployed since V1
+    /// and read by nothing: no CloudKit field deploy to buy. It is written as
+    /// the first instant of the year and only ever READ as a year — never as
+    /// a day, because a day is precisely what nobody knows about it.
+    /// **Which years a lump of imported time belongs to** — see
+    /// `CarriedOverSpan`. One span across several years is attribution, not a
+    /// division: it appears on each of those years and is added to none of
+    /// their totals.
+    ///
+    /// Gated on V8: until the field is in Production, the single year still
+    /// rides on `startedAt`, which has been deployed since V1. Writing spans
+    /// on a Production build before the deploy would fail the whole save.
+    func setCarriedOverSpans(_ spans: [CarriedOverSpan], on pt: Playthrough,
+                             calendar: Calendar = .current) {
+        if SchemaDeploy.v8Fields {
+            pt.carriedOverSpans = spans
+        }
+        // The first span's start year also goes to `startedAt`, so a build
+        // without V8 — or a device that hasn't synced it yet — still shows
+        // and files the attribution, just without the range.
+        setCarriedOverYear(spans.first?.fromYear, on: pt, calendar: calendar)
+    }
+
+    func setCarriedOverYear(_ year: Int?, on pt: Playthrough,
+                            calendar: Calendar = .current) {
+        if let year {
+            pt.startedAt = calendar.date(from: DateComponents(year: year, month: 1, day: 1))
+        } else {
+            pt.startedAt = nil
+        }
+        touch(pt)
+        persist()
+    }
+
     func logManualSession(
         on pt: Playthrough,
         duration: TimeInterval,
@@ -1758,7 +1808,8 @@ struct Repository {
     /// the user's Personal Goals across regeneration.
     func setGeneratedSchema(for game: Game, jsonData: Data,
                             source: TrackerSource = .aiGenerated,
-                            attribution: String? = "claude") {
+                            attribution: String? = "claude",
+                            provenance: [TrackerProvenance] = []) {
         // Generated ids are untrusted input, not a valid key set — duplicate
         // item ids share one state record (ticking either row ticks both).
         // Sanitize at the boundary so no install path accepts them raw.
@@ -1776,10 +1827,24 @@ struct Repository {
         schema.source = source
         schema.generatedAt = .now
         schema.generatedBy = attribution
+        recordProvenance(on: schema, from: jsonData, adding: provenance)
         touch(schema)
         touch(game)
         recomputeProgress(game)
         persist()
+    }
+
+    /// **Where the items came from, kept where the record says it keeps
+    /// them.** The generator has always sent a `sources` list inside the
+    /// schema it returns; nothing lifted it into `sourcesJSON`, so every
+    /// tracker was silent about its origin (Codex, 09-21). Descriptors and
+    /// links only — see `TrackerProvenance` for why a paste records that it
+    /// was pasted and nothing of what.
+    private func recordProvenance(on schema: TrackerSchemaRecord, from jsonData: Data,
+                                  adding explicit: [TrackerProvenance]) {
+        let incoming = TrackerProvenance.fromSchemaPayload(jsonData) + explicit
+        guard !incoming.isEmpty else { return }
+        schema.sourcesJSON = TrackerProvenance.merged(existing: schema.sourcesJSON, adding: incoming)
     }
 
     /// What actually happened when a generated schema was folded in — the
@@ -2149,7 +2214,8 @@ struct Repository {
     func applyGeneratedSchema(for game: Game, jsonData: Data,
                               mode: TrackerMergeMode,
                               source: TrackerSource = .aiGenerated,
-                              attribution: String? = "claude") -> TrackerMergeOutcome {
+                              attribution: String? = "claude",
+                              provenance: [TrackerProvenance] = []) -> TrackerMergeOutcome {
         // The ONE ingest boundary: first generation, Replace, Add-to-existing
         // and Add-new-category all pass through here, so sanitizing the
         // payload once covers every mode — the previous seen-set fix deduped
@@ -2162,10 +2228,14 @@ struct Repository {
         guard let existing = game.trackerSchema else {
             // Nothing to merge into — first generation is just an install.
             setGeneratedSchema(for: game, jsonData: jsonData,
-                               source: source, attribution: attribution)
+                               source: source, attribution: attribution,
+                               provenance: provenance)
             let cats = TrackerSchemaJSON.categories(from: jsonData)
             return TrackerMergeOutcome(added: cats.flatMap(\.items).count)
         }
+        // Merging into a tracker that already exists: what it was built from
+        // grows, so a guide and then a paste are both remembered.
+        recordProvenance(on: existing, from: jsonData, adding: provenance)
 
         let states = allTrackerStates(for: game)
         let progressIDs = progressItemIDs(for: game)
@@ -3488,8 +3558,40 @@ struct Repository {
         return rows.count - 1
     }
 
+    /// **Fold badge sync twins into one row per badge.**
+    ///
+    /// Two offline devices can each earn "Roll credits" and each write a row
+    /// with its own id. The Journal and Replay already collapse them by badge
+    /// id; the widget did not, and counted both (Codex, build 40, 09-21).
+    /// Folding them here means nothing downstream has to remember to.
+    ///
+    /// The survivor is the earliest by `(earnedAt, id)` — a total order, so
+    /// every device picks the SAME row and none tombstones the one another
+    /// kept. The earliest date wins because a badge was earned the first time
+    /// it was earned. The rest are tombstoned rather than deleted, so the
+    /// removal itself syncs.
+    @discardableResult
+    func reconcileBadges(at date: Date = .now) -> Int {
+        let live = ((try? context.fetch(FetchDescriptor<EarnedBadge>(
+            predicate: #Predicate { $0.deletedAt == nil }))) ?? [])
+        var folded = 0
+        for (_, rows) in Dictionary(grouping: live, by: \.badgeID) where rows.count > 1 {
+            let ordered = rows.sorted {
+                ($0.earnedAt, $0.id.uuidString) < ($1.earnedAt, $1.id.uuidString)
+            }
+            for loser in ordered.dropFirst() {
+                loser.deletedAt = date
+                loser.updatedAt = date
+                loser.revision += 1
+                folded += 1
+            }
+        }
+        return folded
+    }
+
     func reconcileLibrary(at date: Date = .now) {
         reconcileSingletons(at: date)
+        reconcileBadges(at: date)
         repairDetachedSessionsFromLedger()
         var seen = Set<UUID>()
         for session in unstoppedSessions() {

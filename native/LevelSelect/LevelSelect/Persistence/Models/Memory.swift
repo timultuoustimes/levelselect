@@ -138,6 +138,23 @@ final class Memory {
     /// thing across sessions, finishes and memories.
     var playedWithData: Data?
 
+    /// **Whether this one memory rings on its anniversary.** Off, always,
+    /// until somebody turns it on for this entry.
+    ///
+    /// The switch is per memory because notifications here are opt-in per
+    /// thing and never blanket (decided 09-09): a blanket toggle makes people
+    /// turn the useful one off along with the noise. So the one big thing
+    /// from 2017 can ring on 1 January 2027 while the smaller 2017 entries
+    /// stay quiet.
+    ///
+    /// When it fires is the entry's own grain — a day-grain memory on its
+    /// day, month-grain on the 1st, year-grain on 1 January — and only at
+    /// five-year intervals, so only the bigger numbers come round. Season and
+    /// decade grains never fire. See `precision`.
+    ///
+    /// **Schema V8, ahead of the feature**, which is designed and unbuilt.
+    var anniversaryReminder: Bool = false
+
     /// Optional, and the optionality is the feature — "first LAN party" has
     /// neither a game nor a console.
     var game: Game?

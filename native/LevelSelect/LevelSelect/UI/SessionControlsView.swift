@@ -110,8 +110,11 @@ struct SessionControlsView: View {
             EditSessionSheet(session: session).lsSheet()
         }
         .sheet(isPresented: $showingCarriedOver) {
-            CarriedOverSheet(seconds: playthrough?.carriedOverSeconds ?? 0) { seconds in
-                repo.setCarriedOver(seconds, on: repo.ensureDefaultPlaythrough(for: game))
+            CarriedOverSheet(seconds: playthrough?.carriedOverSeconds ?? 0,
+                             existingSpans: playthrough?.carriedOverSpans ?? []) { seconds, spans in
+                let pt = repo.ensureDefaultPlaythrough(for: game)
+                repo.setCarriedOver(seconds, on: pt)
+                repo.setCarriedOverSpans(spans, on: pt)
             }
             .lsSheet()
         }
@@ -146,7 +149,21 @@ struct SessionControlsView: View {
                 let carried = playthrough?.carriedOverSeconds ?? 0
                 Button { showingCarriedOver = true } label: {
                     HStack {
-                        Text(carried > 0 ? "Before tracking" : "Add time played before tracking")
+                        // The year rides in the label rather than as a second
+                        // row: it is a qualifier on this number, not a fact
+                        // of its own.
+                        //
+                        // The spans, not the single year: a 2021–2023 range
+                        // read as "2021" here. And `String`, never a bare
+                        // `Int`, inside the label — interpolated into a
+                        // `Text` literal an Int becomes a localized number
+                        // and the year read "2,018" (Fable, build 40, 09-21).
+                        let years = (playthrough?.carriedOverSpans ?? []).map(\.label)
+                        Text(verbatim: carried > 0
+                             ? (years.isEmpty ? "Before tracking"
+                                              : "Before tracking · " + years.joined(separator: ", "))
+                             : "Add time played before tracking")
+                            .lineLimit(1)
                             .font(.caption)
                         Spacer()
                         if carried > 0 {
@@ -320,8 +337,8 @@ struct LogSessionSheet: View {
         NavigationStack {
             LSForm {
                 Section("Duration") {
-                    Stepper("\(hours) h", value: $hours, in: 0...100)
-                    Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
+                    DurationField(value: $hours, unit: "h", range: 0...100, accessibilityName: "Hours")
+                    DurationField(value: $minutes, unit: "m", range: 0...59, step: 5, accessibilityName: "Minutes")
                 }
                 Section("When") {
                     DatePicker("Date", selection: $date)
@@ -363,21 +380,95 @@ struct LogSessionSheet: View {
 struct CarriedOverSheet: View {
     @Environment(\.dismiss) private var dismiss
     let seconds: TimeInterval
-    var onSave: (TimeInterval) -> Void
+    /// Which years these hours belong to, if anybody has said.
+    var existingSpans: [CarriedOverSpan] = []
+    var onSave: (TimeInterval, [CarriedOverSpan]) -> Void
 
     @State private var hours = 0
     @State private var minutes = 0
+    @State private var spans: [CarriedOverSpan] = []
+
+    /// Hours not yet placed in any year.
+    private var remaining: TimeInterval {
+        TimeInterval(hours * 3600 + minutes * 60) - spans.totalSeconds
+    }
+
+    private var spansFooter: String {
+        // Nothing to place yet: "all of it is placed" is true of zero and
+        // reads like a boast about nothing.
+        if spans.isEmpty || TimeInterval(hours * 3600 + minutes * 60) == 0 {
+            return "Optional, and only as exact as you actually are. Hours you place land in those years' Replays as a line of their own — never spread across days, because nobody knows which days they were."
+        }
+        if remaining > 60 {
+            return "\(Format.duration(remaining)) isn't placed in any year yet. That's fine — it still counts toward the total."
+        }
+        if remaining < -60 {
+            return "You've placed more time than the total above. Raise the total, or take some back."
+        }
+        return "All of it is placed. A range is shown whole on each year it covers, because you said the span rather than the year."
+    }
+
+    private func yearPicker(_ label: String, _ selection: Binding<Int>) -> some View {
+        Picker(label, selection: selection) {
+            ForEach(years, id: \.self) { year in
+                Text(String(year)).tag(year)
+            }
+        }
+        .pickerStyle(.menu)
+    }
+
+    /// This year back to 1972 — the Odyssey. Long enough that nobody's
+    /// history falls off the end of it.
+    private var years: [Int] {
+        let thisYear = Calendar.current.component(.year, from: .now)
+        return Array((1972...thisYear).reversed())
+    }
 
     var body: some View {
         NavigationStack {
             LSForm {
                 Section {
-                    Stepper("\(hours) h", value: $hours, in: 0...9_999)
-                    Stepper("\(minutes) m", value: $minutes, in: 0...59, step: 5)
+                    HoursField(hours: $hours)
+                    DurationField(value: $minutes, unit: "m", range: 0...59, step: 5, accessibilityName: "Minutes")
                 } header: {
                     Text("Time played before tracking")
                 } footer: {
                     Text("The number your console or storefront already knows — Steam's hours, a Switch profile's. It adds to this game's total and stays out of your session history, because it never happened on any one day. Set it to zero to remove it.")
+                }
+                // **The one thing the API can't tell us and you can.**
+                // Steam hands over a lifetime total with no dates, so these
+                // hours sit outside every dated view. Naming the years puts
+                // them back into those years' Replays — and only there,
+                // because a year is not a day and the heatmap stays honest.
+                Section {
+                    ForEach($spans) { $span in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HoursField(hours: Binding(
+                                get: { Int(span.seconds) / 3600 },
+                                set: { span.seconds = TimeInterval($0 * 3600) }))
+                            HStack(spacing: 8) {
+                                yearPicker("From", $span.fromYear)
+                                yearPicker("To", $span.toYear)
+                            }
+                            if !span.isSingleYear {
+                                Text(verbatim: "Appears in full in each year's Replay from \(String(span.fromYear)) to \(String(span.toYear)), rather than split between them.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onDelete { spans.remove(atOffsets: $0) }
+                    Button {
+                        let thisYear = Calendar.current.component(.year, from: .now)
+                        spans.append(CarriedOverSpan(
+                            seconds: max(0, remaining), fromYear: thisYear))
+                    } label: {
+                        Label("Add years", systemImage: "plus")
+                    }
+                } header: {
+                    Text("When was it?")
+                } footer: {
+                    Text(spansFooter)
                 }
             }
             .lsFormStyle()
@@ -391,7 +482,10 @@ struct CarriedOverSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(TimeInterval(hours * 3600 + minutes * 60))
+                        // Spans with no time in them are noise rather than a
+                        // claim, and are dropped on the way out.
+                        onSave(TimeInterval(hours * 3600 + minutes * 60),
+                               spans.filter { $0.seconds > 0 })
                         dismiss()
                     }
                 }
@@ -399,7 +493,61 @@ struct CarriedOverSheet: View {
             .onAppear {
                 hours = Int(seconds) / 3600
                 minutes = (Int(seconds) % 3600) / 60
+                spans = existingSpans
             }
         }
+    }
+}
+
+
+/// **Hours you can type, as well as step.**
+///
+/// A stepper alone made a real Steam figure unenterable: Fable held "+" for
+/// three seconds and reached 5 hours, which puts Cities: Skylines' 7,491 more
+/// than an hour of pressing away (build 40 runtime, 09-21). The number is the
+/// field; the stepper stays beside it for nudging a small one.
+///
+/// Clamped rather than rejected, so pasting "12,000" into a field capped at
+/// 99,999 simply works and a negative can't happen.
+/// **A number you can type, with the stepper beside it.**
+///
+/// Durations were steppers alone — minutes in fives — so 45 minutes was
+/// nine taps and 47 wasn't reachable at all. Typing is the fast path; the
+/// stepper stays for nudging. Clamped to its range either way.
+struct DurationField: View {
+    @Binding var value: Int
+    /// "h" or "m", drawn after the number.
+    var unit: String
+    var range: ClosedRange<Int>
+    var step: Int = 1
+    var accessibilityName: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            TextField("0", value: Binding(
+                get: { value },
+                set: { value = min(max($0, range.lowerBound), range.upperBound) }),
+                      format: .number)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+                .fixedSize()
+                .accessibilityLabel(accessibilityName)
+            Text(unit)
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 8)
+            Stepper(accessibilityName, value: $value, in: range, step: step)
+                .labelsHidden()
+        }
+    }
+}
+
+/// Hours, up to a lifetime's worth.
+private struct HoursField: View {
+    @Binding var hours: Int
+    var range: ClosedRange<Int> = 0...99_999
+
+    var body: some View {
+        DurationField(value: $hours, unit: "h", range: range, accessibilityName: "Hours")
     }
 }

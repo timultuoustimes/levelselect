@@ -26,7 +26,18 @@ extension View {
     ///
     /// Not for image viewers or the system share sheet. A photo wants the whole
     /// screen, and `ShareSheet` is UIKit's own.
+    /// Every sheet also reports that it is open, so a badge earned underneath
+    /// one waits rather than celebrating where nobody can see it — see
+    /// `AppNavigator.celebrate`. This is the one modifier every themed sheet
+    /// in the app already goes through, which is why it hangs here.
     func lsSheet(_ detents: Set<PresentationDetent> = [.medium, .large]) -> some View {
+        sheetBody(detents)
+            .onAppear { AppNavigator.shared.sheetOpened() }
+            .onDisappear { AppNavigator.shared.sheetClosed() }
+    }
+
+    @ViewBuilder
+    private func sheetBody(_ detents: Set<PresentationDetent>) -> some View {
         #if os(macOS)
         // **A Mac sheet has no detents, so it takes the size of its content —
         // and a Form's content has no opinion about width.**

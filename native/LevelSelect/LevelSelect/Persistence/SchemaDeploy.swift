@@ -30,6 +30,26 @@ enum SchemaDeploy {
     /// he pasted listed exactly these five and nothing else.
     static let v7DeployedToProduction = true
 
+    /// Build 40's field batch: `Playthrough.carriedOverSpansData` (which
+    /// years a lump of imported playtime belongs to — `CarriedOverSpan`),
+    /// `ThemeSettings.nameFontRaw`, and `anniversaryReminder` on both
+    /// `Memory` and `CompletionEvent`. The last three ship ahead of their
+    /// features, by the V5 rule: an unused optional costs nothing and a
+    /// promote costs a cycle.
+    ///
+    /// Deployed 2026-09-21 by Tim, seeded from the Mac on a throwaway
+    /// `seed.store` (`-LSSeedStore YES`, verified with `lsof` — only the seed
+    /// store was ever open, the group container's `default.store` never).
+    /// The Development-vs-Production diff he pasted listed exactly these four
+    /// and nothing else: `carriedOverSpansData` as BYTES rather than ASSET,
+    /// both switches as INT64, `nameFontRaw` as STRING, no record type added
+    /// and no field dropped. Purged afterwards.
+    static let v8DeployedToProduction = true
+
+    static var v8Fields: Bool {
+        v8DeployedToProduction || !syncsToProduction
+    }
+
     static var v7Fields: Bool {
         v7DeployedToProduction || !syncsToProduction
     }

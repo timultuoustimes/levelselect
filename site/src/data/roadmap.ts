@@ -8,9 +8,17 @@
  */
 
 /** Shown on both surfaces, so the app can say when this was last honest. */
-export const reviewed = '18 September 2026';
+export const reviewed = '22 September 2026';
 
 export const shipped = [
+  { t: 'Badges, and the moment they land', build: 40,
+    d: 'Thirty-two badges earned from your library, dated from what earned them and kept for good — arriving with a glow, a little confetti, and a widget to keep them on.' },
+  { t: 'Replays', build: 40,
+    d: 'A month, a quarter or a year read back to you from your own library, with the box art of what you played most — and a card to post.' },
+  { t: 'Hours in the years they happened', build: 40,
+    d: 'Steam, PlayStation and Xbox report a lifetime total. Now you can say it was 2021 to 2023, and each of those years remembers it.' },
+  { t: 'Every console wears its logo', build: 40,
+    d: 'A console page is titled with the console\'s own logo, following the name you chose — a Mega Drive is a Mega Drive.' },
   { t: 'Game news, in its own place', build: 39,
     d: 'A News tab of the sites you choose — all of it, your games first, by topic — plus every game coming out and what just did. Save stories for later, read them in Reader.' },
   { t: 'One search for everything', build: 39,
@@ -88,7 +96,7 @@ export const horizons = [
     note: 'being worked on',
     color: '#30D158',
     items: [
-      { t: 'Settling the beta', d: 'Making the things people use every day dependable before adding more.' },
+      { t: 'Getting to 1.0', d: 'No new features until it ships: two devices, a fresh iCloud account, every way a session can start and stop, and a backup restored into an empty library — until each of those holds.' },
       { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
       { t: 'Mac polish', d: "Underway. The Mac app has the new design and reachable settings now; the details still lag the iPhone." },
     ],
@@ -99,9 +107,10 @@ export const horizons = [
     note: 'planned',
     color: '#0A84FF',
     items: [
-      { t: 'Moments worth celebrating', d: 'Finishing a game or hitting a milestone should feel like something.' },
+      { t: 'A pile of cartridges, added at once', d: 'Barcodes cover boxes. Loose cartridges have none — point the camera at a table of them and add what it sees.' },
+      { t: 'On this day, five years ago', d: 'Anniversaries for the memories and finishes you choose, at the precision you remember them — and a celebration when one comes round.' },
+      { t: 'A timer for the time you have', d: '"I have forty-five minutes": a countdown that sounds on the Lock Screen, even on silent.' },
       { t: 'Trackers that fit the game', d: 'A checklist suits a Metroidvania. Other games need a count, a time, a rank or a score. Trackers will learn the shape of the game they are for.' },
-      { t: 'Replays', d: 'A look back at a month, a quarter or a year, built from your own library on your own device.' },
     ],
   },
   {
@@ -110,8 +119,7 @@ export const horizons = [
     note: 'no commitment',
     color: '#BF5AF2',
     items: [
-      { t: 'Badges', d: "Recognition for what you've actually done, earned once and kept." },
-      { t: 'Commissioned artwork', d: 'The console icons and the genie are placeholders today. We would like them drawn by an artist.' },
+      { t: 'Console art by hand', d: 'A set of console art made by hand, dropped in as its own update when it is ready.' },
       { t: 'Scanning a written list', d: 'Point a camera at a checklist you wrote by hand and turn it into a tracker.' },
       { t: 'More of your own notebook', d: 'Light and dark and your own background color landed in 36. Icons, covers, and the rest of the personality a paper journal has.' },
     ],

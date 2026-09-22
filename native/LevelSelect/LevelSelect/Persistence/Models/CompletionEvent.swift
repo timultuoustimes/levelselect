@@ -37,6 +37,18 @@ final class CompletionEvent {
     var startedDate: Date?
     var startedPrecision: String?
 
+    /// **Whether this one finish rings on its anniversary.** Off by default,
+    /// asked at the moment a session is logged as the beaten one.
+    ///
+    /// Per finish, not per game and not blanket (decided 09-09), so "the
+    /// first time I beat this" or "the third time, with a friend" can ring
+    /// and the other four stay quiet. Finishes still show in the Journal
+    /// silently whatever this says — the switch is only about the
+    /// notification.
+    ///
+    /// **Schema V8, ahead of the feature**, which is designed and unbuilt.
+    var anniversaryReminder: Bool = false
+
     var game: Game?
     /// The run this moment capped, when there was one. Optional on purpose:
     /// a 2011 clear logged from memory belongs to the game, not to any

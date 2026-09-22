@@ -111,7 +111,7 @@ struct TrackerListImportView: View {
             // table below, where they can be read before anything is kept.
             HStack(spacing: 8) {
                 TextField("Or paste a Google Sheets link", text: $link)
-                    .textFieldStyle(.roundedBorder)
+                    .lsField()
                     .font(.caption)
                     #if !os(macOS)
                     .keyboardType(.URL)
@@ -360,7 +360,13 @@ struct TrackerListImportView: View {
         repo.ensureDefaultPlaythrough(for: game)
         // Append-only: an import should never be able to remove anything the
         // player already has.
-        repo.applyGeneratedSchema(for: game, jsonData: incoming, mode: .addAll)
+        //
+        // Provenance says a sheet by its link and a paste by the fact of it —
+        // never the pasted text (Tim, 09-21).
+        let fromLink = SheetsLinkImport.looksLikeLink(link) && fetchedCSV != nil
+        repo.applyGeneratedSchema(
+            for: game, jsonData: incoming, mode: .addAll,
+            provenance: [fromLink ? .sheet(link) : .pasted])
         if keepTicks { applyTicks(result.categories) }
         dismiss()
     }

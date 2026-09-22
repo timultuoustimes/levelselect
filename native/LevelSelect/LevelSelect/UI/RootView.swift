@@ -149,6 +149,41 @@ struct RootView: View {
                 }
             }
 
+            // Badges earned a moment ago. Above the save-failure banner in
+            // the stack but below nothing else: a celebration must never sit
+            // over a message about your data.
+            if !nav.earnedBadges.isEmpty {
+                ZStack {
+                    ConfettiBurst(trigger: nav.earnedBadges.count)
+                    VStack {
+                        Spacer()
+                        BadgeToast(badges: nav.earnedBadges) {
+                            nav.earnedBadges = []
+                            nav.selectedTab = .journal
+                            nav.journalLens = "badges"
+                        } dismiss: {
+                            nav.earnedBadges = []
+                        }
+                        // Capped and centered. On the iPad it ran the full
+                        // 860 points, which put "See" as far from the badge's
+                        // name as the screen allows (Fable, build 40, 09-21).
+                        // A toast reads as one thing when it is one width.
+                        .frame(maxWidth: 520)
+                        .padding(.horizontal)
+                        .padding(.bottom, persistence.lastErrorMessage != nil ? 128 : 64)
+                    }
+                    .transition(slideIn)
+                }
+                .zIndex(4)
+                // Eight seconds, and keyed on what is being celebrated rather
+                // than how many: a re-render mid-celebration used to restart
+                // the clock, or cut it short.
+                .task(id: nav.earnedBadges.map(\.id).joined()) {
+                    try? await Task.sleep(for: .seconds(8))
+                    nav.earnedBadges = []
+                }
+            }
+
             if let notice = generation.notice {
                 VStack {
                     Spacer()
@@ -304,6 +339,9 @@ struct RootView: View {
         case "wishlist": nav.go(to: .wishlist)
         // Both spellings: "stats" is what every widget already baked.
         case "journal", "stats": nav.go(to: .journal)
+        case "badges":
+            nav.go(to: .journal)
+            nav.journalLens = "badges"
         case "shuffle":
             // The lock-screen die: every tap is a fresh roll, made HERE at
             // launch — a widget URL is baked per timeline entry, so rolling

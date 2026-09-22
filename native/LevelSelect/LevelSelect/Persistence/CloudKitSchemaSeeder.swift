@@ -217,6 +217,9 @@ enum CloudKitSchemaSeeder {
         // build 37 — a number, so the marker cannot stand in for it. Any
         // non-zero value types the CloudKit field; the purge sets it back.
         pt.carriedOverSeconds = 1
+        // build 40 (V8) — any non-empty value types the CloudKit field; the
+        // purge sets it back.
+        pt.carriedOverSpansData = Data([0x5b, 0x5d])   // "[]"
         pt.startedAt = now
         pt.lastPlayedAt = now
         context.insert(pt)
@@ -301,6 +304,8 @@ enum CloudKitSchemaSeeder {
         completion.datePrecision = "year"
         completion.startedDate = now
         completion.startedPrecision = "year"
+        // build 40 (V8) — the per-finish anniversary switch.
+        completion.anniversaryReminder = true
         completion.companions = [Companion(name: marker, handle: marker)]
         context.insert(completion)
         completion.game = game
@@ -445,6 +450,9 @@ enum CloudKitSchemaSeeder {
         memory.body = marker
         memory.place = marker
         memory.platform = marker
+        // build 40 (V8) — the per-memory anniversary switch. A Bool has to be
+        // set to the NON-default value, or CloudKit never sees the column.
+        memory.anniversaryReminder = true
         // Build 37. The seeded Memory is deleted whole by `purgeAll`, so this
         // needs no marker value of its own — it only has to be non-nil, or
         // CloudKit never sees the field at all.
@@ -603,6 +611,8 @@ enum CloudKitSchemaSeeder {
             if existingTheme.heroHexDark == nil { existingTheme.heroHexDark = marker }
             if existingTheme.suggestionPrefsRaw == nil { existingTheme.suggestionPrefsRaw = marker }
             if existingTheme.shelfOrderRaw == nil { existingTheme.shelfOrderRaw = marker }
+            // build 40 (V8) — the name font.
+            if existingTheme.nameFontRaw == nil { existingTheme.nameFontRaw = marker }
         // ⚠️ A NEW ThemeSettings FIELD MUST BE ADDED TO BOTH BRANCHES.
         //
         // The app creates a ThemeSettings on launch, so a seed run almost
@@ -640,6 +650,7 @@ enum CloudKitSchemaSeeder {
             theme.accentSaturation = seededHue            // build 37
             theme.paletteLinked = true                    // build 37, non-optional
             theme.heroHexLight = marker                   // build 39
+            theme.nameFontRaw = marker                    // build 40 (V8)
             theme.heroHexDark = marker                    // build 39
             theme.suggestionPrefsRaw = marker             // V7
             theme.shelfOrderRaw = marker                  // V7
@@ -722,6 +733,7 @@ enum CloudKitSchemaSeeder {
             if theme.heroHexDark == marker { theme.heroHexDark = nil }
             if theme.suggestionPrefsRaw == marker { theme.suggestionPrefsRaw = nil }
             if theme.shelfOrderRaw == marker { theme.shelfOrderRaw = nil }
+            if theme.nameFontRaw == marker { theme.nameFontRaw = nil }
             ThemePalette.refresh(from: theme)
         }
 

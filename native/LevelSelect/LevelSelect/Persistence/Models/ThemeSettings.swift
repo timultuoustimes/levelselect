@@ -104,6 +104,25 @@ final class ThemeSettings {
     /// a logo and the bold one could never be turned down to plain text.
     var showGameLogos: Bool = true
 
+    /// **Which face carries your name and the big numbers.** Nil is the
+    /// pixel face, which is the brand and the default.
+    ///
+    /// The wordmark is not negotiable — it stays the pixel face whatever this
+    /// says. This is for the handle, the Journal's large figures and the pie
+    /// centers, after heartOfTheCherry on r/AfterWorkGamers (09-21) called the
+    /// pixel face *"gamer-y in an arcade way (which works for some but not
+    /// quite for me)"*.
+    ///
+    /// Synced rather than device-local, by the same rule as
+    /// `gamePageLayoutRaw` and `showGameLogos`: a look you chose is a look you
+    /// chose everywhere, while a layout preference belongs to the device.
+    ///
+    /// **Schema V8, and deliberately ahead of its feature** — the toggle is
+    /// still "maybe" on the roadmap. Per the V5 precedent: an unused optional
+    /// costs nothing and a schema version costs a promote cycle, so a field
+    /// whose feature is a build away belongs in the batch deploying today.
+    var nameFontRaw: String?
+
     /// Colors the user kept in the color editor, as a JSON array of hex
     /// strings. Synced, because a palette you built on your phone should be
     /// on your iPad — it was `@AppStorage` until this field existed.

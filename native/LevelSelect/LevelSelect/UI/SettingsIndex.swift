@@ -456,6 +456,19 @@ struct DeveloperSettingsPage: View {
                     }
                 }
                 .disabled(seedingDemo)
+                // A new user's library, for checking every screen against:
+                // three games and nothing finished (the 1.0 plan's step 4).
+                Button {
+                    seedingDemo = true
+                    Task {
+                        seedResult = await DemoLibrarySeeder.seedWeekOne(context: context)
+                        seedingDemo = false
+                        WidgetBridge.refresh()
+                    }
+                } label: {
+                    Label("Load a week-one library", systemImage: "leaf")
+                }
+                .disabled(seedingDemo)
                 Button(role: .destructive) {
                     seedResult = DemoLibrarySeeder.purge(context: context)
                     // Widgets read a snapshot, not the store, so they

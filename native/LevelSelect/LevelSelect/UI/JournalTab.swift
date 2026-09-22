@@ -22,13 +22,14 @@ struct JournalTab: View {
         /// happened when, and what it all adds up to. The calendar sits in the
         /// middle because it is the bridge — a shape you scan rather than
         /// read, and a way into any day.
-        case timeline, calendar, charts
+        case timeline, calendar, charts, badges
         var id: String { rawValue }
         var label: String {
             switch self {
             case .timeline: "Timeline"
             case .calendar: "Calendar"
             case .charts:   "Charts"
+            case .badges:   "Badges"
             }
         }
         var icon: String {
@@ -36,6 +37,7 @@ struct JournalTab: View {
             case .timeline: "list.bullet.indent"
             case .calendar: "calendar"
             case .charts:   "chart.bar.fill"
+            case .badges:   "rosette"
             }
         }
     }
@@ -45,6 +47,7 @@ struct JournalTab: View {
     /// as on the iPad on the desk.
     @AppStorage("journalLens") private var lensRaw = Lens.timeline.rawValue
     @State private var addingMemory = false
+    @State private var nav = AppNavigator.shared
     private var lens: Lens { Lens(rawValue: lensRaw) ?? .timeline }
 
     var body: some View {
@@ -72,6 +75,7 @@ struct JournalTab: View {
                 case .timeline: JournalTimeline()
                 case .calendar: JournalCalendarView()
                 case .charts:   StatsCards()
+                case .badges:   BadgesView()
                 }
             }
             // Pinned rather than scrolled with the content: this is how you
@@ -91,6 +95,10 @@ struct JournalTab: View {
                 .padding(.bottom, 8)
             }
             .lsBackground()
+            // The badge toast's "See" asks for this lens by name.
+            .onChange(of: nav.journalLens) { _, lens in
+                if let lens { lensRaw = lens; nav.journalLens = nil }
+            }
             // **Large, left, and it stays there.**
             //
             // The default for a stack root is `.large`: a full-size title on

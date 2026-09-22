@@ -18,7 +18,7 @@ settings:
     MARKETING_VERSION: "0.1.0"
     # Bumped per TestFlight build, in the repo rather than in the Organizer,
     # so the number a device reports and the number git blames agree.
-    CURRENT_PROJECT_VERSION: "39"
+    CURRENT_PROJECT_VERSION: "40"
     DEVELOPMENT_TEAM: "GYDB3WFZB2"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
@@ -91,6 +91,9 @@ targets:
         # Which CloudKit environment this build syncs to, so the app can keep
         # fields Production hasn't been deployed with out of reach (SchemaDeploy).
         LSCloudKitEnvironment: $(LS_CK_ENV)
+        # Replay's "Save as image" (ReplayView). ADD-only: the app can put a
+        # picture in the library and can never read what is already there.
+        NSPhotoLibraryAddUsageDescription: "Save as image puts your Replay in your photo library. LevelSelect can only add pictures there, never see the ones you have."
         # The app's Documents folder shows in Files, so the safety copy taken
         # before Replace Library or Erase Library is somewhere a person can
         # find it (LibraryReplace.safetyFolder).
@@ -184,6 +187,10 @@ targets:
       # store, which is the only behaviour that makes sense there.
       - path: LevelSelect/Persistence/LibrarySwitcher.swift
       - path: LevelSelect/Persistence/Repository.swift
+      # Repository asks it before writing a field Production may not have —
+      # the watch writes to the same CloudKit container, so it needs the same
+      # answer rather than a guess.
+      - path: LevelSelect/Persistence/SchemaDeploy.swift
       - path: LevelSelect/Persistence/Syncable.swift
       - path: LevelSelect/Persistence/DeviceIdentity.swift
       # Repository records every session's parent here; the watch creates

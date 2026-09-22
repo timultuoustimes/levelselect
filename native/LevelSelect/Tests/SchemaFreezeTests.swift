@@ -150,7 +150,12 @@ struct SchemaFreezeTests {
             // 2026-08-27 (who was on the couch); startedDate/startedPrecision
             // added 2026-08-27 build 31 (spans — "Dec 2025 → Jan 2026").
             // Seed-and-promote before any build that writes them ships.
-            "CompletionEvent: createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
+            // anniversaryReminder added 2026-09-21 build 40 (V8) — whether
+            // this one finish rings on its anniversary. Per finish, never
+            // blanket (decided 09-09). Ships AHEAD of the feature, which is
+            // designed and unbuilt: an unused optional costs nothing and a
+            // schema version costs a promote cycle.
+            "CompletionEvent: anniversaryReminder,createdAt,customLabel,date,datePrecision,deletedAt,game,id,label,legacyID,notes,platform,playedWithData,playthrough,revision,startedDate,startedPrecision,updatedAt,userID",
             // Console — new in V6 (build 39), the model that turns the
             // systems shelf from a grouping into things you own. Keyed by
             // PlatformKey.canonical so two spellings are one console.
@@ -193,7 +198,10 @@ struct SchemaFreezeTests {
             // and never regenerated from the interval; precision is nil for a
             // genuine disjunction ("Christmas 1995 or 1996"), which is the
             // case no single precision can describe.
-            "Memory: body,createdAt,dayKnownRaw,deletedAt,earliest,game,id,images,kind,latest,legacyID,place,platform,playedWithData,precision,revision,title,updatedAt,userID,whenText",
+            // anniversaryReminder added 2026-09-21 build 40 (V8) — the
+            // per-memory switch, so the one big thing from 2017 can ring and
+            // the smaller entries stay quiet. Ahead of the feature, as above.
+            "Memory: anniversaryReminder,body,createdAt,dayKnownRaw,deletedAt,earliest,game,id,images,kind,latest,legacyID,place,platform,playedWithData,precision,revision,title,updatedAt,userID,whenText",
             "MigrationReceipt: appVersion,countsJSON,id,importedAt,sourceDeviceID",
             // V7, 2026-09-17 build 39 — the news reader. A feed is a URL and
             // what to call it; nothing of anyone's writing is stored, because
@@ -230,7 +238,15 @@ struct SchemaFreezeTests {
             // ⚠️ NOT YET PROMOTED TO PRODUCTION. Seed on a Development build,
             // verify CD_carriedOverSeconds appears as DOUBLE in the Console
             // diff, deploy, then purge.
-            "Playthrough: carriedOverSeconds,completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
+            // carriedOverSpansData added 2026-09-21 build 40 (V8) — which
+            // years a lump of imported playtime belongs to (CarriedOverSpan).
+            // Steam reports one lifetime total with no dates; this is the
+            // person saying roughly when, so those hours can appear in a
+            // Replay. Attribution only: carriedOverSeconds stays the total.
+            // Seed-and-promote before `SchemaDeploy.v8DeployedToProduction`
+            // flips — until it does, a Production build writes the single
+            // year to `startedAt` and leaves this alone.
+            "Playthrough: carriedOverSeconds,carriedOverSpansData,completionEvents,createdAt,deletedAt,game,id,lastPlayedAt,legacyID,name,notes,outcomeNote,outcomeRaw,progressPercent,revision,runs,sessions,startedAt,trackerStates,updatedAt,userID",
             "Profile: appleUserIdentifier,createdAt,displayName,email,id,updatedAt",
             "Run: createdAt,deletedAt,endedAt,fieldsJSON,id,legacyID,notes,outcome,playedWithData,playthrough,revision,startedAt,templateID,updatedAt,userID",
             "Session: accumulatedDuration,createdAt,deletedAt,endDate,id,isManual,legacyID,notes,originDevice,pausedAt,playedWithData,playthrough,resumedAt,revision,startDate,state,updatedAt,userID",
@@ -260,7 +276,12 @@ struct SchemaFreezeTests {
             // and delete each other's winner.
             // heroHexLight/heroHexDark added 2026-09-17 build 39 — the
             // Continue Playing card's own color, per appearance.
-            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,dismissedConsolesRaw,expandedSectionsRaw,gamePageLayoutRaw,heroHexDark,heroHexLight,homeLayoutRaw,homeSystemsRaw,id,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,shelfOrderRaw,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,suggestionPrefsRaw,updatedAt",
+            // nameFontRaw added 2026-09-21 build 40 (V8) — which face carries your
+            // name and the big Journal numbers. The wordmark stays the pixel
+            // face whatever it says. Synced, by the same rule as
+            // gamePageLayoutRaw: a look you chose is a look you chose
+            // everywhere. Ships ahead of the toggle, which is still "maybe".
+            "ThemeSettings: accentHex,accentHexDark,accentHexLight,accentHue,accentSaturation,appearanceRaw,backdropIntensityRaw,backgroundHex,backgroundHexDark,backgroundHexLight,createdAt,defaultMergeModeRaw,defaultTrackerDisplayRaw,dekuWishlistURLString,dismissedConsolesRaw,expandedSectionsRaw,gamePageLayoutRaw,heroHexDark,heroHexLight,homeLayoutRaw,homeSystemsRaw,id,nameFontRaw,overlappingTimerPolicyRaw,ownershipChipsRaw,pageBackgroundRaw,paletteLinked,platformIconVariantsData,platformNamesData,savedSwatchesData,shelfOrderRaw,showGameLogos,showItemHints,starNamesData,statusColorsData,statusNamesData,suggestionPrefsRaw,updatedAt",
             "TrackerItemDetail: chosenName,createdAt,deletedAt,game,id,itemID,legacyID,note,revision,sourceName,updatedAt,userID",
             "TrackerSchemaRecord: createdAt,deletedAt,engine,game,generatedAt,generatedBy,id,jsonData,legacyID,revision,schemaVersion,source,sourcesJSON,updatedAt,userID",
             // valuesJSON added 2026-09-17 build 39 — RPG rosters: per-item

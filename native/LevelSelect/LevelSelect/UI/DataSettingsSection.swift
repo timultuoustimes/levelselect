@@ -284,7 +284,7 @@ struct DataSettingsSection: View {
 }
 
 #if os(iOS)
-private struct ShareSheet: UIViewControllerRepresentable {
+struct ShareSheet: UIViewControllerRepresentable {
     let url: URL
     func makeUIViewController(context: Context) -> UIActivityViewController {
         UIActivityViewController(activityItems: [url], applicationActivities: nil)
@@ -302,7 +302,7 @@ private struct ShareSheet: UIViewControllerRepresentable {
 ///
 /// iOS keeps the share sheet, where "Save to Files" is one of the choices and
 /// AirDropping the export to another device is a real thing people do.
-private struct ShareSheet: View {
+struct ShareSheet: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
     @State private var saving = false

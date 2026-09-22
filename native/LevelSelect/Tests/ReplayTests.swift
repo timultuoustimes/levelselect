@@ -1,0 +1,605 @@
+import Testing
+import Foundation
+import SwiftData
+@testable import LevelSelect
+
+/// The recap engine: one walk over sessions, completions and the ledger for a
+/// date range, serving month, quarter and year alike.
+@MainActor
+struct ReplayTests {
+
+    private func store() -> Repository {
+        Repository(ModelContext(LevelSelectStore.makeContainer(inMemory: true)))
+    }
+
+    /// A fixed calendar so a test of the rule is not a test of the machine's
+    /// time zone.
+    private var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "UTC")!
+        return c
+    }
+
+    private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12) -> Date {
+        calendar.date(from: DateComponents(year: y, month: m, day: d, hour: h))!
+    }
+
+    /// Sessions are inserted through the repository so they carry the same
+    /// shape the app writes.
+    @discardableResult
+    private func play(_ repo: Repository, _ game: Game,
+                      from start: Date, hours: Double) -> Session {
+        let playthrough = game.activePlaythrough ?? repo.addPlaythrough(to: game, named: "Main")
+        let session = Session(startDate: start)
+        session.endDate = start.addingTimeInterval(hours * 3600)
+        session.accumulatedDuration = hours * 3600
+        session.state = .stopped
+        session.playthrough = playthrough
+        repo.context.insert(session)
+        return session
+    }
+
+    private func source(_ repo: Repository, badges: [String: Date] = [:]) -> Replay.Source {
+        Replay.Source(
+            games: (try? repo.context.fetch(FetchDescriptor<Game>())) ?? [],
+            completions: (try? repo.context.fetch(FetchDescriptor<CompletionEvent>())) ?? [],
+            memories: (try? repo.context.fetch(FetchDescriptor<Memory>())) ?? [],
+            badgeDates: badges)
+    }
+
+    // MARK: The span
+
+    @Test("A quarter runs three months, whichever month you ask from")
+    func quarterCoversThreeMonths() {
+        for month in [7, 8, 9] {
+            let interval = Replay.Span.quarter(date(2026, month, 15)).interval(calendar)
+            #expect(interval.start == date(2026, 7, 1, 0))
+            #expect(interval.end == date(2026, 10, 1, 0))
+        }
+    }
+
+    @Test("A span knows what to call itself")
+    func spansAreNamed() {
+        #expect(Replay.Span.year(date(2026, 3, 4)).title(calendar) == "2026")
+        #expect(Replay.Span.quarter(date(2026, 8, 4)).title(calendar) == "Q3 2026")
+        #expect(Replay.Span.month(date(2026, 8, 4)).title(calendar) == "August 2026")
+    }
+
+    // MARK: What it counts
+
+    @Test("Play inside the period is counted; play outside it is not")
+    func countsOnlyThePeriod() {
+        let repo = store()
+        let game = repo.addGame(name: "Hollow Knight")
+        play(repo, game, from: date(2026, 3, 2), hours: 2)
+        play(repo, game, from: date(2025, 12, 2), hours: 40)   // the year before
+
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sessionCount == 1)
+        #expect(abs(replay.totalSeconds - 2 * 3600) < 1)
+        #expect(replay.played.map(\.name) == ["Hollow Knight"])
+    }
+
+    /// **Whole, to the year it began.** A session begun at 22:00 on New Year's
+    /// Eve counts entirely toward the old year — which is what Charts' By
+    /// Month does, so the two can never disagree. It used to be split two and
+    /// two by wall clock, which was only right for a session played straight
+    /// through (Tim chose start-date attribution, 09-21).
+    @Test("A session straddling the boundary counts whole toward the year it began")
+    func straddlingSessionCountsWhereItBegan() {
+        let repo = store()
+        let game = repo.addGame(name: "Celeste")
+        play(repo, game, from: date(2025, 12, 31, 22), hours: 4)
+
+        let old = Replay.make(.year(date(2025, 6, 1)), from: source(repo),
+                              calendar: calendar, now: date(2026, 12, 31))
+        let new = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                              calendar: calendar, now: date(2026, 12, 31))
+        #expect(abs(old.totalSeconds - 4 * 3600) < 1)
+        #expect(new.totalSeconds == 0)
+        #expect(new.sessionCount == 0)
+    }
+
+    /// Codex's case: a paused session has no end date, so the old clipping
+    /// measured it to *now* and spread its time into every later month.
+    @Test("A paused session stays in the month it began")
+    func pausedSessionDoesNotLeakForward() {
+        let repo = store()
+        let game = repo.addGame(name: "Tunic")
+        let session = play(repo, game, from: date(2026, 3, 10), hours: 2)
+        session.endDate = nil
+        session.state = .paused
+        session.pausedAt = date(2026, 3, 10, 14)
+
+        let march = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                calendar: calendar, now: date(2026, 9, 1))
+        let later = Replay.make(.month(date(2026, 6, 15)), from: source(repo),
+                                calendar: calendar, now: date(2026, 9, 1))
+        #expect(abs(march.totalSeconds - 2 * 3600) < 1)
+        #expect(later.totalSeconds == 0)
+    }
+
+    /// An edited session whose end came before its start still has a valid
+    /// duration; the old clipping returned zero for it.
+    @Test("A session with a reversed end still counts its real duration")
+    func reversedEndStillCounts() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")
+        let session = play(repo, game, from: date(2026, 3, 10, 20), hours: 3)
+        session.endDate = date(2026, 3, 10, 18)   // edited before the start
+
+        let replay = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 9, 1))
+        #expect(abs(replay.totalSeconds - 3 * 3600) < 1)
+    }
+
+    @Test("Games are ranked by how much of the period they had")
+    func playedIsRankedByTime()  {
+        let repo = store()
+        let little = repo.addGame(name: "A little")
+        let lots = repo.addGame(name: "A lot")
+        play(repo, little, from: date(2026, 3, 2), hours: 1)
+        play(repo, lots, from: date(2026, 3, 3), hours: 9)
+        play(repo, lots, from: date(2026, 4, 3), hours: 2)
+
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.played.map(\.name) == ["A lot", "A little"])
+        #expect(replay.played.first?.sessions == 2)
+        #expect(replay.gamesPlayedCount == 2)
+    }
+
+    @Test("Days played counts days, not sessions")
+    func daysPlayedCountsDays() {
+        let repo = store()
+        let game = repo.addGame(name: "Tunic")
+        play(repo, game, from: date(2026, 3, 2, 9), hours: 1)
+        play(repo, game, from: date(2026, 3, 2, 20), hours: 1)   // same day
+        play(repo, game, from: date(2026, 3, 5), hours: 1)
+
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sessionCount == 3)
+        #expect(replay.daysPlayed == 2)
+        #expect(replay.busiestDay?.day == calendar.startOfDay(for: date(2026, 3, 2)))
+        #expect(abs((replay.busiestDay?.seconds ?? 0) - 2 * 3600) < 1)
+    }
+
+    @Test("A finish inside the period is listed with the label you gave it")
+    func finishesAreListed() {
+        let repo = store()
+        let game = repo.addGame(name: "Outer Wilds")
+        repo.addCompletion(to: game, label: .cleared, date: date(2026, 5, 9))
+        repo.addCompletion(to: game, label: .cleared, date: date(2024, 5, 9))
+
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.finished.count == 1)
+        #expect(replay.finished.first?.name == "Outer Wilds")
+        #expect(replay.finished.first?.label == CompletionLabel.cleared.display)
+    }
+
+    @Test("Badges earned in the period come from the ledger's own dates")
+    func badgesComeFromTheLedger() {
+        let repo = store()
+        _ = repo.addGame(name: "Hades")
+        let replay = Replay.make(
+            .year(date(2026, 6, 1)),
+            from: source(repo, badges: ["first.beaten": date(2026, 2, 2),
+                                        "first.session": date(2019, 2, 2)]),
+            calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.badges.map(\.id) == ["first.beaten"])
+    }
+
+    /// A recap of a month you didn't play is a reproach, not a gift — the
+    /// screen needs to be able to ask.
+    @Test("A period with nothing in it says so")
+    func emptyPeriodKnowsItIsEmpty() {
+        let repo = store()
+        let game = repo.addGame(name: "Chrono Trigger")
+        play(repo, game, from: date(2020, 3, 2), hours: 3)
+
+        let replay = Replay.make(.month(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.isEmpty)
+        #expect(replay.totalSeconds == 0)
+    }
+
+    @Test("A month sees its own month and not the quarter around it")
+    func monthIsNarrowerThanQuarter() {
+        let repo = store()
+        let game = repo.addGame(name: "Balatro")
+        play(repo, game, from: date(2026, 7, 5), hours: 3)
+        play(repo, game, from: date(2026, 8, 5), hours: 5)
+
+        let july = Replay.make(.month(date(2026, 7, 20)), from: source(repo),
+                               calendar: calendar, now: date(2026, 12, 31))
+        let quarter = Replay.make(.quarter(date(2026, 7, 20)), from: source(repo),
+                                  calendar: calendar, now: date(2026, 12, 31))
+        #expect(abs(july.totalSeconds - 3 * 3600) < 1)
+        #expect(abs(quarter.totalSeconds - 8 * 3600) < 1)
+    }
+
+    // MARK: Carried-over time, attributed by hand
+
+    /// Steam reports one lifetime number with no dates. The person can say
+    /// which year it was — Tim, 09-21: *"I know I played cities skylines the
+    /// most in 2020-2021."*
+    @Test("Imported hours placed in a year show up in that year's replay")
+    func carriedTimeLandsInItsYear() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+
+        let hit = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                              calendar: calendar, now: date(2026, 12, 31))
+        let miss = Replay.make(.year(date(2021, 6, 1)), from: source(repo),
+                               calendar: calendar, now: date(2026, 12, 31))
+        #expect(hit.carried.map(\.name) == ["Cities: Skylines"])
+        #expect(miss.carried.isEmpty)
+    }
+
+    /// Tim, 09-21: *"I played more around 2021-2023, because I had stopped
+    /// around the release date of cities skylines 2."* A range appears whole
+    /// on every year it covers — it is not divided between them, because the
+    /// last year is a part year and nobody said how much of it there was.
+    @Test("A range shows whole on every year it covers, and is split between none")
+    func rangeShowsOnEveryYearUndivided() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans(
+            [CarriedOverSpan(seconds: 300 * 3600, fromYear: 2021, toYear: 2023)],
+            on: pt, calendar: calendar)
+
+        for year in [2021, 2022, 2023] {
+            let replay = Replay.make(.year(date(year, 6, 1)), from: source(repo),
+                                     calendar: calendar, now: date(2026, 12, 31))
+            #expect(replay.carried.count == 1)
+            #expect(abs(replay.carriedSeconds - 300 * 3600) < 1)
+            #expect(replay.carried.first?.span == "2021–2023")
+            #expect(replay.carried.first?.isRange == true)
+        }
+        let outside = Replay.make(.year(date(2024, 6, 1)), from: source(repo),
+                                  calendar: calendar, now: date(2026, 12, 31))
+        #expect(outside.carried.isEmpty)
+    }
+
+    /// The other half: somebody who does know the split says it year by year,
+    /// and each year gets its own real number.
+    @Test("Per-year spans each land in their own year")
+    func perYearSpansLandSeparately() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([
+            CarriedOverSpan(seconds: 120 * 3600, fromYear: 2021),
+            CarriedOverSpan(seconds: 150 * 3600, fromYear: 2022),
+            CarriedOverSpan(seconds: 30 * 3600, fromYear: 2023),
+        ], on: pt, calendar: calendar)
+
+        let expected = [2021: 120.0, 2022: 150.0, 2023: 30.0]
+        for (year, hours) in expected {
+            let replay = Replay.make(.year(date(year, 6, 1)), from: source(repo),
+                                     calendar: calendar, now: date(2026, 12, 31))
+            #expect(replay.carried.count == 1)
+            #expect(abs(replay.carriedSeconds - hours * 3600) < 1)
+            #expect(replay.carried.first?.isRange == false)
+        }
+    }
+
+    @Test("Hours left unplaced stay in the total and out of every year")
+    func unplacedHoursStayUnplaced() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans(
+            [CarriedOverSpan(seconds: 120 * 3600, fromYear: 2021)],
+            on: pt, calendar: calendar)
+
+        #expect(abs(pt.unattributedCarriedSeconds - 180 * 3600) < 1)
+        let replay = Replay.make(.year(date(2022, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+    }
+
+    @Test("A span given backwards is read as the range it means")
+    func backwardsRangeIsNormalised() {
+        let span = CarriedOverSpan(seconds: 3600, fromYear: 2023, toYear: 2021)
+        #expect(span.fromYear == 2021)
+        #expect(span.toYear == 2023)
+        #expect(span.label == "2021–2023")
+    }
+
+    /// It is a recollection, not a record: it must never be added to the
+    /// hours that came from real sessions.
+    @Test("Attributed hours stay out of the timed total")
+    func carriedTimeIsNotAddedToTheTotal() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+        play(repo, game, from: date(2020, 5, 5), hours: 2)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(abs(replay.totalSeconds - 2 * 3600) < 1)
+        #expect(abs(replay.carriedSeconds - 300 * 3600) < 1)
+    }
+
+    /// A year is the finest grain anybody has for these hours, so a month
+    /// must not claim them.
+    @Test("A month replay does not claim a year's attributed hours")
+    func monthDoesNotClaimCarriedTime() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)], on: pt, calendar: calendar)
+
+        let month = Replay.make(.month(date(2020, 6, 1)), from: source(repo),
+                                calendar: calendar, now: date(2026, 12, 31))
+        let quarter = Replay.make(.quarter(date(2020, 6, 1)), from: source(repo),
+                                  calendar: calendar, now: date(2026, 12, 31))
+        #expect(month.carried.isEmpty)
+        #expect(quarter.carried.isEmpty)
+    }
+
+    @Test("Taking the years back removes the hours from every replay")
+    func clearingTheSpansRemovesThem() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2020)],
+                                 on: pt, calendar: calendar)
+        repo.setCarriedOverSpans([], on: pt, calendar: calendar)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+        #expect(pt.carriedOverYear(calendar) == nil)
+        // The hours themselves are untouched — only the claim about when.
+        #expect(abs(pt.carriedOverSeconds - 300 * 3600) < 1)
+        #expect(abs(pt.unattributedCarriedSeconds - 300 * 3600) < 1)
+    }
+
+    /// A span with no hours in it is not a claim about anything, and must not
+    /// conjure a zero-hour line on a year.
+    @Test("A year with no hours behind it says nothing")
+    func yearWithoutHoursIsIgnored() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 0, fromYear: 2020)],
+                                 on: pt, calendar: calendar)
+
+        let replay = Replay.make(.year(date(2020, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.carried.isEmpty)
+        // And nothing else put anything in 2020 either — the game was added
+        // today — so the year stays empty rather than gaining a blank line.
+        #expect(replay.isEmpty)
+    }
+
+    // MARK: The headline — Fable, build 40 runtime
+
+    @Test("'Mostly' only when it is mostly")
+    func mostlyNeedsAMajority() {
+        let repo = store()
+        let a = repo.addGame(name: "Stardew Valley")
+        let b = repo.addGame(name: "Hollow Knight")
+        let c = repo.addGame(name: "Outer Wilds")
+        play(repo, a, from: date(2026, 3, 1), hours: 3)
+        play(repo, b, from: date(2026, 3, 2), hours: 2)
+        play(repo, c, from: date(2026, 3, 3), hours: 2)
+        let spread = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(spread.sentence == "Three games, and Stardew Valley more than any.")
+
+        for day in 1...5 { play(repo, a, from: date(2026, 4, day), hours: 2) }
+        let mostly = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(mostly.sentence == "Mostly Stardew Valley.")
+    }
+
+    /// A single-finish year said "you didn't play" directly above the finish.
+    @Test("A year with only a finish leads with the finish")
+    func finishOnlyYearLeadsWithTheFinish() {
+        let repo = store()
+        let game = repo.addGame(name: "Chrono Trigger")
+        repo.addCompletion(to: game, label: .cleared, date: date(2015, 6, 1))
+        let replay = Replay.make(.year(date(2015, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.lead == .finished(1))
+        #expect(replay.sentence == "You finished Chrono Trigger.")
+        #expect(!replay.sentence.contains("didn't play"))
+    }
+
+    /// A year holding only imported hours opened on "0s".
+    @Test("A year with only placed hours leads with those hours, not zero")
+    func placedOnlyYearLeadsWithThem() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2022)],
+                                 on: pt, calendar: calendar)
+        let replay = Replay.make(.year(date(2022, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.lead == .placed(300 * 3600))
+        #expect(replay.sentence == "Cities: Skylines, from before you tracked it.")
+    }
+
+    /// A finish recorded as "just the year" is "2015", never "Jan 1".
+    @Test("A finish keeps the precision it was recorded with")
+    func finishKeepsItsPrecision() {
+        let repo = store()
+        let game = repo.addGame(name: "Chrono Trigger")
+        repo.addCompletion(to: game, label: .cleared, date: date(2015, 6, 15))
+        let event = try? #require(game.completionEvents?.first)
+        event?.datePrecision = "year"
+        let replay = Replay.make(.year(date(2015, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        let text = replay.finished.first?.dateText ?? ""
+        #expect(!text.contains("Jan"))
+        #expect(text.contains("2015"))
+    }
+
+    // MARK: Which years are offered
+
+    /// On the 1st, the month just finished — the one a monthly recap is for —
+    /// used to disappear, and the new month was empty.
+    @Test("Last month is still offered on the first of the next")
+    func lastMonthSurvivesTheFirst() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")
+        play(repo, game, from: date(2026, 9, 12), hours: 3)
+        let titles = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                  now: date(2026, 10, 1, 9))
+            .map { $0.title(calendar) }
+        #expect(titles.contains("September 2026"))
+        #expect(!titles.contains("October 2026"))   // nothing in it yet
+        #expect(titles.contains("Q3 2026"))
+    }
+
+    /// A game added this year with a 2020 session made a 2020 replay that
+    /// `make` would build and the year list never offered (Codex, 09-21).
+    @Test("A year with only sessions in it is offered")
+    func sessionOnlyYearIsOffered() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")   // added today
+        play(repo, game, from: date(2020, 5, 5), hours: 3)
+        let years = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                 now: date(2026, 9, 21))
+            .map { $0.title(calendar) }
+        #expect(years.contains("2020"))
+    }
+
+    /// **Reversed, on Fable's mockup (09-21).** Codex asked for a year holding
+    /// placed hours to be offered; Fable found one 5-hour range making eight
+    /// empty pages. Imported hours alone now earn no year a page — they are
+    /// all on "Before you tracked", with the years they were placed in.
+    @Test("Placed Steam hours make one Before-you-tracked page, not a page per year")
+    func placedHoursFoldIntoBeforeTracking() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(300 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 300 * 3600, fromYear: 2021, toYear: 2023)],
+                                 on: pt, calendar: calendar)
+        let spans = ReplayBuilder.availableSpans(in: repo.context, calendar: calendar,
+                                                 now: date(2026, 9, 21))
+        let titles = spans.map { $0.title(calendar) }
+        #expect(!titles.contains("2021") && !titles.contains("2022") && !titles.contains("2023"))
+        #expect(spans.last == .beforeTracking)
+
+        let page = Replay.make(.beforeTracking, from: source(repo), calendar: calendar,
+                               now: date(2026, 9, 21))
+        #expect(page.carried.map(\.span) == ["2021–2023"])
+        #expect(page.carried.first?.gameID == game.id)
+    }
+
+    /// A year that has play keeps its placed hours as a line of their own.
+    @Test("A year with play still shows the hours placed in it")
+    func yearWithPlayKeepsItsPlacedHours() {
+        let repo = store()
+        let game = repo.addGame(name: "Cities: Skylines")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(100 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 100 * 3600, fromYear: 2022)],
+                                 on: pt, calendar: calendar)
+        play(repo, game, from: date(2022, 5, 5), hours: 2)
+        let year = Replay.make(.year(date(2022, 6, 1)), from: source(repo), calendar: calendar,
+                               now: date(2026, 9, 21))
+        #expect(year.offersOwnPage)
+        #expect(abs(year.carriedSeconds - 100 * 3600) < 1)
+    }
+
+    /// Hours placed in part: the rest is one line with no years.
+    @Test("Before you tracked lists unplaced hours as their own line")
+    func unplacedHoursAppearUndated() {
+        let repo = store()
+        let game = repo.addGame(name: "Hades")
+        let pt = repo.addPlaythrough(to: game, named: "Steam")
+        repo.setCarriedOver(50 * 3600, on: pt)
+        repo.setCarriedOverSpans([CarriedOverSpan(seconds: 20 * 3600, fromYear: 2020)],
+                                 on: pt, calendar: calendar)
+        let page = Replay.make(.beforeTracking, from: source(repo), calendar: calendar,
+                               now: date(2026, 9, 21))
+        #expect(Set(page.carried.map(\.span)) == ["2020", ""])
+        #expect(abs(page.carriedSeconds - 50 * 3600) < 1)
+    }
+
+    // MARK: The sentence, as rules — Fable's mockup
+
+    @Test("Two games close at the top, together most of it: about evenly")
+    func aboutEvenly() {
+        let repo = store()
+        let a = repo.addGame(name: "Hollow Knight")
+        let b = repo.addGame(name: "Hades")
+        play(repo, a, from: date(2026, 3, 1), hours: 5)
+        play(repo, b, from: date(2026, 3, 2), hours: 4.5)
+        let replay = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sentence == "Hollow Knight and Hades, about evenly.")
+    }
+
+    @Test("One long day holding most of the period says so")
+    func oneLongDay() {
+        let repo = store()
+        let game = repo.addGame(name: "Hollow Knight")
+        let other = repo.addGame(name: "Tunic")
+        play(repo, game, from: date(2026, 3, 7, 10), hours: 6)   // a Saturday
+        play(repo, other, from: date(2026, 3, 20), hours: 1)
+        let replay = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sentence == "One long Saturday with Hollow Knight, and not much else.")
+    }
+
+    @Test("Many games with no leader: the count, spelled, and the one ahead")
+    func manyGames() {
+        let repo = store()
+        let hours: [Double] = [4, 3, 3, 3, 3, 2, 2]
+        for (i, h) in hours.enumerated() {
+            let game = repo.addGame(name: i == 0 ? "Stardew Valley" : "Game \(i)")
+            play(repo, game, from: date(2026, 2 + i, 3), hours: h)
+        }
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sentence == "Seven games, and Stardew Valley more than any.")
+    }
+
+    @Test("A finish of the game the sentence is about is 'it'")
+    func finishOfTheSubjectIsIt() {
+        let repo = store()
+        let game = repo.addGame(name: "Celeste")
+        play(repo, game, from: date(2026, 3, 1), hours: 2.5)
+        play(repo, game, from: date(2026, 3, 4), hours: 2.5)
+        repo.addCompletion(to: game, label: .cleared, date: date(2026, 3, 9))
+        let replay = Replay.make(.month(date(2026, 3, 15)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.sentence == "All Celeste, and you finished it.")
+    }
+
+    /// The library a replay describes is the one you have now: a game deleted
+    /// since must not surface in last year's recap.
+    @Test("A deleted game's finish is left out")
+    func deletedGamesAreLeftOut() {
+        let repo = store()
+        let game = repo.addGame(name: "Gone")
+        repo.addCompletion(to: game, label: .cleared, date: date(2026, 5, 9))
+        game.deletedAt = .now
+
+        let replay = Replay.make(.year(date(2026, 6, 1)), from: source(repo),
+                                 calendar: calendar, now: date(2026, 12, 31))
+        #expect(replay.finished.isEmpty)
+    }
+}

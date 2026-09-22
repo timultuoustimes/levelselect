@@ -116,6 +116,23 @@ extension View {
             .ignoresSafeArea())
     }
 
+    /// A text field that belongs to this app rather than to the system.
+    ///
+    /// `.roundedBorder` draws a near-black filled rectangle in dark mode. On a
+    /// white sheet that is a bordered field; on LevelSelect's purple it is a
+    /// hole. Tim caught it on the video paste box first (iPad, 09-18) and
+    /// again on the game page's Notes (09-21), and it was still on eight
+    /// fields besides — every one of them standing on a themed pane.
+    ///
+    /// Use it wherever a field sits on `lsBackground()`. Inside a `Form`,
+    /// leave the system style alone: there the field is a row, not a box.
+    func lsField() -> some View {
+        textFieldStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(LSTheme.cardFill, in: .rect(cornerRadius: 10))
+    }
+
     /// A 44-point tap target, for a control with room to be one.
     ///
     /// **The glyph is not the target.** `PlatformEditor` said exactly that —

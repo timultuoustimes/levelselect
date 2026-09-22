@@ -1,6 +1,6 @@
 # LevelSelect Privacy Policy
 
-*Last updated: September 18, 2026*
+*Last updated: September 22, 2026*
 
 LevelSelect is a game library and progress tracker for iPhone, iPad, Mac, and Apple Watch. It is built so that your data stays yours: there are no accounts, no ads, no analytics SDKs, and no tracking.
 
@@ -48,7 +48,7 @@ Additionally, entirely from your device:
 - **Your Xbox account** *(optional)*: you sign in on **Microsoft's own page**; LevelSelect never sees your password. Microsoft returns a sign-in token, stored in your device's **Keychain** and not synced, and your device uses it **directly with Microsoft and Xbox Live** (login.microsoftonline.com and xboxlive.com) to read the games you've played and the achievements you've earned. Your gamertag and Xbox user id are kept in the app's settings on that device to show who's connected. None of it passes through our backend. Disconnecting in Settings deletes the token.
 - **News** *(the News tab)*: the app fetches each site's feed **directly from that site**, and for a story whose feed sends no picture, the story's own page, to read the picture it names. These are ordinary requests with nothing of ours attached — no install identifier, no LevelSelect key — so a site learns only that its feed was read. Opening a story is an ordinary visit in Safari's in-app view (or Reader), where the site sees what it would see from Safari. The list of feeds you follow and the stories you save sync through your own iCloud; the stories themselves are cached on your device and never stored with us.
 - **Deku Deals wishlist**: if you configure a wishlist, the app fetches your **public** Deku Deals wishlist JSON directly from dekudeals.com. Nothing about you is sent beyond that public URL request.
-- **Cover art and video metadata**: images load directly from IGDB's and SteamGridDB's image CDNs, and YouTube video titles/thumbnails load via YouTube's public oEmbed endpoint for links you add.
+- **Cover art, console logos and video metadata**: images load directly from IGDB's and SteamGridDB's image CDNs; console logos load directly from [Wikimedia Commons](https://commons.wikimedia.org), which is sent only the logo's file name; and YouTube video titles/thumbnails load via YouTube's public oEmbed endpoint for links you add.
 
 Requests to our backend include a **random per-install identifier** (a UUID the app generates on first launch) used only to enforce fair-use rate limits. It is not derived from your device's hardware, not connected to your identity or iCloud account, and resets if you delete and reinstall the app.
 

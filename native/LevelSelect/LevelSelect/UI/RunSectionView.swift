@@ -683,7 +683,7 @@ struct LogRunSheet: View {
                         }
                     }
                     DatePicker("When", selection: $date)
-                    Stepper("\(minutes) min", value: $minutes, in: 1...600, step: 5)
+                    DurationField(value: $minutes, unit: "min", range: 1...600, step: 5, accessibilityName: "Minutes")
                 }
                 Section("Notes") {
                     TextField("Optional", text: $notes, axis: .vertical)

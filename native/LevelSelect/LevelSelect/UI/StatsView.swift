@@ -205,6 +205,10 @@ struct StatsCards: View {
                     // any library that has finished nothing yet — the page
                     // announcing a section it does not have.
                     let visible = cardOrder.filter { !hiddenCards.contains($0) && draws($0, top: top) }
+                    // Above the cards and outside the arrange sheet: a Replay
+                    // is an occasion rather than one more statistic, and it
+                    // draws nothing at all when there is nothing to recap.
+                    ReplayEntryCard()
                     if visible.contains(.overview) {
                         overviewCard(sessions: sessions)
                     }
@@ -277,16 +281,48 @@ struct StatsCards: View {
     /// two across, which also stops "266h 36m" wrapping mid-figure the way it
     /// did in a four-across strip on a phone.
     private func overviewCard(sessions: [Session]) -> some View {
-        let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() })
-        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
-            GridRow {
-                statTile("gamecontroller.fill", "\(games.count)", "Games")
-                statTile("clock.fill", played, "Played")
-            }
-            GridRow {
-                statTile("timer", "\(sessions.count)", "Sessions")
-                // Completed share of the library — the web's headline number.
-                statTile("flag.checkered", "\(Int((completionRate * 100).rounded()))%", "Beaten")
+        // **Lifetime, imported hours included** — the same thing "Played"
+        // means on a game page (`Playthrough.totalPlaytime`) and in Most
+        // Played below. This tile summed sessions only, so for anyone who
+        // brought Steam hours in, the page's headline and its own leaderboard
+        // disagreed with no word to say why (Codex, build 40, 09-21).
+        //
+        // The dated cards further down stay sessions-only, and that is not a
+        // contradiction: imported time has no days in it to put on a chart.
+        let carried = games.reduce(0) { total, game in
+            total + game.livePlaythroughs.reduce(0) { $0 + $1.carriedOverSeconds }
+        }
+        let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() } + carried)
+        let beaten = "\(Int((completionRate * 100).rounded()))%"
+        // **Say where the rest came from.** In a week-one library with a
+        // Steam import, "43h 30m" sat above "Last 7 days 5h 30m" with nothing
+        // to explain the 38 hours between them (09-22).
+        let playedLabel = carried >= 3600
+            ? "Played · \(Int(carried / 3600))h imported"
+            : "Played"
+        return Group {
+            // One column at the largest text sizes. Two across left each tile
+            // half a phone, and even shrunk to 60% "266h 36m" read "266h 3…"
+            // (Fable, build 40 runtime, 09-21) — the headline figure cut off.
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 10) {
+                    statTile("gamecontroller.fill", "\(games.count)", "Games")
+                    statTile("clock.fill", played, playedLabel)
+                    statTile("timer", "\(sessions.count)", "Sessions")
+                    statTile("flag.checkered", beaten, "Beaten")
+                }
+            } else {
+                Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+                    GridRow {
+                        statTile("gamecontroller.fill", "\(games.count)", "Games")
+                        statTile("clock.fill", played, playedLabel)
+                    }
+                    GridRow {
+                        statTile("timer", "\(sessions.count)", "Sessions")
+                        // Completed share of the library — the web's headline number.
+                        statTile("flag.checkered", beaten, "Beaten")
+                    }
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -553,7 +589,7 @@ struct StatsCards: View {
     /// Hours and finishes for the last six months, oldest first so the eye
     /// reads toward now.
     private func monthlyCard(sessions: [Session]) -> some View {
-        let months = lastMonths(6)
+        let months = monthsSinceFirstActivity(lastMonths(6), sessions: sessions)
         let byMonth = monthlyRollup(sessions: sessions, months: months)
         let maxSeconds = byMonth.map(\.seconds).max() ?? 1
         return VStack(alignment: .leading, spacing: 10) {
@@ -1004,6 +1040,21 @@ struct StatsCards: View {
     }
 
     private struct MonthRow { let label: String; let seconds: TimeInterval; let completions: Int }
+
+    /// **Not the months before you started.** A library begun this month
+    /// drew five empty rows of dashes above its one real month (week-one
+    /// pass, 09-22). Leading months with nothing before them go; a gap after
+    /// the first activity stays, because a gap is something you did.
+    private func monthsSinceFirstActivity(_ months: [Date], sessions: [Session]) -> [Date] {
+        let events = games.flatMap { $0.completionEvents ?? [] }.filter { $0.deletedAt == nil }
+        let first = [sessions.map(\.startDate).min(), events.map(\.date).min()]
+            .compactMap { $0 }.min()
+        guard let first else { return Array(months.suffix(1)) }
+        let cal = Calendar.current
+        let firstMonth = cal.dateInterval(of: .month, for: first)?.start ?? first
+        let kept = months.filter { $0 >= firstMonth }
+        return kept.isEmpty ? Array(months.suffix(1)) : kept
+    }
 
     private func lastMonths(_ n: Int) -> [Date] {
         let cal = Calendar.current

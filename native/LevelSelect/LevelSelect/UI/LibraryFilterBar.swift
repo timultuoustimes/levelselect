@@ -45,7 +45,13 @@ struct LibraryFilterBar: View {
     let tags: [String]
 
     private var ownerships: [Ownership] {
-        Ownership.allCases.filter { (ownershipCounts.byKind[$0] ?? 0) > 0 }
+        let kinds = Ownership.allCases.filter { (ownershipCounts.byKind[$0] ?? 0) > 0 }
+        // **One kind covering everything filters nothing.** A new library
+        // where every game is digital showed a lone "Digital 3" chip, and
+        // tapping it left the same three games (week-one pass, 09-22). Kept
+        // while it's the active filter, so there's always a way back out.
+        if kinds.count == 1, !showsGap, ownershipFilter == nil { return [] }
+        return kinds
     }
 
     /// Shown only when there is a gap to show. A library with ownership on

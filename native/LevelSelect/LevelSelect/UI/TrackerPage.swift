@@ -92,10 +92,14 @@ struct CompactTrackerCard: View {
     /// zero for everything else — "0 pts" on a tracker with no notion of
     /// points is noise pretending to be information.
     private func subtitle(_ pt: Playthrough) -> String {
-        var parts = ["\(Format.duration(pt.totalPlaytime())) · \(Int(pt.progressPercent))%"]
         let items = game.trackerSchema
             .map { TrackerSchemaJSON.categories(from: $0.jsonData) }?
             .flatMap(\.items) ?? []
+        // The same rule for progress: "0%" of a tracker that doesn't exist
+        // yet read as a verdict on a game you'd played for 39 hours
+        // (week-one pass, 09-22).
+        var parts = [Format.duration(pt.totalPlaytime()),
+                     items.isEmpty ? "no tracker yet" : "\(Int(pt.progressPercent))%"]
         let total = items.compactMap(\.points).reduce(0, +)
         if total > 0 {
             let done = Set((pt.trackerStates ?? [])

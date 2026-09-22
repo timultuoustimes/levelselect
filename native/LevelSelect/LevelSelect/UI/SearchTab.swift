@@ -25,9 +25,15 @@ struct SearchScreen: View {
     @State private var scope: UniversalSearch.Scope = .all
     @State private var path = NavigationPath()
     @State private var index = SearchIndex()
+    /// Bumped by any save and by opening Search, so the index follows edits
+    /// rather than only the game count.
+    @State private var indexGeneration = 0
     @State private var results = SearchResults()
     @State private var igdb: [IGDBGame] = []
     @State private var igdbLoading = false
+    /// Set when the IGDB half of a search failed, so the empty section can
+    /// say so instead of implying no such game exists.
+    @State private var igdbFailure: IGDBError?
     @State private var adding: NamedAdd?
     @State private var release: UpcomingRelease?
     @State private var browsing: DekuLinkTarget?
@@ -80,7 +86,18 @@ struct SearchScreen: View {
             .onSubmit(of: .search) { remember() }
             .gamePageDestinations()
         }
-        .task(id: games.count) { index = SearchIndex.build(games: games, context: context) }
+        // **Rebuilt on every save, not only when the game count changes.**
+        // Keyed on the count alone, an edited note, a new memory or a ticked
+        // tracker item stayed invisible to search until a game was added or
+        // removed (Codex, 09-22). The pause lets a burst of saves rebuild once.
+        .task(id: "\(games.count)|\(indexGeneration)") {
+            if indexGeneration > 0 { try? await Task.sleep(for: .milliseconds(400)) }
+            guard !Task.isCancelled else { return }
+            index = SearchIndex.build(games: games, context: context)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            indexGeneration &+= 1
+        }
         .onAppear {
             fieldFocused = true
             takePendingTerm()
@@ -88,7 +105,12 @@ struct SearchScreen: View {
         // The tab stays alive after the first visit, so onAppear alone would
         // focus the field once. Every tap on Search is a request to type.
         .onChange(of: AppNavigator.shared.selectedTab) { _, tab in
-            if inTab && tab == .search { fieldFocused = true }
+            if inTab && tab == .search {
+                fieldFocused = true
+                // Changes synced from another device arrive without a local
+                // save; opening Search is the moment they have to be in.
+                indexGeneration &+= 1
+            }
         }
         .onChange(of: AppNavigator.shared.pendingSearchTerm) { _, _ in takePendingTerm() }
         // Opening anything from results is what makes a search worth
@@ -235,6 +257,16 @@ struct SearchScreen: View {
                 Section("Add from IGDB") {
                     ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
                 }
+            } else if let failure = igdbFailure, igdb.isEmpty {
+                Section("Add from IGDB") {
+                    Label(failure == .offline
+                          ? "Offline — these are your own results. Games you don't have yet need a connection."
+                          : "IGDB didn't answer just now — your own results above are complete.",
+                          systemImage: failure == .offline ? "wifi.slash" : "exclamationmark.icloud")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
             } else if !igdb.isEmpty {
                 Section("Add from IGDB") {
                     ForEach(igdb.prefix(5)) { g in
@@ -326,6 +358,7 @@ struct SearchScreen: View {
         guard !q.isEmpty else {
             results = SearchResults()
             igdb = []
+            igdbFailure = nil
             return
         }
         // Let typing settle.
@@ -342,11 +375,21 @@ struct SearchScreen: View {
         try? await Task.sleep(for: .milliseconds(320))
         guard !Task.isCancelled else { return }
         let have = Set(games.compactMap(\.igdbID))
-        var found = (try? await IGDBService.search(name: q)) ?? []
-        if found.isEmpty, let joined = UniversalSearch.runTogether(q) {
-            found = (try? await IGDBService.search(name: joined)) ?? []
+        // **A failure is not an answer.** This swallowed the error into an
+        // empty list, so offline the section simply vanished, which read as
+        // "no game by that name exists" (Codex, offline assessment, 09-22).
+        var found: [IGDBGame] = []
+        var failure: IGDBError?
+        do {
+            found = try await IGDBService.search(name: q)
+            if found.isEmpty, let joined = UniversalSearch.runTogether(q) {
+                found = try await IGDBService.search(name: joined)
+            }
+        } catch {
+            failure = error as? IGDBError ?? .offline
         }
         guard !Task.isCancelled else { return }
+        igdbFailure = failure
         igdb = found.filter { !have.contains($0.id) }
     }
 }
@@ -395,11 +438,15 @@ struct SearchIndex {
     var trackers: [TrackerHit] = []
     var notes: [Note] = []
     var version = 0
+    @MainActor private static var builds = 0
 
     @MainActor
     static func build(games: [Game], context: ModelContext) -> SearchIndex {
         var out = SearchIndex()
-        out.version = Int(Date.now.timeIntervalSince1970)
+        // A counter, not the clock: two rebuilds inside one second kept the
+        // same version, and the open search didn't re-run on the second.
+        builds &+= 1
+        out.version = builds
         for game in games {
             if let schema = game.trackerSchema {
                 let done = Set((game.activePlaythrough?.trackerStates ?? [])
