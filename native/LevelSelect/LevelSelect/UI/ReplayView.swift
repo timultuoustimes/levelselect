@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(LinkPresentation)
+import LinkPresentation
+#endif
 import SwiftData
 #if canImport(UIKit)
 import UIKit
@@ -108,7 +111,7 @@ struct ReplayView: View {
         .onChange(of: chosen) { _, _ in rebuild() }
         .sheet(item: $exportURL) { export in
             #if canImport(UIKit)
-            ImageShareSheet(image: export.image)
+            ImageShareSheet(image: export.image, title: export.url.deletingPathExtension().lastPathComponent)
             #else
             ShareSheet(url: export.url)
             #endif
@@ -210,12 +213,8 @@ struct ReplayView: View {
         exporting = true
         defer { exporting = false }
         let covers = await ReplayCovers.load(Self.coverIDs(for: replay), from: games)
-        let page = ReplayPage(replay: replay, games: games, forExport: true, openBadges: {})
+        let page = ReplayShareCard(replay: replay, games: games)
             .environment(\.replayCovers, covers)
-            .padding(16)
-            .frame(width: 390)
-            .background(LSTheme.ground(lightTint: ThemePalette.backgroundOverrideLight,
-                                       darkTint: ThemePalette.backgroundOverrideDark))
             .environment(\.colorScheme, .dark)
         let renderer = ImageRenderer(content: page)
         renderer.scale = 3
@@ -297,12 +296,6 @@ private struct ReplayPage: View {
             if !replay.carried.isEmpty { carried }
             if !replay.badges.isEmpty { badges }
             aside
-            Text("Made on this device, from your own records. Nothing left it.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
-                .padding(.top, 4)
         }
     }
 
@@ -614,6 +607,197 @@ private struct ReplayPage: View {
     }
 }
 
+// MARK: - The share card
+
+/// **What Save as image makes: a card for posting, not a copy of the page.**
+///
+/// The first export drew the page itself. It carried none of LevelSelect:
+/// no wordmark, no pixel face, no console. Its words ("The year you finished
+/// Kirby and the Forgotten Land", then "Made on this device, from your own
+/// records. Nothing left it.") read as a report about the export rather than
+/// something anyone would post. Tim, 09-21: *"Nothing about this says
+/// LevelSelect either. No branding, no typeface, color, console icon,
+/// nothing."*
+///
+/// So it's a poster, 4:5 so it fills a feed: the wordmark and the period in
+/// the pixel face, the art, one short headline, the console, and where the
+/// app lives. The page keeps the detail; the card keeps the one thing worth
+/// saying.
+private struct ReplayShareCard: View {
+    let replay: Replay
+    let games: [UUID: Game]
+
+    static let size = CGSize(width: 360, height: 450)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                Wordmark(size: 12, showsIcon: true)
+                    .fixedSize()
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
+                Text(verbatim: "REPLAY · \(replay.span.title().uppercased())")
+                    .font(LSTheme.pixel(8))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+            .padding(.bottom, 14)
+
+            art
+                .frame(height: 250)
+                .clipShape(.rect(cornerRadius: 16))
+
+            Text(verbatim: label)
+                .font(LSTheme.pixel(10))
+                .foregroundStyle(LSTheme.torch)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .padding(.top, 16)
+            Text(verbatim: headline)
+                .font(.system(size: 23, weight: .bold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 7)
+            detailRow
+                .padding(.top, 9)
+
+            Spacer(minLength: 0)
+            Text(verbatim: "levelselect.app")
+                .font(LSTheme.pixel(7))
+                .foregroundStyle(.white.opacity(0.45))
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(20)
+        .frame(width: Self.size.width, height: Self.size.height, alignment: .topLeading)
+        .background(LSTheme.ground(lightTint: ThemePalette.backgroundOverrideLight,
+                                   darkTint: ThemePalette.backgroundOverrideDark))
+    }
+
+    // MARK: What it says
+
+    /// The one finish, when a finish is the whole story.
+    private var soleFinish: Replay.Finish? {
+        replay.sessionCount == 0 && replay.finished.count == 1 ? replay.finished.first : nil
+    }
+
+    /// The pixel line over the headline. A finish uses the word you gave it
+    /// ("BEATEN", "100%"), not one of the app's.
+    private var label: String {
+        if let finish = soleFinish {
+            return finish.label.isEmpty ? "FINISHED" : finish.label.uppercased()
+        }
+        switch replay.lead {
+        case .timed(let seconds): return "\(Format.duration(seconds).uppercased()) PLAYED"
+        case .finished: return "\(replay.finished.count) FINISHED"
+        case .placed(let seconds): return "\(Format.duration(seconds).uppercased()) BEFORE TRACKING"
+        case .added(let n): return n == 1 ? "1 GAME ADDED" : "\(n) GAMES ADDED"
+        case .remembered(let n): return n == 1 ? "1 MEMORY" : "\(n) MEMORIES"
+        case .none: return "REPLAY"
+        }
+    }
+
+    /// The game's name when one game is the story; the page's sentence
+    /// otherwise.
+    private var headline: String {
+        if let finish = soleFinish { return finish.name }
+        return replay.sentence
+    }
+
+    /// The console, with its icon, and the date when it says more than the
+    /// period already does.
+    @ViewBuilder
+    private var detailRow: some View {
+        let platform = self.platform
+        let when: String? = {
+            guard let finish = soleFinish, finish.dateText != replay.span.title() else { return nil }
+            return finish.dateText
+        }()
+        let stats: String? = replay.sessionCount > 0
+            ? [replay.daysPlayed == 1 ? "1 day" : "\(replay.daysPlayed) days",
+               replay.gamesPlayedCount == 1 ? "1 game" : "\(replay.gamesPlayedCount) games"]
+                .joined(separator: " · ")
+            : nil
+        let words = [platform.map(PlatformShort.name), when, stats].compactMap { $0 }
+        if !words.isEmpty {
+            HStack(spacing: 8) {
+                if let platform {
+                    PlatformIconView(platform: platform, size: 26)
+                        .frame(width: 30, height: 26)
+                }
+                Text(verbatim: words.joined(separator: " · "))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.75))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+    }
+
+    /// The console the story happened on: the finish's, else the lead game's.
+    private var platform: String? {
+        if let finish = soleFinish {
+            return finish.platform ?? games[finish.id].flatMap { $0.chosenPlatform ?? $0.platforms.first }
+        }
+        guard let id = leadIDs.first, let game = games[id] else { return nil }
+        return game.chosenPlatform ?? game.platforms.first
+    }
+
+    // MARK: The art
+
+    private var leadIDs: [UUID] {
+        switch replay.lead {
+        case .timed:
+            if let top = replay.played.first,
+               replay.played.count == 1 || top.seconds / max(replay.totalSeconds, 1) >= 0.6 {
+                return [top.id]
+            }
+            return replay.played.map(\.id)
+        case .finished:
+            return replay.finished.map(\.id)
+        case .placed:
+            var seen = Set<UUID>()
+            return replay.carried.compactMap(\.gameID).filter { seen.insert($0).inserted }
+        default:
+            return replay.played.map(\.id) + replay.finished.map(\.id)
+        }
+    }
+
+    @ViewBuilder
+    private var art: some View {
+        let ids = leadIDs
+        if ids.count == 1, let id = ids.first {
+            // **The whole box, not a strip of it.** A portrait cover cut to
+            // a wide band kept its middle third; here it stands at full
+            // height over a blurred wash of its own colors.
+            ZStack {
+                ReplayCover(id: id, game: games[id])
+                    .frame(width: Self.size.width - 40, height: 250)
+                    .blur(radius: 24, opaque: true)
+                    .overlay(Color.black.opacity(0.25))
+                    .clipped()
+                ReplayCover(id: id, game: games[id])
+                    .frame(width: 168, height: 224)
+                    .clipShape(.rect(cornerRadius: 8))
+                    .shadow(color: .black.opacity(0.5), radius: 14, y: 8)
+            }
+        } else if !ids.isEmpty {
+            Mosaic(ids: Array(ids.prefix(5)), more: max(0, ids.count - 5), games: games)
+        } else {
+            // Nothing with a cover: the period itself, large.
+            Text(verbatim: replay.span.title())
+                .font(LSTheme.pixel(34))
+                .foregroundStyle(LSTheme.torch)
+                .lineLimit(1)
+                .minimumScaleFactor(0.4)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(.white.opacity(0.06))
+        }
+    }
+}
+
 // MARK: - Covers
 
 /// The leaders' covers, the first one large.
@@ -734,6 +918,17 @@ private struct ReplayCover: View {
 /// suspend rather than block.
 @MainActor
 enum ReplayCovers {
+    /// IGDB serves every size from one id; swap the size segment.
+    static func sharp(_ url: URL) -> URL {
+        let text = url.absoluteString
+        guard text.contains("images.igdb.com") else { return url }
+        for size in ["/t_cover_big/", "/t_cover_small/", "/t_thumb/", "/t_720p/"]
+        where text.contains(size) {
+            return URL(string: text.replacingOccurrences(of: size, with: "/t_1080p/")) ?? url
+        }
+        return url
+    }
+
     static func load(_ ids: [UUID], from games: [UUID: Game]) async -> [UUID: Image] {
         var out: [UUID: Image] = [:]
         for id in ids {
@@ -741,7 +936,9 @@ enum ReplayCovers {
             var data: Data?
             switch game.resolvedArtwork(.cover) {
             case .local(let bytes): data = bytes
-            case .remote(let url): data = try? await URLSession.shared.data(from: url).0
+            // The large size for a picture people will post: the library's
+            // `t_cover_big` is 264 wide and went soft at 1080.
+            case .remote(let url): data = try? await URLSession.shared.data(from: sharp(url)).0
             case .none: break
             }
             #if canImport(UIKit)
@@ -839,9 +1036,32 @@ struct ReplayEntryCard: View {
 /// permission — see `NSPhotoLibraryAddUsageDescription`).
 private struct ImageShareSheet: UIViewControllerRepresentable {
     let image: UIImage
+    var title = "Replay"
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: [image], applicationActivities: nil)
+        UIActivityViewController(activityItems: [Preview(image: image, title: title)],
+                                 applicationActivities: nil)
     }
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+
+    /// **The card in the sheet's header.** Handed over bare, the image
+    /// showed as a blank placeholder tile, so you couldn't see what you were
+    /// about to post (09-21). Link metadata is what the header draws.
+    final class Preview: NSObject, UIActivityItemSource {
+        let image: UIImage
+        let title: String
+        init(image: UIImage, title: String) { self.image = image; self.title = title }
+
+        func activityViewControllerPlaceholderItem(_ controller: UIActivityViewController) -> Any { image }
+        func activityViewController(_ controller: UIActivityViewController,
+                                    itemForActivityType activityType: UIActivity.ActivityType?) -> Any? { image }
+        func activityViewControllerLinkMetadata(_ controller: UIActivityViewController) -> LPLinkMetadata? {
+            let metadata = LPLinkMetadata()
+            metadata.title = title
+            let provider = NSItemProvider(object: image)
+            metadata.imageProvider = provider
+            metadata.iconProvider = provider
+            return metadata
+        }
+    }
 }
 #endif

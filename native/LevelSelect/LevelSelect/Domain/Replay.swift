@@ -382,7 +382,7 @@ extension Replay {
         sessionCount > 0 || !finished.isEmpty || added > 0 || memoriesWritten > 0
     }
 
-    /// "year", "month", "quarter" — for "The year you finished Chrono Trigger".
+    /// "year", "month", "quarter" — for "A badge this year".
     var periodWord: String {
         switch span {
         case .month: "month"
@@ -403,7 +403,7 @@ extension Replay {
     /// | Top two within 15% of each other, together most of it | *Hollow Knight* and *Hades*, about evenly. |
     /// | Otherwise | *Eleven* games, and *Stardew Valley* more than any. |
     /// | …plus a finish | …and you finished it. / …and you finished *Celeste*. |
-    /// | A finish and no play | The year you finished *Chrono Trigger*. |
+    /// | A finish and no play | You finished *Chrono Trigger*. |
     ///
     /// "Mostly" needs 60%: it said "Mostly Hollow Knight" over a quarter
     /// where Hollow Knight was 29%. "About evenly" also needs the two to be
@@ -457,9 +457,12 @@ extension Replay {
     /// A period with no play in it.
     private var quietSentence: String {
         if !finished.isEmpty {
+            // Said plainly. "The year you finished Kirby" read as a caption
+            // about a caption (Tim, 09-21); the period is already the page's
+            // title.
             return finished.count == 1
-                ? "The \(periodWord) you finished \(finished[0].name)."
-                : "The \(periodWord) you finished \(Self.spelled(finished.count, capitalized: false)) games."
+                ? "You finished \(finished[0].name)."
+                : "You finished \(Self.spelled(finished.count, capitalized: false)) games."
         }
         if let first = carried.first {
             return carried.count == 1 ? "\(first.name), from before you tracked it."

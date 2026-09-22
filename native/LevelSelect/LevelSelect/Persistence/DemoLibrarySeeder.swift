@@ -194,6 +194,81 @@ enum DemoLibrarySeeder {
         return report
     }
 
+    /// **A week-one library: the one every reviewer and new user has.**
+    ///
+    /// The demo library is generous, and eight months of use means nobody
+    /// has seen the app with three games and nothing finished since February.
+    /// That is where it breaks: Replay's thin periods, badges with nothing to
+    /// date, charts over one week. Fable's 1.0 plan, step 4: three games, four
+    /// sessions, one memory, no finishes, one range of imported hours.
+    ///
+    /// **Empties the whole demo store first**, not just what the seeder made:
+    /// the first try kept the old demo's consoles, badge ledger and
+    /// hand-added memories, and a three-game library claimed eight badges,
+    /// "Five machines" and four memories (09-21). Refuses to run anywhere but
+    /// the demo file.
+    @discardableResult
+    static func seedWeekOne(context: ModelContext) async -> String {
+        guard isDemoStore(context) else { return "Only in the demo library." }
+        purge(context: context)
+        clearEverythingElse(context: context)
+        let repo = Repository(context)
+        let day: TimeInterval = 86_400
+
+        // Pinned ids from the main seed list.
+        let picks: [(id: Int, name: String, platform: String, status: GameStatus)] = [
+            (14593, "Hollow Knight", "Nintendo Switch", .playing),
+            (17000, "Stardew Valley", "Mac", .playing),
+            (1802, "Chrono Trigger", "Super Nintendo Entertainment System", .backlog),
+        ]
+        var byName: [String: Game] = [:]
+        for pick in picks {
+            let game: Game
+            if let igdb = try? await IGDBService.lookup(id: pick.id) {
+                game = repo.addGame(from: igdb, platform: pick.platform, status: pick.status)
+            } else {
+                game = repo.addGame(name: pick.name, status: pick.status)
+            }
+            game.platforms = [pick.platform]
+            game.legacyID = marker
+            game.ownership = [Ownership.digital.rawValue]
+            byName[pick.name] = game
+        }
+
+        // Four sessions, all inside the last week: three of Hollow Knight,
+        // one of Stardew. Human lengths.
+        if let hk = byName["Hollow Knight"] {
+            let pt = repo.ensureDefaultPlaythrough(for: hk)
+            for (daysAgo, hours) in [(6.0, 1.1), (3.0, 2.2), (1.0, 0.7)] {
+                repo.logManualSession(on: pt, duration: hours * 3600,
+                                      date: Date.now.addingTimeInterval(-daysAgo * day))
+            }
+            // One memory, dated to the day.
+            let memory = Memory(title: "Finally beat the Mantis Lords")
+            memory.body = "Took all evening. Bowed back."
+            memory.game = hk
+            memory.legacyID = marker
+            repo.saveMemory(memory, on: Date.now.addingTimeInterval(-3 * day),
+                            precision: "day", words: nil)
+        }
+        if let stardew = byName["Stardew Valley"] {
+            let pt = repo.ensureDefaultPlaythrough(for: stardew)
+            repo.logManualSession(on: pt, duration: 1.5 * 3600,
+                                  date: Date.now.addingTimeInterval(-5 * day))
+            // The imported lump, placed across three years — what a Steam
+            // library brings in on day one.
+            repo.setCarriedOver(38 * 3600, on: pt)
+            let year = Calendar.current.component(.year, from: .now)
+            repo.setCarriedOverSpans([CarriedOverSpan(seconds: 38 * 3600,
+                                                      fromYear: year - 5, toYear: year - 3)],
+                                     on: pt)
+        }
+
+        PersistenceMonitor.shared.commit(context)
+        return "Week-one library ready: 3 games, 4 sessions, 1 memory, no finishes, "
+            + "and 38 imported hours placed across three years."
+    }
+
     /// A believable play history: sessions of a human length, spread over
     /// months, with almost nothing inside the last week.
     ///
@@ -379,20 +454,94 @@ enum DemoLibrarySeeder {
     /// putting Switch 2 and Mac in the systems menu. Nothing was wrong with
     /// the deletion; the report just stopped short of the fact that explained
     /// what he was looking at.
+    ///
+    /// **Tombstoned first, deleted for good a moment later.**
+    ///
+    /// This used to hard-delete on the spot, and whatever screen was drawing
+    /// a demo game at that instant (Home's Continue Playing card, under the
+    /// Settings sheet) read a property off a deleted row and crashed.
+    /// "Load a week-one library" found it, because it empties the library
+    /// with Home already populated (09-21). A tombstone is what every query
+    /// filters on, so the screens let go of the rows first; the rows
+    /// themselves go once nothing holds them. A tombstone that outlives the
+    /// app (quit within the second) is swept at the start of the next purge.
     @discardableResult
     static func purge(context: ModelContext) -> String {
+        sweepTombstones(context: context)
+        let now = Date.now
         var removed = 0
         let games = (try? context.fetch(FetchDescriptor<Game>())) ?? []
-        for game in games where game.legacyID == marker {
-            context.delete(game)
+        for game in games where game.legacyID == marker && game.deletedAt == nil {
+            game.deletedAt = now
             removed += 1
         }
         for collection in ((try? context.fetch(FetchDescriptor<GameCollection>())) ?? [])
-        where collection.legacyID == marker {
-            context.delete(collection)
+        where collection.legacyID == marker && collection.deletedAt == nil {
+            collection.deletedAt = now
+        }
+        // A game's memories outlive it (the relationship nullifies), so the
+        // week-one seed's memory goes by its own marker.
+        for memory in ((try? context.fetch(FetchDescriptor<Memory>())) ?? [])
+        where memory.legacyID == marker && memory.deletedAt == nil {
+            memory.deletedAt = now
         }
         PersistenceMonitor.shared.commit(context)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            sweepTombstones(context: context)
+        }
         return message(removed: removed, kept: kept(among: games))
+    }
+
+    private static func isDemoStore(_ context: ModelContext) -> Bool {
+        let demo = LevelSelectStore.demoStoreURL.standardizedFileURL
+        return context.container.configurations.contains { $0.url.standardizedFileURL == demo }
+    }
+
+    /// Tombstones everything left in the demo store after a purge — the
+    /// hand-added, the consoles, the badges — so the week-one seed starts
+    /// from nothing. The badge ledger goes too, so the first-run fill runs
+    /// again against three games, which is the thing to check.
+    private static func clearEverythingElse(context: ModelContext) {
+        let now = Date.now
+        for game in (try? context.fetch(FetchDescriptor<Game>())) ?? [] where game.deletedAt == nil {
+            game.deletedAt = now
+            game.legacyID = marker
+        }
+        for memory in (try? context.fetch(FetchDescriptor<Memory>())) ?? [] where memory.deletedAt == nil {
+            memory.deletedAt = now
+            memory.legacyID = marker
+        }
+        for collection in (try? context.fetch(FetchDescriptor<GameCollection>())) ?? []
+        where collection.deletedAt == nil {
+            collection.deletedAt = now
+            collection.legacyID = marker
+        }
+        for console in (try? context.fetch(FetchDescriptor<Console>())) ?? [] where console.deletedAt == nil {
+            console.deletedAt = now
+        }
+        for badge in (try? context.fetch(FetchDescriptor<EarnedBadge>())) ?? [] where badge.deletedAt == nil {
+            badge.deletedAt = now
+        }
+        PersistenceMonitor.shared.commit(context)
+    }
+
+    /// Hard-deletes what an earlier purge tombstoned.
+    private static func sweepTombstones(context: ModelContext) {
+        var any = false
+        for game in ((try? context.fetch(FetchDescriptor<Game>())) ?? [])
+        where game.legacyID == marker && game.deletedAt != nil {
+            context.delete(game); any = true
+        }
+        for collection in ((try? context.fetch(FetchDescriptor<GameCollection>())) ?? [])
+        where collection.legacyID == marker && collection.deletedAt != nil {
+            context.delete(collection); any = true
+        }
+        for memory in ((try? context.fetch(FetchDescriptor<Memory>())) ?? [])
+        where memory.legacyID == marker && memory.deletedAt != nil {
+            context.delete(memory); any = true
+        }
+        if any { PersistenceMonitor.shared.commit(context) }
     }
 
     /// Live games in this store that the seeder did not create.

@@ -419,7 +419,7 @@ struct ReplayTests {
         let replay = Replay.make(.year(date(2015, 6, 1)), from: source(repo),
                                  calendar: calendar, now: date(2026, 12, 31))
         #expect(replay.lead == .finished(1))
-        #expect(replay.sentence == "The year you finished Chrono Trigger.")
+        #expect(replay.sentence == "You finished Chrono Trigger.")
         #expect(!replay.sentence.contains("didn't play"))
     }
 
