@@ -57,6 +57,16 @@ struct SessionNotePrompt: ViewModifier {
             .alert("What happened?", isPresented: isPresented, presenting: subject) { session in
                 TextField("One line is plenty", text: $draft)
                 Button("Save") { save(to: session) }
+                // **A tap you didn't mean.** Start and Stop sit where a thumb
+                // lands, and a mistaken pair left a 6-second session in the
+                // history with no way to lose it from here (week-one pass,
+                // 09-22). Under a minute, the question offers to drop it.
+                if Self.looksAccidental(session) {
+                    Button("Discard it", role: .destructive) {
+                        Repository(context).deleteSession(session)
+                        subject = nil
+                    }
+                }
                 // Not "Cancel": nothing is being cancelled, and the choice not
                 // to write is a normal answer rather than backing out.
                 Button("Skip", role: .cancel) { subject = nil }
@@ -79,8 +89,17 @@ struct SessionNotePrompt: ViewModifier {
         Binding(get: { subject != nil }, set: { if !$0 { subject = nil } })
     }
 
+    /// Short enough to have been a mis-tap rather than play.
+    static func looksAccidental(_ session: Session) -> Bool {
+        session.elapsed() < 60
+    }
+
     private func subtitle(for session: Session) -> String {
         let name = session.playthrough?.game?.name ?? "That session"
+        if Self.looksAccidental(session) {
+            return "\(name), \(Format.duration(session.elapsed())). "
+                 + "Too short to be play? You can discard it."
+        }
         return "\(name), \(Format.duration(session.elapsed())). "
              + "You can always add this later from the session itself."
     }
