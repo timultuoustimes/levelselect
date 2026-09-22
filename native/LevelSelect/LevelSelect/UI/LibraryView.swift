@@ -83,7 +83,13 @@ struct LibraryTab: View {
             // *"Glass is also not going far enough down behind the ownership
             // pills, or other top tab pills."*
             content
-                .safeAreaBar(edge: .top) { filterBar }
+                // **Pinned only while it's doing something.** Four pinned
+                // rows (title, search, Collection/Wishlist, the chips) took
+                // 28% of the screen before a single cover (Fable, build 40).
+                // Idle, the chips ride at the top of the scroll and leave
+                // with it; with a filter on they pin, so what's narrowing the
+                // shelf and the way back out stay in view.
+                .safeAreaBar(edge: .top) { if filtersPinned { filterBar } }
                 .safeAreaBar(edge: .top) { if LSTab.wishlistInLibrary { LibraryHalfPicker() } }
             .lsBackground()
             // "See all" on a Home shelf lands here, filtered, rather than
@@ -336,6 +342,7 @@ struct LibraryTab: View {
             // the grid below them stood at 16. Tim drew a line down the left
             // edge of the screen to show it.
             LazyVStack(alignment: .leading, spacing: 18) {
+                scrollingFilterBar
                 systemsShelf
                 collectionShelf
                 genreShelf
@@ -368,6 +375,7 @@ struct LibraryTab: View {
     private var shelvesView: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {
+                scrollingFilterBar
                 systemsShelf
                 collectionShelf
                 genreShelf
@@ -445,6 +453,12 @@ struct LibraryTab: View {
 
     private var listView: some View {
         List {
+            if !filtersPinned {
+                filterBar
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+            }
             if !shelfCollections.isEmpty {
                 collectionShelf
                     .listRowBackground(Color.clear)
@@ -792,6 +806,14 @@ struct LibraryTab: View {
 
     private var anyFilterActive: Bool {
         statusFilter != nil || platformFilter != nil || ownershipFilter != nil
+    }
+
+    private var filtersPinned: Bool { anyFilterActive || tagFilter != nil }
+
+    /// The chip row in the scroll, when it isn't pinned.
+    @ViewBuilder
+    private var scrollingFilterBar: some View {
+        if !filtersPinned { filterBar }
     }
 
     /// Game ids that live inside a bundle collection (hidden from the main
