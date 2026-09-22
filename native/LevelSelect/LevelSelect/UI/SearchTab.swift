@@ -25,6 +25,9 @@ struct SearchScreen: View {
     @State private var scope: UniversalSearch.Scope = .all
     @State private var path = NavigationPath()
     @State private var index = SearchIndex()
+    /// Bumped by any save and by opening Search, so the index follows edits
+    /// rather than only the game count.
+    @State private var indexGeneration = 0
     @State private var results = SearchResults()
     @State private var igdb: [IGDBGame] = []
     @State private var igdbLoading = false
@@ -80,7 +83,18 @@ struct SearchScreen: View {
             .onSubmit(of: .search) { remember() }
             .gamePageDestinations()
         }
-        .task(id: games.count) { index = SearchIndex.build(games: games, context: context) }
+        // **Rebuilt on every save, not only when the game count changes.**
+        // Keyed on the count alone, an edited note, a new memory or a ticked
+        // tracker item stayed invisible to search until a game was added or
+        // removed (Codex, 09-22). The pause lets a burst of saves rebuild once.
+        .task(id: "\(games.count)|\(indexGeneration)") {
+            if indexGeneration > 0 { try? await Task.sleep(for: .milliseconds(400)) }
+            guard !Task.isCancelled else { return }
+            index = SearchIndex.build(games: games, context: context)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            indexGeneration &+= 1
+        }
         .onAppear {
             fieldFocused = true
             takePendingTerm()
@@ -88,7 +102,12 @@ struct SearchScreen: View {
         // The tab stays alive after the first visit, so onAppear alone would
         // focus the field once. Every tap on Search is a request to type.
         .onChange(of: AppNavigator.shared.selectedTab) { _, tab in
-            if inTab && tab == .search { fieldFocused = true }
+            if inTab && tab == .search {
+                fieldFocused = true
+                // Changes synced from another device arrive without a local
+                // save; opening Search is the moment they have to be in.
+                indexGeneration &+= 1
+            }
         }
         .onChange(of: AppNavigator.shared.pendingSearchTerm) { _, _ in takePendingTerm() }
         // Opening anything from results is what makes a search worth
@@ -395,11 +414,15 @@ struct SearchIndex {
     var trackers: [TrackerHit] = []
     var notes: [Note] = []
     var version = 0
+    @MainActor private static var builds = 0
 
     @MainActor
     static func build(games: [Game], context: ModelContext) -> SearchIndex {
         var out = SearchIndex()
-        out.version = Int(Date.now.timeIntervalSince1970)
+        // A counter, not the clock: two rebuilds inside one second kept the
+        // same version, and the open search didn't re-run on the second.
+        builds &+= 1
+        out.version = builds
         for game in games {
             if let schema = game.trackerSchema {
                 let done = Set((game.activePlaythrough?.trackerStates ?? [])
