@@ -39,8 +39,9 @@ enum ConsoleLogoArt {
         if let running = inFlight[entry.file] { return await running.value }
         let task = Task<Prepared?, Never> {
             guard let data = await bytes(for: entry) else { return nil }
+            let keepsColors = entry.keepsColors
             return await Task.detached(priority: .userInitiated) {
-                prepare(data)
+                prepare(data, keepsColors: keepsColors)
             }.value
         }
         inFlight[entry.file] = task
@@ -81,7 +82,7 @@ enum ConsoleLogoArt {
     // MARK: - Pixels
 
     /// Decodes, then makes the light and dark versions. Off the main actor.
-    nonisolated private static func prepare(_ data: Data) -> Prepared? {
+    nonisolated private static func prepare(_ data: Data, keepsColors: Bool) -> Prepared? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
         let width = image.width, height = image.height
@@ -90,6 +91,7 @@ enum ConsoleLogoArt {
 
         func adapted(ground: Double, ink: (UInt8, UInt8, UInt8)) -> CGImage? {
             var pixels = original
+            if keepsColors { return makeImage(pixels, width: width, height: height) }
             LogoLegibility.adapt(&pixels, width: width, height: height,
                                  ground: ground, ink: ink, premultiplied: true)
             return makeImage(pixels, width: width, height: height)

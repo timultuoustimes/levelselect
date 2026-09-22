@@ -53,6 +53,13 @@ struct ConsoleLogoTests {
                 == ConsoleLogo.byConsole["PS1"]?.file)
     }
 
+    @Test func theXboxesKeepTheirOwnColors() {
+        // Light by design, made for white — Tim, 09-21.
+        #expect(ConsoleLogo.byConsole["Xbox 360"]?.keepsColors == true)
+        #expect(ConsoleLogo.byConsole["Xbox"]?.keepsColors == true)
+        #expect(ConsoleLogo.byConsole["PS5"]?.keepsColors == false)
+    }
+
     @Test func theURLAsksCommonsForAPNGAtWidth() throws {
         let url = try #require(ConsoleLogo.byConsole["PS5"]?.url)
         let text = url.absoluteString

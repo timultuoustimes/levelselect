@@ -28,10 +28,17 @@ enum ConsoleLogo {
         let file: String
         /// As Commons records it. Kept so the tests can hold the line.
         let license: String
+        /// **Drawn as it comes, on both grounds.** For the few logos the
+        /// measurement gets wrong: light by design, and made to be read on
+        /// white. Tim, 09-21, with a photo of the white Xbox 360 box: *"Xbox
+        /// 360 and Xbox logos should both be fine on white as they originally
+        /// were."* The rule had turned the 360's silver sphere into a dark dot.
+        let keepsColors: Bool
 
-        init(_ file: String, license: String = "Public domain") {
+        init(_ file: String, license: String = "Public domain", keepsColors: Bool = false) {
             self.file = file
             self.license = license
+            self.keepsColors = keepsColors
         }
 
         /// A PNG render at a width Commons picks near the one asked for — it
@@ -64,8 +71,8 @@ enum ConsoleLogo {
         // ground without being redrawn.
         "Xbox Series":          Entry("Xbox Series X S color.svg"),
         "Xbox One":             Entry("X Box One logo.svg"),
-        "Xbox 360":             Entry("X Box 360 logo.svg"),
-        "Xbox":                 Entry("Xbox Logo 2001.svg"),
+        "Xbox 360":             Entry("X Box 360 logo.svg", keepsColors: true),
+        "Xbox":                 Entry("Xbox Logo 2001.svg", keepsColors: true),
         "3DS":                  Entry("Nintendo 3DS logo.svg"),
         "DS":                   Entry("Nintendo DS Logo.svg"),
         "Wii U":                Entry("WiiU.svg"),
