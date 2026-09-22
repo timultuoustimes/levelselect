@@ -23,7 +23,8 @@ struct SpokenDurationTests {
     /// The exact case Tim heard: 50 minutes has a zero seconds component, and
     /// the written form keeps it. Spoken, a trailing "0 seconds" is noise.
     @Test func aZeroComponentIsNotSpoken() {
-        #expect(Format.duration(50 * 60) == "50m 0s", "the written form is unchanged")
+        #expect(Format.duration(50 * 60) == "50m", "no trailing zero seconds")
+        #expect(Format.duration(50 * 60 + 7) == "50m 7s")
         #expect(!Format.spokenDuration(50 * 60).contains("0 second"))
         #expect(!Format.spokenDuration(2 * 3600).contains("0 minute"))
     }

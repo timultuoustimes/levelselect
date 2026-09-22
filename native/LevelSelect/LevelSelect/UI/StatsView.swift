@@ -294,6 +294,12 @@ struct StatsCards: View {
         }
         let played = Format.duration(sessions.reduce(0) { $0 + $1.elapsed() } + carried)
         let beaten = "\(Int((completionRate * 100).rounded()))%"
+        // **Say where the rest came from.** In a week-one library with a
+        // Steam import, "43h 30m" sat above "Last 7 days 5h 30m" with nothing
+        // to explain the 38 hours between them (09-22).
+        let playedLabel = carried >= 3600
+            ? "Played · \(Int(carried / 3600))h imported"
+            : "Played"
         return Group {
             // One column at the largest text sizes. Two across left each tile
             // half a phone, and even shrunk to 60% "266h 36m" read "266h 3…"
@@ -301,7 +307,7 @@ struct StatsCards: View {
             if typeSize.isAccessibilitySize {
                 VStack(spacing: 10) {
                     statTile("gamecontroller.fill", "\(games.count)", "Games")
-                    statTile("clock.fill", played, "Played")
+                    statTile("clock.fill", played, playedLabel)
                     statTile("timer", "\(sessions.count)", "Sessions")
                     statTile("flag.checkered", beaten, "Beaten")
                 }
@@ -309,7 +315,7 @@ struct StatsCards: View {
                 Grid(horizontalSpacing: 10, verticalSpacing: 10) {
                     GridRow {
                         statTile("gamecontroller.fill", "\(games.count)", "Games")
-                        statTile("clock.fill", played, "Played")
+                        statTile("clock.fill", played, playedLabel)
                     }
                     GridRow {
                         statTile("timer", "\(sessions.count)", "Sessions")
@@ -583,7 +589,7 @@ struct StatsCards: View {
     /// Hours and finishes for the last six months, oldest first so the eye
     /// reads toward now.
     private func monthlyCard(sessions: [Session]) -> some View {
-        let months = lastMonths(6)
+        let months = monthsSinceFirstActivity(lastMonths(6), sessions: sessions)
         let byMonth = monthlyRollup(sessions: sessions, months: months)
         let maxSeconds = byMonth.map(\.seconds).max() ?? 1
         return VStack(alignment: .leading, spacing: 10) {
@@ -1034,6 +1040,21 @@ struct StatsCards: View {
     }
 
     private struct MonthRow { let label: String; let seconds: TimeInterval; let completions: Int }
+
+    /// **Not the months before you started.** A library begun this month
+    /// drew five empty rows of dashes above its one real month (week-one
+    /// pass, 09-22). Leading months with nothing before them go; a gap after
+    /// the first activity stays, because a gap is something you did.
+    private func monthsSinceFirstActivity(_ months: [Date], sessions: [Session]) -> [Date] {
+        let events = games.flatMap { $0.completionEvents ?? [] }.filter { $0.deletedAt == nil }
+        let first = [sessions.map(\.startDate).min(), events.map(\.date).min()]
+            .compactMap { $0 }.min()
+        guard let first else { return Array(months.suffix(1)) }
+        let cal = Calendar.current
+        let firstMonth = cal.dateInterval(of: .month, for: first)?.start ?? first
+        let kept = months.filter { $0 >= firstMonth }
+        return kept.isEmpty ? Array(months.suffix(1)) : kept
+    }
 
     private func lastMonths(_ n: Int) -> [Date] {
         let cal = Calendar.current
