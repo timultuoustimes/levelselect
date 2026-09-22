@@ -293,11 +293,27 @@ enum LevelSelectStore {
 
         // App: SwiftData + CloudKit (`.automatic`) → automatic iCloud sync, no auth.
         do {
+            #if DEBUG
+            // Rehearses the fallback below, which otherwise only runs when
+            // CloudKit setup genuinely fails: launch with
+            // `-LSForceLocalFallback YES`.
+            if UserDefaults.standard.bool(forKey: "LSForceLocalFallback") {
+                throw CocoaError(.featureUnsupported)
+            }
+            #endif
             let config = ModelConfiguration(schema: schema, cloudKitDatabase: .automatic)
             return try ModelContainer(for: schema, configurations: [config])
         } catch {
             // Resilience: if CloudKit is unavailable, keep working from a local store.
-            let local = ModelConfiguration(schema: schema)
+            //
+            // **`.none`, said out loud.** Left unset, `cloudKitDatabase` is
+            // `.automatic` (see the in-memory store above), so this "local"
+            // fallback was a second CloudKit attempt, and when that failed too
+            // the app stopped at the `fatalError` below instead of opening the
+            // library (Codex, offline assessment, 09-22). Same file as the
+            // CloudKit store, so edits made here are in the library that
+            // syncs once CloudKit comes back.
+            let local = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
             if let container = try? ModelContainer(for: schema, configurations: [local]) {
                 usingLocalFallback = true
                 return container

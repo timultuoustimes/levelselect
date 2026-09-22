@@ -14,6 +14,8 @@ struct SuggestionsPane: View {
     @State private var items: [Suggestions.Item] = []
     @State private var loading = false
     @State private var error: String?
+    /// When the shown suggestions are an older copy because refreshing failed.
+    @State private var staleSince: Date?
     @State private var adding: String?
     @State private var loaded = false
     @State private var tuning = false
@@ -60,6 +62,12 @@ struct SuggestionsPane: View {
                 } else if items.isEmpty {
                     empty
                 } else {
+                    if let staleSince {
+                        Label("Couldn't refresh — these are from \(staleSince.formatted(.relative(presentation: .named))).",
+                              systemImage: "clock.arrow.circlepath")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     controls
                     if shown.isEmpty {
                         Text("Nothing here is on \(PlatformShort.name(system)). Try another system, or All.")
@@ -252,8 +260,14 @@ struct SuggestionsPane: View {
         defer { loading = false }
         do {
             items = try await SuggestionsService.suggestions(for: games, force: force)
+            staleSince = nil
         } catch {
-            self.error = "Couldn't reach IGDB for suggestions."
+            if let last = SuggestionsService.lastKnown() {
+                items = last.items
+                staleSince = last.madeAt
+            } else {
+                self.error = "Couldn't reach IGDB for suggestions."
+            }
         }
     }
 }

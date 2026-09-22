@@ -12,6 +12,15 @@ enum SuggestionsService {
 
     // MARK: Games you might like
 
+    /// **Yesterday's answer, when today's can't be had.** The fresh check
+    /// above ignores a cache over a day old, so offline after a day the pane
+    /// swapped still-useful suggestions for an error (Codex, offline
+    /// assessment, 09-22). Any age, any library; the pane says how old.
+    static func lastKnown() -> (items: [Suggestions.Item], madeAt: Date)? {
+        guard let cached = SuggestionsCache.read(), !cached.items.isEmpty else { return nil }
+        return (cached.items.filter { !hidden.contains($0.id) }, cached.madeAt)
+    }
+
     static func suggestions(for games: [Game], force: Bool = false,
                             now: Date = .now) async throws -> [Suggestions.Item] {
         let sources = Suggestions.sources(from: games.compactMap { game in

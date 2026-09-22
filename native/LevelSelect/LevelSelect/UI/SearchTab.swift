@@ -31,6 +31,9 @@ struct SearchScreen: View {
     @State private var results = SearchResults()
     @State private var igdb: [IGDBGame] = []
     @State private var igdbLoading = false
+    /// Set when the IGDB half of a search failed, so the empty section can
+    /// say so instead of implying no such game exists.
+    @State private var igdbFailure: IGDBError?
     @State private var adding: NamedAdd?
     @State private var release: UpcomingRelease?
     @State private var browsing: DekuLinkTarget?
@@ -254,6 +257,16 @@ struct SearchScreen: View {
                 Section("Add from IGDB") {
                     ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
                 }
+            } else if let failure = igdbFailure, igdb.isEmpty {
+                Section("Add from IGDB") {
+                    Label(failure == .offline
+                          ? "Offline — these are your own results. Games you don't have yet need a connection."
+                          : "IGDB didn't answer just now — your own results above are complete.",
+                          systemImage: failure == .offline ? "wifi.slash" : "exclamationmark.icloud")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .listRowBackground(Color.clear)
+                }
             } else if !igdb.isEmpty {
                 Section("Add from IGDB") {
                     ForEach(igdb.prefix(5)) { g in
@@ -345,6 +358,7 @@ struct SearchScreen: View {
         guard !q.isEmpty else {
             results = SearchResults()
             igdb = []
+            igdbFailure = nil
             return
         }
         // Let typing settle.
@@ -361,11 +375,21 @@ struct SearchScreen: View {
         try? await Task.sleep(for: .milliseconds(320))
         guard !Task.isCancelled else { return }
         let have = Set(games.compactMap(\.igdbID))
-        var found = (try? await IGDBService.search(name: q)) ?? []
-        if found.isEmpty, let joined = UniversalSearch.runTogether(q) {
-            found = (try? await IGDBService.search(name: joined)) ?? []
+        // **A failure is not an answer.** This swallowed the error into an
+        // empty list, so offline the section simply vanished, which read as
+        // "no game by that name exists" (Codex, offline assessment, 09-22).
+        var found: [IGDBGame] = []
+        var failure: IGDBError?
+        do {
+            found = try await IGDBService.search(name: q)
+            if found.isEmpty, let joined = UniversalSearch.runTogether(q) {
+                found = try await IGDBService.search(name: joined)
+            }
+        } catch {
+            failure = error as? IGDBError ?? .offline
         }
         guard !Task.isCancelled else { return }
+        igdbFailure = failure
         igdb = found.filter { !have.contains($0.id) }
     }
 }
