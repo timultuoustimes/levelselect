@@ -8,11 +8,21 @@
  */
 
 /** Shown on both surfaces, so the app can say when this was last honest. */
-export const reviewed = '22 September 2026';
+export const reviewed = '7 October 2026';
 
 export const shipped = [
+  { t: 'A Command Board for iPhone', build: 41,
+    d: 'On iOS 27, a widget that takes a whole Home Screen page: one game, its session buttons, two of its tracker lists you can tick from there, and a shelf of your other games.' },
+  { t: 'Spreadsheets that say what came in', build: 41,
+    d: 'Paste a Google Sheets link or copied cells, say what each column is, and see what was read and what was left out before anything is added. Values only: formulas do not carry over.' },
+  { t: 'Trackers built and corrected by hand', build: 41,
+    d: 'Write a whole tracker list by list, add a row, delete one, reorder them, move one to another list, and fix a description without regenerating.' },
+  { t: 'Achievement art from every service', build: 41,
+    d: 'Steam, PlayStation and Xbox achievements show their own icons in the tracker, gray until you tick them off, as RetroAchievements already did.' },
+  { t: 'Runs you can pause', build: 41,
+    d: 'Pause and resume a live run, and discard an attempt you do not want to keep.' },
   { t: 'Badges, and the moment they land', build: 40,
-    d: 'Thirty-two badges earned from your library, dated from what earned them and kept for good — arriving with a glow, a little confetti, and a widget to keep them on.' },
+    d: 'Thirty-two badges earned from your library, dated from what earned them and kept for good — arriving with a glow and a little confetti.' },
   { t: 'Replays', build: 40,
     d: 'A month, a quarter or a year read back to you from your own library, with the box art of what you played most — and a card to post.' },
   { t: 'Hours in the years they happened', build: 40,
@@ -96,8 +106,8 @@ export const horizons = [
     note: 'being worked on',
     color: '#30D158',
     items: [
-      { t: 'Getting to 1.0', d: 'No new features until it ships: two devices, a fresh iCloud account, every way a session can start and stop, and a backup restored into an empty library — until each of those holds.' },
-      { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made." },
+      { t: 'Getting to 1.0', d: 'Build 41 is another beta. Before 1.0: two devices, a fresh iCloud account, every way a session can start and stop, and a backup restored into an empty library, until each of those holds.' },
+      { t: 'Trackers you can trust', d: "Generating a tracker should never be a gamble with progress you've already made. Build 41 made them correctable by hand; spreadsheet importing still reads only the first table on a tab." },
       { t: 'Mac polish', d: "Underway. The Mac app has the new design and reachable settings now; the details still lag the iPhone." },
     ],
   },

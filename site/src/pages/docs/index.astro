@@ -86,6 +86,10 @@ const sections = [
     a: 'A console page asks which machine to draw — and keeps the whole lineage of the ones you have had.' },
   { id: 'paste',             q: 'I have a checklist from a wiki',
     a: 'Tracker → Paste a List turns it into real tracker categories, in two formats.' },
+  { id: 'sheets',            q: 'My checklist is in a spreadsheet',
+    a: 'Tracker → Paste. A Google Sheets link or copied cells, reviewed before anything is added. Values only: formulas do not carry over.' },
+  { id: 'byhand',            q: 'One row is wrong. Do I have to regenerate?',
+    a: 'No. Press and hold a row to edit, move or delete it, and Add… at the foot of a list adds one.' },
   { id: 'regenerating',      q: 'Will regenerating lose my progress?',
     a: 'No. The button tells you what it is about to do, and a long-press changes it for one run.' },
   { id: 'party',             q: 'I am running a party in an RPG',
@@ -102,6 +106,8 @@ const sections = [
     a: 'A game page holds its maps — your own pictures of the world — and a pin on one can tick the tracker.' },
   { id: 'sessions',          q: 'Why is my playtime wrong?',
     a: 'A session is time played; a run is one attempt at something. They count differently. Stopping one asks what happened.' },
+  { id: 'runs',              q: 'Can I pause a run, or throw one away?',
+    a: 'Pause Run and Resume Run sit beside End Run, and ending a run offers Discard Run.' },
   { id: 'carriedover',       q: 'Steam says I have 42 hours in this',
     a: 'Add it as a starting total, and say which years it belongs to. It counts toward your time without inventing a day you played it.' },
   { id: 'releases',          q: 'When does the game I am waiting for come out?',
@@ -116,6 +122,8 @@ const sections = [
     a: 'The magnifying glass beside the tab bar: games, tracker items, notes, news and releases, then games you do not have yet.' },
   { id: 'widgets',           q: 'I want it on my Home Screen',
     a: 'Home Screen, Lock Screen, Control Center, and extra-large boards on iPad. Long-press to aim one.' },
+  { id: 'commandboard',      q: 'What is the Command Board?',
+    a: 'On iOS 27, a widget that takes a whole Home Screen page: one game, two of its lists to tick from there, and a shelf.' },
   { id: 'shortcuts',         q: 'Can I use Siri for this?',
     a: 'Every game is a real entity in Shortcuts, Siri and Spotlight — not just the app.' },
   { id: 'beaten',            q: 'I finished a game — what do I mark?',
@@ -148,12 +156,12 @@ const moments = [
   { t: 'It should use my words',          ids: ['systemnames', 'ownership'] },
   { t: 'Home should look like me',        ids: ['home', 'systems', 'smartcollections'] },
   { t: 'My consoles, not just my games',  ids: ['consoles', 'whichmachine'] },
-  { t: 'I want a checklist for this game', ids: ['paste', 'regenerating', 'party', 'focus', 'notes', 'hints', 'retroachievements', 'maps'] },
-  { t: 'My playtime looks wrong',         ids: ['sessions', 'carriedover'] },
+  { t: 'I want a checklist for this game', ids: ['paste', 'sheets', 'byhand', 'regenerating', 'party', 'focus', 'notes', 'hints', 'retroachievements', 'maps'] },
+  { t: 'My playtime looks wrong',         ids: ['sessions', 'runs', 'carriedover'] },
   { t: 'I am waiting for a game',         ids: ['releases', 'wishlist'] },
   { t: 'What should I play next?',        ids: ['suggestions', 'news'] },
   { t: 'I am looking for something',      ids: ['search'] },
-  { t: 'I want it outside the app',       ids: ['widgets', 'shortcuts'] },
+  { t: 'I want it outside the app',       ids: ['widgets', 'commandboard', 'shortcuts'] },
   { t: 'I just finished a game',          ids: ['beaten'] },
   { t: 'I want to look back',             ids: ['journal', 'memories', 'stats', 'badges', 'replay'] },
   { t: 'I want my data out',              ids: ['data'] },
@@ -185,7 +193,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
 <main class="wrap doc-page">
   <article class="doc">
     <h1>Help</h1>
-    <p class="stamp">Last updated 22 September 2026</p>
+    <p class="stamp">Last updated 7 October 2026</p>
 
     <p class="lede">New here? The three steps below are the whole shape of the app. Everything after them is reference — read it when you need it, not now.</p>
 
@@ -480,6 +488,56 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="sheets" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'sheets')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'sheets')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>In a game's tracker, tap <strong>Paste</strong>. Either paste a Google Sheets link into the link field and tap <strong>Read</strong>, or copy cells out of a spreadsheet and paste them into the box. Both are read the same way, as a table.</p>
+
+    <h3>Review Import, before anything is added</h3>
+    <p>Tap <strong>Preview</strong> and the screen says how many rows it read, which rows and columns it left out, and whether the rows are new or already on your tracker. For a link it also says which tab it read and how many others the sheet has; go back to choose a different tab. Nothing is added until you tap <strong>Import</strong>.</p>
+    <p>Rows already on your tracker are not duplicated or overwritten. A tick or a value from the sheet only fills in where the row has none.</p>
+
+    <h3>Say what each column is</h3>
+    <p>Tap the columns line to open <strong>Columns</strong>. Each column of the sheet can be the <em>Name</em>, where it is, a description, the tick, a new column of your own (text, a number, on/off or a choice), or <em>Ignore</em>. One column is the Name. It opens on the app's own guess, and <strong>Use the App's Guess</strong> puts that back.</p>
+    <ul>
+      <li><strong>Two columns that could both be the tick</strong> means neither is used until you pick one. An import that ticks too little takes a minute to correct; one that ticks too much is harder to find.</li>
+      <li><strong>Columns past an empty column</strong> in the header row are listed separately and are not read unless you say what one is, because they may belong to a table beside your list.</li>
+      <li><strong>A column of your own</strong> keeps its values per playthrough, like any other tracker field, so a new playthrough starts with them blank.</li>
+    </ul>
+
+    <h3>What it does not do</h3>
+    <ul>
+      <li><strong>Formulas do not carry over.</strong> A number the sheet calculates comes in as the number it shows now, and will not recalculate in LevelSelect. Formatting is not kept either.</li>
+      <li><strong>Only the first table on a tab is read.</strong> A second table lower down or beside it is left out, and there is no way yet to choose it.</li>
+      <li><strong>A link has to be readable without signing in.</strong> Share the sheet with &ldquo;Anyone with the link&rdquo;, or copy the cells and paste them instead.</li>
+      <li><strong>Planners, run logs and calculators are turned away</strong> with &ldquo;doesn't look like a list&rdquo;, and that cannot be overridden yet. A run log does not become runs in LevelSelect.</li>
+      <li><strong>Rows with no name</strong> are counted and shown, not imported.</li>
+    </ul>
+    <p><strong>Didn't come out right?</strong> <em>Send it to LevelSelect</em> on the review screen opens an email with the sheet attached. Nothing is sent until you tap Send.</p>
+      </div>
+    </details>
+
+    <details class="qa" id="byhand" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'byhand')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'byhand')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A tracker can be built and corrected by hand, a row at a time.</p>
+    <ul>
+      <li><strong>Start one yourself:</strong> on a game with no tracker, <strong>Write your own</strong> builds it list by list. Name a list, type its rows, add another list. Return adds a row and keeps the keyboard up.</li>
+      <li><strong>Add a row:</strong> <strong>Add&hellip;</strong> at the foot of a list. Imported achievement sets don't have it, because those lists are the developer's.</li>
+      <li><strong>Fix a row:</strong> press and hold it, then <em>Edit item</em>. The description is editable there, above your own note.</li>
+      <li><strong>Reorder:</strong> press and hold a row for <em>Move Up</em> and <em>Move Down</em>.</li>
+      <li><strong>Move to another list:</strong> the same menu, <em>Move to&hellip;</em>. It is the same row afterwards, so its tick, note and values go with it. Moving between a list remembered across playthroughs and one that isn't asks first.</li>
+      <li><strong>Delete one row:</strong> the same menu, <em>Delete Item</em>.</li>
+    </ul>
+      </div>
+    </details>
+
     <details class="qa" id="regenerating" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'regenerating')!.q}</span>
@@ -593,6 +651,18 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </div>
     </details>
 
+    <details class="qa" id="runs" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'runs')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'runs')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>A live run has <strong>Pause Run</strong> beside <strong>End Run</strong>; while paused, the button reads <strong>Resume Run</strong>. Paused time is left out of the run's length, and a paused run can still be ended.</p>
+    <p><strong>End Run</strong> stops the clock when you tap it, so choosing an outcome and writing notes does not add to the attempt. On that screen, <strong>Discard Run</strong> drops the attempt instead of saving it, after asking once. Cancel leaves the run going.</p>
+    <p>A run's clock is separate from sessions and never adds to Time Played.</p>
+      </div>
+    </details>
+
     <details class="qa" id="carriedover" name="qa" data-qa>
       <summary class="qa__s">
         <span class="qa__q">{sections.find((x) => x.id === 'carriedover')!.q}</span>
@@ -688,14 +758,32 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p>Widgets live on the Home Screen and the Lock Screen, and at extra-large sizes on iPad:</p>
     <ul>
       <li><strong>Home Screen:</strong> Continue Playing (with a tappable next objective), <strong>"Choose a Game for Me"</strong> — a die that picks off your shelf and stands by its pick until you roll again — <strong>"Open To…"</strong> launchers that jump straight into a collection, status shelf or system, carrying that section's own cover art at medium and large sizes &mdash; point one at <em>Now Playing</em> and you have a shelf of what you are playing, a sixteen-week play heatmap, week and run trackers, and completion rings.</li>
-      <li><strong>Badges:</strong> your newest badge, or a row of them, at every size &mdash; including iOS 27&rsquo;s tall extra-large on iPad and Mac.</li>
       <li><strong>Releases:</strong> <em>Coming Soon</em> is your wishlist covers with the wait printed under each; <em>Release Calendar</em> is the dates themselves &mdash; one game at small, four at medium, and at large a real month grid with covers standing where the day numbers would be.</li>
       <li><strong>iPad only:</strong> three extra-large boards — a Command Board (your game, its objectives, the shelf, the week, all at once), a twelve-cover Shelf, and Where You Stand, a progress bar for everything you're playing.</li>
       <li><strong>Lock Screen:</strong> a die that opens the app on a fresh random pick every tap, a week gauge measured against your own pace, a play streak, your current game's next objective with a real tick button — and the completion ring that was already there. Four circles fit the bar exactly.</li>
       <li><strong>Control Center, Lock Screen and the Action button:</strong> the <em>Play Session</em> control starts a session for the game you were last playing, and tapping it again stops it. Add it from Control Center's editor, the Lock Screen's customize screen, or Settings &rarr; Action Button.</li>
       <li><strong>Configuring:</strong> long-press any widget &rarr; Edit Widget. The die takes statuses, one system, and an include-finished toggle; different placements roll independently. Launchers take any collection, status, or system you have.</li>
+      <li><strong>iPhone on iOS 27:</strong> the Command Board, a whole page to itself &mdash; <a href="#commandboard">see below</a>.</li>
+      <li><strong>After updating to build 41:</strong> Continue Playing and sixteen other widgets changed how they are configured. A copy placed before the update may freeze on a placeholder; remove it and add it again.</li>
       <li><strong>If art looks missing at first:</strong> open the app once — widgets draw from a snapshot the app refreshes, and cover art for newly-placed widgets is fetched on the next open.</li>
     </ul>
+      </div>
+    </details>
+
+    <details class="qa" id="commandboard" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'commandboard')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'commandboard')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p>On <strong>iOS 27</strong>, Command Board is the tall widget that takes a whole Home Screen page on iPhone. It shows one game with <strong>Start Session</strong> and <strong>Open Playthrough</strong>, two of that game's tracker lists, and a shelf of other games.</p>
+    <ul>
+      <li><strong>Tick from the widget:</strong> tap a card to tick it off. A card that counts has &minus; and +; tapping the rest of that card opens its list in the app. A change can take a few seconds to show on the widget.</li>
+      <li><strong>Paging:</strong> the arrows beside each list page through what is left to do, and <em>View More</em> opens the tracker.</li>
+      <li><strong>Choosing what it shows:</strong> long-press &rarr; Edit Widget picks the game, which two lists, and the shelf: Also Playing, Backlog, Up Next, Always Around, Shelved or Completed. Left alone, it shows the game you played last and Also Playing. <em>View More</em> on the shelf opens that shelf's full list.</li>
+      <li><strong>If the logo or covers look missing:</strong> open the app once.</li>
+    </ul>
+    <p>iPad has its own extra-large Command Board, described above.</p>
       </div>
     </details>
 
