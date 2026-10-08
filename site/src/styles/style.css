@@ -161,7 +161,11 @@ a:hover { color: #FFC078; }
 
 /* ── hero ───────────────────────────────────────────── */
 .hero {
-  position: relative; overflow: hidden;
+  /* Clipped sideways only. `overflow: hidden` also cut the torchlight off
+     along the hero's bottom edge, a hard line just above the devices: the
+     glow is a circle wider than the hero is tall. It fades out on its own;
+     the only thing that needs containing is its width on a narrow screen. */
+  position: relative; overflow-x: clip; overflow-y: visible;
   padding: clamp(3rem, 9vw, 6rem) 0 var(--step);
   /* No gradient of its own — body now carries the full-bleed one, and
      re-starting it here would put a seam at the bottom of the hero. */
@@ -357,7 +361,9 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   .composite--hero { width: 100%; margin-inline: 0; }
 }
 
-.showcase { padding: var(--step) 0 calc(var(--step) * .5); }
+/* Positioned so the devices sit over the tail of the hero's torchlight, which
+   now runs past the hero's own edge. */
+.showcase { position: relative; padding: var(--step) 0 calc(var(--step) * .5); }
 
 /* ── story rows (text beside one shot) ─────────────── */
 .story { display: grid; gap: var(--step); align-items: center; grid-template-columns: 1fr; }

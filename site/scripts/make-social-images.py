@@ -7,8 +7,8 @@ is exactly what happened when the site had no og:image and Reddit scavenged
 one off the page. These are built to read at thumbnail size: wordmark, one
 short line, one device shot, nothing else.
 
-Palette and font are the site's own (style.css / Theme.swift), so a preview
-looks like the thing it links to.
+Palette and font are the app's own (LSPalette.swift, by way of style.css), so
+a preview looks like the thing it links to.
 
     python3 scripts/make-social-images.py
 
@@ -37,7 +37,10 @@ OUT.mkdir(parents=True, exist_ok=True)
 # which the palette work superseded — same change as the site's CSS.
 GROUND      = (23, 15, 42)    # #170F2A, bottom stop
 GROUND_LIFT = (46, 33, 78)    # #2E214E, top stop
-ACCENT      = (148, 92, 250)
+# The app's Purple, for the second glow. Was (148, 92, 250): `LSTheme.purple`,
+# which the app retired on 2026-09-24 and the site dropped the same day. This
+# is `LSPalette` Purple's accent, the one the ground itself is derived from.
+ACCENT      = (151, 110, 245)   # #976EF5
 TORCH       = (245, 163, 77)
 TORCH_DEEP  = (165, 84, 16)   # LSPalette Torch step #A55410 — matches the app and the site
 INK         = (239, 234, 251)
