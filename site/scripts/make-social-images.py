@@ -11,9 +11,21 @@ Palette and font are the site's own (style.css / Theme.swift), so a preview
 looks like the thing it links to.
 
     python3 scripts/make-social-images.py
+
+Each image is built as a stack of full-canvas layers and then flattened, so
+the parts can be taken into an editor:
+
+    python3 scripts/make-social-images.py --layers ~/Desktop/social-layers
+
+writes, per image, one transparent PNG per layer (numbered bottom to top, all
+the size of the canvas, so they stack with no positioning), a flattened
+`00 Background.png` of the gradient with its glows, and a layered `.psd` when
+`pytoshop` is installed. The published PNGs in public/social are written
+either way.
 """
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 import pathlib
+import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PUB = ROOT / "public"
@@ -96,15 +108,39 @@ def gradient(size):
     return img.resize(size, Image.BILINEAR).convert("RGBA")
 
 
-def glow(img, center, radius, color, strength=0.30):
-    """Soft torchlight, the same halo the site puts behind its hero."""
-    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+def glow(size, center, radius, color, strength=0.30):
+    """Soft torchlight, the same halo the site puts behind its hero.
+
+    A flat circle of `color` at `strength` alpha, blurred by 0.55 of its
+    radius. Returned as its own layer.
+    """
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     x, y = center
     d.ellipse([x - radius, y - radius, x + radius, y + radius],
               fill=color + (int(255 * strength),))
-    layer = layer.filter(ImageFilter.GaussianBlur(radius * 0.55))
-    return Image.alpha_composite(img, layer)
+    return layer.filter(ImageFilter.GaussianBlur(radius * 0.55))
+
+
+def placed(size, tile, xy):
+    """`tile` on an empty canvas-sized layer, top-left at `xy`."""
+    layer = Image.new("RGBA", size, (0, 0, 0, 0))
+    layer.alpha_composite(tile, xy)
+    return layer
+
+
+def text(size, fill, lines, anchor="la"):
+    """Lines of one color on their own layer: `(xy, string, font)` each.
+
+    The layer starts as the text color at zero alpha, not as transparent
+    black. Drawing onto transparent black darkens every antialiased edge,
+    which shows as a fringe the moment the layer sits on anything light.
+    """
+    layer = Image.new("RGBA", size, fill + (0,))
+    d = ImageDraw.Draw(layer)
+    for xy, string, font in lines:
+        d.text(xy, string, font=font, fill=fill, anchor=anchor)
+    return layer
 
 
 def shot(name, height):
@@ -165,28 +201,27 @@ def devices(pair, height, max_width=None):
     return canvas
 
 
-def wordmark(img, xy, size, anchor="lt"):
-    """The site's wordmark, both shadows included.
+def wordmark(canvas, xy, size, anchor="lt"):
+    """The site's wordmark, both shadows included, as three layers.
 
-    style.css uses *two*: a zero-blur offset at 0.16em for legibility (pixel
-    strokes are thin and blur eats their corners) and a soft torch glow at
-    0.65em that fills the gaps between strokes. Drawing only the hard one —
+    style.css uses *two* shadows: a zero-blur offset at 0.16em for legibility
+    (pixel strokes are thin and blur eats their corners) and a soft torch glow
+    at 0.65em that fills the gaps between strokes. Drawing only the hard one —
     as the first pass did — gives a wordmark that reads thin and unlit next
     to the real thing. CSS blur radius r is roughly a Gaussian sigma of r/2.
     """
     f = ImageFont.truetype(PIXEL, size)
     x, y = xy
 
-    glow_layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    ImageDraw.Draw(glow_layer).text((x, y), "LevelSelect", font=f,
-                                    fill=TORCH + (77,), anchor=anchor)   # .3 alpha
-    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(size * 0.65 / 2))
-    img = Image.alpha_composite(img, glow_layer)
-
-    d = ImageDraw.Draw(img)
-    d.text((x, y + size * 0.16), "LevelSelect", font=f, fill=TORCH_DEEP, anchor=anchor)
-    d.text((x, y), "LevelSelect", font=f, fill=TORCH, anchor=anchor)
-    return img
+    halo = Image.new("RGBA", canvas, (0, 0, 0, 0))
+    ImageDraw.Draw(halo).text((x, y), "LevelSelect", font=f,
+                              fill=TORCH + (77,), anchor=anchor)   # .3 alpha
+    halo = halo.filter(ImageFilter.GaussianBlur(size * 0.65 / 2))
+    return [
+        ("Wordmark glow", halo),
+        ("Wordmark shadow", text(canvas, TORCH_DEEP, [((x, y + size * 0.16), "LevelSelect", f)], anchor)),
+        ("Wordmark", text(canvas, TORCH, [((x, y), "LevelSelect", f)], anchor)),
+    ]
 
 
 def sans(size, weight=400):
@@ -205,16 +240,13 @@ def sans(size, weight=400):
     return f
 
 
+# Every builder returns its layers bottom to top, each the size of the canvas.
+
 # ─────────────────────────── 1200x630 — link previews ───────────────────────
 def open_graph(pair):
-    W, H = 1200, 630
-    img = gradient((W, H))
-    img = glow(img, (250, 250), 340, TORCH, 0.20)
-    img = glow(img, (980, 430), 380, ACCENT, 0.16)
-
+    C = (1200, 630)
     icon = app_icon(104)
-    img.alpha_composite(icon, (74 + 52 - icon.width // 2, 86 + 52 - icon.height // 2))
-
+    art = devices(pair, 700 if not pair else 424)
     # Type is smaller than it was so the devices fit.
     #
     # At 62px the wordmark ran to about x756 (Press Start 2P is one em per
@@ -222,74 +254,123 @@ def open_graph(pair):
     # fell off the right edge. At 50px it ends near x624, and the art starts at
     # 645 with only about 60px bleeding. The words were never the thing anyone
     # was squinting at; the screens were.
-    img = wordmark(img, (74, 214), 50)
-    d = ImageDraw.Draw(img)
-    d.text((74, 300), "Every game you're playing,", font=sans(27, 400), fill=INK)
-    d.text((74, 337), "and exactly where you left off.", font=sans(27, 400), fill=INK)
-    d.text((74, 398), "Library · session timer · progress tracker",
-           font=sans(20, 400), fill=MUTED)
-    d.text((74, 436), "iPhone · iPad · Mac · Watch", font=sans(19, 400), fill=MUTED)
-    d.text((74, 492), "levelselect.app", font=sans(25, 600), fill=TORCH)
-
-    art = devices(pair, 700 if not pair else 424)
-    img.alpha_composite(art, (835, 92) if not pair else (645, 103))
-    return img, f"og{'-2up' if pair else ''}.png"
+    layers = [
+        ("Gradient", gradient(C)),
+        ("Glow torch", glow(C, (250, 250), 340, TORCH, 0.20)),
+        ("Glow purple", glow(C, (980, 430), 380, ACCENT, 0.16)),
+        ("Icon", placed(C, icon, (74 + 52 - icon.width // 2, 86 + 52 - icon.height // 2))),
+        *wordmark(C, (74, 214), 50),
+        ("Tagline", text(C, INK, [((74, 300), "Every game you're playing,", sans(27, 400)),
+                                  ((74, 337), "and exactly where you left off.", sans(27, 400))])),
+        ("Details", text(C, MUTED, [((74, 398), "Library · session timer · progress tracker", sans(20, 400)),
+                                    ((74, 436), "iPhone · iPad · Mac · Watch", sans(19, 400))])),
+        ("URL", text(C, TORCH, [((74, 492), "levelselect.app", sans(25, 600))])),
+        ("Devices", placed(C, art, (835, 92) if not pair else (645, 103))),
+    ]
+    return layers, f"og{'-2up' if pair else ''}.png"
 
 
 # ─────────────────────────── 1080x1920 — Instagram story ────────────────────
 def story(pair):
-    W, H = 1080, 1920
-    img = gradient((W, H))
-    img = glow(img, (540, 430), 520, TORCH, 0.20)
-    img = glow(img, (540, 1500), 620, ACCENT, 0.16)
-
+    C = (W, H) = (1080, 1920)
     icon = app_icon(150)
-    img.alpha_composite(icon, (465 + 75 - icon.width // 2, 300 + 75 - icon.height // 2))
-
-    img = wordmark(img, (540, 495), 66, anchor="mt")
-    d = ImageDraw.Draw(img)
-    d.text((540, 610), "Every game you're playing,", font=sans(34, 400), fill=INK, anchor="mt")
-    d.text((540, 656), "and exactly where you left off.", font=sans(34, 400), fill=INK, anchor="mt")
-
     # Art sits between the tagline and the footer, scaled to whatever room is
     # left rather than a fixed height that could collide with either.
     top, footer_top = 770, 1700
     art = devices(pair, min(900, footer_top - top - 40), max_width=W - 120)
     if art.width > W - 80:
         art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
-    img.alpha_composite(art, ((W - art.width) // 2, top))
-
-    d.text((540, footer_top + 12), "TestFlight beta", font=sans(30, 600), fill=MUTED, anchor="mt")
-    d.text((540, footer_top + 62), "levelselect.app", font=sans(46, 700), fill=TORCH, anchor="mt")
-    return img, f"instagram-story{'-2up' if pair else ''}.png"
+    layers = [
+        ("Gradient", gradient(C)),
+        ("Glow torch", glow(C, (540, 430), 520, TORCH, 0.20)),
+        ("Glow purple", glow(C, (540, 1500), 620, ACCENT, 0.16)),
+        ("Icon", placed(C, icon, (465 + 75 - icon.width // 2, 300 + 75 - icon.height // 2))),
+        *wordmark(C, (540, 495), 66, anchor="mt"),
+        ("Tagline", text(C, INK, [((540, 610), "Every game you're playing,", sans(34, 400)),
+                                  ((540, 656), "and exactly where you left off.", sans(34, 400))], "mt")),
+        ("Devices", placed(C, art, ((W - art.width) // 2, top))),
+        ("Details", text(C, MUTED, [((540, footer_top + 12), "TestFlight beta", sans(30, 600))], "mt")),
+        ("URL", text(C, TORCH, [((540, footer_top + 62), "levelselect.app", sans(46, 700))], "mt")),
+    ]
+    return layers, f"instagram-story{'-2up' if pair else ''}.png"
 
 
 # ─────────────────────────── 1080x1080 — feed square ────────────────────────
 def square(pair):
-    W = H = 1080
-    img = gradient((W, H))
-    img = glow(img, (540, 300), 420, TORCH, 0.20)
-
+    C = (W, H) = (1080, 1080)
     icon = app_icon(120)
-    img.alpha_composite(icon, (480 + 60 - icon.width // 2, 104 + 60 - icon.height // 2))
-
-    img = wordmark(img, (540, 268), 54, anchor="mt")
-    d = ImageDraw.Draw(img)
-    d.text((540, 366), "Every game you're playing,", font=sans(29, 400), fill=INK, anchor="mt")
-    d.text((540, 406), "and exactly where you left off.", font=sans(29, 400), fill=INK, anchor="mt")
-
     top, footer_top = 486, 990
     art = devices(pair, footer_top - top - 36, max_width=W - 120)
     if art.width > W - 80:
         art = art.resize((W - 80, round(art.height * (W - 80) / art.width)), Image.LANCZOS)
-    img.alpha_composite(art, ((W - art.width) // 2, top))
+    layers = [
+        ("Gradient", gradient(C)),
+        ("Glow torch", glow(C, (540, 300), 420, TORCH, 0.20)),
+        ("Icon", placed(C, icon, (480 + 60 - icon.width // 2, 104 + 60 - icon.height // 2))),
+        *wordmark(C, (540, 268), 54, anchor="mt"),
+        ("Tagline", text(C, INK, [((540, 366), "Every game you're playing,", sans(29, 400)),
+                                  ((540, 406), "and exactly where you left off.", sans(29, 400))], "mt")),
+        ("Devices", placed(C, art, ((W - art.width) // 2, top))),
+        ("URL", text(C, TORCH, [((540, footer_top + 6), "levelselect.app", sans(34, 700))], "mt")),
+    ]
+    return layers, f"instagram-square{'-2up' if pair else ''}.png"
 
-    d.text((540, footer_top + 6), "levelselect.app", font=sans(34, 700), fill=TORCH, anchor="mt")
-    return img, f"instagram-square{'-2up' if pair else ''}.png"
 
+def flatten(layers):
+    img = layers[0][1].copy()
+    for _, layer in layers[1:]:
+        img = Image.alpha_composite(img, layer)
+    return img
+
+
+def write_psd(layers, path):
+    """A layered PSD, which Affinity opens with the layers intact.
+
+    Optional: needs `pip install pytoshop`. Returns False without it.
+    """
+    try:
+        import numpy as np
+        from pytoshop import enums
+        from pytoshop.user import nested_layers as nl
+    except ImportError:
+        return False
+    out = []
+    for name, layer in reversed(layers):          # PSD lists the top layer first
+        r, g, b, a = (np.asarray(c) for c in layer.split())
+        out.append(nl.Image(name=name, top=0, left=0,
+                            channels={0: r, 1: g, 2: b, -1: a},
+                            color_mode=enums.ColorMode.rgb))
+    # Raw, not RLE: pytoshop's RLE needs a compiled extension that is often
+    # missing, and an uncompressed file opens the same.
+    psd = nl.nested_layers_to_psd(out, color_mode=enums.ColorMode.rgb,
+                                  size=layers[0][1].size,
+                                  compression=enums.Compression.raw)
+    with open(path, "wb") as f:
+        psd.write(f)
+    return True
+
+
+def export_layers(layers, folder):
+    """One canvas-sized transparent PNG per layer, numbered bottom to top."""
+    folder.mkdir(parents=True, exist_ok=True)
+    ground = [l for l in layers if l[0] == "Gradient" or l[0].startswith("Glow")]
+    flatten(ground).convert("RGB").save(folder / "00 Background.png")
+    for i, (name, layer) in enumerate(layers, start=1):
+        layer.save(folder / f"{i:02d} {name}.png")
+    return write_psd(layers, folder.with_suffix(".psd"))
+
+
+LAYERS = None
+if "--layers" in sys.argv:
+    LAYERS = pathlib.Path(sys.argv[sys.argv.index("--layers") + 1]).expanduser()
 
 for build in (open_graph, story, square):
     for pair in (False, True):
-        img, name = build(pair)
+        layers, name = build(pair)
+        img = flatten(layers)
         img.convert("RGB").save(OUT / name, quality=94)
-        print(f"{name}  {img.size[0]}x{img.size[1]}")
+        note = ""
+        if LAYERS:
+            psd = export_layers(layers, LAYERS / pathlib.Path(name).stem)
+            note = f"  + {len(layers)} layers" + (" + psd" if psd else "")
+        print(f"{name}  {img.size[0]}x{img.size[1]}{note}")
