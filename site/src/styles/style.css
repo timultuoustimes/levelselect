@@ -11,23 +11,74 @@
 }
 
 :root {
-  --ground: #0D0A17;        /* LSTheme.background, bottom stop */
-  --ground-lift: #1A122E;   /* LSTheme.background top stop — Theme.swift:18 (0.10,0.07,0.18) */
-  --surface: #171029;
-  --surface-hi: #1F1636;
-  --line: #2C2145;
-  --purple: #945CFA;        /* LSTheme.purple — Theme.swift:7 (0.58,0.36,0.98) */
-  /* The live accent. The app's default accent is PURPLE (ThemePalette.swift:9,
-     `accent = LSTheme.purple`), and torch is reserved for the wordmark
-     (Theme.swift:46). This was undefined, so every var(--accent) fell back to
-     torch and the whole site tinted orange where the app is purple. */
-  --accent: #945CFA;
-  --purple-deep: #4D298C;   /* LSTheme.purpleDeep */
+  /* **The app's ground, not the app's old ground.**
+     These used to be `LSTheme.background` (0.10, 0.07, 0.18), which the
+     palette work superseded: a ground is now the chosen accent laid over a
+     base charcoal with *overlay* at full strength, and the accent a library
+     has before anyone picks one is Purple (`LSPalette.defaultGround`). So the
+     dark mode background is Purple's ground, and these are it — computed from
+     that overlay, not sampled. Tim, 2026-09-23: *"the website background
+     should match the dark mode background."*
+
+     They are considerably lighter than what they replace, which is why the
+     three surfaces below had to be re-derived rather than kept. */
+  --ground: #170F2A;        /* LSPalette.ground(Purple, dark, bottom) */
+  --ground-lift: #2E214E;   /* LSPalette.ground(Purple, dark, top) */
+  /* **Surfaces are a lift off the ground, not fixed colors.** The app has no
+     surface hexes at all — `LSSurfaces.cardFill` is white at 6% on dark and
+     `elevatedFill` is white at 10%, over whatever ground is current. The old
+     values here were hexes that happened to sit above a much darker ground;
+     against this one they would have been DARKER than the page, so every card
+     would have sunk into it instead of lifting off. These are that same white
+     6% / 10% resolved against `--ground-lift`. */
+  --surface: #3B2E59;
+  --surface-hi: #433760;
+  --line: #4F456A;          /* white 16%, the same construction */
+  /* `--purple: #945CFA` lived here as `LSTheme.purple`, which `4f7b9a2`
+     retired from the app on the same day this stopped being the accent — it
+     was a pre-`LSPalette` purple 13.9 dE from the palette's own. Nothing
+     references it now. The purple did not leave the site with it: the ground
+     IS Purple's ground, and `--ground` / `--ground-lift` hold those values
+     directly. */
+  /* **Torch, because that is what a fresh install wears.**
+
+     This said purple until 2026-09-24, on a comment claiming the app's
+     default accent is purple and citing `ThemePalette.swift:9`. The line was
+     right and the value was not: it reads `LSTheme.defaultAccent`, which
+     resolves to `.lsDynamic(light: torchInk, dark: torch)` (Theme.swift:54),
+     and `LSPalette.defaultAccent` is `pairs[0]` — Torch.
+
+     Purple stopped being the app's default on 2026-09-01 for the reason that
+     applied here too: the ground IS purple, so a purple accent was a lighter
+     shade of the thing behind it. The site had inherited exactly that flaw —
+     and its focus rings were already torch, so it was disagreeing with
+     itself.
+
+     Torch is also simply better on this ground: 8.99:1 against purple's
+     4.54:1, which is why `--purple-ink` existed and why it does not any more.
+     Tim, 2026-09-24: *"Yes, website should match the app."* */
+  --accent: var(--torch);
+  /* **The ink that goes ON a filled accent, and it is not white.**
+     `ThemePalette.onColor(for:)` picks this by the WCAG crossover where black
+     and white contrast equally — luminance 0.179, derived rather than chosen.
+     Torch sits at 0.461, well above it, so dark wins: white on torch is
+     2.05:1 and this is 9.47:1. The site had it both ways already — the
+     changelog's filter chips used this value while the header pill and the
+     stage controls hard-coded white. */
+  --on-accent: #12081F;
+  /* `--purple-ink: #B78DFF` lived here until 2026-09-24. It existed only
+     because purple could not clear AA as a link color on this ground — 4.42:1
+     on the old one, 3.58 on the lighter one — so the link-hover purple was
+     promoted to be the link. Torch is 8.99:1 and needs no such rescue, so the
+     workaround left with the cause. */
   --torch: #F5A34D;         /* LSTheme.torch */
-  --torch-deep: #8A4A12;
+  /* The app's Torch step. Was #8A4A12, which matched nothing: the steps were
+     re-authored 2026-09-09 so each clears 3:1 against its OWN accent, and this
+     is that value. Tim, 09-23: *"the oranges should match on the site and
+     app."* The accent already did; only the deep one had drifted. */
+  --torch-deep: #A55410;   /* LSPalette Torch step */
   --ink: #EFEAFB;
   --muted: #9990B8;
-  --green: #5BD98A;
   --step: clamp(1.5rem, 4vw, 3rem);
   --measure: 64ch;
 }
@@ -55,8 +106,8 @@ body {
 }
 
 img { max-width: 100%; display: block; }
-a { color: var(--purple); text-underline-offset: 3px; }
-a:hover { color: #B78DFF; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { color: #FFC078; }
 :focus-visible { outline: 2px solid var(--torch); outline-offset: 3px; border-radius: 6px; }
 
 .wrap { width: min(100% - 2.5rem, 1080px); margin-inline: auto; }
@@ -89,7 +140,9 @@ a:hover { color: #B78DFF; }
 /* ── header ─────────────────────────────────────────── */
 .bar {
   position: sticky; top: 0; z-index: 20;
-  background: rgba(13, 10, 23, 0.88);
+  /* The ground, at the same alpha — it has to track --ground or the sticky
+     header reads as a different color from the page behind it. */
+  background: rgba(23, 15, 42, 0.88);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--line);
 }
@@ -134,20 +187,67 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
 .tagline { font-size: clamp(1.05rem, 2.4vw, 1.35rem); max-width: 34ch; margin: 0; text-wrap: balance; }
 .sub { color: var(--muted); max-width: 52ch; margin: 0; }
 .cta { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center; margin-top: .4rem; }
+/* **Shaped and timed to `LSPrimaryButtonStyle` (Theme.swift:474).**
+
+   The app's button is a continuous-corner rect at radius 12 — not a pill —
+   with a HARD drop shadow: `accentStep`, radius 0, three points down. On
+   press it offsets DOWN two points and the shadow shrinks to one, over 80ms
+   ease-out, so it is pushed onto the page rather than lifted off it.
+
+   This was a 14px rect with a soft glow that rose on hover, which is the
+   opposite gesture. Tim, 2026-09-24: "the shape and tapping/clicking action
+   don't match the app buttons."
+
+   `--torch-deep` is Torch's step, so it is literally `accentStep`. */
 .btn {
-  font: inherit; font-weight: 650; font-size: .95rem;
-  padding: .8rem 1.5rem; border-radius: 14px; text-decoration: none;
+  font: inherit; font-weight: 700; font-size: .95rem;
+  padding: .8rem 1.5rem; border-radius: 12px; text-decoration: none;
   border: 1px solid transparent; display: inline-flex; align-items: center; gap: .5rem;
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out, filter 80ms ease-out;
 }
 .btn-primary {
-  color: #fff;
-  background: linear-gradient(180deg, #A272FF, var(--purple));
-  box-shadow: 0 12px 26px -12px var(--purple), inset 0 1px 0 rgba(255,255,255,.35);
+  color: var(--on-accent);
+  /* Flat, because the app fills with `accentFill` — the raw chosen color,
+     never a gradient. */
+  background: var(--accent);
+  box-shadow: 0 3px 0 var(--torch-deep);
 }
-.btn-primary:hover { transform: translateY(-2px); color: #fff; }
-.btn-ghost { color: var(--ink); border-color: var(--line); background: var(--surface); }
-.btn-ghost:hover { border-color: var(--purple); transform: translateY(-2px); color: var(--ink); }
+.btn-primary:hover { color: var(--on-accent); filter: brightness(1.06); }
+.btn-primary:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--torch-deep); }
+
+/* **The secondary is the Continue Playing card's Pause button.**
+
+   `CoverCard.actions` (CoverCard.swift:323) is the exact control Tim pointed
+   at: accent at 16% as the fill, an accent stroke at 60%, accent as the ink,
+   `cornerRadius: 12` — and `LSPlayButtonStyle(feedback: .housekeeping)`,
+   which is `lift`: a scale dip and a fade on a spring, never travel.
+
+   Two corrections to what was here. It is **not a pill** — it is radius 12,
+   the same as the primary, and the app pairs those two shapes deliberately.
+   And it is **not neutral** — a grey button beside an orange one is a
+   different design language; the app tints its secondary with the same accent
+   and only changes how much of it there is.
+
+   `LSPlayButtonStyle` still says why there is no shadow: the step belongs to
+   "the controls that HAVE a step to sink into", and this is not one.
+
+   Measured on the default accent — torch, not the red in Tim's screenshot,
+   which is his chosen theme: accent ink on the composited fill is 6.73:1, and
+   the stroke reads at 3.92:1 against the page. */
+.btn-ghost {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 12px;
+  /* Springy on release, approximating spring(response: .22, damping: .55). */
+  transition: transform 220ms cubic-bezier(.34, 1.56, .64, 1),
+              opacity 220ms ease-out, background-color 80ms ease-out;
+}
+.btn-ghost:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 24%, transparent);
+}
+.btn-ghost:active { transform: scale(.96); opacity: .85; }
 .badge { font-size: .75rem; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
 
 /* ── card surface (beta CTA) ────────────────────────── */
@@ -283,6 +383,27 @@ h1.wordmark { font-size: clamp(1.5rem, 5.4vw, 2.85rem); margin: 0; }
   filter: drop-shadow(0 30px 44px rgba(0, 0, 0, .62));
 }
 
+/* **One phone at a time, below tablet width.**
+   Fable measured the pair at 197px each on a 375px screen and called them
+   unreadable: *"on a phone each section should be one phone, full width,
+   upright."* Two phones at 55% width, rotated two degrees apart, is a desktop
+   composition — it needs room either side to read as an arrangement at all.
+   At phone width it is two thumbnails of nothing.
+
+   So the back phone steps out and the front one stands up straight. It is the
+   front one that survives because it is the shot each section is actually
+   about; the back one is always the supporting example. Nothing is lost that
+   a wider screen doesn't show. */
+@media (max-width: 719px) {
+  .composite--pair { max-width: 320px; aspect-ratio: auto; }
+  .composite--pair .c-back { display: none; }
+  .composite--pair .c-front {
+    position: relative; left: auto; bottom: auto; width: 100%;
+    transform: none;
+    filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55));
+  }
+}
+
 @media (min-width: 860px) {
   .story { grid-template-columns: 1fr 1fr; }
   /* Source order stays text-then-image so it reads correctly without CSS and
@@ -400,6 +521,13 @@ th { color: var(--torch); font-size: .75rem; letter-spacing: .06em; text-transfo
 /* ── footer ─────────────────────────────────────────── */
 footer { border-top: 1px solid var(--line); padding: 2rem 0 3rem; margin-top: var(--step); color: var(--muted); font-size: .9rem; }
 footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; align-items: center; }
+footer .footgrid { display: grid; gap: 1.6rem; grid-template-columns: 1fr 1fr; align-items: start; }
+@media (min-width: 760px) { footer .footgrid { grid-template-columns: 2fr repeat(4, 1fr); } }
+.footbrand { grid-column: 1 / -1; display: flex; flex-direction: column; gap: .35rem; }
+@media (min-width: 760px) { .footbrand { grid-column: auto; } }
+.footbrand .wordmark { color: var(--torch); font-size: .9rem; }
+.footcol { display: flex; flex-direction: column; gap: .45rem; }
+.footcol b { color: var(--ink); font-size: .78rem; text-transform: uppercase; letter-spacing: .08em; }
 footer a { color: var(--muted); }
 footer a:hover { color: var(--ink); }
 
@@ -432,7 +560,7 @@ footer a:hover { color: var(--ink); }
 
 /* The answer, before the explanation. The page used to make you read ~240
    words to find out whether a section was the one you wanted. */
-.doc .answer { font-size: 1.02rem; color: var(--text); margin-top: -.2rem; }
+.doc .answer { font-size: 1.02rem; color: var(--ink); margin-top: -.2rem; }
 .doc .answer + p { margin-top: .7rem; }
 
 
@@ -446,7 +574,7 @@ footer a:hover { color: var(--ink); }
 .qa__s { cursor: pointer; list-style: none; padding: .95rem 1.9rem .95rem 0;
   position: relative; display: block; }
 .qa__s::-webkit-details-marker { display: none; }
-.qa__q { display: block; font-size: 1.06rem; font-weight: 650; color: var(--text); }
+.qa__q { display: block; font-size: 1.06rem; font-weight: 650; color: var(--ink); }
 .qa__a { display: block; font-size: .92rem; color: var(--muted); margin-top: .2rem; }
 /* The marker turns rather than swapping glyph, so the row does not reflow. */
 .qa__s::after {
@@ -459,3 +587,13 @@ footer a:hover { color: var(--ink); }
 .qa__s:hover .qa__q, .qa__s:focus-visible .qa__q { color: var(--torch); }
 .qa__body > *:first-child { margin-top: .2rem; }
 @media (prefers-reduced-motion: reduce) { .qa__s::after { transition: none; } }
+
+/* The button's dip is feedback, not decoration — it stays under reduced
+   motion, without the 80ms ease. */
+@media (prefers-reduced-motion: reduce) {
+  .btn { transition: none; }
+  /* `PressableCardStyle` "honors Reduce Motion by keeping the scale subtle" —
+     subtle, not absent. A control that does not answer a press reads as
+     broken. */
+  .btn-ghost:active { transform: scale(.985); }
+}

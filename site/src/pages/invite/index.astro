@@ -153,10 +153,10 @@ const tracking = [
     border-radius: 999px; padding: .42rem .8rem;
     font-size: .93rem; cursor: pointer;
   }
-  .chip input { accent-color: var(--purple); margin: 0; }
+  .chip input { accent-color: var(--accent); margin: 0; }
   /* The selected state is the checkbox's own, read straight from the DOM — no
      script, so it still works for someone browsing with JS off. */
-  .chip:has(input:checked) { border-color: var(--purple); background: rgba(148, 92, 250, .16); }
+  .chip:has(input:checked) { border-color: var(--accent); background: rgba(245, 163, 77, .14); }
 
   /* "Which one?" only makes sense for an answer that names something, so it
      hides itself for the ones that don't. Written as hide-when rather than
@@ -174,7 +174,7 @@ const tracking = [
   }
 
   .optin { display: flex; gap: .6rem; align-items: flex-start; border-top: 1px solid var(--line); padding-top: 1.3rem; }
-  .optin input { accent-color: var(--purple); margin-top: .28rem; }
+  .optin input { accent-color: var(--accent); margin-top: .28rem; }
   .optin span { font-size: .95rem; color: var(--muted); }
 
   form button { align-self: flex-start; }

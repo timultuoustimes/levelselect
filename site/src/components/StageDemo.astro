@@ -115,9 +115,9 @@
     transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
   }
   .stage__controls button[aria-pressed='true'] {
-    background: var(--accent, #945CFA);
-    border-color: var(--accent, #945CFA);
-    color: #FFFFFF;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
     font-weight: 600;
   }
 
@@ -158,7 +158,7 @@
 
   /* The timer only appears in the tracker header at stage 3 — exactly as in the
      app, where stages 1 and 2 still show the full Sessions controls. */
-  .stage__timerchip { opacity: 0; flex: none; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); font-size: .92em; }
+  .stage__timerchip { opacity: 0; flex: none; transition: opacity 260ms ease; font-variant-numeric: tabular-nums; color: var(--accent); font-size: .92em; }
   .stage[data-stage='3'] .stage__timerchip { opacity: 1; }
   .stage[data-stage='3'] .stage__timer { opacity: .35; }
 
@@ -173,8 +173,8 @@
      a truncated "9/14" does not. */
   .stage__row { min-width: 0; }
   .stage__row > :not(b):not(.dot) { overflow: hidden; text-overflow: ellipsis; }
-  .stage__row--tap { cursor: pointer; color: var(--accent, #945CFA); }
-  .stage__row .dot { width: .5em; height: .5em; border-radius: 50%; background: var(--accent, #945CFA); }
+  .stage__row--tap { cursor: pointer; color: var(--accent); }
+  .stage__row .dot { width: .5em; height: .5em; border-radius: 50%; background: var(--accent); }
 
   /* em, not rem. Everything in this mock scales off the container query above,
      so a rem gap and rem chip padding stayed their full physical size while the
@@ -182,11 +182,11 @@
      and the Stop chip was cut in half. flex-wrap is the backstop: whatever the
      arithmetic does at some future width, a control can drop to the next line
      but can never be sliced. */
-  .stage__timer { font-size: 1.75em; font-variant-numeric: tabular-nums; color: var(--accent, #945CFA); padding: .4em 0; display: flex; align-items: baseline; gap: .35em; flex-wrap: wrap; min-width: 0; transition: opacity 260ms ease; }
+  .stage__timer { font-size: 1.75em; font-variant-numeric: tabular-nums; color: var(--accent); padding: .4em 0; display: flex; align-items: baseline; gap: .35em; flex-wrap: wrap; min-width: 0; transition: opacity 260ms ease; }
   .stage__timer em { font-style: normal; font-size: .8em; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: .15em .45em; }
 
   .stage__bar { height: .42em; border-radius: 999px; background: rgba(255,255,255,.08); margin-bottom: .6em; }
-  .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent, #945CFA); }
+  .stage__bar span { display: block; height: 100%; width: 62%; border-radius: inherit; background: var(--accent); }
 
   .stage__player {
     position: relative; aspect-ratio: 16/9; border-radius: .6em; overflow: hidden;

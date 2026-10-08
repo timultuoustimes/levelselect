@@ -7,8 +7,15 @@ import { getCollection, render } from 'astro:content';
 // which is the only place CONTEXT is "production". The RSS feed and the app's
 // feed.json keep hiding drafts everywhere.
 const showDrafts = process.env.CONTEXT === 'deploy-preview' || process.env.CONTEXT === 'branch-deploy';
+/** The build number out of an id: `0.1.0-32` → 32, and `0.1.0-beta` → 0. */
+const buildNo = (id: string) => Number(id.split('-').pop()) || 0;
+
+// Newest first, and where two builds went out on the same day the higher
+// number is the later one. Date alone left 31 sitting above 32 (both 27
+// August), which reads as a mistake in a list whose whole job is order.
 const entries = (await getCollection('changelog', ({ data }) => showDrafts || !data.draft))
-  .sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+  .sort((a, b) =>
+    b.data.date.valueOf() - a.data.date.valueOf() || buildNo(b.id) - buildNo(a.id));
 
 const rendered = await Promise.all(
   entries.map(async (entry) => ({ entry, Content: (await render(entry)).Content }))
@@ -26,6 +33,29 @@ const anchorFor = (id: string) => `build-${id.split('-').pop()}`;
 
 const fmt = (d: Date) =>
   d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/**
+ * **The index, once the list is too long to scan.**
+ *
+ * Fable, 2026-09-22: *"A version index once there are more than ~6 entries:
+ * year → build → one line, each a link."* There are twenty, and every one of
+ * them is a collapsed heading you have to read in order to find the build you
+ * came for. The index is the only way to arrive at a specific build without
+ * scrolling the whole history.
+ *
+ * Years rather than a flat list because the numbering is about to stop being
+ * monotonic in a readable way — `0.1.0 (40)` becomes `1.0` — and a date is
+ * the one thing that stays sortable across that change.
+ */
+const byYear = entries.reduce<Record<string, typeof entries>>((acc, entry) => {
+  const year = String(entry.data.date.getFullYear());
+  (acc[year] ??= []).push(entry);
+  return acc;
+}, {});
+const years = Object.keys(byYear).sort((a, b) => Number(b) - Number(a));
+
+const shortDate = (d: Date) =>
+  d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 ---
 <Base
   title="Changelog — LevelSelect"
@@ -49,6 +79,28 @@ const fmt = (d: Date) =>
       <button class="fchip" aria-pressed="false" data-f="improved"><i class="d d--improved"></i>Improved</button>
       <button class="fchip" aria-pressed="false" data-f="fixed"><i class="d d--fixed"></i>Fixed</button>
     </div>
+
+    {/* Hidden while a filter is active: the index points at builds, and a
+        filtered page is a list of changes, so its links would jump to
+        headings whose bodies are mostly gone. */}
+    <nav class="vindex" aria-label="Jump to a build" data-hide-when-filtering>
+      {years.map((year) => (
+        <div class="vindex__year">
+          <h2 class="vindex__y">{year}</h2>
+          <ul>
+            {byYear[year].map((entry) => (
+              <li>
+                <a href={`#${anchorFor(entry.id)}`}>
+                  <span class="vindex__v">{entry.data.version}</span>
+                  <span class="vindex__t">{entry.data.title}</span>
+                  <span class="vindex__d">{shortDate(entry.data.date)}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
 
     {rendered.map(({ entry, Content }, i) => (
       <section class="release" id={anchorFor(entry.id)} data-release data-open={i === 0 ? 'true' : 'false'}>
@@ -150,6 +202,12 @@ const fmt = (d: Date) =>
       bar.querySelectorAll('.fchip').forEach((c) =>
         c.setAttribute('aria-pressed', String(c === chip))
       );
+      // The index points at builds. Filtered, the page is a list of changes
+      // rather than of builds, so its links would land on headings whose
+      // bodies are mostly hidden.
+      document.querySelectorAll('[data-hide-when-filtering]').forEach((el) => {
+        (el as HTMLElement).hidden = f !== 'all';
+      });
       document.querySelectorAll('.release').forEach((release) => {
         let shown = 0;
         release.querySelectorAll('.release__content > *').forEach((el) => {
@@ -171,6 +229,33 @@ const fmt = (d: Date) =>
 </script>
 
 <style>
+  /* ── the version index ───────────────────────────────
+     A list, not cards: it is a table of contents and it competes with the
+     releases below it if it is given any weight of its own. */
+  .vindex { margin: 0 0 2.4rem; }
+  .vindex__year + .vindex__year { margin-top: 1.2rem; }
+  .vindex__y {
+    font-size: .8rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 .4rem; font-weight: 600;
+  }
+  .vindex ul { list-style: none; margin: 0; padding: 0; }
+  .vindex li + li { border-top: 1px solid var(--line); }
+  .vindex a {
+    display: grid; grid-template-columns: 5.5rem 1fr auto;
+    gap: .75rem; align-items: baseline;
+    padding: .45rem .2rem; text-decoration: none; color: var(--ink);
+    border-radius: 6px;
+  }
+  .vindex a:hover { background: rgba(255, 255, 255, .05); color: var(--ink); }
+  .vindex__v { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .85rem; }
+  .vindex__t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vindex__d { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+  /* On a phone the title is the only part worth the width. */
+  @media (max-width: 560px) {
+    .vindex a { grid-template-columns: 1fr auto; row-gap: 0; }
+    .vindex__v { grid-column: 1 / -1; order: -1; font-size: .75rem; }
+  }
+
   .filters { display: flex; gap: .4rem; flex-wrap: wrap; margin: 1.4rem 0 1.8rem; }
   .fchip {
     font: inherit; font-size: .82rem;
@@ -182,7 +267,7 @@ const fmt = (d: Date) =>
   }
   .fchip[aria-pressed='true'] {
     background: var(--accent); border-color: var(--accent);
-    color: #12081F; font-weight: 650;
+    color: var(--on-accent); font-weight: 650;
   }
   .fchip[aria-pressed='true'] .d { background: #12081F; }
   .fchip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

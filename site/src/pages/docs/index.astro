@@ -36,7 +36,7 @@ const steps = [
 /**
  * The reference sections, in page order.
  *
- * Labelled as QUESTIONS, not features — the change that matters here.
+ * Labeled as QUESTIONS, not features — the change that matters here.
  *
  * Every label used to name the answer: "RetroAchievements", "Sessions and runs
  * are different things", "Beaten is a moment; 100% is your list". Good
@@ -140,6 +140,8 @@ const sections = [
     a: 'Journal → Charts → Replay. A month, a quarter or a year read back to you, and a card to post.' },
   { id: 'data',              q: 'How do I get my data out?',
     a: 'Settings → Import & Export → Export library writes a readable JSON file of everything.' },
+  { id: 'offline',           q: 'Does it work offline?',
+    a: 'Your library does: sessions, trackers, maps, memories, history and export. Looking things up online needs a connection.' },
 ];
 
 /**
@@ -164,7 +166,7 @@ const moments = [
   { t: 'I want it outside the app',       ids: ['widgets', 'commandboard', 'shortcuts'] },
   { t: 'I just finished a game',          ids: ['beaten'] },
   { t: 'I want to look back',             ids: ['journal', 'memories', 'stats', 'badges', 'replay'] },
-  { t: 'I want my data out',              ids: ['data'] },
+  { t: 'My data, and no signal',          ids: ['data', 'offline'] },
 ];
 
 /**
@@ -179,6 +181,9 @@ const moments = [
  * order below IS the card order, and a section belonging to no card fails the
  * build rather than quietly going missing.
  */
+/** The questions that arrive in a hurry, above everything else (Codex, Fable, 09-22). */
+const mostNeeded = ['consolesimport', 'csv', 'sessions', 'carriedover', 'regenerating', 'data', 'offline'];
+
 const ordered = moments.flatMap((m) => m.ids);
 const orphans = sections.filter((x) => !ordered.includes(x.id)).map((x) => x.q);
 if (orphans.length) throw new Error(`Help: no card points at ${orphans.join(', ')}`);
@@ -211,9 +216,25 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       ))}
     </ol>
 
-    <p class="divider"><span>Or start from what just happened</span></p>
+    {/* Search filters the answers in place; nothing is sent anywhere. */}
+    <div class="helpsearch">
+      <input type="search" id="helpsearch" placeholder="Search help — try “Steam” or “sync”" autocomplete="off" aria-label="Search help" />
+      <p class="helpsearch__none" hidden>Nothing here mentions that. <a href="mailto:support@levelselect.app">Ask me</a>.</p>
+    </div>
 
-    <ul class="moments">
+    <div class="mostneeded" data-hide-when-searching>
+      <b>Most needed</b>
+      <span class="moment__links">
+        {mostNeeded.map((id) => {
+          const s = sections.find((x) => x.id === id)!;
+          return <a href={`#${id}`}>{s.q}</a>;
+        })}
+      </span>
+    </div>
+
+    <p class="divider" data-hide-when-searching><span>Or start from what just happened</span></p>
+
+    <ul class="moments" data-hide-when-searching>
       {moments.map((m) => (
         <li class="moment">
           <b class="moment__t">{m.t}</b>
@@ -227,7 +248,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       ))}
     </ul>
 
-    <p class="divider"><span>Everything, in order</span></p>
+    <p class="divider" data-hide-when-searching><span>Everything, in order</span></p>
 
     <details class="qa" id="profile" name="qa" data-qa>
       <summary class="qa__s">
@@ -823,7 +844,7 @@ if (sections.map((x) => x.id).join() !== ordered.join())
       </summary>
       <div class="qa__body">
     <p>The <strong>Journal</strong> tab, in three views: <strong>Timeline</strong>, <strong>Calendar</strong> and <strong>Charts</strong>. Nothing new had to be stored to fill it &mdash; notes on sessions, on runs and on the moment you finished something have been dated and synced since the first build, and were only ever visible inside the sheet you typed them into.</p>
-    <p>A day of a game is <strong>one entry</strong>. Three sessions of one game on a Saturday is a single row summarising the day; open it for each session with its own note and time, any runs, and whether that was the session you finished in. Tap to read, press and hold to edit.</p>
+    <p>A day of a game is <strong>one entry</strong>. Three sessions of one game on a Saturday is a single row summarizing the day; open it for each session with its own note and time, any runs, and whether that was the session you finished in. Tap to read, press and hold to edit.</p>
     <p>When you stop a session the app asks what happened, once, while it is still what you were just doing. That is the note worth re-reading later, and before this the only way to write one was to go back and edit a session you had already finished.</p>
     <p><strong>Memories</strong> are for the part that happened before you had the app. A title, when, who you were with, where, and pictures. How well you know the date is a choice &mdash; an exact day, a month, a year, or not sure at all &mdash; and <em>&ldquo;Christmas 1995 or 1996&rdquo;</em> is shown exactly as you wrote it rather than re-rendered from a date the app invented. If you know the day but not the year, say so: it sits on that day in the first year, marked as uncertain.</p>
     <p>The <strong>calendar</strong> opens on a year: twelve small months and a heat map. Ones holding something stand out along the year strip, empty ones are still tappable, and any empty day is a <strong>+</strong> that starts a memory already dated. Entries too vague for a single day sit under the year they name rather than being dropped.</p>
@@ -891,13 +912,45 @@ if (sections.map((x) => x.id).join() !== ordered.join())
     <p><strong>And it comes back:</strong> Import LevelSelect export (same screen) reads the file and restores whatever your library is missing — never touching what's already there, so an old export merges safely onto a current library, and importing twice changes nothing. One honest caveat remains: map images are saved as links rather than embedded. Alongside it, Recently Deleted holds everything you delete until <em>you</em> decide otherwise — restore with a tap, or use the app's only permanent delete, which lives there and nowhere else.</p>
     <p><strong>Replace Library with Backup</strong> makes your library match an export exactly &mdash; everything in the file comes back as it was, and anything the file doesn&rsquo;t have goes to Recently Deleted. <strong>Erase Library</strong> moves every game, collection, memory and console to Recently Deleted. Both show you what will change, ask you to type a word to confirm, and save a safety copy first to Files &rarr; LevelSelect &rarr; Safety Copies.</p>
     <p>There's no lock-in here and there isn't going to be. Your library syncs through your own iCloud, and what's in the export is genuinely yours to take.</p>
-
-    <p class="callout" style="margin-top:2.5rem">Something missing or wrong here? <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or send feedback through TestFlight.</p>
       </div>
     </details>
 
+    <details class="qa" id="offline" name="qa" data-qa>
+      <summary class="qa__s">
+        <span class="qa__q">{sections.find((x) => x.id === 'offline')!.q}</span>
+        <span class="qa__a">{sections.find((x) => x.id === 'offline')!.a}</span>
+      </summary>
+      <div class="qa__body">
+    <p><strong>Your library works offline.</strong> Track sessions, update games, use checklists and maps, add memories, look back through the Journal and Replay, and export your data without a connection. iCloud catches up when you reconnect.</p>
+    <p>Online sources need the internet: looking up a game to add, account imports from Steam, PlayStation and Xbox, news, videos, and generated trackers. You can still add a game by hand offline; search tells you when it could only look through what you already have.</p>
+    <p><strong>One thing to avoid:</strong> running the same session&rsquo;s timer from two devices while both are offline. Each device keeps its own idea of the timer, and when they reconnect LevelSelect can&rsquo;t always tell which pauses were real. Start and stop it on one device, and the other catches up.</p>
+      </div>
+    </details>
+
+    <section class="stillstuck">
+      <h2>Still stuck?</h2>
+      <p>Email <a href="mailto:support@levelselect.app">support@levelselect.app</a>, or use <strong>Settings &rarr; Send feedback</strong> in the app, which lets you read everything before it sends. It helps to say which device, what you tapped, and what you expected to happen. A screenshot says the rest.</p>
+    </section>
+
     </article>
 </main>
+
+<script>
+  // Help search: filters the answers on the page, nothing leaves it.
+  const box = document.getElementById('helpsearch') as HTMLInputElement | null;
+  const none = document.querySelector<HTMLElement>('.helpsearch__none');
+  box?.addEventListener('input', () => {
+    const q = box.value.trim().toLowerCase();
+    let shown = 0;
+    document.querySelectorAll<HTMLDetailsElement>('.qa').forEach((d) => {
+      const hit = !q || d.textContent!.toLowerCase().includes(q);
+      d.hidden = !hit;
+      if (hit) shown++;
+    });
+    document.querySelectorAll<HTMLElement>('[data-hide-when-searching]').forEach((e) => { e.hidden = !!q; });
+    if (none) none.hidden = !q || shown > 0;
+  });
+</script>
 
 <script>
   // Opening, not jumping.
@@ -1036,5 +1089,17 @@ if (sections.map((x) => x.id).join() !== ordered.join())
   .doc pre code { font-size: 1em; }
   .doc :not(pre) > code { background: rgba(255, 255, 255, .07); padding: .1em .35em; border-radius: 4px; }
   .doc h3 { font-size: 1rem; margin-top: 1.6rem; }
+  [hidden] { display: none !important; }
+  .helpsearch { margin: 1.4rem 0 .6rem; }
+  .helpsearch input {
+    width: 100%; font: inherit; padding: .7rem 1rem; border-radius: 12px;
+    border: 1px solid var(--line); background: rgba(255,255,255,.05); color: var(--ink);
+  }
+  .helpsearch__none { color: var(--muted); margin: .8rem 0 0; }
+  .mostneeded { display: flex; flex-direction: column; gap: .5rem; margin: 1.2rem 0; padding: 1rem 1.1rem;
+    border: 1px solid var(--line); border-radius: 14px; background: rgba(245,163,77,.06); }
+  .mostneeded b { color: var(--torch); font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; }
+  .stillstuck { margin-top: 2.6rem; padding: 1.2rem 1.3rem; border: 1px solid var(--line); border-radius: 14px; }
+  .stillstuck h2 { margin: 0 0 .5rem; font-size: 1.15rem; }
 </style>
 </Base>

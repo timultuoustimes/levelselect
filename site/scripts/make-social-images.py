@@ -20,11 +20,14 @@ PUB = ROOT / "public"
 OUT = PUB / "social"
 OUT.mkdir(parents=True, exist_ok=True)
 
-GROUND      = (13, 10, 23)
-GROUND_LIFT = (26, 18, 46)
+# The app's dark ground: Purple's, laid over the base charcoal with overlay
+# at full strength (LSPalette.ground). Was the old LSTheme.background pair,
+# which the palette work superseded — same change as the site's CSS.
+GROUND      = (23, 15, 42)    # #170F2A, bottom stop
+GROUND_LIFT = (46, 33, 78)    # #2E214E, top stop
 ACCENT      = (148, 92, 250)
 TORCH       = (245, 163, 77)
-TORCH_DEEP  = (138, 74, 18)
+TORCH_DEEP  = (165, 84, 16)   # LSPalette Torch step #A55410 — matches the app and the site
 INK         = (239, 234, 251)
 MUTED       = (153, 144, 184)
 
@@ -63,7 +66,7 @@ def app_icon(size):
 
     Radius is 22.5% of the side, which is close to the iOS squircle at these
     sizes. Returns an RGBA tile larger than `size` — the glow needs margin —
-    so callers should paste by its centre, not its top-left.
+    so callers should paste by its center, not its top-left.
     """
     src = Image.open(PUB / "assets" / "icon.png").convert("RGBA")
     src = src.resize((size, size), Image.LANCZOS)
@@ -93,13 +96,13 @@ def gradient(size):
     return img.resize(size, Image.BILINEAR).convert("RGBA")
 
 
-def glow(img, center, radius, colour, strength=0.30):
+def glow(img, center, radius, color, strength=0.30):
     """Soft torchlight, the same halo the site puts behind its hero."""
     layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(layer)
     x, y = center
     d.ellipse([x - radius, y - radius, x + radius, y + radius],
-              fill=colour + (int(255 * strength),))
+              fill=color + (int(255 * strength),))
     layer = layer.filter(ImageFilter.GaussianBlur(radius * 0.55))
     return Image.alpha_composite(img, layer)
 

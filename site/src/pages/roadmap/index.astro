@@ -1,6 +1,8 @@
 ---
 import Base from '../../layouts/Base.astro';
 import { shipped, horizons, notPlanned, reviewed } from '../../data/roadmap';
+const latest = Math.max(...shipped.map((s) => s.build));
+const recent = shipped.filter((s) => s.build === latest);
 ---
 <Base
   title="Roadmap — LevelSelect"
@@ -17,22 +19,6 @@ import { shipped, horizons, notPlanned, reviewed } from '../../data/roadmap';
           a column of things that actually happened is what gives the three
           columns of intentions beside it any weight. Every card is a link into
           the build that delivered it — a kept promise you can go and read. */}
-      <section class="col">
-        <header class="col__head">
-          <span class="col__dot" style="background:#FF9F0A"></span>
-          <h2 class="col__name">Shipped</h2>
-          <span class="col__note">done</span>
-          <span class="col__n">{shipped.length}</span>
-        </header>
-        {shipped.map((item) => (
-          <a class="rcard rcard--done" style="--stripe:#FF9F0A" href={`/changelog/#build-${item.build}`}>
-            <b>{item.t}</b>
-            <span>{item.d}</span>
-            <span class="rcard__build">Build {item.build} &rarr;</span>
-          </a>
-        ))}
-      </section>
-
       {horizons.map((h) => (
         <section class="col">
           <header class="col__head">
@@ -69,9 +55,31 @@ import { shipped, horizons, notPlanned, reviewed } from '../../data/roadmap';
       </div>
     </section>
 
-    <p class="stamp" style="margin-top:2rem">
-      For what's already shipped, see the <a href="/changelog/">changelog</a>.
-    </p>
+
+    {/* **The future first** (Codex, 09-22): 38 shipped cards sat in front of
+        Now, Next and Exploring, so visitors scrolled through years of done
+        work to reach what is being done. Only the latest build here; the
+        changelog is the record of everything before it. The app's What's
+        Coming screen still reads the full list from the feed. */}
+    <section class="col col--recent">
+      <header class="col__head">
+        <span class="col__dot" style="background:#FF9F0A"></span>
+        <h2 class="col__name">Just shipped</h2>
+        <span class="col__note">build {latest}</span>
+      </header>
+      <div class="recentgrid">
+        {recent.map((item) => (
+          <a class="rcard rcard--done" style="--stripe:#FF9F0A" href={`/changelog/#build-${item.build}`}>
+            <b>{item.t}</b>
+            <span>{item.d}</span>
+          </a>
+        ))}
+      </div>
+      <p class="stamp" style="margin-top:1rem">
+        Everything before build {latest} is in the <a href="/changelog/">changelog</a> &mdash; {shipped.length - recent.length} more things shipped since the beta began.
+      </p>
+    </section>
+
   </article>
 </main>
 
@@ -84,7 +92,7 @@ import { shipped, horizons, notPlanned, reviewed } from '../../data/roadmap';
     .board { grid-template-columns: repeat(2, 1fr); gap: 1.4rem; align-items: start; }
   }
   @media (min-width: 1180px) {
-    .board { grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+    .board { grid-template-columns: repeat(3, 1fr); gap: 1.2rem; }
   }
 
   /* A shipped card is a link; it must not read as a dead card, or as a button. */
@@ -134,6 +142,9 @@ import { shipped, horizons, notPlanned, reviewed } from '../../data/roadmap';
   .rcard span { display: block; color: var(--muted); font-size: .88rem; margin-top: .2rem; }
 
   .col--off { margin-top: 2.6rem; }
+  .col--recent { margin-top: 2.6rem; }
+  .recentgrid { display: grid; gap: .6rem; }
+  @media (min-width: 860px) { .recentgrid { grid-template-columns: repeat(2, 1fr); } }
   .notgrid { display: grid; gap: .6rem; }
   @media (min-width: 860px) { .notgrid { grid-template-columns: repeat(3, 1fr); } }
   .rcard--off { opacity: .62; margin-bottom: 0; }
