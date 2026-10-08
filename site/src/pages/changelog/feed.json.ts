@@ -73,7 +73,21 @@ function parseItems(body: string): Item[] {
       continue;
     }
     // Lists and images belong to the page, not to a one-line summary.
-    if (/^([-*>|]|!\[|<)/.test(line)) {
+    //
+    // A bullet marker is a marker only when a space follows it. Without that,
+    // `*` matched the opening `**bold**` of a paragraph — and most entries
+    // start that way, so "Scan the box", "Parties, runs and focus" and
+    // several others reached the app as a title with nothing under it.
+    if (/^([-*+>|]\s|!\[|<)/.test(line)) {
+      if (current.detail) detailDone = true;
+      continue;
+    }
+    // A `####` sub-heading is structure, not prose. Build 39's "Your
+    // consoles' libraries" broke the entry into `####` sections, and the
+    // first one landed in the app's What's New as its summary, hashes and
+    // all: "#### Steam, PlayStation and Xbox". Skipping it lets the real
+    // sentence underneath be the detail.
+    if (line.startsWith('#')) {
       if (current.detail) detailDone = true;
       continue;
     }

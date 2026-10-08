@@ -21,12 +21,40 @@ const { title, description, current } = Astro.props;
 // the design does. Importing it means Astro emits a content-hashed filename,
 // so the immutable header becomes true rather than a trap.
 
+// **The beta's nav.** Changelog and Roadmap stay in the bar while the people
+// reading this site are testers, who use both. The 1.0 site moves them to the
+// footer for someone deciding whether to download (Codex and Fable, 09-22).
+// Privacy stays up top because for this app it is a selling point.
 const nav = [
-  { href: '/#features', label: 'Features', key: 'features' },
+  { href: '/features/', label: 'Features', key: 'features' },
   { href: '/docs/', label: 'Help', key: 'docs' },
   { href: '/changelog/', label: 'Changelog', key: 'changelog' },
   { href: '/roadmap/', label: 'Roadmap', key: 'roadmap' },
   { href: '/privacy/', label: 'Privacy', key: 'privacy' },
+];
+
+/** The one action. The beta today; the App Store badge at 1.0. */
+const download = { href: 'https://testflight.apple.com/join/7pwdQEMq', label: 'Get the beta' };
+
+const footerColumns = [
+  { title: 'Product', links: [
+    { href: '/features/', label: 'Features' },
+    { href: '/changelog/', label: 'Changelog' },
+    { href: '/roadmap/', label: 'Roadmap' },
+    { href: '/changelog/rss.xml', label: 'RSS' },
+  ] },
+  { title: 'Help', links: [
+    { href: '/docs/', label: 'Help' },
+    { href: 'mailto:support@levelselect.app', label: 'support@levelselect.app' },
+    { href: '/feedback/', label: 'Feedback' },
+  ] },
+  { title: 'About', links: [
+    { href: '/about/', label: 'About' },
+    { href: 'https://github.com/timultuoustimes/levelselect', label: 'GitHub' },
+  ] },
+  { title: 'Legal', links: [
+    { href: '/privacy/', label: 'Privacy' },
+  ] },
 ];
 ---
 <!doctype html>
@@ -38,7 +66,7 @@ const nav = [
 <meta name="description" content={description} />
 <link rel="icon" href="/assets/favicon.png" />
 <link rel="alternate" type="application/rss+xml" title="LevelSelect changelog" href="/changelog/rss.xml" />
-<meta name="theme-color" content="#0D0A17" />
+<meta name="theme-color" content="#170F2A" />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />
 <meta property="og:type" content="website" />
@@ -70,6 +98,9 @@ const nav = [
         <a href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
       ))}
     </nav>
+    {/* Beside the menu on a phone too: the first screen should always hold
+        the way to get the app (Fable, 09-22). */}
+    <a class="navcta" href={download.href}>{download.label}</a>
 
     {/* Below the breakpoint the four links collided with the wordmark and ran
         off the edge. <details> gives a real disclosure menu with no JavaScript
@@ -82,7 +113,6 @@ const nav = [
         {nav.map((item) => (
           <a href={item.href} aria-current={current === item.key ? 'page' : undefined}>{item.label}</a>
         ))}
-        <a href="/about/">How this was made</a>
       </div>
     </details>
   </div>
@@ -92,6 +122,18 @@ const nav = [
   /* One breakpoint, one rule each way — the inline links and the menu are
      never both present. */
   .navmenu { display: none; position: relative; }
+  .navcta {
+    margin-left: auto; margin-right: .6rem;
+    padding: .42rem .9rem; border-radius: 12px;
+    background: var(--accent); color: var(--on-accent) !important;
+    font-weight: 700; font-size: .9rem; text-decoration: none; white-space: nowrap;
+    box-shadow: 0 3px 0 var(--torch-deep);
+    transition: transform 80ms ease-out, box-shadow 80ms ease-out, filter 80ms ease-out;
+  }
+  .navcta:hover { filter: brightness(1.06); }
+  .navcta:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--torch-deep); }
+  @media (prefers-reduced-motion: reduce) { .navcta { transition: none; } }
+  @media (min-width: 721px) { .navcta { margin-left: 1.2rem; margin-right: 0; } }
 
   @media (max-width: 720px) {
     :global(.bar .navlinks) { display: none; }
@@ -107,7 +149,7 @@ const nav = [
     place-items: center;
   }
   .navmenu > summary::-webkit-details-marker { display: none; }
-  .navmenu > summary:focus-visible { outline: 2px solid var(--accent, #945CFA); outline-offset: 2px; }
+  .navmenu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* Three bars from one element: the middle is the box, the others are
      pseudo-elements. */
@@ -165,18 +207,18 @@ const nav = [
 <slot />
 
 <footer>
-  <div class="wrap">
-    <span>&copy; 2026 LevelSelect</span>
-    <span>
-      <a href="/">Home</a> &middot;
-      <a href="/docs/">Help</a> &middot;
-      <a href="/roadmap/">Roadmap</a> &middot;
-      <a href="/changelog/">Changelog</a> &middot;
-      <a href="/privacy/">Privacy</a> &middot;
-      <a href="/about/">How this was made</a> &middot;
-      <a href="mailto:support@levelselect.app">support@levelselect.app</a> &middot;
-      <a href="https://github.com/timultuoustimes/levelselect">GitHub</a>
-    </span>
+  <div class="wrap footgrid">
+    <div class="footbrand">
+      <span class="pixel wordmark">LevelSelect</span>
+      <span>Every game you're playing, and exactly where you left off.</span>
+      <span>&copy; 2026 LevelSelect</span>
+    </div>
+    {footerColumns.map((col) => (
+      <div class="footcol">
+        <b>{col.title}</b>
+        {col.links.map((l) => <a href={l.href}>{l.label}</a>)}
+      </div>
+    ))}
   </div>
 </footer>
 

@@ -1,25 +1,41 @@
 ---
 import Base from '../../layouts/Base.astro';
 ---
-<Base title="How this was made — LevelSelect" description="LevelSelect is built with AI assistance, openly. Here's what that means in practice and why the app is built the way it is." current="about">
+<Base title="About — LevelSelect" description="LevelSelect is made by Tim Miller, one person who could never remember where he left off in a game. Why it exists, how it was built with AI assistance, and what it promises." current="about">
 <main class="wrap">
 <article class="doc">
-    <h1>How this was made</h1>
-    <p class="stamp">Last updated 18 September 2026</p>
+    <h1>About</h1>
+    <p class="stamp">Last updated 7 October 2026</p>
 
+    <p>LevelSelect is made by <strong>Tim Miller</strong> — one person who could never remember where he left off in a game, and finally decided to build an app to help.</p>
+
+    <h2>Why LevelSelect</h2>
+    <p>Let's start off with: I'm a parent with ADHD. My gaming sessions can sometimes be 45 minutes long and months apart, so when I come back to a game I would end up spending more time trying to remember what I was doing and relearning the controls than I would spend actually playing the game. I don't have time to always play without a guide, either.</p>
+    <p>I needed something to help me remember what I was doing, so I tried dozens of apps, including some small indie developed ones as well as some bigger ones a lot of gamers have probably heard of, but nothing had what I wanted. I knew I didn't want a spreadsheet, and a notes app wasn't going to cut it. I never knew where I was within a game either, and most apps' progress tracking requires you to guess how far you've gotten through the game. I needed some way to keep everything I use for each game together, whether it's a simple task checklist, real progression tracking, tip and guide videos from YouTube, maps, or anything else. I also wanted it to be customizable, completely private, and with no social features. So, at the end of December 2025, that's what I set out to create.</p>
+
+    <h2>How I built LevelSelect</h2>
+    <p>Now, I'm not a developer. That said, I've been using Apple products since 2007, and at this point consider myself to be a power user, tinkering with automation and simple code, and I've been obsessed with tech and gaming my entire life. I'm very discerning when it comes to apps and software, and I like to think I know what does and doesn't work well. My background is in graphic design, which is probably why I couldn't leave the way this thing looks alone.</p>
+    <p>That said, there was no way I could personally build what I was wanting without AI assistance. I started with a web app, building custom trackers for a couple of games I was actively playing at the time, but I quickly realized that wasn't going to cut it, and I needed a way to do all of this natively on my devices. I wanted the native features like widgets, Shortcuts and App Intents, Liquid Glass, and everything else that came with designing in Swift, so I soon switched over to that.</p>
+    <p>I know there are a lot of issues with AI, most of which I completely agree with, but this isn't some app vibe coded in a weekend. I've looked over every detail trying to refine LevelSelect into something that looks and functions how I want it to, and something that will be truly useful to gamers — especially those who do more than just game.</p>
+
+    <h2>What "AI-assisted" means here</h2>
     <div class="callout">
-      <p>LevelSelect is built with AI assistance — mainly Claude, from Anthropic, used as a pair-programming tool throughout. That's true of the code, and it's true of this sentence.</p>
+      <p>LevelSelect is built with AI assistance — mainly Claude, from Anthropic, used as a pair-programming tool throughout. That's true of the code, and it's true of this site.</p>
     </div>
+    <p>I don't write Swift by hand. What I bring is wanting exactly this tool badly enough to keep at it, and the judgment to know when something generated for me is wrong. In practice that's meant catching things the AI got wrong before they shipped: an email typo that would have sent tester feedback to a stranger's inbox, a demo screen that quietly stopped showing real tracker progress, a sync bug that would have silently dropped data between devices. None of that is a story about AI writing perfect code. It's a story about someone reviewing it like the mistakes were going to be theirs to live with — because they were.</p>
+    <p>Every product decision — what LevelSelect tracks, what it refuses to collect, what a run is versus a session, which games get a bespoke tracker — is mine. The commits are tagged with the AI's co-authorship, so this was never a choice between disclosing and not; I'd rather say it myself, plainly.</p>
 
-    <h2>Why say so</h2>
-    <p>Because every commit in the public repo is already tagged with it, so this was never really a choice between disclosing and not — only between saying it myself or letting someone else notice first. I'd rather say it myself, plainly, and let the app speak for whether it was worth doing this way.</p>
+    <h2>What LevelSelect promises</h2>
+    <p>LevelSelect is built around being completely private and 100% yours. In short: there is no account, it stores in your iCloud, and it has no ads, no analytics and no social feed. Your data exports readably: a full backup you can restore from, and a plain list of your games you can take to a spreadsheet or another app if you so choose.</p>
+    <p>The long version is on the <a href="/privacy/">Privacy</a> page, and what isn't planned is at the foot of the <a href="/roadmap/">Roadmap</a>.</p>
 
-    <h2>What "AI-assisted" actually means here</h2>
-    <p>I'm not a professional developer. I don't write Swift by hand. What I bring is a few years of wanting exactly this tool badly enough to spend more than eight months on it. It started as a web app, and I rebuilt it natively in Swift once I wanted things a browser can't do. I also bring the judgment to know when something generated for me is wrong. In practice that's meant catching things the AI got wrong before they shipped: an email typo that would have sent tester feedback to a stranger's inbox, a demo screen that quietly stopped showing real tracker progress, a sync bug that would have silently dropped data between devices. None of that is a story about AI writing perfect code. It's a story about someone reviewing it like the mistakes were going to be theirs to live with — because they were.</p>
-    <p>Every product decision — what LevelSelect tracks, what it refuses to collect, what a run is versus a session, which games get a bespoke tracker — is mine. The privacy stance on the <a href="/privacy/">Privacy</a> page isn't boilerplate; it's the same standard applied to how the app itself got built.</p>
-
-    <h2>If you want to look</h2>
-    <p>The repository is public, and it stays that way: <a href="https://github.com/timultuoustimes/levelselect">github.com/timultuoustimes/levelselect</a>. It's updated in batches, so the newest work shows up there a little after it ships, and every commit's history, including the AI co-authorship tags, is there.</p>
+    <h2>Say hi</h2>
+    <p>Feedback, issues and suggestions — reach out by email, or find me on Bluesky and Mastodon.</p>
+    <ul>
+      <li><a href="mailto:feedback@levelselect.app">feedback@levelselect.app</a></li>
+      <li><a href="https://bsky.app/profile/timultuoustimes.bsky.social">@timultuoustimes.bsky.social</a></li>
+      <li><a href="https://mastodon.social/@timultuoustimes">@timultuoustimes@mastodon.social</a></li>
+    </ul>
   </article>
 </main>
 </Base>
